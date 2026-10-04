@@ -1,0 +1,13 @@
+//! The dynamic dictionary model.
+
+mod dictionary;
+mod entry;
+pub mod field;
+mod table;
+pub mod tag;
+
+pub use dictionary::Dictionary;
+pub use entry::WordEntry;
+pub use field::{FieldType, FieldValue};
+pub use table::{TagRemoval, WordTable};
+pub use tag::{TagDef, DEFINITION_TAG, PARENT_TAG, WORDNAME_TAG};
