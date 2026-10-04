@@ -268,6 +268,9 @@ pub fn scan_notes(notes_dir: &Path) -> Result<Vec<NoteFile>, StorageError> {
 fn collect_notes(base: &Path, dir: &Path, out: &mut Vec<NoteFile>) -> Result<(), StorageError> {
     for dirent in fs::read_dir(dir).map_err(|e| io_err(dir, e))? {
         let dirent = dirent.map_err(|e| io_err(dir, e))?;
+        if dirent.file_name().to_string_lossy().starts_with('.') {
+            continue;
+        }
         let path = dirent.path();
         if path.is_dir() {
             collect_notes(base, &path, out)?;
@@ -284,6 +287,12 @@ fn collect_notes(base: &Path, dir: &Path, out: &mut Vec<NoteFile>) -> Result<(),
 pub fn write_note(notes_dir: &Path, note: &NoteFile) -> Result<(), StorageError> {
     let path = safe_join(notes_dir, &note.path)?;
     atomic_write(&path, note.raw_content.as_bytes())
+}
+
+/// Read a note's raw content from `notes/<relative path>`.
+pub fn read_note(notes_dir: &Path, relative: &Path) -> Result<String, StorageError> {
+    let path = safe_join(notes_dir, relative)?;
+    fs::read_to_string(&path).map_err(|e| io_err(&path, e))
 }
 
 /// Create an empty note at `notes/<relative>`.
@@ -481,5 +490,37 @@ mod tests {
         for name in DEFAULT_CONFIG_FILES {
             assert!(root.join(CONFIG_DIR).join(name).is_file());
         }
+    }
+
+    #[test]
+    fn hidden_files_and_dirs_are_skipped() {
+        let dir = tempfile::tempdir().unwrap();
+        let notes = dir.path().join(NOTES_DIR);
+        fs::create_dir_all(notes.join(".hiddendir")).unwrap();
+
+        write_note(&notes, &NoteFile::new("visible", "ok")).unwrap();
+        write_note(&notes, &NoteFile::new(".hidden", "no")).unwrap();
+        write_note(&notes, &NoteFile::new(".hiddendir/inner", "no")).unwrap();
+
+        let loaded = scan_notes(&notes).unwrap();
+        assert_eq!(loaded.len(), 1);
+        assert_eq!(loaded[0].path, PathBuf::from("visible"));
+    }
+
+    #[test]
+    fn read_note_guards_and_reads() {
+        let dir = tempfile::tempdir().unwrap();
+        let notes = dir.path().join(NOTES_DIR);
+        fs::create_dir_all(&notes).unwrap();
+        write_note(&notes, &NoteFile::new("Grammar/phonology", "### Vowels")).unwrap();
+
+        assert_eq!(
+            read_note(&notes, Path::new("Grammar/phonology")).unwrap(),
+            "### Vowels"
+        );
+        assert!(matches!(
+            read_note(&notes, Path::new("../secret")),
+            Err(StorageError::UnsafePath(_))
+        ));
     }
 }

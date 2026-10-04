@@ -346,6 +346,11 @@ impl Workspace {
         Ok(())
     }
 
+    /// Read a note's raw content from `notes/<relative>`.
+    pub fn read_note(&self, relative: impl AsRef<Path>) -> Result<String, StorageError> {
+        storage::read_note(&self.notes_dir(), relative.as_ref())
+    }
+
     /// Create an empty note and refresh the note list.
     pub fn create_note(&mut self, relative: impl AsRef<Path>) -> Result<(), StorageError> {
         let relative = relative.as_ref();
