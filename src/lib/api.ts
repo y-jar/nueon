@@ -229,3 +229,49 @@ export const createTranslationWord = (
 ): Promise<string | null> =>
   invoke("create_translation_word", { table, wordname, definition, tags });
 
+// -- version control -----------------------------------------------------
+export interface StatusEntry {
+  code: string;
+  path: string;
+}
+
+export interface Commit {
+  id: string;
+  author: string;
+  date: string;
+  summary: string;
+}
+
+export interface VcsInfo {
+  /** `ready`, `not_a_repo`, or `git_missing`. */
+  state: string;
+  branch: string | null;
+}
+
+export interface AutoCheckinInfo {
+  enabled: boolean;
+  secs: number;
+}
+
+export const vcsState = (): Promise<VcsInfo> => invoke("vcs_state");
+export const vcsStatus = (): Promise<StatusEntry[]> => invoke("vcs_status");
+export const vcsLog = (limit: number): Promise<Commit[]> =>
+  invoke("vcs_log", { limit });
+export const vcsDiff = (path: string | null): Promise<string> =>
+  invoke("vcs_diff", { path });
+export const vcsShow = (id: string): Promise<string> =>
+  invoke("vcs_show", { id });
+export const vcsCommit = (message: string): Promise<string | null> =>
+  invoke("vcs_commit", { message });
+export const vcsInit = (): Promise<void> => invoke("vcs_init");
+export const vcsRevertFile = (path: string): Promise<void> =>
+  invoke("vcs_revert_file", { path });
+export const autocheckinGet = (): Promise<AutoCheckinInfo> =>
+  invoke("autocheckin_get");
+export const autocheckinSet = (
+  enabled: boolean,
+  secs: number,
+): Promise<void> => invoke("autocheckin_set", { enabled, secs });
+export const autocheckinPump = (): Promise<string | null> =>
+  invoke("autocheckin_pump");
+

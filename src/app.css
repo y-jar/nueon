@@ -609,3 +609,57 @@ button.link {
 .mono {
   font-family: ui-monospace, monospace;
 }
+
+/* -- source control ------------------------------------------------------ */
+
+.topbar button.active {
+  color: var(--accent);
+  border-color: var(--accent);
+}
+
+.git-panel textarea {
+  width: 100%;
+  margin: 6px 0;
+}
+
+.git-panel .vcs-status,
+.git-panel .vcs-log {
+  list-style: none;
+  padding: 0;
+  margin: 4px 0;
+}
+
+.git-panel .vcs-status li {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 4px;
+  font-size: 12px;
+  padding: 1px 0;
+}
+
+.git-panel .vcs-log li {
+  font-size: 12px;
+  color: var(--muted);
+  padding: 1px 0;
+}
+
+pre.diff {
+  max-height: 320px;
+  overflow: auto;
+  font-size: 11px;
+  line-height: 1.4;
+  background: var(--bg);
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  padding: 6px;
+  white-space: pre;
+}
+
+label.field.inline {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 12px;
+  color: var(--muted);
+}

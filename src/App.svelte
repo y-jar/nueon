@@ -1,12 +1,13 @@
 <script lang="ts">
   import { onMount } from "svelte";
-  import { ui, init, setView } from "./lib/state.svelte";
+  import { ui, init, setView, toggleGitPanel } from "./lib/state.svelte";
   import Onboarding from "./components/Onboarding.svelte";
   import Sidebar from "./components/Sidebar.svelte";
   import Editor from "./components/Editor.svelte";
   import Grid from "./components/Grid.svelte";
   import Translation from "./components/Translation.svelte";
   import Inspector from "./components/Inspector.svelte";
+  import GitPanel from "./components/GitPanel.svelte";
 
   onMount(() => {
     init();
@@ -17,6 +18,10 @@
   <div class="shell">
     <header class="topbar">
       <span class="brand">langloom</span>
+      <button
+        class:active={ui.gitPanelOpen}
+        onclick={toggleGitPanel}>Source Control</button
+      >
       <span class="muted">{ui.status}</span>
     </header>
     <Sidebar />
@@ -42,7 +47,11 @@
         <Translation />
       {/if}
     </main>
-    <Inspector />
+    {#if ui.gitPanelOpen}
+      <GitPanel />
+    {:else}
+      <Inspector />
+    {/if}
   </div>
 {:else}
   <Onboarding />

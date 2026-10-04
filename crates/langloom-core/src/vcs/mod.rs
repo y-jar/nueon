@@ -5,6 +5,8 @@ pub mod autocheckin;
 use std::path::{Path, PathBuf};
 use std::process::{Command, Stdio};
 
+use serde::{Deserialize, Serialize};
+
 pub use autocheckin::AutoCheckin;
 
 /// Errors raised by the version-control layer.
@@ -73,7 +75,7 @@ impl GitStatus {
 }
 
 /// A single line of `git status` output.
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct StatusEntry {
     /// The two-character porcelain status code, e.g. ` M` or `??`.
     pub code: String,
@@ -82,7 +84,7 @@ pub struct StatusEntry {
 }
 
 /// A single commit from the log.
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct Commit {
     pub id: String,
     pub author: String,
@@ -247,6 +249,28 @@ impl GitRepo {
     /// A short diffstat of the working tree.
     pub fn diff_stat(&self) -> Result<String, VcsError> {
         self.checked(&["diff", "--stat"])
+    }
+
+    /// The full working-tree diff, optionally limited to one path.
+    pub fn diff(&self, path: Option<&str>) -> Result<String, VcsError> {
+        match path {
+            Some(path) => self.checked(&["diff", "--", path]),
+            None => self.checked(&["diff"]),
+        }
+    }
+
+    /// Restore one tracked file to its committed state.
+    pub fn revert_file(&self, path: &str) -> Result<(), VcsError> {
+        self.checked(&["restore", "--", path])?;
+        Ok(())
+    }
+
+    /// The current branch name (or `HEAD` when detached).
+    pub fn branch(&self) -> Result<String, VcsError> {
+        Ok(self
+            .checked(&["rev-parse", "--abbrev-ref", "HEAD"])?
+            .trim()
+            .to_string())
     }
 
     /// Show a single commit.

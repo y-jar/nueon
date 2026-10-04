@@ -19,6 +19,8 @@ export const ui = $state({
   selectedEntry: null as string | null,
   wordIndex: {} as api.WordIndex,
   nameById: {} as Record<string, string>,
+  gitPanelOpen: false,
+  vcsRevision: 0,
 });
 
 export async function refreshWorkspaces(): Promise<void> {
@@ -94,6 +96,10 @@ export function setView(view: View): void {
   ui.view = view;
 }
 
+export function toggleGitPanel(): void {
+  ui.gitPanelOpen = !ui.gitPanelOpen;
+}
+
 /** Initial load + backend event subscription. */
 export async function init(): Promise<void> {
   await refreshWorkspaces();
@@ -112,6 +118,8 @@ export async function init(): Promise<void> {
     } else if (scope === "dictionary") {
       await loadWordIndex();
       await refreshTables();
+    } else if (scope === "vcs") {
+      ui.vcsRevision += 1;
     }
   });
 }

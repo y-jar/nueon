@@ -8,6 +8,9 @@ mod state;
 mod tree;
 
 use std::sync::Mutex;
+use std::time::{Duration, Instant};
+
+use tauri::{Emitter, Manager};
 
 use state::AppState;
 
@@ -17,6 +20,32 @@ fn ping() -> String {
     "pong".to_string()
 }
 
+/// Background auto-check-in pump.
+///
+/// Sleeps, briefly locks the state only for the pump call (never during I/O
+/// with the UI), and notifies the frontend when a commit lands. Because note
+/// saves and the pump both take the same mutex, they serialize cleanly against
+/// the debounced autosave.
+fn background_pump(handle: tauri::AppHandle) {
+    loop {
+        std::thread::sleep(Duration::from_secs(5));
+        let committed = {
+            let state = handle.state::<Mutex<AppState>>();
+            let mut guard = match state.lock() {
+                Ok(guard) => guard,
+                Err(_) => continue,
+            };
+            match guard.workspace.as_mut() {
+                Some(workspace) => workspace.pump_auto_checkin(Instant::now()).is_some(),
+                None => false,
+            }
+        };
+        if committed {
+            let _ = handle.emit("data-changed", serde_json::json!({ "scope": "vcs" }));
+        }
+    }
+}
+
 /// Build and run the Tauri application.
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
@@ -24,6 +53,11 @@ pub fn run() {
         .plugin(tauri_plugin_opener::init())
         .plugin(tauri_plugin_dialog::init())
         .manage(Mutex::new(AppState::load()))
+        .setup(|app| {
+            let handle = app.handle().clone();
+            std::thread::spawn(move || background_pump(handle));
+            Ok(())
+        })
         .invoke_handler(tauri::generate_handler![
             ping,
             commands::workspace_list,
@@ -62,6 +96,17 @@ pub fn run() {
             commands::delete_preset,
             commands::execute_translation,
             commands::create_translation_word,
+            commands::vcs_state,
+            commands::vcs_status,
+            commands::vcs_log,
+            commands::vcs_diff,
+            commands::vcs_show,
+            commands::vcs_commit,
+            commands::vcs_init,
+            commands::vcs_revert_file,
+            commands::autocheckin_get,
+            commands::autocheckin_set,
+            commands::autocheckin_pump,
         ])
         .run(tauri::generate_context!())
         .expect("error while running langloom");
