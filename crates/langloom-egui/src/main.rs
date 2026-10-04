@@ -1,7 +1,7 @@
 use std::path::PathBuf;
 
-use langloom::global::GlobalConfig;
-use langloom::{app, GitStatus, Workspace};
+use langloom_egui::global::GlobalConfig;
+use langloom_egui::{app, GitStatus, Workspace};
 
 /// Default workspace directory, following the XDG base directory spec.
 fn default_workspace() -> PathBuf {

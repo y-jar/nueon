@@ -129,42 +129,50 @@ translation re-runs immediately.
 
 ## Development
 
-Everything is provided by the Nix shell:
+> **Migration in progress:** the app is moving from egui to **Tauri v2 + Svelte 5
+> + CodeMirror 6**. The reusable Rust core lives in `crates/langloom-core`; the
+> interim egui UI lives in `crates/langloom-egui` and will be removed once the
+> Tauri UI reaches parity.
+
+Everything is provided by the Nix shell (Node/Tauri deps land in stage R1):
 
 ```sh
 nix-shell
-cargo build
-cargo test
-cargo clippy --all-targets -- -D warnings
-cargo fmt --check
+cargo test -p langloom-core          # core logic (UI-agnostic)
+cargo clippy --workspace --all-targets -- -D warnings
+cargo fmt --all --check
 ```
 
-Run the app against a workspace directory (defaults to `$XDG_DATA_HOME/langloom`
-or `~/.local/share/langloom`):
+Run the interim egui app against a workspace directory (defaults to
+`$XDG_DATA_HOME/langloom` or `~/.local/share/langloom`):
 
 ```sh
-cargo run -- /path/to/workspace
-```
-
-Headless CI/load check (prints workspace summary, no window):
-
-```sh
-cargo run -- --check /path/to/workspace
+cargo run -p langloom-egui -- /path/to/workspace
+cargo run -p langloom-egui -- --check /path/to/workspace   # headless summary
 ```
 
 ## Roadmap
 
-- [x] Tables + per-table tags, sparse storage, config, git backend
-- [x] egui/eframe three-pane shell, docked tabs, dictionary grid, git panel
-- [x] Block live-preview Markdown notes editor (click-to-reveal, autosave)
-- [x] Etymology/derivation: multi-parent DAG, parent picker, dependency warnings
-- [x] Dictionary grid column sort / filter / per-column search / visibility
-- [x] Drag-and-drop translation syntax-grid builder
-- [x] Translation execution: slot assignment, conflicts, missing/unfilled reports
-- [x] Inline missing-word creation from the translation view
-- [x] Dictionary word highlighting / hover previews in the notes editor
-- [x] Notes sidebar tree with note/folder create, rename, and delete
-- [x] Workspace registry + switcher dropdown + manage wizard
-- [ ] Nix flake for packaging
+Legacy egui UI (kept as a reference until the Tauri port is complete):
+
+- [x] Three-pane shell, docked tabs, dictionary grid, git panel
+- [x] Block live-preview Markdown editor (click-to-reveal, autosave)
+- [x] Etymology/derivation DAG, parent picker, dependency warnings
+- [x] Grid column sort / filter / per-column search / visibility
+- [x] Translation builder + execution + inline missing-word creation
+- [x] Notes sidebar tree + workspace registry + switcher + manage wizard
+
+Tauri v2 + Svelte 5 + CodeMirror 6 (current effort):
+
+- [x] R0 — Cargo workspace split (`langloom-core` + legacy `langloom-egui`)
+- [ ] R1 — Toolchain + Tauri scaffold + blank three-pane shell
+- [ ] R2 — Registry + notes tree
+- [ ] R3 — CodeMirror Live Preview editor
+- [ ] R4 — Dictionary grid + inspector
+- [ ] R5 — Translation builder + runner
+- [ ] R6 — Git panel + auto-check-in
+- [ ] R7 — Tree DnD + constructs (images/tables/task lists/footnotes)
+- [ ] R8 — Nix flake packaging + purge legacy egui
+
 
 See [`deferred.md`](deferred.md) for the full register of deferred work.

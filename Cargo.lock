@@ -1133,7 +1133,19 @@ dependencies = [
 ]
 
 [[package]]
-name = "langloom"
+name = "langloom-core"
+version = "0.1.0"
+dependencies = [
+ "serde",
+ "serde_json",
+ "tempfile",
+ "thiserror 2.0.21",
+ "toml",
+ "uuid",
+]
+
+[[package]]
+name = "langloom-egui"
 version = "0.1.0"
 dependencies = [
  "anyhow",
@@ -1141,13 +1153,10 @@ dependencies = [
  "egui",
  "egui_dock",
  "egui_extras",
+ "langloom-core",
  "pulldown-cmark",
  "rfd",
- "serde",
- "serde_json",
  "tempfile",
- "thiserror 2.0.21",
- "toml",
  "uuid",
 ]
 

@@ -1,28 +1,11 @@
-[package]
-name = "langloom"
+[workspace]
+resolver = "2"
+members = [
+    "crates/langloom-core",
+    "crates/langloom-egui",
+]
+
+[workspace.package]
 version = "0.1.0"
 edition = "2021"
-description = "A super awesome conlang editor and creation app."
 license = "MIT"
-
-[dependencies]
-anyhow = "1"
-serde = { version = "1", features = ["derive"] }
-serde_json = "1"
-thiserror = "2"
-uuid = { version = "1", features = ["v4", "serde"] }
-pulldown-cmark = "0.13"
-toml = "1"
-rfd = "0.17"
-egui = "0.36"
-egui_extras = "0.36"
-egui_dock = "0.21"
-eframe = { version = "0.36", default-features = false, features = [
-    "default_fonts",
-    "glow",
-    "wayland",
-    "x11",
-] }
-
-[dev-dependencies]
-tempfile = "3"

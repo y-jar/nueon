@@ -1,6 +1,8 @@
 //! Core data model, storage, configuration, and version control for langloom.
+//!
+//! UI-agnostic: both the Tauri backend and the legacy egui UI build on this
+//! crate.
 
-pub mod app;
 pub mod config;
 pub mod global;
 pub mod model;
@@ -11,6 +13,7 @@ pub mod workspace;
 pub use config::{
     GrammarConfig, GrammarRule, LanguageConfig, TextDirection, TranslationConfig, WorkspaceSettings,
 };
+pub use global::{GlobalConfig, WorkspaceEntry};
 pub use model::{
     Dictionary, FieldType, FieldValue, TagDef, TagRemoval, WordEntry, WordTable, DEFINITION_TAG,
     PARENT_TAG, WORDNAME_TAG,
