@@ -38,13 +38,11 @@ forgotten. Add to this list instead of dropping ideas. Group items by area.
 
 ## Translation engine
 
-- English→conlang execution: tokenize input, look up equivalents via
-  `definition`, and map words into the grid's slots.
-- Conflict resolution when an English word maps to multiple conlang words
-  (homographs).
 - Inline creation of missing words from the translation view.
 - Multi-clause / sentence-level grids (current grids are a single clause).
 - Morphology: inflection, agreement, and tense transforms.
+- Smarter English tokenization / lemmatization (plurals, tense, stopwords).
+- Per-slot custom spacer text (a `Spacer` currently emits the global separator).
 - Import/export presets.
 
 ## Version control

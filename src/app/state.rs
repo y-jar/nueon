@@ -216,6 +216,29 @@ impl Default for TranslationState {
     }
 }
 
+/// State for the translation execution runner.
+#[derive(Debug, Clone)]
+pub struct TranslationRun {
+    pub input: String,
+    /// Chosen entry per token index, resolving homograph conflicts.
+    pub choices: HashMap<usize, Uuid>,
+    /// Whether the Translate button has been pressed for the current input.
+    pub ran: bool,
+    /// Separator emitted between words (also stored in translation settings).
+    pub separator: String,
+}
+
+impl Default for TranslationRun {
+    fn default() -> Self {
+        Self {
+            input: String::new(),
+            choices: HashMap::new(),
+            ran: false,
+            separator: " ".to_string(),
+        }
+    }
+}
+
 /// Transient UI state, independent of the workspace.
 #[derive(Debug, Default)]
 pub struct UiState {
@@ -249,6 +272,8 @@ pub struct UiState {
     pub grid_views: HashMap<String, GridView>,
     /// Translation syntax-grid builder state.
     pub translation: TranslationState,
+    /// Translation execution state.
+    pub translation_run: TranslationRun,
     /// Pending tag-removal confirmation.
     pub pending_tag_removal: Option<TagRemovalRequest>,
     /// Whether the user dismissed the git init/install prompt.

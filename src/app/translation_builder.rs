@@ -30,6 +30,8 @@ pub fn translation(ui: &mut Ui, ws: &mut Workspace, state: &mut UiState) {
             canvas(ui, state, &tags);
         });
     });
+
+    super::translation_run::run(ui, ws, state);
 }
 
 fn preset_bar(ui: &mut Ui, ws: &mut Workspace, state: &mut UiState) {

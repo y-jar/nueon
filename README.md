@@ -94,7 +94,16 @@ The Translation tab builds a clause structure by dragging tags from the palette
 into ordered slots (drag to reorder, or use the up/down buttons). Slots can be a
 required tag (`#Subject`), a literal particle, a wildcard, or a spacer for
 between-word rules. Presets are named, saved, and loaded from
-`config/translation`. Execution (English → conlang) is a later stage.
+`config/translation`.
+
+### Translation execution
+
+Below the builder, enter an English sentence and press **Translate**. Words are
+matched to entries by their `definition` (exact, then substring), assigned to
+slots by tag, and emitted as conlang text. Adjacent words are auto-spaced by
+the configurable separator; literals attach directly. Ambiguous words
+(homographs) require choosing a meaning; missing words and unfilled required
+slots are reported. Inline creation of missing words is a later stage.
 
 ## Development
 
@@ -129,7 +138,7 @@ cargo run -- --check /path/to/workspace
 - [x] Etymology/derivation: multi-parent DAG, parent picker, dependency warnings
 - [x] Dictionary grid column sort / filter / per-column search / visibility
 - [x] Drag-and-drop translation syntax-grid builder
-- [ ] Translation execution (English → conlang mapping, conflicts, missing words)
+- [x] Translation execution: slot assignment, conflicts, missing/unfilled reports
 - [ ] Dictionary word highlighting / hover previews in the notes editor
 - [ ] Nix flake for packaging
 
