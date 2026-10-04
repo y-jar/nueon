@@ -2,6 +2,7 @@
 
 pub mod app;
 pub mod config;
+pub mod global;
 pub mod model;
 pub mod translation;
 pub mod vcs;

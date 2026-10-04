@@ -110,6 +110,22 @@ pub fn ensure_gitignore(root: &Path) -> Result<(), StorageError> {
     atomic_write(&path, GITIGNORE_CONTENT.as_bytes())
 }
 
+/// Default config files written when a workspace is created or opened empty.
+pub const DEFAULT_CONFIG_FILES: &[&str] =
+    &[LANGUAGE_FILE, GRAMMAR_FILE, TRANSLATION_FILE, SETTINGS_FILE];
+
+/// Write any missing default config files (`config/<name>` = `{}`).
+pub fn ensure_config_files(root: &Path) -> Result<(), StorageError> {
+    let dir = root.join(CONFIG_DIR);
+    for name in DEFAULT_CONFIG_FILES {
+        let path = dir.join(name);
+        if !path.exists() {
+            atomic_write(&path, b"{}")?;
+        }
+    }
+    Ok(())
+}
+
 /// Write bytes atomically by writing to a sibling temp file then renaming.
 pub fn atomic_write(path: &Path, bytes: &[u8]) -> Result<(), StorageError> {
     if let Some(parent) = path.parent() {
@@ -454,5 +470,16 @@ mod tests {
             remove_path(&notes, Path::new("Grammar")),
             Err(StorageError::NotFound(_))
         ));
+    }
+
+    #[test]
+    fn scaffold_writes_default_config_files() {
+        let dir = tempfile::tempdir().unwrap();
+        let root = dir.path();
+        ensure_dirs(root).unwrap();
+        ensure_config_files(root).unwrap();
+        for name in DEFAULT_CONFIG_FILES {
+            assert!(root.join(CONFIG_DIR).join(name).is_file());
+        }
     }
 }

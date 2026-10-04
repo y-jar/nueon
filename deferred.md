@@ -55,7 +55,6 @@ forgotten. Add to this list instead of dropping ideas. Group items by area.
 
 ## Workspace & app shell
 
-- Native "Open / Create workspace" file picker (`rfd`).
 - Window size and dock layout persistence (eframe storage).
 - Settings screen (language metadata editor, script/direction rendering).
 - Grammar rules editor UI (`config/grammar`).

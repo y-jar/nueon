@@ -49,6 +49,7 @@ impl Workspace {
         let root_path = root_path.into();
         storage::ensure_dirs(&root_path)?;
         storage::ensure_gitignore(&root_path)?;
+        storage::ensure_config_files(&root_path)?;
 
         let settings = WorkspaceSettings::default();
         let auto = AutoCheckin::new(
@@ -75,6 +76,7 @@ impl Workspace {
         let root_path = root_path.into();
         storage::ensure_dirs(&root_path)?;
         storage::ensure_gitignore(&root_path)?;
+        storage::ensure_config_files(&root_path)?;
 
         let mut dictionary = Dictionary::new();
         for table in storage::scan_tables(&root_path.join(DICTIONARY_DIR))? {

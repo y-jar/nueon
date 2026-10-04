@@ -1,5 +1,6 @@
 use std::path::PathBuf;
 
+use langloom::global::GlobalConfig;
 use langloom::{app, GitStatus, Workspace};
 
 /// Default workspace directory, following the XDG base directory spec.
@@ -17,22 +18,23 @@ fn default_workspace() -> PathBuf {
 }
 
 fn main() -> Result<(), Box<dyn std::error::Error>> {
-    let mut root: Option<PathBuf> = None;
+    let mut requested: Option<PathBuf> = None;
     let mut check_only = false;
     for arg in std::env::args().skip(1) {
         match arg.as_str() {
             "--check" => check_only = true,
-            _ => root = Some(PathBuf::from(arg)),
+            _ => requested = Some(PathBuf::from(arg)),
         }
     }
-    let root = root.unwrap_or_else(default_workspace);
 
     if check_only {
+        let root = requested.unwrap_or_else(default_workspace);
         let workspace = Workspace::load(root)?;
         print_summary(&workspace);
         return Ok(());
     }
 
+    let global = GlobalConfig::load_default();
     let options = eframe::NativeOptions {
         viewport: egui::ViewportBuilder::default()
             .with_title("langloom")
@@ -45,8 +47,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         options,
         Box::new(move |cc: &eframe::CreationContext<'_>| {
             app::theme::apply(&cc.egui_ctx);
-            let workspace = Workspace::load(&root)?;
-            Ok(Box::new(app::LangloomApp::new(workspace)) as Box<dyn eframe::App>)
+            Ok(Box::new(app::LangloomApp::new(global, requested)) as Box<dyn eframe::App>)
         }),
     )?;
 

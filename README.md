@@ -35,6 +35,17 @@ A workspace is a plain local directory the user picks:
 └── .git/             # optional, opt-in
 ```
 
+## Workspaces
+
+The app keeps an app-global registry of workspaces at
+`$XDG_CONFIG_HOME/langloom/config.toml` (fallback `~/.config/langloom/`),
+listing each workspace's display name and path plus the last-opened one. The
+bottom of the left sidebar has a workspace switcher; its last entry opens the
+**Manage workspaces** wizard, where you can create a new workspace (name +
+destination), open an existing folder (empty folders are scaffolded with
+`notes/`, `dictionary/`, `config/`, and `.gitignore`), or edit/remove registered
+ones. With no workspace open, an onboarding screen links to the same wizard.
+
 ## Version control
 
 Git is opt-in. On open the app detects `Ready`, `NotARepo`, or
@@ -151,7 +162,7 @@ cargo run -- --check /path/to/workspace
 - [x] Inline missing-word creation from the translation view
 - [x] Dictionary word highlighting / hover previews in the notes editor
 - [x] Notes sidebar tree with note/folder create, rename, and delete
-- [ ] Workspace registry + switcher dropdown + manage wizard
+- [x] Workspace registry + switcher dropdown + manage wizard
 - [ ] Nix flake for packaging
 
 See [`deferred.md`](deferred.md) for the full register of deferred work.

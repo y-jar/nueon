@@ -272,6 +272,38 @@ pub struct NotePrompt {
     pub value: String,
 }
 
+/// A workspace management action requested by the UI.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum WorkspaceAction {
+    /// Register and open an existing workspace.
+    Open(PathBuf),
+    /// Create a new workspace at `destination/name` and open it.
+    Create { name: String, destination: PathBuf },
+    /// Remove a workspace from the registry.
+    Remove(PathBuf),
+    /// Rename a workspace's display name.
+    Rename { path: PathBuf, name: String },
+    /// Re-point a workspace to a new location.
+    EditPath { from: PathBuf, to: PathBuf },
+    /// Delete a workspace directory from disk.
+    DeleteFromDisk(PathBuf),
+}
+
+/// State for the workspace manager wizard.
+#[derive(Debug, Clone, Default)]
+pub struct WizardState {
+    pub open: bool,
+    pub create_name: String,
+    pub create_dest: String,
+    pub existing_path: String,
+    /// The workspace being edited inline, if any.
+    pub editing: Option<PathBuf>,
+    pub edit_name: String,
+    pub edit_path: String,
+    /// A workspace pending delete-from-disk confirmation.
+    pub confirm_delete: Option<PathBuf>,
+}
+
 /// Transient UI state, independent of the workspace.
 #[derive(Debug, Default)]
 pub struct UiState {
@@ -313,6 +345,10 @@ pub struct UiState {
     pub translation: TranslationState,
     /// Translation execution state.
     pub translation_run: TranslationRun,
+    /// A pending workspace management action.
+    pub workspace_action: Option<WorkspaceAction>,
+    /// Workspace manager wizard state.
+    pub wizard: WizardState,
     /// Pending tag-removal confirmation.
     pub pending_tag_removal: Option<TagRemovalRequest>,
     /// Whether the user dismissed the git init/install prompt.
