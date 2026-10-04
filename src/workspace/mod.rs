@@ -155,7 +155,7 @@ impl Workspace {
             return Ok(false);
         }
         self.save_table(name)?;
-        self.mark_change(Instant::now(), format!("langjar: create table \"{name}\""));
+        self.mark_change(Instant::now(), format!("langloom: create table \"{name}\""));
         Ok(true)
     }
 
@@ -165,7 +165,7 @@ impl Workspace {
             return Ok(false);
         }
         storage::delete_table(&self.dictionary_dir(), name)?;
-        self.mark_change(Instant::now(), format!("langjar: delete table \"{name}\""));
+        self.mark_change(Instant::now(), format!("langloom: delete table \"{name}\""));
         Ok(true)
     }
 
@@ -181,7 +181,7 @@ impl Workspace {
     /// Persist in-place edits to the words of a table.
     pub fn save_table_edits(&mut self, table: &str) -> Result<(), StorageError> {
         self.save_table(table)?;
-        self.mark_change(Instant::now(), format!("langjar: edit table \"{table}\""));
+        self.mark_change(Instant::now(), format!("langloom: edit table \"{table}\""));
         Ok(())
     }
 
@@ -202,7 +202,7 @@ impl Workspace {
         self.save_table(table)?;
         self.mark_change(
             Instant::now(),
-            format!("langjar: add word \"{wordname}\" to table \"{table}\""),
+            format!("langloom: add word \"{wordname}\" to table \"{table}\""),
         );
         Ok(Some(id))
     }
@@ -245,7 +245,7 @@ impl Workspace {
         self.save_table(table)?;
         self.mark_change(
             Instant::now(),
-            format!("langjar: add word \"{wordname}\" (from translation) to table \"{table}\""),
+            format!("langloom: add word \"{wordname}\" (from translation) to table \"{table}\""),
         );
         Ok(Some(id))
     }
@@ -259,7 +259,7 @@ impl Workspace {
         self.save_table(table)?;
         self.mark_change(
             Instant::now(),
-            format!("langjar: update word \"{wordname}\" in table \"{table}\""),
+            format!("langloom: update word \"{wordname}\" in table \"{table}\""),
         );
         Ok(true)
     }
@@ -278,7 +278,7 @@ impl Workspace {
         self.mark_change(
             Instant::now(),
             format!(
-                "langjar: delete word \"{}\" from table \"{table}\"",
+                "langloom: delete word \"{}\" from table \"{table}\"",
                 removed.wordname
             ),
         );
@@ -296,7 +296,7 @@ impl Workspace {
         self.save_table(table)?;
         self.mark_change(
             Instant::now(),
-            format!("langjar: add tag \"{name}\" to table \"{table}\""),
+            format!("langloom: add tag \"{name}\" to table \"{table}\""),
         );
         Ok(true)
     }
@@ -321,7 +321,7 @@ impl Workspace {
         };
         self.save_table(table)?;
         let message = format!(
-            "langjar: DELETED TAGS: {table}.{tag} ({} words) <CAN REVERT>",
+            "langloom: DELETED TAGS: {table}.{tag} ({} words) <CAN REVERT>",
             removal.affected
         );
         self.force_checkin(&message);
@@ -339,7 +339,7 @@ impl Workspace {
         }
         self.mark_change(
             Instant::now(),
-            format!("langjar: update note \"{}\"", note.path.display()),
+            format!("langloom: update note \"{}\"", note.path.display()),
         );
         Ok(())
     }
@@ -351,7 +351,7 @@ impl Workspace {
             &self.config_dir().join(storage::TRANSLATION_FILE),
             &self.translation,
         )?;
-        self.mark_change(Instant::now(), "langjar: update translation presets");
+        self.mark_change(Instant::now(), "langloom: update translation presets");
         Ok(())
     }
 
@@ -361,7 +361,7 @@ impl Workspace {
             &self.config_dir().join(storage::TRANSLATION_FILE),
             &self.translation,
         )?;
-        self.mark_change(Instant::now(), "langjar: update translation presets");
+        self.mark_change(Instant::now(), "langloom: update translation presets");
         Ok(())
     }
 
@@ -372,7 +372,7 @@ impl Workspace {
         storage::save_json(&dir.join(storage::GRAMMAR_FILE), &self.grammar)?;
         storage::save_json(&dir.join(storage::TRANSLATION_FILE), &self.translation)?;
         storage::save_json(&dir.join(storage::SETTINGS_FILE), &self.settings)?;
-        self.mark_change(Instant::now(), "langjar: update config");
+        self.mark_change(Instant::now(), "langloom: update config");
         Ok(())
     }
 

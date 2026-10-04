@@ -100,7 +100,7 @@ fn live_preview(ui: &mut Ui, ws: &mut Workspace, state: &mut UiState, path: Path
     let response = ui.add(
         TextEdit::multiline(&mut buffer)
             .desired_width(f32::INFINITY)
-            .id(egui::Id::new(("langjar-note-edit", path.as_os_str()))),
+            .id(egui::Id::new(("langloom-note-edit", path.as_os_str()))),
     );
     if state.focus_edit {
         response.request_focus();

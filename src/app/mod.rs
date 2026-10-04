@@ -24,13 +24,13 @@ use state::GitAction;
 use tab_viewer::AppTabViewer;
 
 /// The root application state.
-pub struct LangjarApp {
+pub struct LangloomApp {
     dock: DockState<Tab>,
     workspace: Workspace,
     state: UiState,
 }
 
-impl LangjarApp {
+impl LangloomApp {
     /// Create the app with an open workspace.
     pub fn new(workspace: Workspace) -> Self {
         Self {
@@ -141,7 +141,7 @@ impl LangjarApp {
                 },
                 GitAction::Checkin(message) => {
                     let message = if message.trim().is_empty() {
-                        "langjar: manual check-in".to_string()
+                        "langloom: manual check-in".to_string()
                     } else {
                         message
                     };
@@ -158,7 +158,7 @@ impl LangjarApp {
     }
 }
 
-impl eframe::App for LangjarApp {
+impl eframe::App for LangloomApp {
     fn ui(&mut self, ui: &mut egui::Ui, _frame: &mut eframe::Frame) {
         let ctx = ui.ctx().clone();
         self.tick(&ctx);
@@ -189,7 +189,7 @@ impl eframe::App for LangjarApp {
             });
 
         egui::CentralPanel::default().show(ui, |ui| {
-            let LangjarApp {
+            let LangloomApp {
                 dock,
                 workspace,
                 state,
@@ -216,7 +216,7 @@ mod tests {
     fn app_builds_from_a_workspace() {
         let dir = tempfile::tempdir().unwrap();
         let workspace = Workspace::load(dir.path()).unwrap();
-        let app = LangjarApp::new(workspace);
+        let app = LangloomApp::new(workspace);
         assert_eq!(app.dock.iter_all_tabs().count(), 1);
     }
 }

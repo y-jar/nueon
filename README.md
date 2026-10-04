@@ -1,4 +1,4 @@
-# langjar
+# langloom
 
 A super awesome conlang editor and creation app.
 
@@ -125,8 +125,8 @@ cargo clippy --all-targets -- -D warnings
 cargo fmt --check
 ```
 
-Run the app against a workspace directory (defaults to `$XDG_DATA_HOME/langjar`
-or `~/.local/share/langjar`):
+Run the app against a workspace directory (defaults to `$XDG_DATA_HOME/langloom`
+or `~/.local/share/langloom`):
 
 ```sh
 cargo run -- /path/to/workspace

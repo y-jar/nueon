@@ -17,7 +17,7 @@ const CHANGED: egui::Color32 = egui::Color32::from_rgb(206, 176, 110);
 /// The global command & search bar.
 pub fn command_bar(ui: &mut Ui, ws: &Workspace, state: &mut UiState) {
     ui.horizontal(|ui| {
-        ui.label(RichText::new("langjar").strong().size(16.0));
+        ui.label(RichText::new("langloom").strong().size(16.0));
         let response = ui.add(
             egui::TextEdit::singleline(&mut state.command_query)
                 .hint_text("Search…   tag:  def:")

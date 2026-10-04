@@ -1131,7 +1131,7 @@ dependencies = [
 ]
 
 [[package]]
-name = "langjar"
+name = "langloom"
 version = "0.1.0"
 dependencies = [
  "anyhow",

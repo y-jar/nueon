@@ -1,10 +1,10 @@
 use std::path::PathBuf;
 
-use langjar::{app, GitStatus, Workspace};
+use langloom::{app, GitStatus, Workspace};
 
 /// Default workspace directory, following the XDG base directory spec.
 fn default_workspace() -> PathBuf {
-    if let Some(dir) = std::env::var_os("LANGJAR_WORKSPACE") {
+    if let Some(dir) = std::env::var_os("LANGLOOM_WORKSPACE") {
         return PathBuf::from(dir);
     }
 
@@ -13,7 +13,7 @@ fn default_workspace() -> PathBuf {
         .or_else(|| std::env::var_os("HOME").map(|home| PathBuf::from(home).join(".local/share")))
         .unwrap_or_else(|| PathBuf::from("."));
 
-    base.join("langjar")
+    base.join("langloom")
 }
 
 fn main() -> Result<(), Box<dyn std::error::Error>> {
@@ -35,18 +35,18 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
 
     let options = eframe::NativeOptions {
         viewport: egui::ViewportBuilder::default()
-            .with_title("langjar")
+            .with_title("langloom")
             .with_inner_size([1280.0, 800.0]),
         ..Default::default()
     };
 
     eframe::run_native(
-        "langjar",
+        "langloom",
         options,
         Box::new(move |cc: &eframe::CreationContext<'_>| {
             app::theme::apply(&cc.egui_ctx);
             let workspace = Workspace::load(&root)?;
-            Ok(Box::new(app::LangjarApp::new(workspace)) as Box<dyn eframe::App>)
+            Ok(Box::new(app::LangloomApp::new(workspace)) as Box<dyn eframe::App>)
         }),
     )?;
 
@@ -54,7 +54,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
 }
 
 fn print_summary(workspace: &Workspace) {
-    println!("langjar workspace: {}", workspace.root_path.display());
+    println!("langloom workspace: {}", workspace.root_path.display());
     println!("tables: {}", workspace.dictionary.tables.len());
     for table in workspace.dictionary.tables() {
         println!(

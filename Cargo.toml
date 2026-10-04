@@ -1,5 +1,5 @@
 [package]
-name = "langjar"
+name = "langloom"
 version = "0.1.0"
 edition = "2021"
 description = "A super awesome conlang editor and creation app."

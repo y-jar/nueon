@@ -1,4 +1,4 @@
-//! Core data model, storage, configuration, and version control for langjar.
+//! Core data model, storage, configuration, and version control for langloom.
 
 pub mod app;
 pub mod config;

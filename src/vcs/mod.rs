@@ -134,7 +134,7 @@ impl GitRepo {
 
         let repo = Self { root };
         repo.ensure_identity()?;
-        repo.commit_all("langjar: initialize workspace")?;
+        repo.commit_all("langloom: initialize workspace")?;
         Ok(repo)
     }
 
@@ -176,8 +176,8 @@ impl GitRepo {
     fn ensure_identity(&self) -> Result<(), VcsError> {
         let email = self.git(&["config", "user.email"])?;
         if String::from_utf8_lossy(&email.stdout).trim().is_empty() {
-            self.checked(&["config", "user.name", "langjar"])?;
-            self.checked(&["config", "user.email", "langjar@localhost"])?;
+            self.checked(&["config", "user.name", "langloom"])?;
+            self.checked(&["config", "user.email", "langloom@localhost"])?;
         }
         Ok(())
     }
@@ -289,12 +289,12 @@ mod tests {
 
         std::fs::write(dir.path().join("more"), "world").unwrap();
         assert!(!repo.is_clean().unwrap());
-        let id = repo.commit_all("langjar: test change").unwrap();
+        let id = repo.commit_all("langloom: test change").unwrap();
         assert!(id.is_some());
 
         let commits = repo.log(10).unwrap();
         assert_eq!(commits.len(), 2);
-        assert_eq!(commits[0].summary, "langjar: test change");
+        assert_eq!(commits[0].summary, "langloom: test change");
         assert!(repo.is_clean().unwrap());
     }
 

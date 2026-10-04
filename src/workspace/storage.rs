@@ -34,7 +34,7 @@ pub const SETTINGS_FILE: &str = "settings";
 /// Workspace `.gitignore` contents.
 pub const GITIGNORE_FILE: &str = ".gitignore";
 /// Files matched by the workspace `.gitignore`.
-pub const GITIGNORE_CONTENT: &str = "# langjar workspace\n*.tmp\n";
+pub const GITIGNORE_CONTENT: &str = "# langloom workspace\n*.tmp\n";
 
 /// Errors raised by the storage layer.
 #[derive(Debug, thiserror::Error)]

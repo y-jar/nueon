@@ -44,7 +44,7 @@ impl TabViewer for AppTabViewer<'_> {
 
 fn welcome(ui: &mut Ui, ws: &Workspace, state: &mut UiState) {
     ui.add_space(8.0);
-    ui.heading("langjar");
+    ui.heading("langloom");
     ui.label("A conlang editor and creation app.");
     ui.add_space(12.0);
 
