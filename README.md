@@ -60,6 +60,15 @@ tab area:
 - **Source Control panel** — status, commit box, and history; git prompts on
   first open, plus an auto check-in toggle.
 
+### Dictionary grid
+
+A builtin `parent` column follows `wordname`, then the table's tags. Left-click
+a column header to sort (repeat toggles ascending/descending, a third time
+clears); right-click for a menu to filter (has/no value, true/false, hide
+column, remove tag); the search icon opens a per-column "contains" search.
+A "Columns" menu unhides columns, "Clear filters" resets the view, and the
+header shows `showing N of M`.
+
 ### Etymology
 
 A word may list multiple `parent` words (a DAG). Renaming or deleting a word
@@ -110,7 +119,7 @@ cargo run -- --check /path/to/workspace
 - [x] egui/eframe three-pane shell, docked tabs, dictionary grid, git panel
 - [x] Block live-preview Markdown notes editor (click-to-reveal, autosave)
 - [x] Etymology/derivation: multi-parent DAG, parent picker, dependency warnings
-- [ ] Dictionary grid column sort / filter / per-column search
+- [x] Dictionary grid column sort / filter / per-column search / visibility
 - [ ] Drag-and-drop translation builder
 - [ ] Dictionary word highlighting / hover previews in the notes editor
 - [ ] Nix flake for packaging

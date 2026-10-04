@@ -1,10 +1,11 @@
 //! UI state and pure navigation helpers.
 
-use std::collections::HashMap;
+use std::collections::{HashMap, HashSet};
 use std::path::PathBuf;
 
 use uuid::Uuid;
 
+use crate::model::query::TableQuery;
 use crate::model::FieldType;
 
 /// A tab in the central dock area.
@@ -173,6 +174,15 @@ pub struct DraftRename {
     pub text: String,
 }
 
+/// Per-table dictionary grid state: sort, filters, hidden columns, search.
+#[derive(Debug, Clone, Default)]
+pub struct GridView {
+    pub query: TableQuery,
+    pub hidden: HashSet<String>,
+    pub search_open: Option<String>,
+    pub focus_search: bool,
+}
+
 /// Transient UI state, independent of the workspace.
 #[derive(Debug, Default)]
 pub struct UiState {
@@ -202,6 +212,8 @@ pub struct UiState {
     pub remove_parent: Option<(String, Uuid, Uuid)>,
     /// Inline rename drafts keyed by `(table, id)`.
     pub rename_drafts: HashMap<(String, Uuid), DraftRename>,
+    /// Per-table grid view state (sort, filter, hidden columns, search).
+    pub grid_views: HashMap<String, GridView>,
     /// Pending tag-removal confirmation.
     pub pending_tag_removal: Option<TagRemovalRequest>,
     /// Whether the user dismissed the git init/install prompt.

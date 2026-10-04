@@ -4,6 +4,7 @@ pub mod derivation;
 mod dictionary;
 mod entry;
 pub mod field;
+pub mod query;
 mod table;
 pub mod tag;
 

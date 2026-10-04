@@ -18,20 +18,14 @@ forgotten. Add to this list instead of dropping ideas. Group items by area.
 
 ## Dictionary grid
 
-- **Column/tag header interactions** (next planned stage): left-click a header
-  to sort that column (repeat click toggles ascending/descending); right-click
-  opens a context menu to filter (and hide/show columns); a **search icon at the
-  top-right of the tag-name box** searches within that column only and shows
-  matching rows.
-- Column sorting for every tag type (text, boolean, tag list, references).
-- Persist hidden columns / sort / filter state.
-- Filter to words with **no parent** (served by the column filter above).
+- Persist hidden columns / sort / filter state across restarts.
 - Misspelling guard for `definition` fields against a standard dependency
   dictionary (PSD §B); never applied to `wordname`.
 - Tag suggestion dropdown when adding a tag (backend `known_tag_names` exists).
 - Bulk edit / multi-select of rows.
 - Field-type editing or migration after tags are created.
-- Rich cell editors for `TagList` (currently display-only in the grid).
+- Rich cell editors for `TagList` (currently display-only in the grid);
+  reference cells are display-only (edit via the inspector parent picker).
 
 ## Etymology / derivation
 
