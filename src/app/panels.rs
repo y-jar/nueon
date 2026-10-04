@@ -227,6 +227,12 @@ pub fn git_panel(ui: &mut Ui, ws: &Workspace, state: &mut UiState) {
         GitStatus::Ready(_) => {
             let repo = ws.git().expect("ready repo");
 
+            let mut auto = ws.settings.auto_checkin;
+            if ui.checkbox(&mut auto, "Auto check-in").changed() {
+                state.set_auto_checkin = Some((auto, ws.settings.auto_checkin_secs));
+            }
+            ui.separator();
+
             match repo.status() {
                 Ok(entries) if entries.is_empty() => {
                     ui.label(RichText::new("Working tree clean.").weak());

@@ -51,15 +51,24 @@ tab area:
 - **Top command bar** — omni-search (`tag:` / `def:` prefixes) and the
   Source Control toggle.
 - **Left sidebar** — notes, tables, and translation presets; create tables.
-- **Center dock** — Welcome, Notes editor, and editable Dictionary grid
-  (add words/tags, inline text/boolean edits, delete, inspect).
+- **Center dock** — Welcome, a live-preview Markdown note editor, and an
+  editable Dictionary grid (add words/tags, inline text/boolean edits, delete,
+  inspect).
 - **Right inspector** — details for the selected word or note, including
   etymology and derivative counts.
 - **Source Control panel** — status, commit box, and history; git prompts on
-  first open.
+  first open, plus an auto check-in toggle.
 
-Keyboard: `Ctrl+K` search, `Ctrl+S` save note, `Ctrl+T` translation,
-`Ctrl+Shift+G` toggle Source Control.
+### Notes editor
+
+Notes render as rich Markdown (headings, lists, quotes, code, bold/italic/
+inline code/links). Click a rendered block to reveal and edit its raw syntax;
+the rest stays rendered. `Ctrl+E` toggles whole-note raw mode. Edits are
+autosaved immediately; version-control check-ins remain gated on git being
+opted in and the auto check-in toggle.
+
+Keyboard: `Ctrl+K` search, `Ctrl+S` save note, `Ctrl+E` raw/rendered toggle,
+`Ctrl+T` translation, `Ctrl+Shift+G` toggle Source Control.
 
 ## Development
 
@@ -90,7 +99,8 @@ cargo run -- --check /path/to/workspace
 
 - [x] Tables + per-table tags, sparse storage, config, git backend
 - [x] egui/eframe three-pane shell, docked tabs, dictionary grid, git panel
-- [ ] Live-preview Markdown editor
+- [x] Block live-preview Markdown notes editor (click-to-reveal, autosave)
 - [ ] Etymology/derivation editing UI + dependency warnings
 - [ ] Drag-and-drop translation builder
+- [ ] Dictionary word highlighting / hover previews in the notes editor
 - [ ] Nix flake for packaging

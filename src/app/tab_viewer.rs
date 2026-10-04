@@ -80,33 +80,7 @@ fn welcome(ui: &mut Ui, ws: &Workspace, state: &mut UiState) {
 }
 
 fn notes(ui: &mut Ui, ws: &mut Workspace, state: &mut UiState, path: PathBuf) {
-    let Some(index) = ws.notes.iter().position(|n| n.path == path) else {
-        ui.label(RichText::new("This note no longer exists.").weak());
-        return;
-    };
-
-    ui.horizontal(|ui| {
-        ui.heading(path.display().to_string());
-        ui.label(RichText::new("autosaves").weak());
-    });
-    ui.separator();
-
-    let snapshot = {
-        let note = &mut ws.notes[index];
-        let response = ui.add_sized(
-            ui.available_size(),
-            egui::TextEdit::multiline(&mut note.raw_content)
-                .font(egui::TextStyle::Monospace)
-                .code_editor(),
-        );
-        response.changed().then(|| note.clone())
-    };
-
-    if let Some(note) = snapshot {
-        if let Err(err) = ws.save_note(&note) {
-            state.status = Some(format!("Save failed: {err}"));
-        }
-    }
+    super::note_editor::notes(ui, ws, state, path);
 }
 
 fn dictionary(ui: &mut Ui, ws: &mut Workspace, state: &mut UiState, table: String) {

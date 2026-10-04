@@ -3,6 +3,8 @@
 pub mod state;
 pub mod theme;
 
+mod markdown;
+mod note_editor;
 mod panels;
 mod tab_viewer;
 
@@ -67,6 +69,10 @@ impl LangjarApp {
             if input.consume_key(Modifiers::CTRL, Key::T) {
                 self.state.request_tab(Tab::Translation);
             }
+            if input.consume_key(Modifiers::CTRL, Key::E) {
+                self.state.raw_mode = !self.state.raw_mode;
+                self.state.note_edit = None;
+            }
             if input.consume_key(Modifiers::CTRL, Key::S) {
                 save = true;
             }
@@ -106,6 +112,13 @@ impl LangjarApp {
     }
 
     fn apply_actions(&mut self) {
+        if let Some((enabled, secs)) = self.state.set_auto_checkin.take() {
+            self.workspace.set_auto_checkin(enabled, secs);
+            if let Err(err) = self.workspace.save_config() {
+                self.state.status = Some(format!("Save settings failed: {err}"));
+            }
+        }
+
         if let Some(action) = self.state.git_action.take() {
             match action {
                 GitAction::Init => match self.workspace.init_git() {

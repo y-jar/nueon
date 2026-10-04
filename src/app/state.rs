@@ -73,6 +73,19 @@ pub struct TagRemovalRequest {
     pub affected: usize,
 }
 
+/// An in-progress raw edit of one region of a note.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct NoteEdit {
+    /// The note this edit belongs to.
+    pub note: PathBuf,
+    /// Absolute byte offset where the edited region starts.
+    pub start: usize,
+    /// Absolute byte offset where the edited region ends.
+    pub end: usize,
+    /// The raw region buffer being edited.
+    pub buffer: String,
+}
+
 /// An action requested by the UI to run against the workspace.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum GitAction {
@@ -93,6 +106,12 @@ pub struct UiState {
     pub selected_word: Option<WordRef>,
     /// Currently selected note, if any.
     pub selected_note: Option<PathBuf>,
+    /// Active raw region edit in the notes view.
+    pub note_edit: Option<NoteEdit>,
+    /// Whether the notes view is in whole-note raw mode.
+    pub raw_mode: bool,
+    /// Set to request focus on the active note editor next frame.
+    pub focus_edit: bool,
     /// Pending tag-removal confirmation.
     pub pending_tag_removal: Option<TagRemovalRequest>,
     /// Whether the user dismissed the git init/install prompt.
@@ -109,6 +128,8 @@ pub struct UiState {
     pub commit_message: String,
     /// Requested git action.
     pub git_action: Option<GitAction>,
+    /// Pending change to the auto-check-in setting (enabled, seconds).
+    pub set_auto_checkin: Option<(bool, u64)>,
     /// Tabs requested to be opened by child views.
     pub open_tabs: Vec<Tab>,
     /// Last status message.
