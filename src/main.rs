@@ -1,7 +1,6 @@
 use std::path::PathBuf;
 
-use anyhow::Result;
-use langjar::{GitStatus, Workspace};
+use langjar::{app, GitStatus, Workspace};
 
 /// Default workspace directory, following the XDG base directory spec.
 fn default_workspace() -> PathBuf {
@@ -17,14 +16,44 @@ fn default_workspace() -> PathBuf {
     base.join("langjar")
 }
 
-fn main() -> Result<()> {
-    let root = std::env::args()
-        .nth(1)
-        .map(PathBuf::from)
-        .unwrap_or_else(default_workspace);
+fn main() -> Result<(), Box<dyn std::error::Error>> {
+    let mut root: Option<PathBuf> = None;
+    let mut check_only = false;
+    for arg in std::env::args().skip(1) {
+        match arg.as_str() {
+            "--check" => check_only = true,
+            _ => root = Some(PathBuf::from(arg)),
+        }
+    }
+    let root = root.unwrap_or_else(default_workspace);
 
-    let workspace = Workspace::load(root)?;
+    if check_only {
+        let workspace = Workspace::load(root)?;
+        print_summary(&workspace);
+        return Ok(());
+    }
 
+    let options = eframe::NativeOptions {
+        viewport: egui::ViewportBuilder::default()
+            .with_title("langjar")
+            .with_inner_size([1280.0, 800.0]),
+        ..Default::default()
+    };
+
+    eframe::run_native(
+        "langjar",
+        options,
+        Box::new(move |cc: &eframe::CreationContext<'_>| {
+            app::theme::apply(&cc.egui_ctx);
+            let workspace = Workspace::load(&root)?;
+            Ok(Box::new(app::LangjarApp::new(workspace)) as Box<dyn eframe::App>)
+        }),
+    )?;
+
+    Ok(())
+}
+
+fn print_summary(workspace: &Workspace) {
     println!("langjar workspace: {}", workspace.root_path.display());
     println!("tables: {}", workspace.dictionary.tables.len());
     for table in workspace.dictionary.tables() {
@@ -46,6 +75,4 @@ fn main() -> Result<()> {
             println!("git: not installed (the app will prompt to install)")
         }
     }
-
-    Ok(())
 }

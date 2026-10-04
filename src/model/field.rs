@@ -4,9 +4,10 @@ use serde::{Deserialize, Serialize};
 use uuid::Uuid;
 
 /// The data type of a [`super::TagDef`].
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Default, Serialize, Deserialize)]
 #[serde(rename_all = "snake_case")]
 pub enum FieldType {
+    #[default]
     Text,
     Boolean,
     TagList,

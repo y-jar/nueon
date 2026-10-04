@@ -1,5 +1,6 @@
 //! Core data model, storage, configuration, and version control for langjar.
 
+pub mod app;
 pub mod config;
 pub mod model;
 pub mod translation;

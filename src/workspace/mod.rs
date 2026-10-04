@@ -176,6 +176,13 @@ impl Workspace {
         storage::write_table(&self.dictionary_dir(), table)
     }
 
+    /// Persist in-place edits to the words of a table.
+    pub fn save_table_edits(&mut self, table: &str) -> Result<(), StorageError> {
+        self.save_table(table)?;
+        self.mark_change(Instant::now(), format!("langjar: edit table \"{table}\""));
+        Ok(())
+    }
+
     // -- words ----------------------------------------------------------
 
     /// Create and persist a new word in a table.
