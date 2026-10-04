@@ -5,6 +5,7 @@ pub mod theme;
 
 mod markdown;
 mod note_editor;
+mod note_tree;
 mod panels;
 mod tab_viewer;
 mod translation_builder;

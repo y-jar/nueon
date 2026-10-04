@@ -255,6 +255,23 @@ pub struct NewWordDraft {
     pub table: Option<String>,
 }
 
+/// What a note prompt is for.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum NotePromptKind {
+    NewNote,
+    NewFolder,
+    Rename,
+}
+
+/// A pending create/rename prompt for the notes tree.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct NotePrompt {
+    pub kind: NotePromptKind,
+    /// Base folder for new items, or the source path when renaming.
+    pub path: PathBuf,
+    pub value: String,
+}
+
 /// Transient UI state, independent of the workspace.
 #[derive(Debug, Default)]
 pub struct UiState {
@@ -274,6 +291,12 @@ pub struct UiState {
     pub raw_mode: bool,
     /// Set to request focus on the active note editor next frame.
     pub focus_edit: bool,
+    /// Pending note create/rename prompt.
+    pub note_prompt: Option<NotePrompt>,
+    /// Pending note/folder deletion confirmation.
+    pub pending_note_delete: Option<PathBuf>,
+    /// Collapsed folders in the notes tree (empty means all expanded).
+    pub collapsed_notes: HashSet<PathBuf>,
     /// Pending dependency warning.
     pub dependency_prompt: Option<DependencyPrompt>,
     /// Manual-convert modal state.

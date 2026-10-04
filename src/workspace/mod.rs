@@ -6,7 +6,7 @@ mod storage;
 pub use note::NoteFile;
 pub use storage::{StorageError, CONFIG_DIR, DICTIONARY_DIR, NOTES_DIR};
 
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 use std::time::{Duration, Instant};
 
 use uuid::Uuid;
@@ -344,6 +344,67 @@ impl Workspace {
         Ok(())
     }
 
+    /// Create an empty note and refresh the note list.
+    pub fn create_note(&mut self, relative: impl AsRef<Path>) -> Result<(), StorageError> {
+        let relative = relative.as_ref();
+        storage::create_note(&self.notes_dir(), relative)?;
+        self.refresh_notes()?;
+        self.mark_change(
+            Instant::now(),
+            format!("langloom: create note \"{}\"", relative.display()),
+        );
+        Ok(())
+    }
+
+    /// Create a notes folder.
+    pub fn create_folder(&mut self, relative: impl AsRef<Path>) -> Result<(), StorageError> {
+        let relative = relative.as_ref();
+        storage::create_folder(&self.notes_dir(), relative)?;
+        self.mark_change(
+            Instant::now(),
+            format!("langloom: create folder \"{}\"", relative.display()),
+        );
+        Ok(())
+    }
+
+    /// Rename a note or folder and refresh the note list.
+    pub fn rename_note(
+        &mut self,
+        from: impl AsRef<Path>,
+        to: impl AsRef<Path>,
+    ) -> Result<(), StorageError> {
+        let from = from.as_ref();
+        let to = to.as_ref();
+        storage::rename_path(&self.notes_dir(), from, to)?;
+        self.refresh_notes()?;
+        self.mark_change(
+            Instant::now(),
+            format!(
+                "langloom: rename \"{}\" to \"{}\"",
+                from.display(),
+                to.display()
+            ),
+        );
+        Ok(())
+    }
+
+    /// Delete a note or folder (recursively) and refresh the note list.
+    pub fn delete_note(&mut self, relative: impl AsRef<Path>) -> Result<(), StorageError> {
+        let relative = relative.as_ref();
+        storage::remove_path(&self.notes_dir(), relative)?;
+        self.refresh_notes()?;
+        self.mark_change(
+            Instant::now(),
+            format!("langloom: delete \"{}\"", relative.display()),
+        );
+        Ok(())
+    }
+
+    fn refresh_notes(&mut self) -> Result<(), StorageError> {
+        self.notes = storage::scan_notes(&self.notes_dir())?;
+        Ok(())
+    }
+
     /// Add a translation preset and persist the translation config.
     pub fn add_preset(&mut self, grid: SyntaxGrid) -> Result<(), StorageError> {
         self.translation.grids.push(grid);
@@ -606,5 +667,23 @@ mod tests {
         let after = translate::translate(&ws.dictionary, &grid, " ", "dog", &HashMap::new());
         assert!(after.complete);
         assert_eq!(after.output, "kala");
+    }
+
+    #[test]
+    fn note_crud_refreshes_the_list() {
+        let dir = tempfile::tempdir().unwrap();
+        let mut ws = Workspace::new(dir.path()).unwrap();
+
+        ws.create_folder("Grammar").unwrap();
+        ws.create_note("Grammar/phonology").unwrap();
+        assert_eq!(ws.notes.len(), 1);
+        assert_eq!(ws.notes[0].path, PathBuf::from("Grammar/phonology"));
+
+        ws.rename_note("Grammar/phonology", "Grammar/sounds")
+            .unwrap();
+        assert_eq!(ws.notes[0].path, PathBuf::from("Grammar/sounds"));
+
+        ws.delete_note("Grammar").unwrap();
+        assert!(ws.notes.is_empty());
     }
 }

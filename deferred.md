@@ -57,7 +57,6 @@ forgotten. Add to this list instead of dropping ideas. Group items by area.
 
 - Native "Open / Create workspace" file picker (`rfd`).
 - Window size and dock layout persistence (eframe storage).
-- Create / rename / delete notes and folders from the sidebar.
 - Settings screen (language metadata editor, script/direction rendering).
 - Grammar rules editor UI (`config/grammar`).
 - Nix flake for packaging, app icon, `.desktop` entry.

@@ -61,6 +61,10 @@ pub enum StorageError {
     TableMissing(String),
     #[error("refusing to write outside the workspace: {0}")]
     UnsafePath(PathBuf),
+    #[error("already exists: {0}")]
+    AlreadyExists(PathBuf),
+    #[error("not found: {0}")]
+    NotFound(PathBuf),
 }
 
 fn io_err(path: impl Into<PathBuf>, source: io::Error) -> StorageError {
@@ -266,6 +270,53 @@ pub fn write_note(notes_dir: &Path, note: &NoteFile) -> Result<(), StorageError>
     atomic_write(&path, note.raw_content.as_bytes())
 }
 
+/// Create an empty note at `notes/<relative>`.
+pub fn create_note(notes_dir: &Path, relative: &Path) -> Result<(), StorageError> {
+    let path = safe_join(notes_dir, relative)?;
+    if path.exists() {
+        return Err(StorageError::AlreadyExists(relative.to_path_buf()));
+    }
+    atomic_write(&path, b"")
+}
+
+/// Create a directory at `notes/<relative>`.
+pub fn create_folder(notes_dir: &Path, relative: &Path) -> Result<(), StorageError> {
+    let path = safe_join(notes_dir, relative)?;
+    if path.exists() {
+        return Err(StorageError::AlreadyExists(relative.to_path_buf()));
+    }
+    fs::create_dir_all(&path).map_err(|e| io_err(&path, e))
+}
+
+/// Rename a note or folder within the notes directory.
+pub fn rename_path(notes_dir: &Path, from: &Path, to: &Path) -> Result<(), StorageError> {
+    let source = safe_join(notes_dir, from)?;
+    let target = safe_join(notes_dir, to)?;
+    if !source.exists() {
+        return Err(StorageError::NotFound(from.to_path_buf()));
+    }
+    if target.exists() {
+        return Err(StorageError::AlreadyExists(to.to_path_buf()));
+    }
+    if let Some(parent) = target.parent() {
+        fs::create_dir_all(parent).map_err(|e| io_err(parent, e))?;
+    }
+    fs::rename(&source, &target).map_err(|e| io_err(&source, e))
+}
+
+/// Delete a note file or a folder (recursively) within the notes directory.
+pub fn remove_path(notes_dir: &Path, relative: &Path) -> Result<(), StorageError> {
+    let path = safe_join(notes_dir, relative)?;
+    if !path.exists() {
+        return Err(StorageError::NotFound(relative.to_path_buf()));
+    }
+    if path.is_dir() {
+        fs::remove_dir_all(&path).map_err(|e| io_err(&path, e))
+    } else {
+        fs::remove_file(&path).map_err(|e| io_err(&path, e))
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -366,5 +417,42 @@ mod tests {
         ensure_gitignore(dir.path()).unwrap();
         let path = dir.path().join(GITIGNORE_FILE);
         assert_eq!(fs::read_to_string(&path).unwrap(), GITIGNORE_CONTENT);
+    }
+
+    #[test]
+    fn note_and_folder_lifecycle() {
+        let dir = tempfile::tempdir().unwrap();
+        let notes = dir.path().join(NOTES_DIR);
+        fs::create_dir_all(&notes).unwrap();
+
+        create_folder(&notes, Path::new("Grammar")).unwrap();
+        assert!(notes.join("Grammar").is_dir());
+        assert!(matches!(
+            create_folder(&notes, Path::new("Grammar")),
+            Err(StorageError::AlreadyExists(_))
+        ));
+
+        create_note(&notes, Path::new("Grammar/phonology")).unwrap();
+        assert!(notes.join("Grammar/phonology").exists());
+        assert!(matches!(
+            create_note(&notes, Path::new("Grammar/phonology")),
+            Err(StorageError::AlreadyExists(_))
+        ));
+
+        rename_path(
+            &notes,
+            Path::new("Grammar/phonology"),
+            Path::new("Grammar/sounds"),
+        )
+        .unwrap();
+        assert!(!notes.join("Grammar/phonology").exists());
+        assert!(notes.join("Grammar/sounds").exists());
+
+        remove_path(&notes, Path::new("Grammar")).unwrap();
+        assert!(!notes.join("Grammar").exists());
+        assert!(matches!(
+            remove_path(&notes, Path::new("Grammar")),
+            Err(StorageError::NotFound(_))
+        ));
     }
 }

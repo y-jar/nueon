@@ -2,9 +2,12 @@
 
 use egui::{RichText, Ui};
 
+use std::path::{Path, PathBuf};
+
+use super::note_tree::{self, NoteNode};
 use super::state::{
     parse_command, CommandFilter, DependencyPrompt, GitAction, ManualConvert, ManualRow,
-    ParentPicker, PendingChange, Tab, UiState, WordRef,
+    NotePrompt, NotePromptKind, ParentPicker, PendingChange, Tab, UiState, WordRef,
 };
 use crate::model::{derivation, FieldValue, PARENT_TAG};
 use crate::vcs::GitStatus;
@@ -104,21 +107,34 @@ fn search(ws: &Workspace, filter: &CommandFilter) -> Vec<(String, uuid::Uuid, St
 
 /// The left navigation sidebar.
 pub fn sidebar(ui: &mut Ui, ws: &mut Workspace, state: &mut UiState) {
-    ui.heading("Notes");
-    if ws.notes.is_empty() {
+    ui.horizontal(|ui| {
+        ui.heading("Notes");
+        ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
+            ui.menu_button("＋", |ui| {
+                if ui.button("New note").clicked() {
+                    state.note_prompt = Some(NotePrompt {
+                        kind: NotePromptKind::NewNote,
+                        path: PathBuf::new(),
+                        value: String::new(),
+                    });
+                    ui.close();
+                }
+                if ui.button("New folder").clicked() {
+                    state.note_prompt = Some(NotePrompt {
+                        kind: NotePromptKind::NewFolder,
+                        path: PathBuf::new(),
+                        value: String::new(),
+                    });
+                    ui.close();
+                }
+            });
+        });
+    });
+    let tree = note_tree::build(&ws.notes);
+    if tree.children.is_empty() {
         ui.label(RichText::new("No notes yet.").weak());
     }
-    for note in &ws.notes {
-        let path = note.path.clone();
-        let selected = state.selected_note.as_ref() == Some(&path);
-        if ui
-            .selectable_label(selected, path.display().to_string())
-            .clicked()
-        {
-            state.selected_note = Some(path.clone());
-            state.request_tab(Tab::Notes(path));
-        }
-    }
+    render_tree(ui, &tree, 0, state);
 
     ui.separator();
     ui.heading("Tables");
@@ -172,6 +188,76 @@ pub fn sidebar(ui: &mut Ui, ws: &mut Workspace, state: &mut UiState) {
     for name in presets {
         if ui.selectable_label(false, name).clicked() {
             state.request_tab(Tab::Translation);
+        }
+    }
+}
+
+fn render_tree(ui: &mut Ui, node: &NoteNode, depth: usize, state: &mut UiState) {
+    for child in &node.children {
+        let path = child.path.clone();
+        let name = child.name.clone();
+        let is_dir = child.is_dir;
+        let expanded = !state.collapsed_notes.contains(&path);
+
+        ui.horizontal(|ui| {
+            ui.add_space(depth as f32 * 10.0);
+            if is_dir {
+                if ui.small_button(if expanded { "▾" } else { "▸" }).clicked() {
+                    if expanded {
+                        state.collapsed_notes.insert(path.clone());
+                    } else {
+                        state.collapsed_notes.remove(&path);
+                    }
+                }
+                ui.label(RichText::new(&name).strong());
+            } else {
+                let selected = state.selected_note.as_ref() == Some(&path);
+                if ui.selectable_label(selected, &name).clicked() {
+                    state.selected_note = Some(path.clone());
+                    state.request_tab(Tab::Notes(path.clone()));
+                }
+            }
+            ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
+                ui.menu_button("⋮", |ui| {
+                    let base = if is_dir {
+                        path.clone()
+                    } else {
+                        path.parent().map(Path::to_path_buf).unwrap_or_default()
+                    };
+                    if ui.button("New note").clicked() {
+                        state.note_prompt = Some(NotePrompt {
+                            kind: NotePromptKind::NewNote,
+                            path: base.clone(),
+                            value: String::new(),
+                        });
+                        ui.close();
+                    }
+                    if ui.button("New folder").clicked() {
+                        state.note_prompt = Some(NotePrompt {
+                            kind: NotePromptKind::NewFolder,
+                            path: base.clone(),
+                            value: String::new(),
+                        });
+                        ui.close();
+                    }
+                    if ui.button("Rename").clicked() {
+                        state.note_prompt = Some(NotePrompt {
+                            kind: NotePromptKind::Rename,
+                            path: path.clone(),
+                            value: name.clone(),
+                        });
+                        ui.close();
+                    }
+                    if ui.button("Delete").clicked() {
+                        state.pending_note_delete = Some(path.clone());
+                        ui.close();
+                    }
+                });
+            });
+        });
+
+        if is_dir && expanded {
+            render_tree(ui, child, depth + 1, state);
         }
     }
 }
@@ -473,6 +559,144 @@ pub fn dialogs(ctx: &egui::Context, ws: &mut Workspace, state: &mut UiState) {
     dependency_dialog(ctx, ws, state);
     manual_convert_dialog(ctx, ws, state);
     parent_picker_dialog(ctx, ws, state);
+    note_prompt_dialog(ctx, ws, state);
+    note_delete_dialog(ctx, ws, state);
+}
+
+fn note_prompt_dialog(ctx: &egui::Context, ws: &mut Workspace, state: &mut UiState) {
+    let Some(mut prompt) = state.note_prompt.take() else {
+        return;
+    };
+    let title = match prompt.kind {
+        NotePromptKind::NewNote => "New note",
+        NotePromptKind::NewFolder => "New folder",
+        NotePromptKind::Rename => "Rename",
+    };
+    let mut submit = false;
+    let mut cancel = false;
+    egui::Window::new(title)
+        .collapsible(false)
+        .resizable(false)
+        .show(ctx, |ui| {
+            ui.add(
+                egui::TextEdit::singleline(&mut prompt.value)
+                    .hint_text("name")
+                    .desired_width(240.0),
+            );
+            ui.horizontal(|ui| {
+                if ui.button("OK").clicked() {
+                    submit = true;
+                }
+                if ui.button("Cancel").clicked() {
+                    cancel = true;
+                }
+            });
+        });
+
+    if cancel {
+        return;
+    }
+    if !submit {
+        state.note_prompt = Some(prompt);
+        return;
+    }
+
+    let name = prompt.value.trim().to_string();
+    if name.is_empty() || name.contains('/') || name.contains('\\') || name == "." || name == ".." {
+        state.status = Some("Invalid name".to_string());
+        state.note_prompt = Some(prompt);
+        return;
+    }
+
+    match prompt.kind {
+        NotePromptKind::NewNote => {
+            let target = prompt.path.join(&name);
+            match ws.create_note(&target) {
+                Ok(()) => {
+                    state.selected_note = Some(target.clone());
+                    state.request_tab(Tab::Notes(target));
+                    state.status = Some(format!("Created note \"{name}\""));
+                }
+                Err(err) => {
+                    state.status = Some(format!("Create failed: {err}"));
+                    state.note_prompt = Some(prompt);
+                }
+            }
+        }
+        NotePromptKind::NewFolder => {
+            let target = prompt.path.join(&name);
+            match ws.create_folder(&target) {
+                Ok(()) => state.status = Some(format!("Created folder \"{name}\"")),
+                Err(err) => {
+                    state.status = Some(format!("Create failed: {err}"));
+                    state.note_prompt = Some(prompt);
+                }
+            }
+        }
+        NotePromptKind::Rename => {
+            let target = prompt
+                .path
+                .parent()
+                .map(|parent| parent.join(&name))
+                .unwrap_or_else(|| PathBuf::from(&name));
+            match ws.rename_note(&prompt.path, &target) {
+                Ok(()) => {
+                    if state.selected_note.as_ref() == Some(&prompt.path) {
+                        state.selected_note = Some(target.clone());
+                    }
+                    state.note_edit = None;
+                    state.status = Some(format!("Renamed to \"{name}\""));
+                }
+                Err(err) => {
+                    state.status = Some(format!("Rename failed: {err}"));
+                    state.note_prompt = Some(prompt);
+                }
+            }
+        }
+    }
+}
+
+fn note_delete_dialog(ctx: &egui::Context, ws: &mut Workspace, state: &mut UiState) {
+    let Some(path) = state.pending_note_delete.clone() else {
+        return;
+    };
+    let mut confirm = false;
+    let mut cancel = false;
+    egui::Window::new("Delete")
+        .collapsible(false)
+        .resizable(false)
+        .show(ctx, |ui| {
+            ui.label(format!("Delete \"{}\"?", path.display()));
+            ui.label(RichText::new("Folders are deleted recursively.").weak());
+            ui.horizontal(|ui| {
+                if ui.button("Delete").clicked() {
+                    confirm = true;
+                }
+                if ui.button("Cancel").clicked() {
+                    cancel = true;
+                }
+            });
+        });
+
+    if cancel {
+        state.pending_note_delete = None;
+    } else if confirm {
+        state.pending_note_delete = None;
+        let affects_selection = state
+            .selected_note
+            .as_ref()
+            .is_some_and(|selected| selected == &path || selected.starts_with(&path));
+        match ws.delete_note(&path) {
+            Ok(()) => {
+                if affects_selection {
+                    state.selected_note = None;
+                    state.note_edit = None;
+                }
+                state.status = Some(format!("Deleted \"{}\"", path.display()));
+            }
+            Err(err) => state.status = Some(format!("Delete failed: {err}")),
+        }
+    }
 }
 
 #[derive(Clone, Copy)]

@@ -50,7 +50,8 @@ tab area:
 
 - **Top command bar** — omni-search (`tag:` / `def:` prefixes) and the
   Source Control toggle.
-- **Left sidebar** — notes, tables, and translation presets; create tables.
+- **Left sidebar** — a notes folder tree (create/rename/delete notes and
+  folders), dictionary tables, and translation presets; create tables.
 - **Center dock** — Welcome, a live-preview Markdown note editor, and an
   editable Dictionary grid (add words/tags, inline text/boolean edits, delete,
   inspect).
@@ -149,6 +150,8 @@ cargo run -- --check /path/to/workspace
 - [x] Translation execution: slot assignment, conflicts, missing/unfilled reports
 - [x] Inline missing-word creation from the translation view
 - [x] Dictionary word highlighting / hover previews in the notes editor
+- [x] Notes sidebar tree with note/folder create, rename, and delete
+- [ ] Workspace registry + switcher dropdown + manage wizard
 - [ ] Nix flake for packaging
 
 See [`deferred.md`](deferred.md) for the full register of deferred work.
