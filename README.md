@@ -134,10 +134,15 @@ translation re-runs immediately.
 > interim egui UI lives in `crates/langloom-egui` and will be removed once the
 > Tauri UI reaches parity.
 
-Everything is provided by the Nix shell (Node/Tauri deps land in stage R1):
+Everything is provided by the Nix shell (Rust + Node 22 + Tauri's WebKit/GTK
+libraries). The Tauri shell is at `src-tauri/` with the Svelte frontend in
+`src/`; see [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md).
 
 ```sh
 nix-shell
+npm install
+npm run tauri dev        # launch the Tauri + Svelte app
+
 cargo test -p langloom-core          # core logic (UI-agnostic)
 cargo clippy --workspace --all-targets -- -D warnings
 cargo fmt --all --check
@@ -165,7 +170,7 @@ Legacy egui UI (kept as a reference until the Tauri port is complete):
 Tauri v2 + Svelte 5 + CodeMirror 6 (current effort):
 
 - [x] R0 — Cargo workspace split (`langloom-core` + legacy `langloom-egui`)
-- [ ] R1 — Toolchain + Tauri scaffold + blank three-pane shell
+- [x] R1 — Toolchain + Tauri scaffold + blank three-pane shell
 - [ ] R2 — Registry + notes tree
 - [ ] R3 — CodeMirror Live Preview editor
 - [ ] R4 — Dictionary grid + inspector

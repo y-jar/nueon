@@ -3,6 +3,7 @@ resolver = "2"
 members = [
     "crates/langloom-core",
     "crates/langloom-egui",
+    "src-tauri",
 ]
 
 [workspace.package]

@@ -3,3 +3,6 @@
 /result-*
 .direnv/
 *.swp
+/node_modules
+/dist
+/src-tauri/gen
