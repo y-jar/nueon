@@ -1,11 +1,14 @@
 //! Translation execution runner: English input to conlang output.
 
+use std::collections::BTreeSet;
+
 use egui::{RichText, Ui};
 
-use crate::model::translate;
+use crate::model::{translate, WORDNAME_TAG};
+use crate::translation::ClauseSlot;
 use crate::workspace::Workspace;
 
-use super::state::UiState;
+use super::state::{NewWordDraft, UiState};
 
 /// The execution section shown below the builder.
 pub fn run(ui: &mut Ui, ws: &mut Workspace, state: &mut UiState) {
@@ -28,6 +31,7 @@ pub fn run(ui: &mut Ui, ws: &mut Workspace, state: &mut UiState) {
     );
     if input_response.changed() {
         state.translation_run.choices.clear();
+        state.translation_run.drafts.clear();
         state.translation_run.ran = false;
     }
 
@@ -118,12 +122,6 @@ pub fn run(ui: &mut Ui, ws: &mut Workspace, state: &mut UiState) {
         ui.colored_label(ui.visuals().hyperlink_color, "complete");
     } else {
         ui.colored_label(ui.visuals().warn_fg_color, "incomplete");
-        if !report.missing.is_empty() {
-            ui.label(format!(
-                "Missing words: {}",
-                words(&report, &report.missing)
-            ));
-        }
         if !report.unfilled.is_empty() {
             let slots: Vec<String> = report
                 .unfilled
@@ -135,6 +133,9 @@ pub fn run(ui: &mut Ui, ws: &mut Workspace, state: &mut UiState) {
         if !report.leftovers.is_empty() {
             let indices: Vec<usize> = report.leftovers.iter().map(|(index, _)| *index).collect();
             ui.label(format!("Unplaced words: {}", words(&report, &indices)));
+        }
+        if !report.missing.is_empty() {
+            missing_editor(ui, ws, state, &report);
         }
     }
 
@@ -164,4 +165,195 @@ fn words(report: &translate::TranslationReport, indices: &[usize]) -> String {
         .map(|token| token.text.clone())
         .collect::<Vec<_>>()
         .join(", ")
+}
+
+fn default_table(ws: &Workspace, state: &UiState) -> Option<String> {
+    let exists = |name: &str| {
+        ws.dictionary
+            .table(name)
+            .is_some()
+            .then(|| name.to_string())
+    };
+    state
+        .translation_run
+        .target_table
+        .as_deref()
+        .and_then(exists)
+        .or_else(|| ws.settings.default_table.as_deref().and_then(exists))
+        .or_else(|| exists("all words"))
+        .or_else(|| ws.dictionary.table_names().first().map(|s| s.to_string()))
+}
+
+fn missing_editor(
+    ui: &mut Ui,
+    ws: &mut Workspace,
+    state: &mut UiState,
+    report: &translate::TranslationReport,
+) {
+    ui.separator();
+    ui.label(RichText::new("Missing words").strong());
+
+    let tables: Vec<String> = ws
+        .dictionary
+        .table_names()
+        .iter()
+        .map(|name| (*name).to_string())
+        .collect();
+    if tables.is_empty() {
+        ui.label(RichText::new("Create a table in the Dictionary tab first.").weak());
+        return;
+    }
+    let default = default_table(ws, state);
+
+    ui.horizontal(|ui| {
+        ui.label("Create in:");
+        let current = state
+            .translation_run
+            .target_table
+            .clone()
+            .or_else(|| default.clone())
+            .unwrap_or_default();
+        egui::ComboBox::from_id_salt("missing_target_table")
+            .selected_text(current.clone())
+            .show_ui(ui, |ui| {
+                for table in &tables {
+                    if ui.selectable_label(&current == table, table).clicked() {
+                        state.translation_run.target_table = Some(table.clone());
+                    }
+                }
+            });
+    });
+
+    let suggested: Vec<String> = report
+        .unfilled
+        .iter()
+        .filter_map(|index| report.slots.get(*index))
+        .filter_map(|outcome| match &outcome.slot {
+            ClauseSlot::RequiredTag { tag } => Some(tag.clone()),
+            _ => None,
+        })
+        .collect();
+
+    let mut status: Option<String> = None;
+    let mut finished: Vec<usize> = Vec::new();
+
+    for &index in &report.missing {
+        let Some(token) = report.tokens.get(index) else {
+            continue;
+        };
+        let draft = state
+            .translation_run
+            .drafts
+            .entry(index)
+            .or_insert_with(|| NewWordDraft {
+                wordname: String::new(),
+                definition: token.text.clone(),
+                tags: Vec::new(),
+                table: None,
+            });
+
+        let effective = draft.table.clone().or_else(|| default.clone());
+        let declared: Vec<String> = effective
+            .as_deref()
+            .and_then(|table| ws.dictionary.table(table))
+            .map(|table| {
+                table
+                    .tags
+                    .iter()
+                    .filter(|tag| tag.name != WORDNAME_TAG)
+                    .map(|tag| tag.name.clone())
+                    .collect()
+            })
+            .unwrap_or_default();
+        let all_tags: Vec<String> = declared
+            .into_iter()
+            .chain(suggested.iter().cloned())
+            .collect::<BTreeSet<_>>()
+            .into_iter()
+            .collect();
+
+        egui::Frame::group(ui.style()).show(ui, |ui| {
+            ui.label(RichText::new(format!("missing: {}", token.text)).weak());
+            ui.horizontal(|ui| {
+                ui.add(
+                    egui::TextEdit::singleline(&mut draft.wordname)
+                        .hint_text(&token.text)
+                        .desired_width(140.0),
+                );
+                ui.add(
+                    egui::TextEdit::singleline(&mut draft.definition)
+                        .hint_text("definition")
+                        .desired_width(160.0),
+                );
+            });
+            ui.horizontal(|ui| {
+                ui.label("table:");
+                let label = draft
+                    .table
+                    .clone()
+                    .unwrap_or_else(|| "inherit default".to_string());
+                egui::ComboBox::from_id_salt(("draft_table", index))
+                    .selected_text(label)
+                    .show_ui(ui, |ui| {
+                        if ui
+                            .selectable_label(draft.table.is_none(), "inherit default")
+                            .clicked()
+                        {
+                            draft.table = None;
+                        }
+                        for table in &tables {
+                            let selected = draft.table.as_deref() == Some(table.as_str());
+                            if ui.selectable_label(selected, table).clicked() {
+                                draft.table = Some(table.clone());
+                            }
+                        }
+                    });
+            });
+            ui.horizontal_wrapped(|ui| {
+                ui.label("tags:");
+                for name in &all_tags {
+                    let mut on = draft.tags.contains(name);
+                    if ui.checkbox(&mut on, name).changed() {
+                        if on {
+                            draft.tags.push(name.clone());
+                        } else {
+                            draft.tags.retain(|tag| tag != name);
+                        }
+                    }
+                }
+            });
+            ui.horizontal(|ui| {
+                let can_create = effective.is_some() && !draft.wordname.trim().is_empty();
+                if ui
+                    .add_enabled(can_create, egui::Button::new("＋ Create"))
+                    .clicked()
+                {
+                    let table = effective.clone().unwrap();
+                    match ws.create_defined_entry(
+                        &table,
+                        draft.wordname.trim(),
+                        &draft.definition,
+                        &draft.tags,
+                    ) {
+                        Ok(Some(_)) => {
+                            status = Some(format!(
+                                "Created \"{}\" in \"{table}\"",
+                                draft.wordname.trim()
+                            ));
+                            finished.push(index);
+                        }
+                        Ok(None) => {}
+                        Err(err) => status = Some(format!("Create failed: {err}")),
+                    }
+                }
+            });
+        });
+    }
+
+    for index in finished {
+        state.translation_run.drafts.remove(&index);
+    }
+    if let Some(message) = status {
+        state.status = Some(message);
+    }
 }

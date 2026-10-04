@@ -12,7 +12,9 @@ use std::time::{Duration, Instant};
 use uuid::Uuid;
 
 use crate::config::{GrammarConfig, LanguageConfig, TranslationConfig, WorkspaceSettings};
-use crate::model::{Dictionary, TagDef, TagRemoval, WordEntry};
+use crate::model::{
+    Dictionary, FieldType, FieldValue, TagDef, TagRemoval, WordEntry, DEFINITION_TAG,
+};
 use crate::translation::SyntaxGrid;
 use crate::vcs::{AutoCheckin, GitRepo, GitStatus, VcsError};
 
@@ -201,6 +203,49 @@ impl Workspace {
         self.mark_change(
             Instant::now(),
             format!("langjar: add word \"{wordname}\" to table \"{table}\""),
+        );
+        Ok(Some(id))
+    }
+
+    /// Create a word with an English definition and optional tags.
+    ///
+    /// Tags that are not yet columns in the table are declared as Boolean
+    /// columns. Used by the translation view's inline missing-word creation.
+    pub fn create_defined_entry(
+        &mut self,
+        table: &str,
+        wordname: impl Into<String>,
+        definition: &str,
+        tags: &[String],
+    ) -> Result<Option<Uuid>, StorageError> {
+        if self.dictionary.table(table).is_none() {
+            return Err(StorageError::TableMissing(table.to_string()));
+        }
+        for tag in tags {
+            let declared = self.dictionary.table(table).is_some_and(|t| t.has_tag(tag));
+            if !declared {
+                self.dictionary
+                    .add_tag(table, TagDef::new(tag.clone(), FieldType::Boolean));
+            }
+        }
+
+        let mut entry = WordEntry::new(wordname);
+        let id = entry.id;
+        if !definition.trim().is_empty() {
+            entry.set(
+                DEFINITION_TAG,
+                FieldValue::TagList(vec![definition.trim().to_string()]),
+            );
+        }
+        for tag in tags {
+            entry.set(tag, FieldValue::Boolean(true));
+        }
+        let wordname = entry.wordname.clone();
+        self.dictionary.add_entry(table, entry);
+        self.save_table(table)?;
+        self.mark_change(
+            Instant::now(),
+            format!("langjar: add word \"{wordname}\" (from translation) to table \"{table}\""),
         );
         Ok(Some(id))
     }
@@ -511,5 +556,55 @@ mod tests {
         let latest = &ws.git().unwrap().log(1).unwrap()[0];
         assert!(latest.summary.contains("DELETED TAGS"));
         assert!(latest.summary.contains("CAN REVERT"));
+    }
+
+    #[test]
+    fn create_defined_entry_sets_fields_and_declares_columns() {
+        let dir = tempfile::tempdir().unwrap();
+        let mut ws = Workspace::new(dir.path()).unwrap();
+        ws.create_table("lexicon").unwrap();
+
+        let id = ws
+            .create_defined_entry("lexicon", "kala", "dog", &["Subject".to_string()])
+            .unwrap()
+            .unwrap();
+
+        let entry = ws.dictionary.get_entry("lexicon", id).unwrap();
+        assert_eq!(entry.definition().unwrap(), ["dog"]);
+        assert!(entry.has("Subject"));
+        assert!(ws.dictionary.table("lexicon").unwrap().has_tag("Subject"));
+
+        let reloaded = Workspace::load(dir.path()).unwrap();
+        let entry = reloaded.dictionary.get_entry("lexicon", id).unwrap();
+        assert_eq!(entry.wordname, "kala");
+        assert!(entry.has("Subject"));
+    }
+
+    #[test]
+    fn created_word_completes_a_translation() {
+        use crate::model::translate;
+        use crate::translation::{ClauseSlot, SyntaxGrid};
+        use std::collections::HashMap;
+
+        let dir = tempfile::tempdir().unwrap();
+        let mut ws = Workspace::new(dir.path()).unwrap();
+        ws.create_table("lexicon").unwrap();
+
+        let grid = SyntaxGrid {
+            preset_name: "s".into(),
+            slots: vec![ClauseSlot::RequiredTag {
+                tag: "Subject".into(),
+            }],
+        };
+
+        let before = translate::translate(&ws.dictionary, &grid, " ", "dog", &HashMap::new());
+        assert!(!before.complete);
+
+        ws.create_defined_entry("lexicon", "kala", "dog", &["Subject".to_string()])
+            .unwrap();
+
+        let after = translate::translate(&ws.dictionary, &grid, " ", "dog", &HashMap::new());
+        assert!(after.complete);
+        assert_eq!(after.output, "kala");
     }
 }

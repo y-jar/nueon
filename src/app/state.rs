@@ -226,6 +226,10 @@ pub struct TranslationRun {
     pub ran: bool,
     /// Separator emitted between words (also stored in translation settings).
     pub separator: String,
+    /// Global table for inline missing-word creation.
+    pub target_table: Option<String>,
+    /// Per-missing-token creation drafts.
+    pub drafts: HashMap<usize, NewWordDraft>,
 }
 
 impl Default for TranslationRun {
@@ -235,8 +239,20 @@ impl Default for TranslationRun {
             choices: HashMap::new(),
             ran: false,
             separator: " ".to_string(),
+            target_table: None,
+            drafts: HashMap::new(),
         }
     }
+}
+
+/// A draft for creating a word inline from a missing translation token.
+#[derive(Debug, Clone, Default)]
+pub struct NewWordDraft {
+    pub wordname: String,
+    pub definition: String,
+    pub tags: Vec<String>,
+    /// Per-word table override; `None` uses the global target table.
+    pub table: Option<String>,
 }
 
 /// Transient UI state, independent of the workspace.

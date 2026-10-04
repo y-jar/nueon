@@ -103,7 +103,12 @@ matched to entries by their `definition` (exact, then substring), assigned to
 slots by tag, and emitted as conlang text. Adjacent words are auto-spaced by
 the configurable separator; literals attach directly. Ambiguous words
 (homographs) require choosing a meaning; missing words and unfilled required
-slots are reported. Inline creation of missing words is a later stage.
+slots are reported.
+
+Missing words can be created inline: type a conlang spelling, pick the target
+table (global default with per-word override), tick tags (undeclared tags are
+added as Boolean columns), and **Create**. The word is saved and the
+translation re-runs immediately.
 
 ## Development
 
@@ -139,6 +144,7 @@ cargo run -- --check /path/to/workspace
 - [x] Dictionary grid column sort / filter / per-column search / visibility
 - [x] Drag-and-drop translation syntax-grid builder
 - [x] Translation execution: slot assignment, conflicts, missing/unfilled reports
+- [x] Inline missing-word creation from the translation view
 - [ ] Dictionary word highlighting / hover previews in the notes editor
 - [ ] Nix flake for packaging
 

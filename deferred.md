@@ -38,7 +38,6 @@ forgotten. Add to this list instead of dropping ideas. Group items by area.
 
 ## Translation engine
 
-- Inline creation of missing words from the translation view.
 - Multi-clause / sentence-level grids (current grids are a single clause).
 - Morphology: inflection, agreement, and tense transforms.
 - Smarter English tokenization / lemmatization (plurals, tense, stopwords).
