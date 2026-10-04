@@ -85,6 +85,9 @@ the rest stays rendered. `Ctrl+E` toggles whole-note raw mode. Edits are
 autosaved immediately; version-control check-ins remain gated on git being
 opted in and the auto check-in toggle.
 
+Words that exist in the dictionary are tinted; hovering shows a tooltip with
+their senses and table, and **Ctrl+click** selects the word in the Inspector.
+
 Keyboard: `Ctrl+K` search, `Ctrl+S` save note, `Ctrl+E` raw/rendered toggle,
 `Ctrl+T` translation, `Ctrl+Shift+G` toggle Source Control.
 
@@ -145,7 +148,7 @@ cargo run -- --check /path/to/workspace
 - [x] Drag-and-drop translation syntax-grid builder
 - [x] Translation execution: slot assignment, conflicts, missing/unfilled reports
 - [x] Inline missing-word creation from the translation view
-- [ ] Dictionary word highlighting / hover previews in the notes editor
+- [x] Dictionary word highlighting / hover previews in the notes editor
 - [ ] Nix flake for packaging
 
 See [`deferred.md`](deferred.md) for the full register of deferred work.

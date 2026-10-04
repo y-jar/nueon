@@ -4,11 +4,12 @@ use std::ops::Range;
 use std::path::{Path, PathBuf};
 
 use egui::{Key, RichText, TextEdit, Ui};
+use uuid::Uuid;
 
 use crate::workspace::Workspace;
 
-use super::markdown::{parse_regions, render_region};
-use super::state::{NoteEdit, UiState};
+use super::markdown::{parse_regions, render_region, WordIndex};
+use super::state::{NoteEdit, UiState, WordRef};
 
 /// Render a note, either as a live preview or as raw Markdown.
 pub fn notes(ui: &mut Ui, ws: &mut Workspace, state: &mut UiState, path: PathBuf) {
@@ -78,9 +79,13 @@ fn live_preview(ui: &mut Ui, ws: &mut Workspace, state: &mut UiState, path: Path
     }
 
     let mut source = ws.notes[index].raw_content.clone();
+    let words = WordIndex::build(&ws.dictionary);
 
     let Some(edit) = state.note_edit.clone().filter(|edit| edit.note == path) else {
-        if let Some(range) = render_source(ui, &source, 0) {
+        let (edit_range, inspect) = render_source(ui, &source, 0, &words);
+        if let Some(id) = inspect {
+            select_word(ws, state, id);
+        } else if let Some(range) = edit_range {
             activate(state, &path, &source, range);
         }
         return;
@@ -89,7 +94,7 @@ fn live_preview(ui: &mut Ui, ws: &mut Workspace, state: &mut UiState, path: Path
     let start = edit.start.min(source.len());
     let end = edit.end.min(source.len()).max(start);
 
-    let mut clicked = render_source(ui, &source[..start], 0);
+    let (mut edit_range, mut inspect) = render_source(ui, &source[..start], 0, &words);
 
     let mut buffer = edit.buffer.clone();
     let response = ui.add(
@@ -119,14 +124,29 @@ fn live_preview(ui: &mut Ui, ws: &mut Workspace, state: &mut UiState, path: Path
     }
 
     let tail = active_end.min(source.len());
-    if let Some(range) = render_source(ui, &source[tail..], tail) {
-        clicked = Some(range);
+    let (tail_edit, tail_inspect) = render_source(ui, &source[tail..], tail, &words);
+    if tail_edit.is_some() {
+        edit_range = tail_edit;
+    }
+    if inspect.is_none() {
+        inspect = tail_inspect;
     }
 
-    if let Some(range) = clicked {
+    if let Some(id) = inspect {
+        select_word(ws, state, id);
+    } else if let Some(range) = edit_range {
         activate(state, &path, &source, range);
     } else if response.lost_focus() {
         state.note_edit = None;
+    }
+}
+
+fn select_word(ws: &Workspace, state: &mut UiState, id: Uuid) {
+    if let Some((table, _)) = ws.dictionary.find_entry(id) {
+        state.selected_word = Some(WordRef {
+            table: table.to_string(),
+            id,
+        });
     }
 }
 
@@ -141,14 +161,24 @@ fn activate(state: &mut UiState, note: &Path, source: &str, range: Range<usize>)
     state.focus_edit = true;
 }
 
-fn render_source(ui: &mut Ui, text: &str, offset: usize) -> Option<Range<usize>> {
-    let mut clicked = None;
+fn render_source(
+    ui: &mut Ui,
+    text: &str,
+    offset: usize,
+    words: &WordIndex,
+) -> (Option<Range<usize>>, Option<Uuid>) {
+    let mut edit = None;
+    let mut inspect = None;
     for region in parse_regions(text) {
-        if render_region(ui, text, &region) {
-            clicked = Some((region.content.start + offset)..(region.content.end + offset));
+        let action = render_region(ui, text, &region, words);
+        if action.edit {
+            edit = Some((region.content.start + offset)..(region.content.end + offset));
+        }
+        if inspect.is_none() {
+            inspect = action.inspect;
         }
     }
-    clicked
+    (edit, inspect)
 }
 
 /// Replace `source[start..end]` with `buffer`, clamping the range to the source.

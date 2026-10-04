@@ -1,93 +1,316 @@
 //! Egui rendering for Markdown regions.
 
 use egui::text::{LayoutJob, TextFormat};
-use egui::{Color32, FontId, Label, Sense, Stroke, TextWrapMode, Ui};
+use egui::{Color32, FontId, Label, RichText, Sense, TextWrapMode, Ui};
 use pulldown_cmark::{Event, Options, Parser, Tag, TagEnd};
+use uuid::Uuid;
 
 use super::parse::{fence_marker, Region, RegionKind};
+use super::words::WordIndex;
 
 const STRONG: Color32 = Color32::from_rgb(240, 232, 216);
 const WEAK: Color32 = Color32::from_rgb(158, 148, 132);
 const ACCENT: Color32 = Color32::from_rgb(196, 148, 92);
 
-/// Render one region. Returns `true` if the user clicked it.
-pub(crate) fn render_region(ui: &mut Ui, text: &str, region: &Region) -> bool {
+/// The result of interacting with one region.
+#[derive(Debug, Clone, Copy, Default)]
+pub(crate) struct RegionAction {
+    /// A plain click requesting raw edit mode.
+    pub edit: bool,
+    /// A Ctrl+click on a dictionary word requesting inspection.
+    pub inspect: Option<Uuid>,
+}
+
+impl RegionAction {
+    fn merge(&mut self, other: RegionAction) {
+        self.edit |= other.edit;
+        if self.inspect.is_none() {
+            self.inspect = other.inspect;
+        }
+    }
+}
+
+/// Render one region. Returns the interaction outcome.
+pub(crate) fn render_region(
+    ui: &mut Ui,
+    text: &str,
+    region: &Region,
+    words: &WordIndex,
+) -> RegionAction {
     let content = &text[region.content.clone()];
     match &region.kind {
         RegionKind::Blank => {
             let (_rect, response) =
                 ui.allocate_exact_size(egui::vec2(ui.available_width(), 10.0), Sense::click());
-            response.clicked()
+            RegionAction {
+                edit: response.clicked(),
+                inspect: None,
+            }
         }
         RegionKind::Rule => {
             ui.separator();
-            false
+            RegionAction::default()
         }
         RegionKind::Heading(level) => {
             let body = strip_heading(content);
-            let job = inline_job(
-                ui,
-                body,
-                FontId::proportional(heading_size(*level)),
-                STRONG,
-                true,
-            );
-            clickable(ui, job, TextWrapMode::Wrap)
+            let style = Style::heading(heading_size(*level));
+            render_lines(ui, body, style, words)
         }
         RegionKind::Paragraph => {
-            let job = inline_job(ui, content, body_font(), ui.visuals().text_color(), false);
-            clickable(ui, job, TextWrapMode::Wrap)
+            let style = Style::body(ui.visuals().text_color());
+            render_lines(ui, content, style, words)
         }
         RegionKind::ListItem { ordered, marker } => {
             let body = strip_list_marker(content);
-            let mut clicked = false;
-            ui.horizontal_wrapped(|ui| {
-                let bullet = if *ordered {
-                    marker.clone()
-                } else {
-                    "•".to_string()
-                };
-                ui.label(egui::RichText::new(bullet).strong().color(STRONG));
-                let job = inline_job(ui, body, body_font(), ui.visuals().text_color(), false);
-                clicked = clickable(ui, job, TextWrapMode::Wrap);
+            let bullet = if *ordered {
+                marker.clone()
+            } else {
+                "•".to_string()
+            };
+            let inner = ui.horizontal_wrapped(|ui| {
+                ui.spacing_mut().item_spacing.x = 0.0;
+                let mut action = RegionAction::default();
+                let bullet_response = ui.add(
+                    Label::new(RichText::new(format!("{bullet} ")).strong().color(STRONG))
+                        .sense(Sense::click()),
+                );
+                if bullet_response.clicked() {
+                    action.edit = true;
+                }
+                action.merge(render_inline(
+                    ui,
+                    body,
+                    Style::body(ui.visuals().text_color()),
+                    words,
+                ));
+                action
             });
-            clicked
+            inner.inner
         }
         RegionKind::BlockQuote => {
             let body = strip_blockquote(content);
-            let mut clicked = false;
-            ui.horizontal(|ui| {
-                ui.colored_label(ACCENT, "▎");
-                let job = inline_job(ui, &body, body_font(), WEAK, false);
-                clicked = clickable(ui, job, TextWrapMode::Wrap);
-            });
-            clicked
+            let mut action = RegionAction::default();
+            for line in body.split('\n') {
+                let inner = ui.horizontal_wrapped(|ui| {
+                    ui.spacing_mut().item_spacing.x = 0.0;
+                    ui.colored_label(ACCENT, "▎ ");
+                    render_inline(ui, line, Style::quote(), words)
+                });
+                action.merge(inner.inner);
+            }
+            action
         }
         RegionKind::CodeBlock { lang } => {
             let body = strip_code_fences(content);
             let job = monospace_job(ui, &body);
-            egui::Frame::NONE
+            let edit = egui::Frame::NONE
                 .fill(ui.visuals().code_bg_color)
                 .inner_margin(6.0)
                 .corner_radius(4.0)
                 .show(ui, |ui| {
                     if !lang.is_empty() {
-                        ui.label(egui::RichText::new(lang).small().color(WEAK));
+                        ui.label(RichText::new(lang).small().color(WEAK));
                     }
-                    clickable(ui, job, TextWrapMode::Extend)
+                    clickable(ui, job)
                 })
-                .inner
+                .inner;
+            RegionAction {
+                edit,
+                inspect: None,
+            }
         }
     }
 }
 
-fn clickable(ui: &mut Ui, job: LayoutJob, wrap: TextWrapMode) -> bool {
-    ui.add(Label::new(job).wrap_mode(wrap).sense(Sense::click()))
-        .clicked()
+fn render_lines(ui: &mut Ui, text: &str, style: Style, words: &WordIndex) -> RegionAction {
+    let mut action = RegionAction::default();
+    for line in text.split('\n') {
+        let inner = ui.horizontal_wrapped(|ui| {
+            ui.spacing_mut().item_spacing.x = 0.0;
+            render_inline(ui, line, style.clone(), words)
+        });
+        action.merge(inner.inner);
+    }
+    action
 }
 
-fn body_font() -> FontId {
-    FontId::proportional(15.0)
+#[derive(Clone)]
+struct Style {
+    size: f32,
+    color: Color32,
+    italics: bool,
+    code: bool,
+    link: bool,
+}
+
+impl Style {
+    fn body(color: Color32) -> Self {
+        Self {
+            size: 15.0,
+            color,
+            italics: false,
+            code: false,
+            link: false,
+        }
+    }
+
+    fn heading(size: f32) -> Self {
+        Self {
+            size,
+            color: STRONG,
+            italics: false,
+            code: false,
+            link: false,
+        }
+    }
+
+    fn quote() -> Self {
+        Self {
+            size: 15.0,
+            color: WEAK,
+            italics: false,
+            code: false,
+            link: false,
+        }
+    }
+
+    fn rich(&self, text: &str) -> RichText {
+        let mut rich = RichText::new(text).size(self.size).color(self.color);
+        if self.italics {
+            rich = rich.italics();
+        }
+        if self.code {
+            rich = rich.monospace();
+        }
+        if self.link {
+            rich = rich.underline();
+        }
+        rich
+    }
+}
+
+fn render_inline(ui: &mut Ui, text: &str, style: Style, words: &WordIndex) -> RegionAction {
+    let mut action = RegionAction::default();
+    let mut emphasis = 0usize;
+    let mut strong = 0usize;
+    let mut link = false;
+
+    for event in Parser::new_ext(text, Options::empty()) {
+        match event {
+            Event::Start(Tag::Emphasis) => emphasis += 1,
+            Event::End(TagEnd::Emphasis) => emphasis = emphasis.saturating_sub(1),
+            Event::Start(Tag::Strong) => strong += 1,
+            Event::End(TagEnd::Strong) => strong = strong.saturating_sub(1),
+            Event::Start(Tag::Link { .. }) => link = true,
+            Event::End(TagEnd::Link) => link = false,
+            Event::Text(value) => {
+                let mut current = style.clone();
+                current.italics = emphasis > 0;
+                if strong > 0 {
+                    current.color = STRONG;
+                }
+                if link {
+                    current.color = ui.visuals().hyperlink_color;
+                    current.link = true;
+                }
+                for (segment, word_like) in split_segments(&value) {
+                    action.merge(render_segment(ui, segment, &current, words, word_like));
+                }
+            }
+            Event::Code(value) => {
+                let mut current = style.clone();
+                current.code = true;
+                action.merge(render_segment(ui, &value, &current, words, false));
+            }
+            Event::SoftBreak | Event::HardBreak => {
+                action.merge(render_segment(ui, " ", &style, words, false));
+            }
+            _ => {}
+        }
+    }
+
+    action
+}
+
+fn render_segment(
+    ui: &mut Ui,
+    text: &str,
+    style: &Style,
+    words: &WordIndex,
+    word_like: bool,
+) -> RegionAction {
+    if text.is_empty() {
+        return RegionAction::default();
+    }
+
+    if word_like {
+        if let Some(hit) = words.get(text) {
+            let response = ui
+                .add(Label::new(style.rich(text).color(ACCENT)).sense(Sense::click()))
+                .on_hover_text(&hit.tooltip);
+            if response.clicked() {
+                return if ctrl_held(ui) {
+                    RegionAction {
+                        edit: false,
+                        inspect: Some(hit.id),
+                    }
+                } else {
+                    RegionAction {
+                        edit: true,
+                        inspect: None,
+                    }
+                };
+            }
+            return RegionAction::default();
+        }
+    }
+
+    let response = ui.add(Label::new(style.rich(text)).sense(Sense::click()));
+    RegionAction {
+        edit: response.clicked(),
+        inspect: None,
+    }
+}
+
+fn ctrl_held(ui: &Ui) -> bool {
+    ui.input(|input| input.modifiers.ctrl || input.modifiers.command)
+}
+
+fn split_segments(text: &str) -> Vec<(&str, bool)> {
+    let mut segments = Vec::new();
+    let mut start = 0;
+    let mut word = None;
+    for (index, character) in text.char_indices() {
+        let is_word = is_word_char(character);
+        match word {
+            None => word = Some(is_word),
+            Some(previous) if previous != is_word => {
+                segments.push((&text[start..index], previous));
+                start = index;
+                word = Some(is_word);
+            }
+            _ => {}
+        }
+    }
+    if let Some(is_word) = word {
+        if start < text.len() {
+            segments.push((&text[start..], is_word));
+        }
+    }
+    segments
+}
+
+fn is_word_char(character: char) -> bool {
+    character.is_alphanumeric() || matches!(character, '-' | '\'' | '\u{2019}')
+}
+
+fn clickable(ui: &mut Ui, job: LayoutJob) -> bool {
+    ui.add(
+        Label::new(job)
+            .wrap_mode(TextWrapMode::Extend)
+            .sense(Sense::click()),
+    )
+    .clicked()
 }
 
 fn heading_size(level: u8) -> f32 {
@@ -99,59 +322,6 @@ fn heading_size(level: u8) -> f32 {
         5 => 16.0,
         _ => 15.0,
     }
-}
-
-fn inline_job(ui: &Ui, text: &str, base: FontId, color: Color32, heading: bool) -> LayoutJob {
-    let mut job = LayoutJob::default();
-    job.wrap.max_width = ui.available_width();
-    job.break_on_newline = true;
-
-    let plain = TextFormat::simple(base.clone(), color);
-    let link_color = ui.visuals().hyperlink_color;
-    let code_bg = ui.visuals().code_bg_color;
-
-    let mut emphasis = 0usize;
-    let mut strong = 0usize;
-    let mut strike = 0usize;
-    let mut link = false;
-
-    for event in Parser::new_ext(text, Options::empty()) {
-        match event {
-            Event::Start(Tag::Emphasis) => emphasis += 1,
-            Event::End(TagEnd::Emphasis) => emphasis = emphasis.saturating_sub(1),
-            Event::Start(Tag::Strong) => strong += 1,
-            Event::End(TagEnd::Strong) => strong = strong.saturating_sub(1),
-            Event::Start(Tag::Strikethrough) => strike += 1,
-            Event::End(TagEnd::Strikethrough) => strike = strike.saturating_sub(1),
-            Event::Start(Tag::Link { .. }) => link = true,
-            Event::End(TagEnd::Link) => link = false,
-            Event::Text(value) => {
-                let mut format = TextFormat::simple(base.clone(), color);
-                format.italics = emphasis > 0;
-                if heading || strong > 0 {
-                    format.color = STRONG;
-                }
-                if strike > 0 {
-                    format.strikethrough = Stroke::new(1.0, format.color);
-                }
-                if link {
-                    format.color = link_color;
-                    format.underline = Stroke::new(1.0, link_color);
-                }
-                job.append(&value, 0.0, format);
-            }
-            Event::Code(value) => {
-                let mut format = TextFormat::simple(FontId::monospace(base.size * 0.95), color);
-                format.background = code_bg;
-                job.append(&value, 0.0, format);
-            }
-            Event::SoftBreak => job.append(" ", 0.0, plain.clone()),
-            Event::HardBreak => job.append("\n", 0.0, plain.clone()),
-            _ => {}
-        }
-    }
-
-    job
 }
 
 fn monospace_job(ui: &Ui, text: &str) -> LayoutJob {
@@ -230,5 +400,15 @@ mod tests {
         assert_eq!(strip_list_marker("3. item"), "item");
         assert_eq!(strip_blockquote("> a\n> b"), "a\nb");
         assert_eq!(strip_code_fences("```rust\nx\n```"), "x");
+    }
+
+    #[test]
+    fn splits_words_and_separators() {
+        assert_eq!(
+            split_segments("kala, velo!"),
+            vec![("kala", true), (", ", false), ("velo", true), ("!", false)]
+        );
+        assert_eq!(split_segments("a-b"), vec![("a-b", true)]);
+        assert!(split_segments("").is_empty());
     }
 }
