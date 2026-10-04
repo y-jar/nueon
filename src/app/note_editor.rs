@@ -41,15 +41,21 @@ pub fn notes(ui: &mut Ui, ws: &mut Workspace, state: &mut UiState, path: PathBuf
     });
     ui.separator();
 
-    egui::ScrollArea::vertical()
-        .auto_shrink([false, false])
-        .show(ui, |ui| {
-            if state.raw_mode {
-                raw_editor(ui, ws, state, index);
-            } else {
-                live_preview(ui, ws, state, path, index);
-            }
-        });
+    let note_path = path.clone();
+    let mut area = egui::ScrollArea::vertical().auto_shrink([false, false]);
+    if state.last_scroll_note.as_ref() != Some(&note_path) {
+        area =
+            area.vertical_scroll_offset(state.note_scroll.get(&note_path).copied().unwrap_or(0.0));
+        state.last_scroll_note = Some(note_path.clone());
+    }
+    let output = area.show(ui, |ui| {
+        if state.raw_mode {
+            raw_editor(ui, ws, state, index);
+        } else {
+            live_preview(ui, ws, state, note_path.clone(), index);
+        }
+    });
+    state.note_scroll.insert(note_path, output.state.offset.y);
 }
 
 fn raw_editor(ui: &mut Ui, ws: &mut Workspace, state: &mut UiState, index: usize) {

@@ -6,7 +6,7 @@ use pulldown_cmark::{Event, Options, Parser, Tag, TagEnd};
 use uuid::Uuid;
 
 use super::parse::{fence_marker, Region, RegionKind};
-use super::words::WordIndex;
+use super::words::{superscript, WordIndex};
 
 const STRONG: Color32 = Color32::from_rgb(240, 232, 216);
 const WEAK: Color32 = Color32::from_rgb(158, 148, 132);
@@ -194,6 +194,7 @@ fn render_inline(ui: &mut Ui, text: &str, style: Style, words: &WordIndex) -> Re
     let mut emphasis = 0usize;
     let mut strong = 0usize;
     let mut link = false;
+    let mut link_url: Option<String> = None;
 
     for event in Parser::new_ext(text, Options::empty()) {
         match event {
@@ -201,8 +202,14 @@ fn render_inline(ui: &mut Ui, text: &str, style: Style, words: &WordIndex) -> Re
             Event::End(TagEnd::Emphasis) => emphasis = emphasis.saturating_sub(1),
             Event::Start(Tag::Strong) => strong += 1,
             Event::End(TagEnd::Strong) => strong = strong.saturating_sub(1),
-            Event::Start(Tag::Link { .. }) => link = true,
-            Event::End(TagEnd::Link) => link = false,
+            Event::Start(Tag::Link { dest_url, .. }) => {
+                link = true;
+                link_url = Some(dest_url.to_string());
+            }
+            Event::End(TagEnd::Link) => {
+                link = false;
+                link_url = None;
+            }
             Event::Text(value) => {
                 let mut current = style.clone();
                 current.italics = emphasis > 0;
@@ -214,16 +221,23 @@ fn render_inline(ui: &mut Ui, text: &str, style: Style, words: &WordIndex) -> Re
                     current.link = true;
                 }
                 for (segment, word_like) in split_segments(&value) {
-                    action.merge(render_segment(ui, segment, &current, words, word_like));
+                    action.merge(render_segment(
+                        ui,
+                        segment,
+                        &current,
+                        words,
+                        word_like,
+                        link_url.as_deref(),
+                    ));
                 }
             }
             Event::Code(value) => {
                 let mut current = style.clone();
                 current.code = true;
-                action.merge(render_segment(ui, &value, &current, words, false));
+                action.merge(render_segment(ui, &value, &current, words, false, None));
             }
             Event::SoftBreak | Event::HardBreak => {
-                action.merge(render_segment(ui, " ", &style, words, false));
+                action.merge(render_segment(ui, " ", &style, words, false, None));
             }
             _ => {}
         }
@@ -238,15 +252,32 @@ fn render_segment(
     style: &Style,
     words: &WordIndex,
     word_like: bool,
+    url: Option<&str>,
 ) -> RegionAction {
     if text.is_empty() {
         return RegionAction::default();
     }
 
+    if let Some(url) = url {
+        let response = ui
+            .add(Label::new(style.rich(text)).sense(Sense::click()))
+            .on_hover_text(url);
+        if response.clicked() {
+            ui.ctx().open_url(egui::OpenUrl::new_tab(url));
+        }
+        return RegionAction::default();
+    }
+
     if word_like {
-        if let Some(hit) = words.get(text) {
+        if let Some(hits) = words.hits(text) {
+            let hit = &hits[0];
+            let label = if hits.len() > 1 {
+                format!("{text}{}", superscript(1))
+            } else {
+                text.to_string()
+            };
             let response = ui
-                .add(Label::new(style.rich(text).color(ACCENT)).sense(Sense::click()))
+                .add(Label::new(style.rich(&label).color(ACCENT)).sense(Sense::click()))
                 .on_hover_text(&hit.tooltip);
             if response.clicked() {
                 return if ctrl_held(ui) {

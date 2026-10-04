@@ -5,13 +5,10 @@ forgotten. Add to this list instead of dropping ideas. Group items by area.
 
 ## Notes editor
 
-- Clickable links (open in browser via `egui::open_url`) and link tooltips.
 - Inline images and image files stored in the workspace.
 - GFM tables, task lists (`- [ ]`), footnotes, HTML blocks, inline/display math.
 - Cross-block keyboard navigation (Up/Down across region boundaries, Home/End).
-- Per-note scroll position memory.
 - Find/replace within a note.
-- Homograph superscripts (`word¹`, `word²`) in editor and inspector.
 - Optional debounced disk writes (currently every keystroke).
 - Cache the dictionary word index (currently rebuilt on each rendered frame);
   a revisioned index on `Dictionary` would avoid the per-frame rebuild.

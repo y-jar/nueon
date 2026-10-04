@@ -99,6 +99,8 @@ opted in and the auto check-in toggle.
 
 Words that exist in the dictionary are tinted; hovering shows a tooltip with
 their senses and table, and **Ctrl+click** selects the word in the Inspector.
+Homographs display a superscript (`word¹`). Markdown links are clickable and
+open in the browser. Each note remembers its scroll position.
 
 Keyboard: `Ctrl+K` search, `Ctrl+S` save note, `Ctrl+E` raw/rendered toggle,
 `Ctrl+T` translation, `Ctrl+Shift+G` toggle Source Control.

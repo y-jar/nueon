@@ -197,6 +197,26 @@ impl Dictionary {
             .collect()
     }
 
+    /// How many entries share this exact spelling across all tables.
+    pub fn homograph_count(&self, wordname: &str) -> usize {
+        self.all_entries()
+            .filter(|entry| entry.wordname == wordname)
+            .count()
+    }
+
+    /// Zero-based position of `id` among entries sharing its spelling,
+    /// ordered by id. Used to render *word¹*, *word²*, … in editor views.
+    pub fn homograph_index(&self, id: Uuid) -> Option<usize> {
+        let wordname = &self.find_entry(id)?.1.wordname;
+        let mut ids: Vec<Uuid> = self
+            .all_entries()
+            .filter(|entry| entry.wordname == *wordname)
+            .map(|entry| entry.id)
+            .collect();
+        ids.sort_unstable();
+        ids.iter().position(|candidate| *candidate == id)
+    }
+
     /// Entries that directly list `parent_id` as a parent, across all tables.
     pub fn children_of(&self, parent_id: Uuid) -> Vec<&WordEntry> {
         self.all_entries()
@@ -445,5 +465,27 @@ mod tests {
         assert_eq!(dict.children_of(c_id).len(), 1);
         assert!(!dict.can_be_parent(a_id, d_id));
         assert!(dict.can_be_parent(d_id, a_id));
+    }
+
+    #[test]
+    fn global_homograph_index_spans_tables() {
+        let mut dict = Dictionary::new();
+        dict.add_table("one");
+        dict.add_table("two");
+        let first = WordEntry::new("kala");
+        let first_id = first.id;
+        dict.add_entry("one", first);
+        let second = WordEntry::new("kala");
+        let second_id = second.id;
+        dict.add_entry("two", second);
+
+        assert_eq!(dict.homograph_count("kala"), 2);
+        let mut indices = [
+            dict.homograph_index(first_id),
+            dict.homograph_index(second_id),
+        ];
+        indices.sort();
+        assert_eq!(indices, [Some(0), Some(1)]);
+        assert_eq!(dict.homograph_index(Uuid::new_v4()), None);
     }
 }

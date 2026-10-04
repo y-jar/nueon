@@ -4,6 +4,7 @@ use egui::{RichText, Ui};
 
 use std::path::{Path, PathBuf};
 
+use super::markdown::superscript;
 use super::note_tree::{self, NoteNode};
 use super::state::{
     parse_command, CommandFilter, DependencyPrompt, GitAction, ManualConvert, ManualRow,
@@ -310,7 +311,17 @@ pub fn inspector(ui: &mut Ui, ws: &mut Workspace, state: &mut UiState) {
         })
         .collect();
 
-    ui.label(RichText::new(&wordname).strong().size(18.0));
+    let heading = if ws.dictionary.homograph_count(&wordname) > 1 {
+        let index = ws
+            .dictionary
+            .homograph_index(word.id)
+            .map(|index| index + 1)
+            .unwrap_or(1);
+        format!("{wordname}{}", superscript(index))
+    } else {
+        wordname.clone()
+    };
+    ui.label(RichText::new(heading).strong().size(18.0));
     ui.label(RichText::new(format!("table: {}", word.table)).weak());
     ui.separator();
 

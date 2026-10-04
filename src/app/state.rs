@@ -329,6 +329,10 @@ pub struct UiState {
     pub pending_note_delete: Option<PathBuf>,
     /// Collapsed folders in the notes tree (empty means all expanded).
     pub collapsed_notes: HashSet<PathBuf>,
+    /// Remembered scroll offset per note.
+    pub note_scroll: HashMap<PathBuf, f32>,
+    /// The note whose scroll offset was last restored.
+    pub last_scroll_note: Option<PathBuf>,
     /// Pending dependency warning.
     pub dependency_prompt: Option<DependencyPrompt>,
     /// Manual-convert modal state.

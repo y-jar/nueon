@@ -35,6 +35,9 @@ impl WordIndex {
                     });
             }
         }
+        for hits in map.values_mut() {
+            hits.sort_by_key(|hit| hit.id);
+        }
         Self { map }
     }
 
@@ -42,11 +45,21 @@ impl WordIndex {
     pub fn hits(&self, word: &str) -> Option<&[WordHit]> {
         self.map.get(&word.to_lowercase()).map(Vec::as_slice)
     }
+}
 
-    /// The first entry matching a spelling.
-    pub fn get(&self, word: &str) -> Option<&WordHit> {
-        self.hits(word).and_then(|hits| hits.first())
+/// Render a 1-based index as a Unicode superscript (e.g. 1 → "¹", 12 → "¹²").
+pub(crate) fn superscript(index: usize) -> String {
+    const DIGITS: [char; 10] = ['⁰', '¹', '²', '³', '⁴', '⁵', '⁶', '⁷', '⁸', '⁹'];
+    if index == 0 {
+        return DIGITS[0].to_string();
     }
+    let mut value = index;
+    let mut digits = Vec::new();
+    while value > 0 {
+        digits.push(DIGITS[value % 10]);
+        value /= 10;
+    }
+    digits.iter().rev().collect()
 }
 
 fn tooltip_for(table: &str, entry: &WordEntry) -> String {
@@ -98,16 +111,26 @@ mod tests {
         let index = WordIndex::build(&dict_with_homographs());
         let hits = index.hits("kala").unwrap();
         assert_eq!(hits.len(), 2);
-        assert_eq!(index.get("KALA").unwrap().id, hits[0].id);
-        assert!(index.get("missing").is_none());
+        assert_eq!(index.hits("KALA").unwrap().first().unwrap().id, hits[0].id);
+        assert!(index.hits("missing").is_none());
     }
 
     #[test]
     fn tooltip_contains_sense_and_table() {
         let index = WordIndex::build(&dict_with_homographs());
-        let hit = index.get("kala").unwrap();
-        assert!(hit.tooltip.contains("to speak"));
+        let hits = index.hits("kala").unwrap();
+        let hit = hits
+            .iter()
+            .find(|hit| hit.tooltip.contains("to speak"))
+            .expect("entry with a definition");
         assert!(hit.tooltip.contains("table: lexicon"));
         assert!(hit.tooltip.contains("pos"));
+    }
+
+    #[test]
+    fn superscript_digits() {
+        assert_eq!(superscript(0), "⁰");
+        assert_eq!(superscript(1), "¹");
+        assert_eq!(superscript(12), "¹²");
     }
 }
