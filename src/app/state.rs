@@ -7,6 +7,7 @@ use uuid::Uuid;
 
 use crate::model::query::TableQuery;
 use crate::model::FieldType;
+use crate::translation::SyntaxGrid;
 
 /// A tab in the central dock area.
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
@@ -183,6 +184,38 @@ pub struct GridView {
     pub focus_search: bool,
 }
 
+/// The drag payload carried by the translation builder.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum BuilderPayload {
+    Tag(String),
+    Literal,
+    Wildcard,
+    Spacer,
+    /// Move the slot at this index.
+    Move(usize),
+}
+
+/// State for the translation syntax-grid builder.
+#[derive(Debug, Clone)]
+pub struct TranslationState {
+    /// The grid currently being edited.
+    pub draft: SyntaxGrid,
+    /// Name of the preset the draft was loaded from, if any.
+    pub loaded: Option<String>,
+    /// Text used when adding a literal slot.
+    pub new_literal: String,
+}
+
+impl Default for TranslationState {
+    fn default() -> Self {
+        Self {
+            draft: SyntaxGrid::new("New preset"),
+            loaded: None,
+            new_literal: String::new(),
+        }
+    }
+}
+
 /// Transient UI state, independent of the workspace.
 #[derive(Debug, Default)]
 pub struct UiState {
@@ -214,6 +247,8 @@ pub struct UiState {
     pub rename_drafts: HashMap<(String, Uuid), DraftRename>,
     /// Per-table grid view state (sort, filter, hidden columns, search).
     pub grid_views: HashMap<String, GridView>,
+    /// Translation syntax-grid builder state.
+    pub translation: TranslationState,
     /// Pending tag-removal confirmation.
     pub pending_tag_removal: Option<TagRemovalRequest>,
     /// Whether the user dismissed the git init/install prompt.

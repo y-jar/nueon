@@ -37,7 +37,7 @@ impl TabViewer for AppTabViewer<'_> {
             Tab::Welcome => welcome(ui, self.workspace, self.state),
             Tab::Notes(path) => notes(ui, self.workspace, self.state, path),
             Tab::Dictionary(table) => dictionary(ui, self.workspace, self.state, table),
-            Tab::Translation => translation(ui, self.workspace),
+            Tab::Translation => translation(ui, self.workspace, self.state),
         }
     }
 }
@@ -615,24 +615,8 @@ fn dictionary(ui: &mut Ui, ws: &mut Workspace, state: &mut UiState, table: Strin
     }
 }
 
-fn translation(ui: &mut Ui, ws: &Workspace) {
-    ui.heading("Translation");
-    ui.label(RichText::new("The drag-and-drop syntax builder arrives in a later stage.").weak());
-    ui.separator();
-    ui.label(RichText::new("Saved syntax grids").strong());
-    if ws.translation.grids.is_empty() {
-        ui.label(RichText::new("No presets yet.").weak());
-    }
-    for grid in &ws.translation.grids {
-        ui.label(format!(
-            "{} · {} slot(s)",
-            grid.preset_name,
-            grid.slots.len()
-        ));
-    }
-    if let Some(default) = &ws.translation.default_rule {
-        ui.label(RichText::new(format!("default rule: {default}")).weak());
-    }
+fn translation(ui: &mut Ui, ws: &mut Workspace, state: &mut UiState) {
+    super::translation_builder::translation(ui, ws, state);
 }
 
 fn display_value(value: &FieldValue) -> String {

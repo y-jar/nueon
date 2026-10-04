@@ -88,6 +88,14 @@ opted in and the auto check-in toggle.
 Keyboard: `Ctrl+K` search, `Ctrl+S` save note, `Ctrl+E` raw/rendered toggle,
 `Ctrl+T` translation, `Ctrl+Shift+G` toggle Source Control.
 
+### Translation builder
+
+The Translation tab builds a clause structure by dragging tags from the palette
+into ordered slots (drag to reorder, or use the up/down buttons). Slots can be a
+required tag (`#Subject`), a literal particle, a wildcard, or a spacer for
+between-word rules. Presets are named, saved, and loaded from
+`config/translation`. Execution (English → conlang) is a later stage.
+
 ## Development
 
 Everything is provided by the Nix shell:
@@ -120,7 +128,8 @@ cargo run -- --check /path/to/workspace
 - [x] Block live-preview Markdown notes editor (click-to-reveal, autosave)
 - [x] Etymology/derivation: multi-parent DAG, parent picker, dependency warnings
 - [x] Dictionary grid column sort / filter / per-column search / visibility
-- [ ] Drag-and-drop translation builder
+- [x] Drag-and-drop translation syntax-grid builder
+- [ ] Translation execution (English → conlang mapping, conflicts, missing words)
 - [ ] Dictionary word highlighting / hover previews in the notes editor
 - [ ] Nix flake for packaging
 

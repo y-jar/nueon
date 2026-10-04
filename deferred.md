@@ -38,11 +38,14 @@ forgotten. Add to this list instead of dropping ideas. Group items by area.
 
 ## Translation engine
 
-- The entire drag-and-drop clause builder (PSD §D).
-- Conflict resolution when an English word maps to multiple conlang words.
+- English→conlang execution: tokenize input, look up equivalents via
+  `definition`, and map words into the grid's slots.
+- Conflict resolution when an English word maps to multiple conlang words
+  (homographs).
 - Inline creation of missing words from the translation view.
-- Preset persistence UI (backend stores grids in `config/translation`).
-- Syntax grid slot editing and reordering.
+- Multi-clause / sentence-level grids (current grids are a single clause).
+- Morphology: inflection, agreement, and tense transforms.
+- Import/export presets.
 
 ## Version control
 

@@ -310,6 +310,16 @@ impl Workspace {
         Ok(())
     }
 
+    /// Persist the translation configuration.
+    pub fn save_translation(&mut self) -> Result<(), StorageError> {
+        storage::save_json(
+            &self.config_dir().join(storage::TRANSLATION_FILE),
+            &self.translation,
+        )?;
+        self.mark_change(Instant::now(), "langjar: update translation presets");
+        Ok(())
+    }
+
     /// Persist all configuration files.
     pub fn save_config(&mut self) -> Result<(), StorageError> {
         let dir = self.config_dir();

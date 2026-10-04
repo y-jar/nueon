@@ -7,6 +7,7 @@ mod markdown;
 mod note_editor;
 mod panels;
 mod tab_viewer;
+mod translation_builder;
 
 pub use state::{Tab, UiState};
 
