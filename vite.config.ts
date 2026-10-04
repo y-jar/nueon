@@ -8,6 +8,10 @@ export default defineConfig({
   plugins: [svelte()],
   // Prevent Vite from obscuring Rust errors.
   clearScreen: false,
+  build: {
+    // CodeMirror is intentionally bundled into the editor chunk.
+    chunkSizeWarningLimit: 1500,
+  },
   server: {
     port: 1420,
     strictPort: true,

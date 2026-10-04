@@ -1,31 +1,40 @@
 <script lang="ts">
-  import { ui, markDirty, saveCurrent } from "../lib/state.svelte";
+  import * as api from "../lib/api";
+  import type { WordIndex } from "../lib/api";
+  import { ui } from "../lib/state.svelte";
+  import { codemirror } from "../lib/editor/action";
 
-  function onKeydown(event: KeyboardEvent) {
-    if ((event.ctrlKey || event.metaKey) && event.key.toLowerCase() === "s") {
-      event.preventDefault();
-      saveCurrent();
+  let index = $state<WordIndex>({});
+  let loadedFor: string | null = null;
+
+  // Load the dictionary word index once per open workspace.
+  $effect(() => {
+    const root = ui.root;
+    if (root && loadedFor !== root) {
+      loadedFor = root;
+      api
+        .wordIndex()
+        .then((value) => (index = value))
+        .catch(() => (index = {}));
     }
-  }
+  });
 </script>
 
 {#if ui.selected}
   <div class="editor">
     <div class="editor-head">
       <span class="muted">{ui.selected}{ui.dirty ? " •" : ""}</span>
-      <button onclick={saveCurrent} disabled={!ui.dirty}>Save</button>
     </div>
-    <textarea
-      class="editor-body"
-      spellcheck="false"
-      bind:value={ui.content}
-      oninput={markDirty}
-      onkeydown={onKeydown}
-      onblur={() => ui.dirty && saveCurrent()}
-    ></textarea>
-    <p class="muted note">
-      Plain-text fallback editor — CodeMirror 6 Live Preview lands in R3.
-    </p>
+    <div
+      class="cm-host"
+      use:codemirror={{
+        path: ui.selected,
+        content: ui.noteContent,
+        index,
+        onDirty: (dirty: boolean) => (ui.dirty = dirty),
+        onSave: api.saveNote,
+      }}
+    ></div>
   </div>
 {:else}
   <div class="placeholder">Select a note, or create one from the sidebar.</div>

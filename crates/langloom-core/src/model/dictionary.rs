@@ -8,7 +8,37 @@ use uuid::Uuid;
 use super::entry::WordEntry;
 use super::field::FieldValue;
 use super::table::{TagRemoval, WordTable};
-use super::tag::{TagDef, WORDNAME_TAG};
+use super::tag::{TagDef, DEFINITION_TAG, PARENT_TAG, WORDNAME_TAG};
+
+/// A dictionary entry matching a spelling, for editor highlighting/hover.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct WordHit {
+    pub id: Uuid,
+    pub table: String,
+    pub wordname: String,
+    /// English senses (`definition` tag).
+    pub senses: Vec<String>,
+    /// Non-reserved tag names applied to the entry.
+    pub tags: Vec<String>,
+}
+
+fn word_hit(table: &str, entry: &WordEntry) -> WordHit {
+    WordHit {
+        id: entry.id,
+        table: table.to_string(),
+        wordname: entry.wordname.clone(),
+        senses: entry
+            .definition()
+            .map(<[String]>::to_vec)
+            .unwrap_or_default(),
+        tags: entry
+            .values
+            .keys()
+            .filter(|name| *name != DEFINITION_TAG && *name != PARENT_TAG)
+            .cloned()
+            .collect(),
+    }
+}
 
 /// The master database held in memory during runtime.
 ///
@@ -215,6 +245,37 @@ impl Dictionary {
             .collect();
         ids.sort_unstable();
         ids.iter().position(|candidate| *candidate == id)
+    }
+
+    /// All entries matching `wordname` (case-insensitive), ordered by id.
+    pub fn word_hits(&self, wordname: &str) -> Vec<WordHit> {
+        let needle = wordname.to_lowercase();
+        let mut hits = Vec::new();
+        for table in self.tables() {
+            for entry in &table.entries {
+                if entry.wordname.to_lowercase() == needle {
+                    hits.push(word_hit(&table.name, entry));
+                }
+            }
+        }
+        hits.sort_by_key(|hit| hit.id);
+        hits
+    }
+
+    /// Index from lowercased wordname to its entries (for the editor).
+    pub fn word_index(&self) -> BTreeMap<String, Vec<WordHit>> {
+        let mut map: BTreeMap<String, Vec<WordHit>> = BTreeMap::new();
+        for table in self.tables() {
+            for entry in &table.entries {
+                map.entry(entry.wordname.to_lowercase())
+                    .or_default()
+                    .push(word_hit(&table.name, entry));
+            }
+        }
+        for hits in map.values_mut() {
+            hits.sort_by_key(|hit| hit.id);
+        }
+        map
     }
 
     /// Entries that directly list `parent_id` as a parent, across all tables.
@@ -487,5 +548,36 @@ mod tests {
         indices.sort();
         assert_eq!(indices, [Some(0), Some(1)]);
         assert_eq!(dict.homograph_index(Uuid::new_v4()), None);
+    }
+
+    #[test]
+    fn word_index_groups_senses_and_tags() {
+        let mut dict = Dictionary::new();
+        dict.add_table("lexicon");
+
+        let mut a = WordEntry::new("kala");
+        a.set(DEFINITION_TAG, FieldValue::TagList(vec!["to speak".into()]));
+        a.set("pos", FieldValue::Text("verb".into()));
+        let aid = a.id;
+        dict.add_entry("lexicon", a);
+
+        let b = WordEntry::new("Kala");
+        let bid = b.id;
+        dict.add_entry("lexicon", b);
+
+        let index = dict.word_index();
+        let hits = index.get("kala").expect("case-insensitive key");
+        assert_eq!(hits.len(), 2);
+
+        let mut ids = [hits[0].id, hits[1].id];
+        ids.sort();
+        let mut expected = [aid, bid];
+        expected.sort();
+        assert_eq!(ids, expected);
+
+        let with_sense = hits.iter().find(|h| !h.senses.is_empty()).unwrap();
+        assert_eq!(with_sense.senses, ["to speak"]);
+        assert!(with_sense.tags.contains(&"pos".to_string()));
+        assert_eq!(dict.word_hits("KALA").len(), 2);
     }
 }

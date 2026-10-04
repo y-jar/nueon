@@ -12,7 +12,7 @@ pub mod translate;
 pub use derivation::{
     apply_rename, parent_candidates, plan_substring_rename, RelatedWord, RenameTarget,
 };
-pub use dictionary::Dictionary;
+pub use dictionary::{Dictionary, WordHit};
 pub use entry::WordEntry;
 pub use field::{FieldType, FieldValue};
 pub use table::{TagRemoval, WordTable};

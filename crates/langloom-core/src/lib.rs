@@ -15,8 +15,8 @@ pub use config::{
 };
 pub use global::{GlobalConfig, WorkspaceEntry};
 pub use model::{
-    Dictionary, FieldType, FieldValue, TagDef, TagRemoval, WordEntry, WordTable, DEFINITION_TAG,
-    PARENT_TAG, WORDNAME_TAG,
+    Dictionary, FieldType, FieldValue, TagDef, TagRemoval, WordEntry, WordHit, WordTable,
+    DEFINITION_TAG, PARENT_TAG, WORDNAME_TAG,
 };
 pub use translation::{ClauseSlot, SyntaxGrid};
 pub use vcs::{AutoCheckin, Commit, GitRepo, GitStatus, StatusEntry, VcsError};

@@ -1,8 +1,10 @@
 //! Tauri command handlers.
 
+mod dictionary;
 mod notes;
 mod workspace;
 
+pub use dictionary::*;
 pub use notes::*;
 pub use workspace::*;
 

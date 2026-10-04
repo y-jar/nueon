@@ -41,6 +41,7 @@ pub fn run() {
             commands::create_folder,
             commands::move_or_rename_note,
             commands::delete_note,
+            commands::word_index,
         ])
         .run(tauri::generate_context!())
         .expect("error while running langloom");

@@ -249,6 +249,37 @@ textarea:focus {
   background: var(--bg);
 }
 
+.cm-host {
+  flex: 1;
+  min-height: 0;
+  overflow: hidden;
+  border: 1px solid var(--border);
+  border-radius: 4px;
+}
+
+.cm-host .cm-editor {
+  height: 100%;
+}
+
+.cm-tooltip {
+  background: var(--panel);
+  border: 1px solid var(--border);
+  border-radius: 4px;
+}
+
+.cm-dict-tooltip {
+  padding: 6px 8px;
+  max-width: 360px;
+  font-size: 12px;
+  color: var(--text);
+}
+
+.cm-dict-row + .cm-dict-row {
+  margin-top: 6px;
+  padding-top: 6px;
+  border-top: 1px solid var(--border);
+}
+
 .note {
   margin: 6px 0 0;
 }

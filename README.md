@@ -172,7 +172,7 @@ Tauri v2 + Svelte 5 + CodeMirror 6 (current effort):
 - [x] R0 — Cargo workspace split (`langloom-core` + legacy `langloom-egui`)
 - [x] R1 — Toolchain + Tauri scaffold + blank three-pane shell
 - [x] R2 — Registry + notes tree
-- [ ] R3 — CodeMirror Live Preview editor
+- [x] R3 — CodeMirror Live Preview editor
 - [ ] R4 — Dictionary grid + inspector
 - [ ] R5 — Translation builder + runner
 - [ ] R6 — Git panel + auto-check-in

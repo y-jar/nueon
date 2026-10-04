@@ -15,6 +15,18 @@ export interface NoteNode {
   children: NoteNode[];
 }
 
+/** A dictionary entry matching a spelling (mirrors `langloom_core::WordHit`). */
+export interface WordHit {
+  id: string;
+  table: string;
+  wordname: string;
+  senses: string[];
+  tags: string[];
+}
+
+/** Lowercased wordname → matching entries. */
+export type WordIndex = Record<string, WordHit[]>;
+
 export const ping = (): Promise<string> => invoke("ping");
 
 // -- workspace registry --------------------------------------------------
@@ -54,3 +66,6 @@ export const moveOrRenameNote = (
 ): Promise<void> => invoke("move_or_rename_note", { oldPath, newPath });
 export const deleteNote = (relPath: string): Promise<void> =>
   invoke("delete_note", { relPath });
+
+// -- dictionary ----------------------------------------------------------
+export const wordIndex = (): Promise<WordIndex> => invoke("word_index");

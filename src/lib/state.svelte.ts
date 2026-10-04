@@ -7,7 +7,7 @@ export const ui = $state({
   root: null as string | null,
   tree: [] as api.NoteNode[],
   selected: null as string | null,
-  content: "",
+  noteContent: "",
   dirty: false,
   status: "",
 });
@@ -40,7 +40,7 @@ export async function openWorkspace(path: string): Promise<void> {
   ui.status = `opening ${path}…`;
   await api.workspaceOpen(path);
   ui.selected = null;
-  ui.content = "";
+  ui.noteContent = "";
   ui.dirty = false;
   await refreshWorkspaces();
   await refreshTree();
@@ -59,27 +59,15 @@ export async function createWorkspace(
 }
 
 export async function selectNote(path: string): Promise<void> {
-  if (ui.dirty && ui.selected) {
-    await saveCurrent();
-  }
+  const content = await api.readNote(path);
   ui.selected = path;
-  ui.content = await api.readNote(path);
+  ui.noteContent = content;
   ui.dirty = false;
-}
-
-export async function saveCurrent(): Promise<void> {
-  if (!ui.selected) return;
-  await api.saveNote(ui.selected, ui.content);
-  ui.dirty = false;
-  ui.status = `saved ${ui.selected}`;
-}
-
-export function markDirty(): void {
-  ui.dirty = true;
 }
 
 export async function createNote(relPath: string): Promise<void> {
   await api.createNote(relPath);
+  await selectNote(relPath);
   ui.status = `created ${relPath}`;
 }
 
@@ -106,7 +94,7 @@ export async function deletePath(relPath: string): Promise<void> {
     ui.selected?.startsWith(`${relPath}/`)
   ) {
     ui.selected = null;
-    ui.content = "";
+    ui.noteContent = "";
   }
   ui.status = `deleted ${relPath}`;
 }
