@@ -6,6 +6,7 @@
 
 use std::collections::HashMap;
 
+use serde::{Deserialize, Serialize};
 use uuid::Uuid;
 
 use super::dictionary::Dictionary;
@@ -13,14 +14,15 @@ use super::entry::WordEntry;
 use crate::translation::{ClauseSlot, SyntaxGrid};
 
 /// One normalized word of the input sentence.
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct Token {
     pub text: String,
     pub normalized: String,
 }
 
 /// A resolved piece of output produced by one slot.
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(tag = "kind", content = "value", rename_all = "snake_case")]
 pub enum Symbol {
     Word(String),
     Literal(String),
@@ -29,7 +31,7 @@ pub enum Symbol {
 }
 
 /// The outcome of one slot.
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct SlotOutcome {
     pub index: usize,
     pub slot: ClauseSlot,
@@ -46,7 +48,7 @@ pub struct Candidate {
 }
 
 /// The full result of a translation attempt.
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct TranslationReport {
     /// The assembled conlang sentence (with placeholders for gaps).
     pub output: String,

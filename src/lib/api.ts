@@ -169,3 +169,63 @@ export const parentCandidates = (child: string): Promise<RelatedWord[]> =>
 export const derivationTree = (id: string): Promise<DerivationTree> =>
   invoke("derivation_tree", { id });
 
+// -- translation ---------------------------------------------------------
+export type ClauseSlot =
+  | { kind: "required_tag"; tag: string }
+  | { kind: "literal"; text: string }
+  | { kind: "wildcard" }
+  | { kind: "spacer" };
+
+export interface SyntaxGrid {
+  preset_name: string;
+  slots: ClauseSlot[];
+}
+
+export interface Token {
+  text: string;
+  normalized: string;
+}
+
+export type Symbol =
+  | { kind: "word"; value: string }
+  | { kind: "literal"; value: string }
+  | { kind: "separator" }
+  | { kind: "placeholder"; value: string };
+
+export interface SlotOutcome {
+  index: number;
+  slot: ClauseSlot;
+  symbol: Symbol;
+}
+
+export interface TranslationReport {
+  output: string;
+  complete: boolean;
+  tokens: Token[];
+  slots: SlotOutcome[];
+  missing: number[];
+  conflicts: number[];
+  leftovers: [number, string][];
+  unfilled: number[];
+}
+
+export const listPresets = (): Promise<SyntaxGrid[]> =>
+  invoke("list_presets");
+export const savePreset = (grid: SyntaxGrid): Promise<void> =>
+  invoke("save_preset", { grid });
+export const deletePreset = (name: string): Promise<boolean> =>
+  invoke("delete_preset", { name });
+export const executeTranslation = (
+  inputText: string,
+  grid: SyntaxGrid,
+  choices: Record<string, string>,
+): Promise<TranslationReport> =>
+  invoke("execute_translation", { inputText, grid, choices });
+export const createTranslationWord = (
+  table: string,
+  wordname: string,
+  definition: string,
+  tags: string[],
+): Promise<string | null> =>
+  invoke("create_translation_word", { table, wordname, definition, tags });
+

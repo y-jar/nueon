@@ -57,6 +57,11 @@ pub fn run() {
             commands::remove_parent,
             commands::parent_candidates,
             commands::derivation_tree,
+            commands::list_presets,
+            commands::save_preset,
+            commands::delete_preset,
+            commands::execute_translation,
+            commands::create_translation_word,
         ])
         .run(tauri::generate_context!())
         .expect("error while running langloom");

@@ -174,7 +174,7 @@ Tauri v2 + Svelte 5 + CodeMirror 6 (current effort):
 - [x] R2 — Registry + notes tree
 - [x] R3 — CodeMirror Live Preview editor
 - [x] R4 — Dictionary grid + inspector
-- [ ] R5 — Translation builder + runner
+- [x] R5 — Translation builder + runner
 - [ ] R6 — Git panel + auto-check-in
 - [ ] R7 — Tree DnD + constructs (images/tables/task lists/footnotes)
 - [ ] R8 — Nix flake packaging + purge legacy egui

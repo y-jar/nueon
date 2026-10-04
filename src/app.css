@@ -501,3 +501,111 @@ button.link {
   padding: 0;
 }
 
+
+/* -- translation --------------------------------------------------------- */
+
+.translation {
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+  padding: 8px;
+  gap: 6px;
+  overflow: auto;
+}
+
+.builder {
+  display: flex;
+  gap: 10px;
+}
+
+.palette {
+  width: 190px;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.chip-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+}
+
+.chip {
+  padding: 1px 6px;
+  font-size: 12px;
+}
+
+.slot-list {
+  flex: 1;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  align-content: flex-start;
+  border: 1px dashed var(--border);
+  border-radius: 4px;
+  padding: 8px;
+  min-height: 60px;
+}
+
+.slot-card {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  background: var(--faint);
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  padding: 2px 6px;
+  font-size: 12px;
+}
+
+.slot-card .grip {
+  cursor: grab;
+  color: var(--muted);
+}
+
+.slot-card input,
+.slot-card select {
+  width: 120px;
+}
+
+.runner {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.runner .row {
+  display: flex;
+  gap: 6px;
+  align-items: center;
+}
+
+.runner textarea {
+  flex: 1;
+  font-family: ui-monospace, monospace;
+}
+
+.output {
+  white-space: pre-wrap;
+  font-family: ui-monospace, monospace;
+  background: var(--bg);
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  padding: 8px;
+  min-height: 32px;
+}
+
+.ok {
+  color: var(--accent);
+  font-size: 12px;
+}
+
+.warn {
+  color: #d6785a;
+  font-size: 12px;
+}
+
+.mono {
+  font-family: ui-monospace, monospace;
+}

@@ -485,6 +485,33 @@ impl Workspace {
         Ok(())
     }
 
+    /// Insert or replace a translation preset by name, then persist.
+    pub fn save_preset(&mut self, grid: SyntaxGrid) -> Result<(), StorageError> {
+        match self
+            .translation
+            .grids
+            .iter_mut()
+            .find(|existing| existing.preset_name == grid.preset_name)
+        {
+            Some(existing) => *existing = grid,
+            None => self.translation.grids.push(grid),
+        }
+        self.save_translation()
+    }
+
+    /// Delete a translation preset by name, then persist.
+    pub fn delete_preset(&mut self, name: &str) -> Result<bool, StorageError> {
+        let before = self.translation.grids.len();
+        self.translation
+            .grids
+            .retain(|grid| grid.preset_name != name);
+        let removed = self.translation.grids.len() != before;
+        if removed {
+            self.save_translation()?;
+        }
+        Ok(removed)
+    }
+
     /// Persist all configuration files.
     pub fn save_config(&mut self) -> Result<(), StorageError> {
         let dir = self.config_dir();

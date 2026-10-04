@@ -2,10 +2,12 @@
 
 mod dictionary;
 mod notes;
+mod translation;
 mod workspace;
 
 pub use dictionary::*;
 pub use notes::*;
+pub use translation::*;
 pub use workspace::*;
 
 use tauri::{AppHandle, Emitter};

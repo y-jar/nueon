@@ -1,0 +1,116 @@
+//! Translation commands: presets, execution, and inline word creation.
+
+use std::collections::HashMap;
+use std::sync::Mutex;
+
+use tauri::{AppHandle, State};
+use uuid::Uuid;
+
+use langloom_core::model::TranslationReport;
+use langloom_core::SyntaxGrid;
+
+use super::changed;
+use crate::state::AppState;
+
+type Shared = Mutex<AppState>;
+
+/// Saved translation presets.
+#[tauri::command]
+pub fn list_presets(state: State<'_, Shared>) -> Result<Vec<SyntaxGrid>, String> {
+    let state = state.lock().map_err(|_| "state poisoned".to_string())?;
+    Ok(state.workspace()?.translation.grids.clone())
+}
+
+/// Insert or replace a preset and persist.
+#[tauri::command]
+pub fn save_preset(
+    app: AppHandle,
+    state: State<'_, Shared>,
+    grid: SyntaxGrid,
+) -> Result<(), String> {
+    let mut state = state.lock().map_err(|_| "state poisoned".to_string())?;
+    state
+        .workspace_mut()?
+        .save_preset(grid)
+        .map_err(|err| err.to_string())?;
+    drop(state);
+    changed(&app, "translation");
+    Ok(())
+}
+
+/// Delete a preset by name and persist.
+#[tauri::command]
+pub fn delete_preset(
+    app: AppHandle,
+    state: State<'_, Shared>,
+    name: String,
+) -> Result<bool, String> {
+    let mut state = state.lock().map_err(|_| "state poisoned".to_string())?;
+    let removed = state
+        .workspace_mut()?
+        .delete_preset(&name)
+        .map_err(|err| err.to_string())?;
+    drop(state);
+    changed(&app, "translation");
+    Ok(removed)
+}
+
+/// Execute the translation engine. `choices` maps token index → entry UUID to
+/// resolve homograph conflicts (JSON keys are strings).
+#[tauri::command]
+pub fn execute_translation(
+    state: State<'_, Shared>,
+    input_text: String,
+    grid: SyntaxGrid,
+    choices: Option<HashMap<String, String>>,
+) -> Result<TranslationReport, String> {
+    let state = state.lock().map_err(|_| "state poisoned".to_string())?;
+    let workspace = state.workspace()?;
+
+    let mut resolved: HashMap<usize, Uuid> = HashMap::new();
+    if let Some(choices) = choices {
+        for (key, value) in choices {
+            let index = key
+                .parse::<usize>()
+                .map_err(|err| format!("bad token index: {err}"))?;
+            let id = Uuid::parse_str(&value).map_err(|err| format!("bad uuid: {err}"))?;
+            resolved.insert(index, id);
+        }
+    }
+
+    let separator = workspace
+        .translation
+        .settings
+        .get("word_separator")
+        .map(String::as_str)
+        .unwrap_or(" ");
+
+    Ok(langloom_core::model::translate::translate(
+        &workspace.dictionary,
+        &grid,
+        separator,
+        &input_text,
+        &resolved,
+    ))
+}
+
+/// Create a word from a missing translation token (writes to the dictionary and
+/// notifies both the grid and the editor).
+#[tauri::command]
+pub fn create_translation_word(
+    app: AppHandle,
+    state: State<'_, Shared>,
+    table: String,
+    wordname: String,
+    definition: String,
+    tags: Vec<String>,
+) -> Result<Option<Uuid>, String> {
+    let mut state = state.lock().map_err(|_| "state poisoned".to_string())?;
+    let id = state
+        .workspace_mut()?
+        .create_defined_entry(&table, wordname, &definition, &tags)
+        .map_err(|err| err.to_string())?;
+    drop(state);
+    changed(&app, "dictionary");
+    Ok(id)
+}
