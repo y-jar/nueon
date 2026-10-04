@@ -54,10 +54,19 @@ tab area:
 - **Center dock** — Welcome, a live-preview Markdown note editor, and an
   editable Dictionary grid (add words/tags, inline text/boolean edits, delete,
   inspect).
-- **Right inspector** — details for the selected word or note, including
-  etymology and derivative counts.
+- **Right inspector** — details for the selected word or note, including its
+  etymology: multiple root/parent words (add/remove with a cycle-safe picker),
+  ancestors, direct derivatives, and dependent counts.
 - **Source Control panel** — status, commit box, and history; git prompts on
   first open, plus an auto check-in toggle.
+
+### Etymology
+
+A word may list multiple `parent` words (a DAG). Renaming or deleting a word
+with dependents raises a warning with four options: Cancel, Auto-Convert
+(rename: substring replace across descendants; delete: unlink the deleted word
+from its children), Manual (bulk editor), or Continue Anyway (keep the link,
+shown as "(missing)" if dangling).
 
 ### Notes editor
 
@@ -100,7 +109,10 @@ cargo run -- --check /path/to/workspace
 - [x] Tables + per-table tags, sparse storage, config, git backend
 - [x] egui/eframe three-pane shell, docked tabs, dictionary grid, git panel
 - [x] Block live-preview Markdown notes editor (click-to-reveal, autosave)
-- [ ] Etymology/derivation editing UI + dependency warnings
+- [x] Etymology/derivation: multi-parent DAG, parent picker, dependency warnings
+- [ ] Dictionary grid column sort / filter / per-column search
 - [ ] Drag-and-drop translation builder
 - [ ] Dictionary word highlighting / hover previews in the notes editor
 - [ ] Nix flake for packaging
+
+See [`deferred.md`](deferred.md) for the full register of deferred work.

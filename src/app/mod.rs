@@ -112,6 +112,18 @@ impl LangjarApp {
     }
 
     fn apply_actions(&mut self) {
+        if let Some((table, child, parent)) = self.state.remove_parent.take() {
+            if self
+                .workspace
+                .dictionary
+                .remove_parent(&table, child, parent)
+            {
+                if let Err(err) = self.workspace.save_table_edits(&table) {
+                    self.state.status = Some(format!("Save failed: {err}"));
+                }
+            }
+        }
+
         if let Some((enabled, secs)) = self.state.set_auto_checkin.take() {
             self.workspace.set_auto_checkin(enabled, secs);
             if let Err(err) = self.workspace.save_config() {
@@ -171,7 +183,7 @@ impl eframe::App for LangjarApp {
         egui::Panel::right("inspector")
             .default_size(240.0)
             .show(ui, |ui| {
-                panels::inspector(ui, &self.workspace, &mut self.state);
+                panels::inspector(ui, &mut self.workspace, &mut self.state);
             });
 
         egui::CentralPanel::default().show(ui, |ui| {

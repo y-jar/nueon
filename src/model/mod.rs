@@ -1,11 +1,15 @@
 //! The dynamic dictionary model.
 
+pub mod derivation;
 mod dictionary;
 mod entry;
 pub mod field;
 mod table;
 pub mod tag;
 
+pub use derivation::{
+    apply_rename, parent_candidates, plan_substring_rename, RelatedWord, RenameTarget,
+};
 pub use dictionary::Dictionary;
 pub use entry::WordEntry;
 pub use field::{FieldType, FieldValue};

@@ -7,8 +7,11 @@ use egui_dock::TabViewer;
 use egui_extras::{Column, TableBuilder};
 use uuid::Uuid;
 
-use super::state::{Tab, TagRemovalRequest, UiState, WordRef};
-use crate::model::{FieldType, FieldValue, TagDef, WORDNAME_TAG};
+use super::state::{
+    DependencyPrompt, DependentInfo, DraftRename, PendingChange, Tab, TagRemovalRequest, UiState,
+    WordRef,
+};
+use crate::model::{derivation, FieldType, FieldValue, TagDef, WORDNAME_TAG};
 use crate::vcs::GitStatus;
 use crate::workspace::Workspace;
 
@@ -197,13 +200,81 @@ fn dictionary(ui: &mut Ui, ws: &mut Workspace, state: &mut UiState, table: Strin
                     .is_some_and(|w| w.id == id && w.table == table);
 
                 row.col(|ui| {
-                    if let Some(entry) = ws.dictionary.get_entry_mut(&table, id) {
-                        if ui
-                            .add(egui::TextEdit::singleline(&mut entry.wordname))
-                            .changed()
-                        {
-                            changed = true;
+                    let key = (table.clone(), id);
+                    let current = ws
+                        .dictionary
+                        .get_entry(&table, id)
+                        .map(|entry| entry.wordname.clone())
+                        .unwrap_or_default();
+                    let mut text = state
+                        .rename_drafts
+                        .get(&key)
+                        .map(|draft| draft.text.clone())
+                        .unwrap_or_else(|| current.clone());
+
+                    let response =
+                        ui.add(egui::TextEdit::singleline(&mut text).desired_width(f32::INFINITY));
+
+                    if response.gained_focus() {
+                        state.rename_drafts.insert(
+                            key.clone(),
+                            DraftRename {
+                                base: current.clone(),
+                                text: current,
+                            },
+                        );
+                    }
+                    if response.changed() {
+                        let base = state
+                            .rename_drafts
+                            .get(&key)
+                            .map(|draft| draft.base.clone())
+                            .unwrap_or_else(|| text.clone());
+                        state.rename_drafts.insert(
+                            key.clone(),
+                            DraftRename {
+                                base: base.clone(),
+                                text: text.clone(),
+                            },
+                        );
+                        if text != base {
+                            if ws.dictionary.dependent_count(id) == 0 {
+                                if let Some(entry) = ws.dictionary.get_entry_mut(&table, id) {
+                                    entry.wordname = text.clone();
+                                }
+                                changed = true;
+                            } else if state
+                                .dependency_prompt
+                                .as_ref()
+                                .is_none_or(|prompt| prompt.change.id() != id)
+                            {
+                                let dependents = derivation::descendants(&ws.dictionary, id)
+                                    .into_iter()
+                                    .map(|dep| DependentInfo {
+                                        table: dep.table,
+                                        id: dep.id,
+                                        wordname: dep.wordname,
+                                    })
+                                    .collect();
+                                state.dependency_prompt = Some(DependencyPrompt {
+                                    change: PendingChange::Rename {
+                                        table: table.clone(),
+                                        id,
+                                        old: base,
+                                        new: text,
+                                    },
+                                    dependents,
+                                });
+                            }
                         }
+                    }
+                    if response.lost_focus()
+                        && state
+                            .dependency_prompt
+                            .as_ref()
+                            .is_none_or(|prompt| prompt.change.id() != id)
+                    {
+                        state.rename_drafts.remove(&key);
                     }
                 });
 
@@ -253,10 +324,31 @@ fn dictionary(ui: &mut Ui, ws: &mut Workspace, state: &mut UiState, table: Strin
     }
 
     if let Some(id) = to_delete {
-        match ws.delete_entry(&table, id) {
-            Ok(Some(_)) => state.selected_word = None,
-            Ok(None) => {}
-            Err(err) => state.status = Some(format!("Delete failed: {err}")),
+        let children = derivation::direct_children(&ws.dictionary, id);
+        if children.is_empty() {
+            match ws.delete_entry(&table, id) {
+                Ok(Some(_)) => state.selected_word = None,
+                Ok(None) => {}
+                Err(err) => state.status = Some(format!("Delete failed: {err}")),
+            }
+        } else {
+            let name = ws
+                .dictionary
+                .get_entry(&table, id)
+                .map(|entry| entry.wordname.clone())
+                .unwrap_or_default();
+            let dependents = children
+                .into_iter()
+                .map(|child| DependentInfo {
+                    table: child.table,
+                    id: child.id,
+                    wordname: child.wordname,
+                })
+                .collect();
+            state.dependency_prompt = Some(DependencyPrompt {
+                change: PendingChange::Delete { table, id, name },
+                dependents,
+            });
         }
     }
 }
@@ -287,5 +379,10 @@ fn display_value(value: &FieldValue) -> String {
         FieldValue::Boolean(flag) => flag.to_string(),
         FieldValue::TagList(list) => list.join(", "),
         FieldValue::Reference(id) => format!("→ {id}"),
+        FieldValue::References(ids) => ids
+            .iter()
+            .map(|id| format!("→ {id}"))
+            .collect::<Vec<_>>()
+            .join(", "),
     }
 }

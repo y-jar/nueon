@@ -197,14 +197,59 @@ impl Dictionary {
             .collect()
     }
 
-    /// Direct children derived from `parent_id`, across all tables.
+    /// Entries that directly list `parent_id` as a parent, across all tables.
     pub fn children_of(&self, parent_id: Uuid) -> Vec<&WordEntry> {
         self.all_entries()
-            .filter(|e| e.parent() == Some(parent_id))
+            .filter(|entry| entry.parents().contains(&parent_id))
             .collect()
     }
 
-    /// Every descendant derived from `parent_id`, cycle-safe.
+    /// The parent ids of `child_id`.
+    pub fn parents_of(&self, child_id: Uuid) -> Vec<Uuid> {
+        self.find_entry(child_id)
+            .map(|(_, entry)| entry.parents())
+            .unwrap_or_default()
+    }
+
+    /// The parent entries of `child_id`, with their table names. Missing
+    /// parents (dangling links) are skipped.
+    pub fn parent_entries(&self, child_id: Uuid) -> Vec<(&str, &WordEntry)> {
+        self.parents_of(child_id)
+            .into_iter()
+            .filter_map(|id| self.find_entry(id))
+            .collect()
+    }
+
+    /// Every ancestor of `id`, cycle-safe.
+    pub fn ancestors_of(&self, id: Uuid) -> Vec<&WordEntry> {
+        let index: HashMap<Uuid, &WordEntry> = self.all_entries().map(|e| (e.id, e)).collect();
+
+        let mut result = Vec::new();
+        let mut visited = HashSet::new();
+        visited.insert(id);
+
+        let mut queue: VecDeque<Uuid> = index
+            .get(&id)
+            .map(|entry| entry.parents())
+            .unwrap_or_default()
+            .into();
+
+        while let Some(parent_id) = queue.pop_front() {
+            if !visited.insert(parent_id) {
+                continue;
+            }
+            if let Some(entry) = index.get(&parent_id) {
+                result.push(*entry);
+                for parent in entry.parents() {
+                    queue.push_back(parent);
+                }
+            }
+        }
+
+        result
+    }
+
+    /// Every descendant of `parent_id` across all parent branches, cycle-safe.
     pub fn descendants_of(&self, parent_id: Uuid) -> Vec<&WordEntry> {
         let index: HashMap<Uuid, &WordEntry> = self.all_entries().map(|e| (e.id, e)).collect();
 
@@ -214,8 +259,8 @@ impl Dictionary {
 
         let mut queue: VecDeque<Uuid> = index
             .values()
-            .filter(|e| e.parent() == Some(parent_id))
-            .map(|e| e.id)
+            .filter(|entry| entry.parents().contains(&parent_id))
+            .map(|entry| entry.id)
             .collect();
 
         while let Some(id) = queue.pop_front() {
@@ -224,7 +269,7 @@ impl Dictionary {
             }
             if let Some(entry) = index.get(&id) {
                 result.push(*entry);
-                for child in index.values().filter(|e| e.parent() == Some(id)) {
+                for child in index.values().filter(|e| e.parents().contains(&id)) {
                     queue.push_back(child.id);
                 }
             }
@@ -237,6 +282,40 @@ impl Dictionary {
     pub fn dependent_count(&self, id: Uuid) -> usize {
         self.descendants_of(id).len()
     }
+
+    /// Whether `parent_id` may be added as a parent of `child_id` without
+    /// creating a cycle. A word cannot parent itself or its own descendant.
+    pub fn can_be_parent(&self, child_id: Uuid, parent_id: Uuid) -> bool {
+        if child_id == parent_id {
+            return false;
+        }
+        !self
+            .descendants_of(child_id)
+            .iter()
+            .any(|entry| entry.id == parent_id)
+    }
+
+    /// Add `parent_id` to `child_id`'s parents, rejecting cycles.
+    pub fn add_parent(&mut self, table: &str, child_id: Uuid, parent_id: Uuid) -> bool {
+        if !self.can_be_parent(child_id, parent_id) {
+            return false;
+        }
+        match self.get_entry_mut(table, child_id) {
+            Some(entry) => {
+                entry.add_parent(parent_id);
+                true
+            }
+            None => false,
+        }
+    }
+
+    /// Remove `parent_id` from `child_id`'s parents.
+    pub fn remove_parent(&mut self, table: &str, child_id: Uuid, parent_id: Uuid) -> bool {
+        match self.get_entry_mut(table, child_id) {
+            Some(entry) => entry.remove_parent(parent_id),
+            None => false,
+        }
+    }
 }
 
 fn entry_matches(entry: &WordEntry, needle: &str) -> bool {
@@ -246,7 +325,7 @@ fn entry_matches(entry: &WordEntry, needle: &str) -> bool {
     entry.values.values().any(|value| match value {
         FieldValue::Text(text) => text.to_lowercase().contains(needle),
         FieldValue::TagList(list) => list.iter().any(|s| s.to_lowercase().contains(needle)),
-        FieldValue::Boolean(_) | FieldValue::Reference(_) => false,
+        FieldValue::Boolean(_) | FieldValue::Reference(_) | FieldValue::References(_) => false,
     })
 }
 
@@ -335,5 +414,36 @@ mod tests {
         let removal = dict.remove_tag("verbs", "transitivity").unwrap();
         assert_eq!(removal.affected, 1);
         assert!(!dict.table("verbs").unwrap().has_tag("transitivity"));
+    }
+
+    #[test]
+    fn multi_parent_union_and_ancestors() {
+        let mut dict = Dictionary::new();
+        dict.add_table("t");
+
+        let a = WordEntry::new("a");
+        let a_id = a.id;
+        dict.add_entry("t", a);
+        let b = WordEntry::new("b");
+        let b_id = b.id;
+        dict.add_entry("t", b);
+
+        let mut c = WordEntry::new("c");
+        let c_id = c.id;
+        c.add_parent(a_id);
+        c.add_parent(b_id);
+        dict.add_entry("t", c);
+
+        let mut d = WordEntry::new("d");
+        let d_id = d.id;
+        d.add_parent(c_id);
+        dict.add_entry("t", d);
+
+        assert_eq!(dict.descendants_of(a_id).len(), 2);
+        assert_eq!(dict.descendants_of(b_id).len(), 2);
+        assert_eq!(dict.ancestors_of(d_id).len(), 3);
+        assert_eq!(dict.children_of(c_id).len(), 1);
+        assert!(!dict.can_be_parent(a_id, d_id));
+        assert!(dict.can_be_parent(d_id, a_id));
     }
 }

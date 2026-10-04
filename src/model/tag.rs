@@ -16,7 +16,7 @@ pub fn reserved_kind(name: &str) -> Option<FieldType> {
     match name {
         WORDNAME_TAG => Some(FieldType::Text),
         DEFINITION_TAG => Some(FieldType::TagList),
-        PARENT_TAG => Some(FieldType::Reference),
+        PARENT_TAG => Some(FieldType::References),
         _ => None,
     }
 }
@@ -80,7 +80,7 @@ mod tests {
     #[test]
     fn reserved_names_get_fixed_types() {
         let parent = TagDef::new("parent", FieldType::Text);
-        assert_eq!(parent.kind, FieldType::Reference);
+        assert_eq!(parent.kind, FieldType::References);
 
         let definition = TagDef::new("definition", FieldType::Text);
         assert_eq!(definition.kind, FieldType::TagList);

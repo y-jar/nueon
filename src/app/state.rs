@@ -1,5 +1,6 @@
 //! UI state and pure navigation helpers.
 
+use std::collections::HashMap;
 use std::path::PathBuf;
 
 use uuid::Uuid;
@@ -93,6 +94,85 @@ pub enum GitAction {
     Checkin(String),
 }
 
+/// A structural word change that may have dependents.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum PendingChange {
+    Rename {
+        table: String,
+        id: Uuid,
+        old: String,
+        new: String,
+    },
+    Delete {
+        table: String,
+        id: Uuid,
+        name: String,
+    },
+}
+
+impl PendingChange {
+    /// The id of the word being changed.
+    pub fn id(&self) -> Uuid {
+        match self {
+            PendingChange::Rename { id, .. } | PendingChange::Delete { id, .. } => *id,
+        }
+    }
+
+    /// The table the changed word belongs to.
+    pub fn table(&self) -> &str {
+        match self {
+            PendingChange::Rename { table, .. } | PendingChange::Delete { table, .. } => table,
+        }
+    }
+}
+
+/// A word that depends on the changed word.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct DependentInfo {
+    pub table: String,
+    pub id: Uuid,
+    pub wordname: String,
+}
+
+/// A pending dependency warning.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct DependencyPrompt {
+    pub change: PendingChange,
+    pub dependents: Vec<DependentInfo>,
+}
+
+/// One editable row of the manual-convert modal.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct ManualRow {
+    pub table: String,
+    pub id: Uuid,
+    pub original: String,
+    pub text: String,
+    pub delete: bool,
+}
+
+/// State for the manual-convert modal.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct ManualConvert {
+    pub change: PendingChange,
+    pub rows: Vec<ManualRow>,
+}
+
+/// State for the parent picker modal.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct ParentPicker {
+    pub table: String,
+    pub child: Uuid,
+    pub filter: String,
+}
+
+/// An in-progress inline rename draft for a grid cell.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct DraftRename {
+    pub base: String,
+    pub text: String,
+}
+
 /// Transient UI state, independent of the workspace.
 #[derive(Debug, Default)]
 pub struct UiState {
@@ -112,6 +192,16 @@ pub struct UiState {
     pub raw_mode: bool,
     /// Set to request focus on the active note editor next frame.
     pub focus_edit: bool,
+    /// Pending dependency warning.
+    pub dependency_prompt: Option<DependencyPrompt>,
+    /// Manual-convert modal state.
+    pub manual_convert: Option<ManualConvert>,
+    /// Parent picker modal state.
+    pub parent_picker: Option<ParentPicker>,
+    /// Pending parent removal as `(table, child, parent)`.
+    pub remove_parent: Option<(String, Uuid, Uuid)>,
+    /// Inline rename drafts keyed by `(table, id)`.
+    pub rename_drafts: HashMap<(String, Uuid), DraftRename>,
     /// Pending tag-removal confirmation.
     pub pending_tag_removal: Option<TagRemovalRequest>,
     /// Whether the user dismissed the git init/install prompt.

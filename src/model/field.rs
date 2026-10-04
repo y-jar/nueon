@@ -11,8 +11,10 @@ pub enum FieldType {
     Text,
     Boolean,
     TagList,
-    /// A pointer to another word's UUID (used by the reserved `parent` tag).
+    /// A pointer to another word's UUID.
     Reference,
+    /// A list of pointers to other words' UUIDs (used by `parent`).
+    References,
 }
 
 /// The actual data stored for a tag on a [`super::WordEntry`].
@@ -23,6 +25,7 @@ pub enum FieldValue {
     Boolean(bool),
     TagList(Vec<String>),
     Reference(Uuid),
+    References(Vec<Uuid>),
 }
 
 impl FieldValue {
@@ -33,6 +36,7 @@ impl FieldValue {
             FieldValue::Boolean(_) => FieldType::Boolean,
             FieldValue::TagList(_) => FieldType::TagList,
             FieldValue::Reference(_) => FieldType::Reference,
+            FieldValue::References(_) => FieldType::References,
         }
     }
 

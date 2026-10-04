@@ -71,23 +71,64 @@ impl WordEntry {
         }
     }
 
-    /// The root/parent word's id, if a `parent` reference is applied.
-    pub fn parent(&self) -> Option<Uuid> {
+    /// The root/parent words this entry derives from (may be empty).
+    ///
+    /// Reads both the multi-value `References` form and the legacy single
+    /// `Reference` form.
+    pub fn parents(&self) -> Vec<Uuid> {
         match self.values.get(PARENT_TAG) {
-            Some(FieldValue::Reference(id)) => Some(*id),
-            _ => None,
+            Some(FieldValue::Reference(id)) => vec![*id],
+            Some(FieldValue::References(ids)) => ids.clone(),
+            _ => Vec::new(),
         }
     }
 
-    /// Set the `parent` reference.
-    pub fn set_parent(&mut self, parent_id: Uuid) {
-        self.values
-            .insert(PARENT_TAG.to_string(), FieldValue::Reference(parent_id));
+    /// Replace the parent list. An empty list removes the tag (sparse).
+    pub fn set_parents(&mut self, parents: &[Uuid]) {
+        if parents.is_empty() {
+            self.values.remove(PARENT_TAG);
+        } else {
+            self.values.insert(
+                PARENT_TAG.to_string(),
+                FieldValue::References(parents.to_vec()),
+            );
+        }
     }
 
-    /// Whether this entry is derived from a root/parent word.
+    /// Add a parent if it is not already present.
+    pub fn add_parent(&mut self, parent: Uuid) {
+        let mut parents = self.parents();
+        if !parents.contains(&parent) {
+            parents.push(parent);
+            self.set_parents(&parents);
+        }
+    }
+
+    /// Remove a parent. Returns whether it was present.
+    pub fn remove_parent(&mut self, parent: Uuid) -> bool {
+        let mut parents = self.parents();
+        let before = parents.len();
+        parents.retain(|candidate| *candidate != parent);
+        if parents.len() == before {
+            return false;
+        }
+        self.set_parents(&parents);
+        true
+    }
+
+    /// The first parent, if any. Convenience for single-parent callers.
+    pub fn parent(&self) -> Option<Uuid> {
+        self.parents().first().copied()
+    }
+
+    /// Set a single parent (replacing any existing parents).
+    pub fn set_parent(&mut self, parent_id: Uuid) {
+        self.set_parents(&[parent_id]);
+    }
+
+    /// Whether this entry is derived from one or more root/parent words.
     pub fn has_parent(&self) -> bool {
-        self.parent().is_some()
+        !self.parents().is_empty()
     }
 }
 
@@ -126,5 +167,23 @@ mod tests {
         e.set_parent(root);
         assert_eq!(e.parent(), Some(root));
         assert!(e.has_parent());
+    }
+
+    #[test]
+    fn multiple_parents_are_sparse() {
+        let mut e = WordEntry::new("child");
+        let a = Uuid::new_v4();
+        let b = Uuid::new_v4();
+
+        e.add_parent(a);
+        e.add_parent(a);
+        e.add_parent(b);
+        assert_eq!(e.parents(), vec![a, b]);
+
+        assert!(e.remove_parent(a));
+        assert_eq!(e.parents(), vec![b]);
+        assert!(e.remove_parent(b));
+        assert!(!e.has_parent());
+        assert!(!e.values.contains_key(PARENT_TAG));
     }
 }
