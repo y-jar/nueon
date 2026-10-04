@@ -42,6 +42,21 @@ pub fn run() {
             commands::move_or_rename_note,
             commands::delete_note,
             commands::word_index,
+            commands::list_tables,
+            commands::get_table,
+            commands::create_table,
+            commands::delete_table,
+            commands::create_word,
+            commands::save_word_entry,
+            commands::delete_word,
+            commands::move_word,
+            commands::add_tag,
+            commands::remove_tag_preview,
+            commands::remove_tag,
+            commands::set_parent,
+            commands::remove_parent,
+            commands::parent_candidates,
+            commands::derivation_tree,
         ])
         .run(tauri::generate_context!())
         .expect("error while running langloom");

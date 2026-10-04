@@ -4,6 +4,7 @@
     openWorkspace,
     createNote,
     createFolder,
+    selectTable,
   } from "../lib/state.svelte";
   import Tree from "./Tree.svelte";
 
@@ -72,6 +73,15 @@
       <p class="muted">No notes yet.</p>
     {/if}
   </div>
+
+  <div class="pane-title">Tables</div>
+  {#each ui.tables as table (table.name)}
+    <button
+      class="tree-name {ui.currentTable === table.name ? 'selected' : ''}"
+      onclick={() => selectTable(table.name)}
+      >{table.name} ({table.word_count})</button
+    >
+  {/each}
 
   <div class="grow"></div>
 

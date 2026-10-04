@@ -68,4 +68,104 @@ export const deleteNote = (relPath: string): Promise<void> =>
   invoke("delete_note", { relPath });
 
 // -- dictionary ----------------------------------------------------------
+export type FieldType =
+  | "text"
+  | "boolean"
+  | "tag_list"
+  | "reference"
+  | "references";
+
+export type FieldValue =
+  | { type: "text"; value: string }
+  | { type: "boolean"; value: boolean }
+  | { type: "tag_list"; value: string[] }
+  | { type: "reference"; value: string }
+  | { type: "references"; value: string[] };
+
+export interface TagDef {
+  name: string;
+  description: string;
+  color?: string | null;
+  kind: FieldType;
+  builtin: boolean;
+}
+
+export interface WordEntry {
+  id: string;
+  wordname: string;
+  values: Record<string, FieldValue>;
+}
+
+export interface WordTable {
+  name: string;
+  tags: TagDef[];
+  entries: WordEntry[];
+}
+
+export interface TableSummary {
+  name: string;
+  word_count: number;
+  tags: TagDef[];
+}
+
+export interface RelatedWord {
+  table: string;
+  id: string;
+  wordname: string;
+}
+
+export interface DerivationTree {
+  ancestors: RelatedWord[];
+  children: RelatedWord[];
+  descendants: RelatedWord[];
+}
+
 export const wordIndex = (): Promise<WordIndex> => invoke("word_index");
+export const listTables = (): Promise<TableSummary[]> => invoke("list_tables");
+export const getTable = (table: string): Promise<WordTable> =>
+  invoke("get_table", { table });
+export const createTable = (name: string): Promise<boolean> =>
+  invoke("create_table", { name });
+export const deleteTable = (name: string): Promise<boolean> =>
+  invoke("delete_table", { name });
+export const createWord = (
+  table: string,
+  wordname: string,
+): Promise<string | null> => invoke("create_word", { table, wordname });
+export const saveWordEntry = (
+  table: string,
+  entry: WordEntry,
+): Promise<boolean> => invoke("save_word_entry", { table, entry });
+export const deleteWord = (table: string, id: string): Promise<boolean> =>
+  invoke("delete_word", { table, id });
+export const moveWord = (
+  from: string,
+  to: string,
+  id: string,
+): Promise<boolean> => invoke("move_word", { from, to, id });
+export const addTag = (
+  table: string,
+  name: string,
+  kind: FieldType,
+): Promise<boolean> => invoke("add_tag", { table, name, kind });
+export const removeTagPreview = (
+  table: string,
+  tag: string,
+): Promise<number> => invoke("remove_tag_preview", { table, tag });
+export const removeTag = (table: string, tag: string): Promise<boolean> =>
+  invoke("remove_tag", { table, tag });
+export const setParent = (
+  table: string,
+  child: string,
+  parent: string,
+): Promise<boolean> => invoke("set_parent", { table, child, parent });
+export const removeParent = (
+  table: string,
+  child: string,
+  parent: string,
+): Promise<boolean> => invoke("remove_parent", { table, child, parent });
+export const parentCandidates = (child: string): Promise<RelatedWord[]> =>
+  invoke("parent_candidates", { child });
+export const derivationTree = (id: string): Promise<DerivationTree> =>
+  invoke("derivation_tree", { id });
+

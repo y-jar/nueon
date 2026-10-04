@@ -1,23 +1,7 @@
 <script lang="ts">
   import * as api from "../lib/api";
-  import type { WordIndex } from "../lib/api";
   import { ui } from "../lib/state.svelte";
   import { codemirror } from "../lib/editor/action";
-
-  let index = $state<WordIndex>({});
-  let loadedFor: string | null = null;
-
-  // Load the dictionary word index once per open workspace.
-  $effect(() => {
-    const root = ui.root;
-    if (root && loadedFor !== root) {
-      loadedFor = root;
-      api
-        .wordIndex()
-        .then((value) => (index = value))
-        .catch(() => (index = {}));
-    }
-  });
 </script>
 
 {#if ui.selected}
@@ -30,7 +14,7 @@
       use:codemirror={{
         path: ui.selected,
         content: ui.noteContent,
-        index,
+        index: ui.wordIndex,
         onDirty: (dirty: boolean) => (ui.dirty = dirty),
         onSave: api.saveNote,
       }}

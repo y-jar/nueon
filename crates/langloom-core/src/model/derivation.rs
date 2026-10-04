@@ -2,12 +2,13 @@
 
 use std::collections::HashSet;
 
+use serde::{Deserialize, Serialize};
 use uuid::Uuid;
 
 use super::dictionary::Dictionary;
 
 /// A planned rename of one word.
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct RenameTarget {
     pub table: String,
     pub id: Uuid,
@@ -16,7 +17,7 @@ pub struct RenameTarget {
 }
 
 /// A word related to a change (a child or descendant).
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct RelatedWord {
     pub table: String,
     pub id: Uuid,
@@ -71,6 +72,20 @@ pub fn direct_children(dict: &Dictionary, id: Uuid) -> Vec<RelatedWord> {
 /// Every descendant of `id`.
 pub fn descendants(dict: &Dictionary, id: Uuid) -> Vec<RelatedWord> {
     dict.descendants_of(id)
+        .into_iter()
+        .filter_map(|entry| {
+            dict.find_entry(entry.id).map(|(table, found)| RelatedWord {
+                table: table.to_string(),
+                id: found.id,
+                wordname: found.wordname.clone(),
+            })
+        })
+        .collect()
+}
+
+/// Every ancestor of `id`.
+pub fn ancestors(dict: &Dictionary, id: Uuid) -> Vec<RelatedWord> {
+    dict.ancestors_of(id)
         .into_iter()
         .filter_map(|entry| {
             dict.find_entry(entry.id).map(|(table, found)| RelatedWord {

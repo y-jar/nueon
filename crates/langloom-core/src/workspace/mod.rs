@@ -266,6 +266,58 @@ impl Workspace {
         Ok(true)
     }
 
+    /// Replace an existing word's data and persist it.
+    pub fn replace_entry(&mut self, table: &str, entry: WordEntry) -> Result<bool, StorageError> {
+        let id = entry.id;
+        match self.dictionary.get_entry_mut(table, id) {
+            Some(existing) => *existing = entry,
+            None => return Ok(false),
+        }
+        self.save_entry(table, id)
+    }
+
+    /// Move a word to another table and persist both tables.
+    pub fn move_entry(&mut self, from: &str, to: &str, id: Uuid) -> Result<bool, StorageError> {
+        if !self.dictionary.move_entry(from, to, id) {
+            return Ok(false);
+        }
+        self.save_table(from)?;
+        self.save_table(to)?;
+        self.mark_change(
+            Instant::now(),
+            format!("langloom: move word between \"{from}\" and \"{to}\""),
+        );
+        Ok(true)
+    }
+
+    /// Add a parent link (rejecting cycles) and persist the table.
+    pub fn add_parent(
+        &mut self,
+        table: &str,
+        child: Uuid,
+        parent: Uuid,
+    ) -> Result<bool, StorageError> {
+        if !self.dictionary.add_parent(table, child, parent) {
+            return Ok(false);
+        }
+        self.save_table_edits(table)?;
+        Ok(true)
+    }
+
+    /// Remove a parent link and persist the table.
+    pub fn remove_parent(
+        &mut self,
+        table: &str,
+        child: Uuid,
+        parent: Uuid,
+    ) -> Result<bool, StorageError> {
+        if !self.dictionary.remove_parent(table, child, parent) {
+            return Ok(false);
+        }
+        self.save_table_edits(table)?;
+        Ok(true)
+    }
+
     /// Remove a word from its table and persist the change.
     pub fn delete_entry(
         &mut self,
