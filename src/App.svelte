@@ -5,6 +5,7 @@
     ui,
     init,
     closeTab,
+    openTranslation,
     type Activity,
   } from "./lib/state.svelte";
   import Onboarding from "./components/Onboarding.svelte";
@@ -35,6 +36,8 @@
     } catch {
       // Layout is best-effort.
     }
+    // Restore the translation tool as a tab when it was the active activity.
+    if (ui.activity === "translation") await openTranslation();
     layoutLoaded = true;
   });
 
