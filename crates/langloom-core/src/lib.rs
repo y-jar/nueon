@@ -11,8 +11,10 @@ pub mod vcs;
 pub mod workspace;
 
 pub use config::{
-    AffixKind, AffixRule, GrammarConfig, GrammarRule, GridViewState, LanguageConfig, SortSpec,
-    TextDirection, TranslationConfig, TranslationOptions, UiLayout, WorkspaceSettings,
+    AffixKind, AffixRule, GrammarConfig, GrammarRule, GridViewState, GroupLayout, LanguageConfig,
+    LayoutState, SecondaryWindow, SortSpec, SplitDirection, SplitLayout, TabKind, TabLayout,
+    TextDirection, TilingLayout, TranslationConfig, TranslationOptions, UiLayout, WindowGeometry,
+    WorkspaceSettings,
 };
 pub use global::{GlobalConfig, WindowLayout, WorkspaceEntry};
 pub use model::{

@@ -7,8 +7,11 @@
     closeTab,
     openTranslation,
     activeGroup,
+    serializeTiling,
+    restoreMainTiling,
     type Activity,
   } from "./lib/state.svelte";
+  import { windowLabel } from "./lib/window";
   import Onboarding from "./components/Onboarding.svelte";
   import ActivityBar from "./components/ActivityBar.svelte";
   import SidebarHost from "./components/SidebarHost.svelte";
@@ -33,9 +36,25 @@
     } catch {
       // Layout is best-effort.
     }
+    await restoreMainTiling();
     // Restore the translation tool as a tab when it was the active activity.
     if (ui.activity === "translation") await openTranslation();
     layoutLoaded = true;
+  });
+
+  // Persist this window's tab groups and splits (debounced).
+  let savedTiling = "";
+  let tilingTimer: ReturnType<typeof setTimeout> | null = null;
+  $effect(() => {
+    if (!ui.layoutReady || !ui.root) return;
+    const tiling = serializeTiling();
+    const json = JSON.stringify(tiling);
+    if (json === savedTiling) return;
+    if (tilingTimer) clearTimeout(tilingTimer);
+    tilingTimer = setTimeout(() => {
+      savedTiling = json;
+      api.tilingSave(windowLabel, tiling).catch(() => {});
+    }, 400);
   });
 
   // Persist shell layout when it changes.

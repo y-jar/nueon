@@ -143,6 +143,59 @@ export interface GridViewState {
   column_widths: Record<string, number>;
 }
 
+// -- tiling layout -------------------------------------------------------
+export interface TabLayout {
+  kind: "note" | "table" | "translation";
+  ref?: string | null;
+  title: string;
+}
+
+export interface GroupLayout {
+  id: string;
+  tabs: TabLayout[];
+  active?: number | null;
+}
+
+export type SplitLayout =
+  | { type: "leaf"; group: string }
+  | {
+      type: "split";
+      direction: "row" | "column";
+      children: SplitLayout[];
+      sizes?: number[];
+    };
+
+export interface TilingLayout {
+  groups: GroupLayout[];
+  root: SplitLayout;
+  active_group?: string | null;
+}
+
+export interface WindowGeometry {
+  x?: number | null;
+  y?: number | null;
+  width: number;
+  height: number;
+}
+
+export interface SecondaryWindow {
+  label: string;
+  geometry?: WindowGeometry | null;
+  tiling: TilingLayout;
+}
+
+export interface LayoutState {
+  main?: TilingLayout | null;
+  windows?: SecondaryWindow[];
+}
+
+export const layoutStateGet = (): Promise<LayoutState> =>
+  invoke("layout_state_get");
+export const tilingSave = (
+  label: string,
+  tiling: TilingLayout,
+): Promise<void> => invoke("tiling_save", { label, tiling });
+
 export interface TagKindChange {
   tag: string;
   from: FieldType;

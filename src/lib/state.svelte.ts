@@ -88,6 +88,8 @@ export const ui = $state({
   groups: [firstGroup] as TabGroup[],
   activeGroupId: firstGroup.id as string,
   splitRoot: { type: "leaf", groupId: firstGroup.id } as SplitNode,
+  /** True once the saved layout is restored; gates layout persistence. */
+  layoutReady: false,
 
   // Workspace data shared across groups.
   tree: [] as api.NoteNode[],
@@ -552,6 +554,132 @@ export async function moveTab(
   }
 }
 
+// -- layout persistence --------------------------------------------------
+
+function toSplitLayout(node: SplitNode): api.SplitLayout {
+  if (node.type === "leaf") return { type: "leaf", group: node.groupId };
+  return {
+    type: "split",
+    direction: node.direction,
+    children: node.children.map(toSplitLayout),
+    ...(node.sizes?.length ? { sizes: [...node.sizes] } : {}),
+  };
+}
+
+/** Snapshot this window's tab groups and split tree for persistence. */
+export function serializeTiling(): api.TilingLayout {
+  return {
+    groups: ui.groups.map((group) => ({
+      id: group.id,
+      tabs: group.tabs.map((tab) => ({
+        kind: tab.kind,
+        ...(tab.ref !== null ? { ref: tab.ref } : {}),
+        title: tab.title,
+      })),
+      active: Math.max(
+        0,
+        group.tabs.findIndex((tab) => tab.id === group.activeTabId),
+      ),
+    })),
+    root: toSplitLayout(ui.splitRoot),
+    active_group: ui.activeGroupId,
+  };
+}
+
+function notePaths(nodes: api.NoteNode[], into = new Set<string>()): Set<string> {
+  for (const node of nodes) {
+    if (node.is_dir) notePaths(node.children, into);
+    else into.add(node.path);
+  }
+  return into;
+}
+
+function fromSplitLayout(
+  node: api.SplitLayout,
+  ids: Map<string, string>,
+): SplitNode | null {
+  if (node.type === "leaf") {
+    const groupId = ids.get(node.group);
+    return groupId ? { type: "leaf", groupId } : null;
+  }
+  const children = node.children
+    .map((child) => fromSplitLayout(child, ids))
+    .filter((child): child is SplitNode => child !== null);
+  if (children.length === 0) return null;
+  if (children.length === 1) return children[0];
+  const sizes =
+    node.sizes && node.sizes.length === children.length ? node.sizes : undefined;
+  return { type: "split", direction: node.direction, children, sizes };
+}
+
+/**
+ * Rebuild this window's layout from a saved snapshot. References to notes or
+ * tables that no longer exist are dropped, along with panes left empty.
+ */
+export async function restoreTiling(layout: api.TilingLayout): Promise<void> {
+  const tables = new Set(ui.tables.map((table) => table.name));
+  const notes = notePaths(ui.tree);
+  const exists = (tab: api.TabLayout): boolean =>
+    tab.kind === "translation" ||
+    (tab.ref != null &&
+      (tab.kind === "table" ? tables.has(tab.ref) : notes.has(tab.ref)));
+
+  const ids = new Map<string, string>();
+  const groups: TabGroup[] = [];
+  const activeIds = new Map<string, string | null>();
+  for (const saved of layout.groups) {
+    const group = makeGroup();
+    ids.set(saved.id, group.id);
+    const kept = saved.tabs.filter(exists);
+    group.tabs = kept.map((tab) => ({
+      id: newId(),
+      kind: tab.kind,
+      ref: tab.ref ?? null,
+      title: tab.title,
+    }));
+    const wanted = saved.tabs[saved.active ?? 0];
+    const active =
+      group.tabs.find(
+        (tab) => wanted && tab.kind === wanted.kind && tab.ref === (wanted.ref ?? null),
+      ) ?? group.tabs[0];
+    activeIds.set(group.id, active?.id ?? null);
+    groups.push(group);
+  }
+  if (groups.length === 0) return;
+
+  let root = fromSplitLayout(layout.root, ids);
+  for (const group of groups) {
+    if (group.tabs.length === 0 && root) root = removeLeaf(root, group.id);
+  }
+  const live = groups.filter((group) => group.tabs.length > 0);
+  if (live.length === 0 || !root) return;
+
+  ui.groups = live;
+  ui.splitRoot = collapseTree(root);
+  ui.activeGroupId = live[0].id;
+  for (const group of live) {
+    const tabId = activeIds.get(group.id);
+    if (tabId) await activateTab(group.id, tabId);
+  }
+  const savedActive = layout.active_group ? ids.get(layout.active_group) : undefined;
+  ui.activeGroupId =
+    savedActive && live.some((group) => group.id === savedActive)
+      ? savedActive
+      : live[0].id;
+}
+
+/** Restore the saved main-window layout (if any) and enable persistence. */
+export async function restoreMainTiling(): Promise<void> {
+  try {
+    const state = await api.layoutStateGet();
+    if (state.main) await restoreTiling(state.main);
+  } catch (error) {
+    ui.status = `could not restore layout: ${String(error)}`;
+  } finally {
+    ui.layoutReady = true;
+  }
+}
+
 // -- active document loaders --------------------------------------------
 
 async function loadNote(doc: DocState, path: string): Promise<void> {
@@ -633,11 +761,13 @@ export async function init(): Promise<void> {
 
 export async function openWorkspace(path: string): Promise<void> {
   ui.status = `opening ${path}…`;
+  ui.layoutReady = false;
   try {
     await api.workspaceOpen(path);
   } catch (error) {
     // The backend prunes vanished folders from the registry; resync.
     ui.status = "";
+    ui.layoutReady = true;
     await refreshWorkspaces();
     throw error;
   }
@@ -647,6 +777,7 @@ export async function openWorkspace(path: string): Promise<void> {
   await refreshTree();
   await loadWordIndex();
   await refreshTables();
+  await restoreMainTiling();
   ui.status = "";
 }
 
@@ -655,6 +786,7 @@ export async function createWorkspace(
   destination: string,
 ): Promise<void> {
   ui.status = `creating ${name}…`;
+  ui.layoutReady = false;
   await api.workspaceCreate(name, destination);
   ui.showWorkspacePicker = false;
   resetDocuments();
@@ -662,6 +794,7 @@ export async function createWorkspace(
   await refreshTree();
   await loadWordIndex();
   await refreshTables();
+  ui.layoutReady = true;
   ui.status = "";
 }
 

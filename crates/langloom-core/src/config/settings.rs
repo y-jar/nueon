@@ -4,6 +4,8 @@ use std::collections::BTreeMap;
 
 use serde::{Deserialize, Serialize};
 
+use super::layout::LayoutState;
+
 /// Default auto-check-in interval, in seconds.
 pub const DEFAULT_AUTO_CHECKIN_SECS: u64 = 60;
 
@@ -87,6 +89,9 @@ pub struct WorkspaceSettings {
     pub dismissed_warnings: Vec<String>,
     /// Persisted shell layout.
     pub ui: UiLayout,
+    /// Persisted tab groups, splits and secondary windows.
+    #[serde(skip_serializing_if = "LayoutState::is_empty")]
+    pub layout: LayoutState,
 }
 
 impl Default for WorkspaceSettings {
@@ -99,6 +104,7 @@ impl Default for WorkspaceSettings {
             git_prompt_dismissed: false,
             dismissed_warnings: Vec::new(),
             ui: UiLayout::default(),
+            layout: LayoutState::default(),
         }
     }
 }

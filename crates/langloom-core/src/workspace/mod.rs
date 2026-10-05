@@ -12,8 +12,8 @@ use std::time::{Duration, Instant};
 use uuid::Uuid;
 
 use crate::config::{
-    GrammarConfig, GridViewState, LanguageConfig, TranslationConfig, TranslationOptions, UiLayout,
-    WorkspaceSettings,
+    GrammarConfig, GridViewState, LanguageConfig, LayoutState, TilingLayout, TranslationConfig,
+    TranslationOptions, UiLayout, WindowGeometry, WorkspaceSettings,
 };
 use crate::model::{
     Dictionary, FieldType, FieldValue, TagDef, TagFormat, TagKindChange, TagRemoval, WordEntry,
@@ -786,6 +786,52 @@ impl Workspace {
         self.save_settings()
     }
 
+    /// The persisted tiling layout (main window + secondary windows).
+    pub fn layout_state(&self) -> LayoutState {
+        self.settings.layout.clone()
+    }
+
+    /// Persist the main window's tiling. Skips the write when unchanged.
+    pub fn set_main_tiling(&mut self, tiling: TilingLayout) -> Result<(), StorageError> {
+        if self.settings.layout.main.as_ref() == Some(&tiling) {
+            return Ok(());
+        }
+        self.settings.layout.main = Some(tiling);
+        self.save_settings()
+    }
+
+    /// Persist one secondary window's tiling (and geometry, when known).
+    pub fn set_window_tiling(
+        &mut self,
+        label: &str,
+        geometry: Option<WindowGeometry>,
+        tiling: TilingLayout,
+    ) -> Result<(), StorageError> {
+        self.settings.layout.upsert_window(label, geometry, tiling);
+        self.save_settings()
+    }
+
+    /// Record a secondary window's geometry. Returns whether anything changed.
+    pub fn set_window_geometry(
+        &mut self,
+        label: &str,
+        geometry: WindowGeometry,
+    ) -> Result<bool, StorageError> {
+        if !self.settings.layout.set_window_geometry(label, geometry) {
+            return Ok(false);
+        }
+        self.save_settings()?;
+        Ok(true)
+    }
+
+    /// Forget one secondary window.
+    pub fn remove_window_layout(&mut self, label: &str) -> Result<(), StorageError> {
+        if self.settings.layout.remove_window(label) {
+            self.save_settings()?;
+        }
+        Ok(())
+    }
+
     /// Read a config section (`language`, `grammar`, `translation`, `settings`)
     /// as JSON.
     pub fn config_json(&self, section: &str) -> Result<serde_json::Value, StorageError> {
@@ -1389,6 +1435,50 @@ mod tests {
         ws.create_table("nouns").unwrap();
         assert!(!ws.rename_table("actions", "nouns").unwrap());
         assert!(!ws.rename_table("missing", "x").unwrap());
+    }
+
+    #[test]
+    fn tiling_layout_persists_with_windows() {
+        use crate::{GroupLayout, SplitLayout, TabKind, TabLayout};
+
+        let tiling = |table: &str| TilingLayout {
+            groups: vec![GroupLayout {
+                id: "g".into(),
+                tabs: vec![TabLayout {
+                    kind: TabKind::Table,
+                    reference: Some(table.into()),
+                    title: table.into(),
+                }],
+                active: Some(0),
+            }],
+            root: SplitLayout::Leaf { group: "g".into() },
+            active_group: Some("g".into()),
+        };
+
+        let dir = tempfile::tempdir().unwrap();
+        let mut ws = Workspace::new(dir.path()).unwrap();
+        assert!(ws.layout_state().is_empty());
+
+        ws.set_main_tiling(tiling("roots")).unwrap();
+        let geometry = WindowGeometry {
+            x: Some(40),
+            y: Some(60),
+            width: 700,
+            height: 500,
+        };
+        ws.set_window_tiling("tear-a", Some(geometry), tiling("verbs"))
+            .unwrap();
+        ws.set_window_tiling("tear-b", None, tiling("nouns"))
+            .unwrap();
+        ws.remove_window_layout("tear-b").unwrap();
+
+        let reloaded = Workspace::load(dir.path()).unwrap();
+        let state = reloaded.layout_state();
+        assert_eq!(state.main, Some(tiling("roots")));
+        assert_eq!(state.windows.len(), 1);
+        assert_eq!(state.windows[0].label, "tear-a");
+        assert_eq!(state.windows[0].geometry, Some(geometry));
+        assert_eq!(state.windows[0].tiling, tiling("verbs"));
     }
 
     #[test]

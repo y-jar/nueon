@@ -107,6 +107,8 @@ pub fn run() {
             commands::layout_set_git_panel,
             commands::ui_layout_get,
             commands::ui_layout_set,
+            commands::layout_state_get,
+            commands::tiling_save,
             commands::list_workspace,
             commands::read_note,
             commands::save_note,

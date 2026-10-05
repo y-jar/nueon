@@ -4,9 +4,12 @@ use std::path::PathBuf;
 use std::sync::Mutex;
 
 use serde::Serialize;
-use tauri::{AppHandle, State};
+use tauri::{AppHandle, Manager, State};
 
-use langloom_core::{StorageError, UiLayout, WindowLayout, Workspace, WorkspaceEntry};
+use langloom_core::{
+    LayoutState, StorageError, TilingLayout, UiLayout, WindowGeometry, WindowLayout, Workspace,
+    WorkspaceEntry,
+};
 
 use super::changed;
 use crate::state::{default_name, AppState};
@@ -240,6 +243,50 @@ pub fn ui_layout_set(state: State<'_, Shared>, layout: UiLayout) -> Result<(), S
         .workspace_mut()?
         .set_ui_layout(layout)
         .map_err(|err| err.to_string())
+}
+
+/// The persisted tiling layout (main window and secondary windows).
+#[tauri::command]
+pub fn layout_state_get(state: State<'_, Shared>) -> Result<LayoutState, String> {
+    let state = state.lock().map_err(|_| "state poisoned".to_string())?;
+    Ok(state.workspace()?.layout_state())
+}
+
+/// Current geometry of a live window, in physical pixels.
+pub(crate) fn window_geometry(app: &AppHandle, label: &str) -> Option<WindowGeometry> {
+    let window = app.get_webview_window(label)?;
+    let size = window.inner_size().ok()?;
+    let position = window.outer_position().ok();
+    Some(WindowGeometry {
+        x: position.map(|p| p.x),
+        y: position.map(|p| p.y),
+        width: size.width,
+        height: size.height,
+    })
+}
+
+/// Persist one window's tiling. `main` is the primary window; any other label
+/// is a secondary window whose geometry is recorded alongside.
+#[tauri::command]
+pub fn tiling_save(
+    app: AppHandle,
+    state: State<'_, Shared>,
+    label: String,
+    tiling: TilingLayout,
+) -> Result<(), String> {
+    let geometry = if label == "main" {
+        None
+    } else {
+        window_geometry(&app, &label)
+    };
+    let mut state = state.lock().map_err(|_| "state poisoned".to_string())?;
+    let workspace = state.workspace_mut()?;
+    if label == "main" {
+        workspace.set_main_tiling(tiling)
+    } else {
+        workspace.set_window_tiling(&label, geometry, tiling)
+    }
+    .map_err(|err| err.to_string())
 }
 
 /// Whether dictionary undo/redo steps are available.
