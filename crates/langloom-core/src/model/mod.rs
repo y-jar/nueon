@@ -19,5 +19,6 @@ pub use field::{FieldType, FieldValue};
 pub use table::{TagKindChange, TagRemoval, WordTable};
 pub use tag::{TagDef, TagFormat, DEFINITION_TAG, PARENT_TAG, WORDNAME_TAG};
 pub use translate::{
-    token_candidates, tokenize, translate, Candidate, SlotOutcome, Symbol, Token, TranslationReport,
+    token_candidates, tokenize, translate, Candidate, GlossMorpheme, InterlinearGloss, SlotOutcome,
+    Symbol, Token, TranslationReport,
 };

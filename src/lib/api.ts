@@ -276,6 +276,16 @@ export interface SlotOutcome {
   symbol: Symbol;
 }
 
+export interface GlossMorpheme {
+  surface: string;
+  gloss: string;
+}
+
+export interface InterlinearGloss {
+  morphemes: GlossMorpheme[];
+  translation: string;
+}
+
 export interface TranslationReport {
   output: string;
   complete: boolean;
@@ -285,6 +295,7 @@ export interface TranslationReport {
   conflicts: number[];
   leftovers: [number, string][];
   unfilled: number[];
+  gloss: InterlinearGloss;
 }
 
 export const listPresets = (): Promise<SyntaxGrid[]> =>

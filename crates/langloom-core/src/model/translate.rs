@@ -55,6 +55,23 @@ pub struct Candidate {
     pub affix: String,
 }
 
+/// One morpheme of an interlinear gloss: its surface form and gloss.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct GlossMorpheme {
+    pub surface: String,
+    pub gloss: String,
+}
+
+/// A Leipzig-style interlinear gloss of the translated sentence.
+#[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(default)]
+pub struct InterlinearGloss {
+    /// Morphemes in output order (surface + morpheme gloss).
+    pub morphemes: Vec<GlossMorpheme>,
+    /// The free English translation.
+    pub translation: String,
+}
+
 /// The full result of a translation attempt.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct TranslationReport {
@@ -72,6 +89,16 @@ pub struct TranslationReport {
     pub leftovers: Vec<(usize, Uuid)>,
     /// Indices of `RequiredTag` slots that could not be filled.
     pub unfilled: Vec<usize>,
+    /// Leipzig interlinear gloss (surface / morpheme gloss / translation).
+    #[serde(default, skip_serializing_if = "InterlinearGloss::is_empty")]
+    pub gloss: InterlinearGloss,
+}
+
+impl InterlinearGloss {
+    /// Whether this gloss has no content.
+    pub fn is_empty(&self) -> bool {
+        self.morphemes.is_empty() && self.translation.is_empty()
+    }
 }
 
 impl TranslationReport {
@@ -86,6 +113,7 @@ impl TranslationReport {
             conflicts: Vec::new(),
             leftovers: Vec::new(),
             unfilled: Vec::new(),
+            gloss: InterlinearGloss::default(),
         }
     }
 }
@@ -169,6 +197,10 @@ struct Match<'a> {
     table: &'a str,
     entry: &'a WordEntry,
     affix: String,
+    /// English affix to gloss with (upper-cased), empty for direct matches.
+    affix_gloss: String,
+    /// Whether the affix attaches before the root.
+    prefix: bool,
 }
 
 fn collect_for_form<'a>(
@@ -212,6 +244,8 @@ fn matching_entries<'a>(
                 table,
                 entry,
                 affix: String::new(),
+                affix_gloss: String::new(),
+                prefix: false,
             })
             .collect();
     }
@@ -245,6 +279,8 @@ fn matching_entries<'a>(
                 table,
                 entry,
                 affix: rule.conlang.clone(),
+                affix_gloss: rule.english.to_uppercase(),
+                prefix: rule.kind == AffixKind::Prefix,
             });
         }
     }
@@ -274,6 +310,8 @@ pub fn token_candidates(dict: &Dictionary, token: &Token, affixes: &[AffixRule])
 struct Picked {
     id: Uuid,
     affix: String,
+    affix_gloss: String,
+    prefix: bool,
 }
 
 /// Translate `input` using `grid`. `choices` resolves conflicts by token index.
@@ -302,6 +340,8 @@ pub fn translate(
                 chosen[index] = Some(Picked {
                     id: matched.entry.id,
                     affix: matched.affix.clone(),
+                    affix_gloss: matched.affix_gloss.clone(),
+                    prefix: matched.prefix,
                 });
             }
             _ => {
@@ -315,6 +355,8 @@ pub fn translate(
                         chosen[index] = Some(Picked {
                             id: matched.entry.id,
                             affix: matched.affix.clone(),
+                            affix_gloss: matched.affix_gloss.clone(),
+                            prefix: matched.prefix,
                         })
                     }
                     None => conflicts.push(index),
@@ -327,27 +369,51 @@ pub fn translate(
     let mut assigned = vec![false; count];
     let mut unfilled = Vec::new();
     let mut slots = Vec::new();
+    let mut morphemes = Vec::new();
 
     for (index, slot) in grid.slots.iter().enumerate() {
         let symbol = match slot {
-            ClauseSlot::Literal { text } => Symbol::Literal(text.clone()),
+            ClauseSlot::Literal { text } => {
+                morphemes.push(GlossMorpheme {
+                    surface: text.clone(),
+                    gloss: text.clone(),
+                });
+                Symbol::Literal(text.clone())
+            }
             ClauseSlot::Spacer { text } => Symbol::Separator(text.clone()),
             ClauseSlot::Wildcard => match pick(&candidates, &chosen, &assigned, count, None) {
                 Some(token) => {
                     assigned[token] = true;
+                    if let Some(morpheme) = gloss_for(dict, chosen[token].as_ref()) {
+                        morphemes.push(morpheme);
+                    }
                     Symbol::Word(word_for(dict, chosen[token].as_ref()))
                 }
-                None => Symbol::Placeholder("*?".to_string()),
+                None => {
+                    morphemes.push(GlossMorpheme {
+                        surface: "*?".to_string(),
+                        gloss: "?".to_string(),
+                    });
+                    Symbol::Placeholder("*?".to_string())
+                }
             },
             ClauseSlot::RequiredTag { tag } => {
                 match pick(&candidates, &chosen, &assigned, count, Some(tag)) {
                     Some(token) => {
                         assigned[token] = true;
+                        if let Some(morpheme) = gloss_for(dict, chosen[token].as_ref()) {
+                            morphemes.push(morpheme);
+                        }
                         Symbol::Word(word_for(dict, chosen[token].as_ref()))
                     }
                     None => {
                         unfilled.push(index);
-                        Symbol::Placeholder(format!("#{tag}?"))
+                        let placeholder = format!("#{tag}?");
+                        morphemes.push(GlossMorpheme {
+                            surface: placeholder.clone(),
+                            gloss: "?".to_string(),
+                        });
+                        Symbol::Placeholder(placeholder)
                     }
                 }
             }
@@ -381,7 +447,40 @@ pub fn translate(
         conflicts,
         leftovers,
         unfilled,
+        gloss: InterlinearGloss {
+            morphemes,
+            translation: input.to_string(),
+        },
     }
+}
+
+/// Build the interlinear gloss morpheme for a chosen word (with affix).
+fn gloss_for(dict: &Dictionary, picked: Option<&Picked>) -> Option<GlossMorpheme> {
+    let picked = picked?;
+    let (_, entry) = dict.find_entry(picked.id)?;
+    let sense = entry
+        .definition()
+        .and_then(<[String]>::first)
+        .map(|sense| normalize(sense))
+        .filter(|sense| !sense.is_empty())
+        .unwrap_or_else(|| entry.wordname.clone());
+    let root = entry.wordname.clone();
+
+    let surface = if picked.affix.is_empty() {
+        root
+    } else if picked.prefix {
+        format!("{}-{root}", picked.affix)
+    } else {
+        format!("{root}-{}", picked.affix)
+    };
+    let gloss = if picked.affix_gloss.is_empty() {
+        sense
+    } else if picked.prefix {
+        format!("{}-{sense}", picked.affix_gloss)
+    } else {
+        format!("{sense}-{}", picked.affix_gloss)
+    };
+    Some(GlossMorpheme { surface, gloss })
 }
 
 fn pick(
@@ -646,5 +745,77 @@ mod tests {
         let grid = grid(vec![ClauseSlot::Wildcard]);
         let report = translate(&dict, &grid, " ", "speak", &HashMap::new(), &no_affixes());
         assert_eq!(report.output, "kala");
+    }
+
+    #[test]
+    fn gloss_pairs_surfaces_with_senses() {
+        let dict = build(&[
+            ("kala", &["dog"], &["Subject"]),
+            ("velo", &["to run"], &["Verb"]),
+        ]);
+        let grid = grid(vec![tag("Subject"), tag("Verb")]);
+        let report = translate(&dict, &grid, " ", "dog run", &HashMap::new(), &no_affixes());
+
+        let surfaces: Vec<&str> = report
+            .gloss
+            .morphemes
+            .iter()
+            .map(|m| m.surface.as_str())
+            .collect();
+        let glosses: Vec<&str> = report
+            .gloss
+            .morphemes
+            .iter()
+            .map(|m| m.gloss.as_str())
+            .collect();
+        assert_eq!(surfaces, ["kala", "velo"]);
+        assert_eq!(glosses, ["dog", "run"]);
+        assert_eq!(report.gloss.translation, "dog run");
+    }
+
+    #[test]
+    fn gloss_splits_morphology_and_uppercases_affix() {
+        let dict = build(&[("kala", &["dog"], &["Subject"])]);
+        let rules = vec![AffixRule {
+            kind: AffixKind::Suffix,
+            english: "x".into(),
+            conlang: "i".into(),
+        }];
+        let grid = grid(vec![tag("Subject")]);
+        let report = translate(&dict, &grid, " ", "dogx", &HashMap::new(), &rules);
+
+        assert_eq!(report.output, "kalai");
+        assert_eq!(report.gloss.morphemes[0].surface, "kala-i");
+        assert_eq!(report.gloss.morphemes[0].gloss, "dog-X");
+    }
+
+    #[test]
+    fn gloss_keeps_literals_and_drops_spacers() {
+        let dict = build(&[("velo", &["to run"], &["Verb"])]);
+        let grid = grid(vec![
+            tag("Verb"),
+            ClauseSlot::Spacer { text: None },
+            ClauseSlot::Literal { text: "ka".into() },
+        ]);
+        let report = translate(&dict, &grid, " ", "run", &HashMap::new(), &no_affixes());
+
+        let surfaces: Vec<&str> = report
+            .gloss
+            .morphemes
+            .iter()
+            .map(|m| m.surface.as_str())
+            .collect();
+        assert_eq!(surfaces, ["velo", "ka"]);
+    }
+
+    #[test]
+    fn gloss_marks_unfilled_slots() {
+        let dict = build(&[("kala", &["dog"], &["Subject"])]);
+        let grid = grid(vec![tag("Subject"), tag("Verb")]);
+        let report = translate(&dict, &grid, " ", "dog", &HashMap::new(), &no_affixes());
+
+        let last = report.gloss.morphemes.last().unwrap();
+        assert_eq!(last.surface, "#Verb?");
+        assert_eq!(last.gloss, "?");
     }
 }

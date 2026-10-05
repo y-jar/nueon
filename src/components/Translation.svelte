@@ -5,6 +5,7 @@
   import { open, save } from "@tauri-apps/plugin-dialog";
   import * as api from "../lib/api";
   import { ui } from "../lib/state.svelte";
+  import InterlinearGloss from "./InterlinearGloss.svelte";
 
   interface SlotItem {
     id: string;
@@ -431,6 +432,8 @@
       <div class:ok={report.complete} class:warn={!report.complete}>
         {report.complete ? $t("translation.complete") : $t("translation.incomplete")}
       </div>
+
+      <InterlinearGloss gloss={report.gloss} />
 
       {#if report.conflicts.length}
         <div class="section-title">{$t("translation.conflicts")}</div>

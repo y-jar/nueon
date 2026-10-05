@@ -1028,3 +1028,26 @@ table.dict-grid td textarea:focus {
 .cm-html-block {
   margin: 6px 0;
 }
+
+/* -- interlinear gloss --------------------------------------------------- */
+
+.interlinear {
+  margin: 8px 0;
+}
+
+.gloss-table {
+  display: grid;
+  gap: 2px 14px;
+  margin: 4px 0;
+  font-size: 13px;
+}
+
+.gloss-morph {
+  color: var(--accent);
+}
+
+.gloss-translation {
+  font-style: italic;
+  color: var(--text);
+  margin-bottom: 6px;
+}
