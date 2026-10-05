@@ -1,5 +1,6 @@
-import { listen } from "@tauri-apps/api/event";
+import { emit, listen } from "@tauri-apps/api/event";
 import * as api from "./api";
+import { windowLabel } from "./window";
 
 /** Left activity ribbon selection. */
 export type Activity = "notes" | "dictionary" | "translation" | "git";
@@ -106,7 +107,8 @@ export const ui = $state({
     y: number;
     path: string;
     isDir: boolean;
-    kind: "node" | "root";
+    kind: "node" | "root" | "tab";
+    tab?: { groupId: string; tabId: string };
   } | null,
   renameTarget: null as string | null,
   newRequest: null as { kind: "note" | "folder"; base: string } | null,
@@ -417,6 +419,38 @@ export async function reloadGroupTable(groupId: string): Promise<void> {
 
 let dragTimer: ReturnType<typeof setTimeout> | null = null;
 
+/** Sentinel `fromGroupId` for a tab dragged in from another window. */
+export const FOREIGN_GROUP = "__foreign__";
+const foreignTabs = new Map<string, api.TabLayout>();
+
+/** Broadcast payload announcing a tab drag to every window. */
+interface TabDragEvent {
+  phase: "start" | "end";
+  sourceLabel: string;
+  tab?: api.TabLayout;
+}
+
+/** The drag started in *this* window, until it ends or is dropped locally. */
+let sourceDrag: { tabId: string; groupId: string } | null = null;
+/** A drag from another window that has not entered this one yet. */
+let pendingForeign: api.TabLayout | null = null;
+/** A drop landed somewhere in this window (handled or not). */
+let dropSeenInWindow = false;
+/** The pointer last left this window's viewport during the drag. */
+let leftWindow = false;
+
+function tabLayoutOf(tab: Tab): api.TabLayout {
+  return {
+    kind: tab.kind,
+    ...(tab.ref !== null ? { ref: tab.ref } : {}),
+    title: tab.title,
+  };
+}
+
+function announceDrag(event: TabDragEvent): void {
+  void emit("tab-drag", event).catch(() => {});
+}
+
 /**
  * Start a tab drag. Publishing the drag (which mounts the drop overlays) is
  * deferred past `dragstart`: changing the DOM under the cursor inside that
@@ -428,15 +462,150 @@ export function beginTabDrag(tabId: string, fromGroupId: string): void {
     dragTimer = null;
     ui.dragTab = { tabId, fromGroupId };
   }, 0);
+
+  const group = ui.groups.find((candidate) => candidate.id === fromGroupId);
+  const tab = group?.tabs.find((candidate) => candidate.id === tabId);
+  sourceDrag = { tabId, groupId: fromGroupId };
+  dropSeenInWindow = false;
+  leftWindow = false;
+  if (tab) {
+    announceDrag({
+      phase: "start",
+      sourceLabel: windowLabel,
+      tab: tabLayoutOf(tab),
+    });
+  }
 }
 
-/** End (or cancel) the current tab drag. */
+/** End (or cancel) the current tab drag after a local drop. */
 export function endTabDrag(): void {
   if (dragTimer) {
     clearTimeout(dragTimer);
     dragTimer = null;
   }
   ui.dragTab = null;
+  if (sourceDrag) {
+    sourceDrag = null;
+    announceDrag({ phase: "end", sourceLabel: windowLabel });
+  }
+}
+
+/** Remove a tab from a group, dropping the group if it empties. */
+function removeSourceTab(groupId: string, tabId: string): void {
+  const group = ui.groups.find((candidate) => candidate.id === groupId);
+  if (!group) return;
+  closeTab(groupId, tabId);
+  if (group.tabs.length === 0 && ui.groups.length > 1) removeGroup(groupId);
+}
+
+/** Send a tab to a brand-new window and close it here. */
+export async function moveTabToNewWindow(
+  groupId: string,
+  tabId: string,
+): Promise<void> {
+  const group = ui.groups.find((candidate) => candidate.id === groupId);
+  const tab = group?.tabs.find((candidate) => candidate.id === tabId);
+  if (!tab) return;
+  try {
+    await api.windowSpawn(tabLayoutOf(tab));
+    removeSourceTab(groupId, tabId);
+  } catch (error) {
+    ui.status = `could not open a new window: ${String(error)}`;
+  }
+}
+
+/**
+ * Finish a drag on the source tab's `dragend`.
+ *
+ * - dropped somewhere in this window: the local handlers already acted;
+ * - accepted by another window (`move`): remove the tab here;
+ * - not accepted after the pointer left the window: tear it off;
+ * - otherwise it was cancelled and nothing changes.
+ */
+export async function finishTabDrag(effect: string): Promise<void> {
+  if (dragTimer) {
+    clearTimeout(dragTimer);
+    dragTimer = null;
+  }
+  ui.dragTab = null;
+  const drag = sourceDrag;
+  sourceDrag = null;
+  if (!drag) return;
+  announceDrag({ phase: "end", sourceLabel: windowLabel });
+  if (dropSeenInWindow) return;
+  if (effect === "move") {
+    removeSourceTab(drag.groupId, drag.tabId);
+  } else if (leftWindow) {
+    await moveTabToNewWindow(drag.groupId, drag.tabId);
+  }
+}
+
+function activateForeignDrag(tab: api.TabLayout): void {
+  const id = newId();
+  foreignTabs.set(id, tab);
+  ui.dragTab = { tabId: id, fromGroupId: FOREIGN_GROUP };
+}
+
+function clearForeignDrag(): void {
+  const drag = ui.dragTab;
+  if (drag?.fromGroupId === FOREIGN_GROUP) {
+    foreignTabs.delete(drag.tabId);
+    ui.dragTab = null;
+  }
+}
+
+/** Create a tab in this window from a foreign tab payload. */
+function adoptForeignTab(payload: api.TabLayout): Tab {
+  return {
+    id: newId(),
+    kind: payload.kind,
+    ref: payload.ref ?? null,
+    title: payload.title,
+  };
+}
+
+/**
+ * Wire window-level drag handling: foreign tab announcements, a catch-all
+ * drop target (so a drop inside the window always counts as "here"), and
+ * detection of the pointer leaving the window.
+ */
+export async function installDragBridge(): Promise<void> {
+  await listen<TabDragEvent>("tab-drag", (event) => {
+    const payload = event.payload;
+    if (payload.sourceLabel === windowLabel) return;
+    if (payload.phase === "start" && payload.tab) {
+      pendingForeign = payload.tab;
+    } else {
+      pendingForeign = null;
+      clearForeignDrag();
+    }
+  });
+
+  document.addEventListener(
+    "dragenter",
+    () => {
+      if (pendingForeign && !ui.dragTab) activateForeignDrag(pendingForeign);
+    },
+    true,
+  );
+  document.addEventListener("dragover", (event) => {
+    leftWindow = false;
+    if (!ui.dragTab) return;
+    event.preventDefault();
+    if (event.dataTransfer) event.dataTransfer.dropEffect = "move";
+  });
+  document.addEventListener("dragleave", (event) => {
+    if (event.relatedTarget !== null) return;
+    leftWindow = true;
+    clearForeignDrag();
+  });
+  document.addEventListener(
+    "drop",
+    () => {
+      dropSeenInWindow = true;
+    },
+    true,
+  );
 }
 
 /** Remove a group and collapse the split tree around it. */
@@ -481,6 +650,23 @@ function collapseTree(node: SplitNode | null): SplitNode {
   return { ...node, children };
 }
 
+/** Put `groupId` beside `targetGroupId` on the given edge of its pane. */
+function placeGroup(
+  targetGroupId: string,
+  groupId: string,
+  edge: "left" | "right" | "top" | "bottom",
+): void {
+  const horizontal = edge === "left" || edge === "right";
+  const before = edge === "left" || edge === "top";
+  ui.splitRoot = replaceLeaf(ui.splitRoot, targetGroupId, (leaf) => ({
+    type: "split",
+    direction: horizontal ? "row" : "column",
+    children: before
+      ? [{ type: "leaf", groupId }, leaf]
+      : [leaf, { type: "leaf", groupId }],
+  }));
+}
+
 /** Drag a tab to `edge` of `targetGroupId`, creating a new pane. */
 export async function splitGroup(
   fromGroupId: string,
@@ -488,6 +674,20 @@ export async function splitGroup(
   targetGroupId: string,
   edge: "left" | "right" | "top" | "bottom",
 ): Promise<void> {
+  if (fromGroupId === FOREIGN_GROUP) {
+    const payload = foreignTabs.get(tabId);
+    foreignTabs.delete(tabId);
+    if (!payload) return;
+    const tab = adoptForeignTab(payload);
+    const group = makeGroup();
+    group.tabs = [tab];
+    group.activeTabId = tab.id;
+    ui.groups = [...ui.groups, group];
+    await activateTab(group.id, tab.id);
+    placeGroup(targetGroupId, group.id, edge);
+    ui.activeGroupId = group.id;
+    return;
+  }
   const source = ui.groups.find((group) => group.id === fromGroupId);
   if (!source) return;
   // Splitting a group's only tab against itself would delete the target.
@@ -504,15 +704,7 @@ export async function splitGroup(
   ui.groups = [...ui.groups, group];
   await activateTab(group.id, tab.id);
 
-  const horizontal = edge === "left" || edge === "right";
-  const before = edge === "left" || edge === "top";
-  ui.splitRoot = replaceLeaf(ui.splitRoot, targetGroupId, (leaf) => ({
-    type: "split",
-    direction: horizontal ? "row" : "column",
-    children: before
-      ? [{ type: "leaf", groupId: group.id }, leaf]
-      : [leaf, { type: "leaf", groupId: group.id }],
-  }));
+  placeGroup(targetGroupId, group.id, edge);
   ui.activeGroupId = group.id;
 
   if (source.tabs.length === 0) {
@@ -529,9 +721,30 @@ export async function moveTab(
   toGroupId: string,
   beforeTabId: string | null = null,
 ): Promise<void> {
-  const source = ui.groups.find((group) => group.id === fromGroupId);
   const target = ui.groups.find((group) => group.id === toGroupId);
-  if (!source || !target) return;
+  if (!target) return;
+
+  if (fromGroupId === FOREIGN_GROUP) {
+    const payload = foreignTabs.get(tabId);
+    foreignTabs.delete(tabId);
+    if (!payload) return;
+    const existing = target.tabs.find(
+      (tab) => tab.kind === payload.kind && tab.ref === (payload.ref ?? null),
+    );
+    const tab = existing ?? adoptForeignTab(payload);
+    if (!existing) {
+      const at = beforeTabId
+        ? target.tabs.findIndex((candidate) => candidate.id === beforeTabId)
+        : -1;
+      const pos = at === -1 ? target.tabs.length : at;
+      target.tabs = [...target.tabs.slice(0, pos), tab, ...target.tabs.slice(pos)];
+    }
+    await activateTab(target.id, tab.id);
+    return;
+  }
+
+  const source = ui.groups.find((group) => group.id === fromGroupId);
+  if (!source) return;
   const index = source.tabs.findIndex((tab) => tab.id === tabId);
   if (index === -1) return;
   const tab = source.tabs[index];
@@ -710,6 +923,22 @@ export async function selectNote(path: string): Promise<void> {
 
 export async function selectTable(name: string): Promise<void> {
   await openTable(name);
+}
+
+export function openTabContextMenu(
+  x: number,
+  y: number,
+  groupId: string,
+  tabId: string,
+): void {
+  ui.contextMenu = {
+    x,
+    y,
+    path: "",
+    isDir: false,
+    kind: "tab",
+    tab: { groupId, tabId },
+  };
 }
 
 export function openContextMenu(

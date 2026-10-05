@@ -10,6 +10,7 @@
     serializeTiling,
     restoreMainTiling,
     restoreSecondaryTiling,
+    installDragBridge,
     type Activity,
   } from "./lib/state.svelte";
   import { windowLabel, isMainWindow } from "./lib/window";
@@ -26,6 +27,7 @@
 
   onMount(async () => {
     await init();
+    await installDragBridge();
     if (!isMainWindow) {
       // Torn-off windows show only tab groups; they restore their own tiling.
       await restoreSecondaryTiling(windowLabel);

@@ -10,6 +10,8 @@
     selectNote,
     refreshTree,
     collapseAll,
+    closeTab,
+    moveTabToNewWindow,
   } from "../lib/state.svelte";
 
   let menuEl: HTMLElement | undefined;
@@ -101,6 +103,22 @@
         }}>{$t("contextMenu.collapseAll")}</button
       >
       <button onclick={reveal}>{$t("contextMenu.reveal")}</button>
+    {:else if menu.kind === "tab" && menu.tab}
+      <!-- Read the target before closing: closing nulls `menu`. -->
+      <button
+        onclick={() => {
+          const { groupId, tabId } = menu.tab!;
+          closeContextMenu();
+          void moveTabToNewWindow(groupId, tabId);
+        }}>{$t("contextMenu.moveToWindow")}</button
+      >
+      <button
+        onclick={() => {
+          const { groupId, tabId } = menu.tab!;
+          closeContextMenu();
+          closeTab(groupId, tabId);
+        }}>{$t("tabs.close")}</button
+      >
     {:else}
       {#if !menu.isDir}
         <button

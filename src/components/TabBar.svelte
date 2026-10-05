@@ -15,6 +15,8 @@
     moveTab,
     beginTabDrag,
     endTabDrag,
+    finishTabDrag,
+    openTabContextMenu,
     toggleInspector,
     toggleSidebar,
     setInspectorDock,
@@ -34,9 +36,9 @@
     beginTabDrag(tab.id, group.id);
   }
 
-  function onDragEnd() {
+  function onDragEnd(event: DragEvent) {
     marker = null;
-    endTabDrag();
+    void finishTabDrag(event.dataTransfer?.dropEffect ?? "none");
   }
 
   function onTabOver(event: DragEvent, tab: Tab) {
@@ -116,6 +118,10 @@
         draggable="true"
         ondragstart={(e) => onDragStart(e, tab)}
         ondragend={onDragEnd}
+        oncontextmenu={(e) => {
+          e.preventDefault();
+          openTabContextMenu(e.clientX, e.clientY, group.id, tab.id);
+        }}
         ondragover={(e) => onTabOver(e, tab)}
         ondrop={(e) => onTabDrop(e, tab)}
       >
