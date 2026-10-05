@@ -219,7 +219,7 @@ export type ClauseSlot =
   | { kind: "required_tag"; tag: string }
   | { kind: "literal"; text: string }
   | { kind: "wildcard" }
-  | { kind: "spacer" };
+  | { kind: "spacer"; text?: string | null };
 
 export interface SyntaxGrid {
   preset_name: string;
@@ -234,8 +234,21 @@ export interface Token {
 export type Symbol =
   | { kind: "word"; value: string }
   | { kind: "literal"; value: string }
-  | { kind: "separator" }
+  | { kind: "separator"; value: string | null }
   | { kind: "placeholder"; value: string };
+
+export type AffixKind = "prefix" | "suffix";
+
+export interface AffixRule {
+  kind: AffixKind;
+  english: string;
+  conlang: string;
+}
+
+export interface TranslationOptions {
+  separator: string;
+  affixes: AffixRule[];
+}
 
 export interface SlotOutcome {
   index: number;
@@ -273,6 +286,17 @@ export const createTranslationWord = (
   tags: string[],
 ): Promise<string | null> =>
   invoke("create_translation_word", { table, wordname, definition, tags });
+export const translationOptions = (): Promise<TranslationOptions> =>
+  invoke("translation_options");
+export const setTranslationOptions = (
+  options: TranslationOptions,
+): Promise<void> => invoke("set_translation_options", { options });
+export const exportPresets = (
+  path: string,
+  grids: SyntaxGrid[],
+): Promise<void> => invoke("export_presets", { path, grids });
+export const importPresets = (path: string): Promise<SyntaxGrid[]> =>
+  invoke("import_presets", { path });
 
 // -- version control -----------------------------------------------------
 export interface StatusEntry {

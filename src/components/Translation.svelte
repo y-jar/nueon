@@ -2,6 +2,7 @@
   import { onMount } from "svelte";
   import { t } from "svelte-i18n";
   import { dndzone } from "svelte-dnd-action";
+  import { open, save } from "@tauri-apps/plugin-dialog";
   import * as api from "../lib/api";
   import { ui } from "../lib/state.svelte";
 
@@ -14,6 +15,10 @@
   let draftName = $state($t("translation.newPreset"));
   let slots = $state<SlotItem[]>([]);
   let separator = $state(" ");
+  let affixes = $state<api.AffixRule[]>([]);
+  let newAffixKind = $state("suffix");
+  let newAffixEnglish = $state("");
+  let newAffixConlang = $state("");
   let inputText = $state("");
   let choices = $state<Record<string, string>>({});
   let report = $state<api.TranslationReport | null>(null);
@@ -38,11 +43,85 @@
     ).sort(),
   );
 
-  onMount(loadPresets);
+  onMount(load);
+
+  async function load() {
+    await loadPresets();
+    await loadOptions();
+  }
 
   async function loadPresets() {
     try {
       presets = await api.listPresets();
+    } catch (e) {
+      error = String(e);
+    }
+  }
+
+  async function loadOptions() {
+    try {
+      const options = await api.translationOptions();
+      separator = options.separator;
+      affixes = options.affixes;
+    } catch (e) {
+      error = String(e);
+    }
+  }
+
+  async function persistOptions() {
+    try {
+      await api.setTranslationOptions({ separator, affixes });
+      error = "";
+    } catch (e) {
+      error = String(e);
+    }
+  }
+
+  async function addAffix() {
+    const english = newAffixEnglish.trim();
+    const conlang = newAffixConlang.trim();
+    if (!english || !conlang) return;
+    affixes = [
+      ...affixes,
+      { kind: newAffixKind as api.AffixKind, english, conlang },
+    ];
+    newAffixEnglish = "";
+    newAffixConlang = "";
+    await persistOptions();
+  }
+
+  async function removeAffix(index: number) {
+    affixes = affixes.filter((_, i) => i !== index);
+    await persistOptions();
+  }
+
+  async function exportPresets() {
+    const path = await save({
+      defaultPath: "langloom-presets.json",
+      filters: [{ name: "JSON", extensions: ["json"] }],
+    });
+    if (!path) return;
+    try {
+      await api.exportPresets(path, presets);
+      error = "";
+    } catch (e) {
+      error = String(e);
+    }
+  }
+
+  async function importPresets() {
+    const selected = await open({
+      multiple: false,
+      filters: [{ name: "JSON", extensions: ["json"] }],
+    });
+    if (!selected || Array.isArray(selected)) return;
+    try {
+      const imported = await api.importPresets(selected);
+      for (const preset of imported) {
+        await api.savePreset(preset);
+      }
+      await loadPresets();
+      error = "";
     } catch (e) {
       error = String(e);
     }
@@ -168,7 +247,7 @@
       case "literal":
         return `"${symbol.value}"`;
       case "separator":
-        return "␣";
+        return symbol.value ? symbol.value : "␣";
       case "placeholder":
         return `⟨${symbol.value}⟩`;
     }
@@ -194,7 +273,37 @@
     {#if presets.some((p) => p.preset_name === draftName)}
       <button onclick={() => deletePreset(draftName)}>{$t("translation.delete")}</button>
     {/if}
+    <button onclick={exportPresets}>{$t("translation.exportPresets")}</button>
+    <button onclick={importPresets}>{$t("translation.importPresets")}</button>
   </div>
+
+  <details class="options">
+    <summary>{$t("translation.morphology")}</summary>
+    <div class="picker-body">
+      {#each affixes as rule, index (index)}
+        <div class="row">
+          <span class="muted">{rule.kind}</span>
+          <span class="mono">{rule.english} → {rule.conlang}</span>
+          <button onclick={() => removeAffix(index)}>✕</button>
+        </div>
+      {/each}
+      <div class="row">
+        <select bind:value={newAffixKind}>
+          <option value="suffix">{$t("translation.suffix")}</option>
+          <option value="prefix">{$t("translation.prefix")}</option>
+        </select>
+        <input
+          placeholder={$t("translation.englishAffix")}
+          bind:value={newAffixEnglish}
+        />
+        <input
+          placeholder={$t("translation.conlangAffix")}
+          bind:value={newAffixConlang}
+        />
+        <button onclick={addAffix}>{$t("translation.add")}</button>
+      </div>
+    </div>
+  </details>
 
   <div class="builder">
     <div class="palette">
@@ -260,6 +369,17 @@
             <em>{$t("translation.wildcardLabel")}</em>
           {:else}
             <em>{$t("translation.spacerLabel")}</em>
+            <input
+              value={item.slot.text ?? ""}
+              placeholder={separator}
+              size="4"
+              onpointerdown={(e) => e.stopPropagation()}
+              onblur={(e) =>
+                updateSlot(item.id, {
+                  kind: "spacer",
+                  text: e.currentTarget.value || null,
+                })}
+            />
           {/if}
           <button onclick={() => removeSlot(item.id)}>✕</button>
         </div>
@@ -273,7 +393,10 @@
   <div class="runner">
     <div class="row">
       <span class="muted">{$t("translation.separator")}</span
-      ><input bind:value={separator} size="3" onblur={run} />
+      ><input bind:value={separator} size="3" onblur={() => {
+        persistOptions();
+        run();
+      }} />
       <textarea
         placeholder={$t("translation.englishPlaceholder")}
         bind:value={inputText}

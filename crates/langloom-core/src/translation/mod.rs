@@ -61,8 +61,12 @@ pub enum ClauseSlot {
     Literal { text: String },
     /// A flexible space where untagged or secondary words fall.
     Wildcard,
-    /// A between-word spacing / join rule.
-    Spacer,
+    /// A between-word spacing / join rule. An optional custom surface
+    /// overrides the global separator.
+    Spacer {
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        text: Option<String>,
+    },
 }
 
 impl ClauseSlot {
@@ -72,7 +76,10 @@ impl ClauseSlot {
             ClauseSlot::RequiredTag { tag } => format!("#{tag}"),
             ClauseSlot::Literal { text } => format!("\"{text}\""),
             ClauseSlot::Wildcard => "*".to_string(),
-            ClauseSlot::Spacer => "␣".to_string(),
+            ClauseSlot::Spacer { text } => match text.as_deref() {
+                Some(surface) if !surface.is_empty() => format!("␣{surface}"),
+                _ => "␣".to_string(),
+            },
         }
     }
 }
@@ -103,7 +110,7 @@ mod tests {
                 ClauseSlot::Literal { text: "ka".into() },
                 ClauseSlot::RequiredTag { tag: "Verb".into() },
                 ClauseSlot::Wildcard,
-                ClauseSlot::Spacer,
+                ClauseSlot::Spacer { text: None },
             ],
         };
 
@@ -113,11 +120,26 @@ mod tests {
     }
 
     #[test]
+    fn spacer_without_text_round_trips_compactly() {
+        let grid = grid(vec![ClauseSlot::Spacer { text: None }]);
+        let json = serde_json::to_string(&grid).unwrap();
+        assert!(json.contains("\"kind\":\"spacer\""));
+        assert!(!json.contains("text"));
+    }
+
+    #[test]
     fn labels_describe_slots() {
         assert_eq!(tag("Subject").label(), "#Subject");
         assert_eq!(ClauseSlot::Literal { text: "ka".into() }.label(), "\"ka\"");
         assert_eq!(ClauseSlot::Wildcard.label(), "*");
-        assert_eq!(ClauseSlot::Spacer.label(), "␣");
+        assert_eq!(ClauseSlot::Spacer { text: None }.label(), "␣");
+        assert_eq!(
+            ClauseSlot::Spacer {
+                text: Some("·".into())
+            }
+            .label(),
+            "␣·"
+        );
     }
 
     #[test]

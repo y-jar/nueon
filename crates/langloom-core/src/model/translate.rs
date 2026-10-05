@@ -1,8 +1,9 @@
 //! English → conlang execution engine.
 //!
 //! Pure and UI-independent: tokenizes an English sentence, finds conlang
-//! candidates by `definition`, assigns them to a syntax grid's slots, and
-//! reports missing words, homograph conflicts, and unfilled slots.
+//! candidates by `definition` (with light lemmatization and rule-based
+//! morphology), assigns them to a syntax grid's slots, and reports missing
+//! words, homograph conflicts, and unfilled slots.
 
 use std::collections::HashMap;
 
@@ -11,7 +12,11 @@ use uuid::Uuid;
 
 use super::dictionary::Dictionary;
 use super::entry::WordEntry;
+use crate::config::{AffixKind, AffixRule};
 use crate::translation::{ClauseSlot, SyntaxGrid};
+
+/// English function words dropped during tokenization.
+const STOPWORDS: &[&str] = &["a", "an", "the"];
 
 /// One normalized word of the input sentence.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
@@ -26,7 +31,8 @@ pub struct Token {
 pub enum Symbol {
     Word(String),
     Literal(String),
-    Separator,
+    /// A spacer; the payload overrides the global separator when present.
+    Separator(Option<String>),
     Placeholder(String),
 }
 
@@ -45,6 +51,8 @@ pub struct Candidate {
     pub id: Uuid,
     pub wordname: String,
     pub senses: Vec<String>,
+    /// Morphology affix to attach to the wordname (empty when none).
+    pub affix: String,
 }
 
 /// The full result of a translation attempt.
@@ -92,7 +100,53 @@ fn normalize(text: &str) -> String {
     without_to.trim().to_string()
 }
 
-/// Split an input sentence into normalized tokens.
+fn add_form(forms: &mut Vec<String>, form: String) {
+    if !form.is_empty() && !forms.contains(&form) {
+        forms.push(form);
+    }
+}
+
+/// Light English lemmatization: the surface form plus plausible base forms
+/// (plural and common verb inflections) so inflected tokens still match roots.
+pub fn lemma_forms(word: &str) -> Vec<String> {
+    let mut forms = vec![word.to_string()];
+
+    if word.ends_with("ies") && word.len() > 3 {
+        add_form(&mut forms, format!("{}y", &word[..word.len() - 3]));
+    }
+    if word.ends_with("es") && word.len() > 2 {
+        add_form(&mut forms, word[..word.len() - 2].to_string());
+    }
+    if word.ends_with('s') && !word.ends_with("ss") && word.len() > 1 {
+        add_form(&mut forms, word[..word.len() - 1].to_string());
+    }
+    if word.ends_with("ing") && word.len() > 4 {
+        let stem = &word[..word.len() - 3];
+        add_form(&mut forms, stem.to_string());
+        add_form(&mut forms, format!("{stem}e"));
+        add_degeminated(&mut forms, stem);
+    }
+    if word.ends_with("ed") && word.len() > 3 {
+        let stem = &word[..word.len() - 2];
+        add_form(&mut forms, stem.to_string());
+        add_form(&mut forms, word[..word.len() - 1].to_string());
+        add_degeminated(&mut forms, stem);
+    }
+    forms
+}
+
+/// Add the stem with a doubled final consonant reduced (`runn` → `run`).
+fn add_degeminated(forms: &mut Vec<String>, stem: &str) {
+    let bytes = stem.as_bytes();
+    if bytes.len() >= 2 && bytes[bytes.len() - 1] == bytes[bytes.len() - 2] {
+        let is_consonant = |b: u8| b.is_ascii_alphabetic() && !b"aeiou".contains(&b);
+        if is_consonant(bytes[bytes.len() - 1]) {
+            add_form(forms, stem[..stem.len() - 1].to_string());
+        }
+    }
+}
+
+/// Split an input sentence into normalized tokens (stopwords removed).
 pub fn tokenize(input: &str) -> Vec<Token> {
     input
         .split(|c: char| !c.is_alphanumeric())
@@ -101,48 +155,125 @@ pub fn tokenize(input: &str) -> Vec<Token> {
             text: part.to_string(),
             normalized: normalize(part),
         })
-        .filter(|token| !token.normalized.is_empty() && token.normalized != "to")
+        .filter(|token| {
+            !token.normalized.is_empty()
+                && token.normalized != "to"
+                && !STOPWORDS.contains(&token.normalized.as_str())
+        })
         .collect()
 }
 
-/// Find matching entries: exact sense matches win, otherwise substring matches.
-fn matching_entries<'a>(dict: &'a Dictionary, token: &Token) -> Vec<(&'a str, &'a WordEntry)> {
-    let mut exact = Vec::new();
-    let mut partial = Vec::new();
+/// A dictionary match plus the morphology affix to attach.
+#[derive(Debug, Clone, PartialEq)]
+struct Match<'a> {
+    table: &'a str,
+    entry: &'a WordEntry,
+    affix: String,
+}
+
+fn collect_for_form<'a>(
+    dict: &'a Dictionary,
+    form: &str,
+    exact: &mut Vec<(&'a str, &'a WordEntry)>,
+    partial: &mut Vec<(&'a str, &'a WordEntry)>,
+) {
     for table in dict.tables() {
         for entry in &table.entries {
             let Some(senses) = entry.definition() else {
                 continue;
             };
             let normalized: Vec<String> = senses.iter().map(|sense| normalize(sense)).collect();
-            if normalized.iter().any(|sense| sense == &token.normalized) {
+            if normalized.iter().any(|sense| sense == form) {
                 exact.push((table.name.as_str(), entry));
-            } else if normalized
-                .iter()
-                .any(|sense| sense.contains(token.normalized.as_str()))
-            {
+            } else if normalized.iter().any(|sense| sense.contains(form)) {
                 partial.push((table.name.as_str(), entry));
             }
         }
     }
-    if exact.is_empty() {
-        partial
-    } else {
-        exact
+}
+
+/// Find matching entries: exact sense matches win, otherwise substring matches.
+/// Falls back to rule-based morphology on the affix rules.
+fn matching_entries<'a>(
+    dict: &'a Dictionary,
+    token: &Token,
+    affixes: &[AffixRule],
+) -> Vec<Match<'a>> {
+    let mut exact = Vec::new();
+    let mut partial = Vec::new();
+    for form in lemma_forms(&token.normalized) {
+        collect_for_form(dict, &form, &mut exact, &mut partial);
     }
+    let direct = if exact.is_empty() { partial } else { exact };
+    if !direct.is_empty() {
+        return direct
+            .into_iter()
+            .map(|(table, entry)| Match {
+                table,
+                entry,
+                affix: String::new(),
+            })
+            .collect();
+    }
+
+    let mut results: Vec<Match> = Vec::new();
+    for rule in affixes {
+        if rule.english.is_empty() {
+            continue;
+        }
+        let base = match rule.kind {
+            AffixKind::Suffix => token.normalized.strip_suffix(&rule.english),
+            AffixKind::Prefix => token.normalized.strip_prefix(&rule.english),
+        };
+        let Some(base) = base.filter(|base| !base.is_empty()) else {
+            continue;
+        };
+        let mut ex = Vec::new();
+        let mut pa = Vec::new();
+        for form in lemma_forms(base) {
+            collect_for_form(dict, &form, &mut ex, &mut pa);
+        }
+        let picked = if ex.is_empty() { pa } else { ex };
+        for (table, entry) in picked {
+            if results
+                .iter()
+                .any(|existing| existing.entry.id == entry.id && existing.affix == rule.conlang)
+            {
+                continue;
+            }
+            results.push(Match {
+                table,
+                entry,
+                affix: rule.conlang.clone(),
+            });
+        }
+    }
+    results
 }
 
 /// Candidates for a token, for use by UI conflict pickers.
-pub fn token_candidates(dict: &Dictionary, token: &Token) -> Vec<Candidate> {
-    matching_entries(dict, token)
+pub fn token_candidates(dict: &Dictionary, token: &Token, affixes: &[AffixRule]) -> Vec<Candidate> {
+    matching_entries(dict, token, affixes)
         .into_iter()
-        .map(|(table, entry)| Candidate {
-            table: table.to_string(),
-            id: entry.id,
-            wordname: entry.wordname.clone(),
-            senses: entry.definition().map(|s| s.to_vec()).unwrap_or_default(),
+        .map(|matched| Candidate {
+            table: matched.table.to_string(),
+            id: matched.entry.id,
+            wordname: matched.entry.wordname.clone(),
+            senses: matched
+                .entry
+                .definition()
+                .map(<[String]>::to_vec)
+                .unwrap_or_default(),
+            affix: matched.affix,
         })
         .collect()
+}
+
+/// A chosen dictionary entry plus its morphology affix.
+#[derive(Debug, Clone, PartialEq, Eq)]
+struct Picked {
+    id: Uuid,
+    affix: String,
 }
 
 /// Translate `input` using `grid`. `choices` resolves conflicts by token index.
@@ -152,27 +283,40 @@ pub fn translate(
     separator: &str,
     input: &str,
     choices: &HashMap<usize, Uuid>,
+    affixes: &[AffixRule],
 ) -> TranslationReport {
     let tokens = tokenize(input);
-    let candidates: Vec<Vec<(&str, &WordEntry)>> = tokens
+    let candidates: Vec<Vec<Match>> = tokens
         .iter()
-        .map(|token| matching_entries(dict, token))
+        .map(|token| matching_entries(dict, token, affixes))
         .collect();
 
-    let mut chosen: Vec<Option<Uuid>> = vec![None; tokens.len()];
+    let mut chosen: Vec<Option<Picked>> = vec![None; tokens.len()];
     let mut missing = Vec::new();
     let mut conflicts = Vec::new();
     for (index, token_candidates) in candidates.iter().enumerate() {
         match token_candidates.len() {
             0 => missing.push(index),
-            1 => chosen[index] = Some(token_candidates[0].1.id),
+            1 => {
+                let matched = &token_candidates[0];
+                chosen[index] = Some(Picked {
+                    id: matched.entry.id,
+                    affix: matched.affix.clone(),
+                });
+            }
             _ => {
-                let picked = choices
-                    .get(&index)
-                    .filter(|id| token_candidates.iter().any(|(_, entry)| entry.id == **id))
-                    .copied();
+                let picked = choices.get(&index).and_then(|id| {
+                    token_candidates
+                        .iter()
+                        .find(|matched| matched.entry.id == *id)
+                });
                 match picked {
-                    Some(id) => chosen[index] = Some(id),
+                    Some(matched) => {
+                        chosen[index] = Some(Picked {
+                            id: matched.entry.id,
+                            affix: matched.affix.clone(),
+                        })
+                    }
                     None => conflicts.push(index),
                 }
             }
@@ -187,11 +331,11 @@ pub fn translate(
     for (index, slot) in grid.slots.iter().enumerate() {
         let symbol = match slot {
             ClauseSlot::Literal { text } => Symbol::Literal(text.clone()),
-            ClauseSlot::Spacer => Symbol::Separator,
+            ClauseSlot::Spacer { text } => Symbol::Separator(text.clone()),
             ClauseSlot::Wildcard => match pick(&candidates, &chosen, &assigned, count, None) {
                 Some(token) => {
                     assigned[token] = true;
-                    Symbol::Word(word_for(dict, chosen[token]))
+                    Symbol::Word(word_for(dict, chosen[token].as_ref()))
                 }
                 None => Symbol::Placeholder("*?".to_string()),
             },
@@ -199,7 +343,7 @@ pub fn translate(
                 match pick(&candidates, &chosen, &assigned, count, Some(tag)) {
                     Some(token) => {
                         assigned[token] = true;
-                        Symbol::Word(word_for(dict, chosen[token]))
+                        Symbol::Word(word_for(dict, chosen[token].as_ref()))
                     }
                     None => {
                         unfilled.push(index);
@@ -216,10 +360,10 @@ pub fn translate(
     }
 
     let mut leftovers = Vec::new();
-    for (index, id) in chosen.iter().enumerate() {
+    for (index, picked) in chosen.iter().enumerate() {
         if !assigned[index] {
-            if let Some(id) = id {
-                leftovers.push((index, *id));
+            if let Some(picked) = picked {
+                leftovers.push((index, picked.id));
             }
         }
     }
@@ -241,8 +385,8 @@ pub fn translate(
 }
 
 fn pick(
-    candidates: &[Vec<(&str, &WordEntry)>],
-    chosen: &[Option<Uuid>],
+    candidates: &[Vec<Match>],
+    chosen: &[Option<Picked>],
     assigned: &[bool],
     count: usize,
     tag: Option<&str>,
@@ -251,13 +395,16 @@ fn pick(
         if assigned[index] {
             continue;
         }
-        let Some(id) = chosen[index] else {
+        let Some(picked) = &chosen[index] else {
             continue;
         };
-        let Some((_, entry)) = candidates[index].iter().find(|(_, entry)| entry.id == id) else {
+        let Some(matched) = candidates[index]
+            .iter()
+            .find(|matched| matched.entry.id == picked.id)
+        else {
             continue;
         };
-        if tag.is_some_and(|tag| !entry.has(tag)) {
+        if tag.is_some_and(|tag| !matched.entry.has(tag)) {
             continue;
         }
         return Some(index);
@@ -265,9 +412,12 @@ fn pick(
     None
 }
 
-fn word_for(dict: &Dictionary, id: Option<Uuid>) -> String {
-    id.and_then(|id| dict.find_entry(id))
-        .map(|(_, entry)| entry.wordname.clone())
+fn word_for(dict: &Dictionary, picked: Option<&Picked>) -> String {
+    picked
+        .and_then(|picked| {
+            dict.find_entry(picked.id)
+                .map(|(_, entry)| format!("{}{}", entry.wordname, picked.affix))
+        })
         .unwrap_or_else(|| "?".to_string())
 }
 
@@ -294,8 +444,13 @@ fn render(slots: &[SlotOutcome], separator: &str) -> String {
                 output.push_str(text);
                 previous_word = false;
             }
-            Symbol::Separator => {
-                output.push_str(separator);
+            Symbol::Separator(custom) => {
+                output.push_str(
+                    custom
+                        .as_deref()
+                        .filter(|surface| !surface.is_empty())
+                        .unwrap_or(separator),
+                );
                 previous_word = false;
             }
         }
@@ -342,11 +497,15 @@ mod tests {
         ClauseSlot::RequiredTag { tag: name.into() }
     }
 
+    fn no_affixes() -> Vec<AffixRule> {
+        Vec::new()
+    }
+
     #[test]
-    fn tokenizes_and_normalizes() {
+    fn tokenizes_and_normalizes_and_drops_stopwords() {
         let tokens = tokenize("To run, the dog!");
         let words: Vec<&str> = tokens.iter().map(|t| t.normalized.as_str()).collect();
-        assert_eq!(words, ["run", "the", "dog"]);
+        assert_eq!(words, ["run", "dog"]);
     }
 
     #[test]
@@ -356,16 +515,56 @@ mod tests {
             ("velo", &["to run"], &["Verb"]),
         ]);
         let grid = grid(vec![tag("Subject"), tag("Verb")]);
-        let report = translate(&dict, &grid, " ", "dog run", &HashMap::new());
+        let report = translate(&dict, &grid, " ", "dog run", &HashMap::new(), &no_affixes());
         assert!(report.complete);
         assert_eq!(report.output, "kala velo");
+    }
+
+    #[test]
+    fn lemmatizes_plurals_and_verb_inflections() {
+        let dict = build(&[("kala", &["dog"], &["Subject"])]);
+        let dog_grid = grid(vec![tag("Subject")]);
+        for input in ["dogs", "dog"] {
+            let report = translate(&dict, &dog_grid, " ", input, &HashMap::new(), &no_affixes());
+            assert!(report.complete, "input {input} should match");
+            assert_eq!(report.output, "kala");
+        }
+
+        let verbs = build(&[("velo", &["to run"], &["Verb"])]);
+        let verb_grid = grid(vec![tag("Verb")]);
+        for input in ["runs", "running", "run"] {
+            let report = translate(
+                &verbs,
+                &verb_grid,
+                " ",
+                input,
+                &HashMap::new(),
+                &no_affixes(),
+            );
+            assert!(report.complete, "input {input} should match");
+            assert_eq!(report.output, "velo");
+        }
+    }
+
+    #[test]
+    fn morphology_applies_affix_to_matched_root() {
+        let dict = build(&[("kala", &["dog"], &["Subject"])]);
+        let rules = vec![AffixRule {
+            kind: AffixKind::Suffix,
+            english: "z".into(),
+            conlang: "i".into(),
+        }];
+        let grid = grid(vec![tag("Subject")]);
+        let report = translate(&dict, &grid, " ", "dogz", &HashMap::new(), &rules);
+        assert!(report.complete);
+        assert_eq!(report.output, "kalai");
     }
 
     #[test]
     fn reports_missing_and_is_incomplete() {
         let dict = build(&[("kala", &["dog"], &[])]);
         let grid = grid(vec![tag("Subject")]);
-        let report = translate(&dict, &grid, " ", "dog fly", &HashMap::new());
+        let report = translate(&dict, &grid, " ", "dog fly", &HashMap::new(), &no_affixes());
         assert!(!report.complete);
         assert_eq!(report.missing.len(), 1);
     }
@@ -377,7 +576,7 @@ mod tests {
             ("koro", &["to run"], &["Verb"]),
         ]);
         let grid = grid(vec![tag("Verb")]);
-        let unresolved = translate(&dict, &grid, " ", "run", &HashMap::new());
+        let unresolved = translate(&dict, &grid, " ", "run", &HashMap::new(), &no_affixes());
         assert!(!unresolved.complete);
         assert_eq!(unresolved.conflicts, vec![0]);
 
@@ -390,7 +589,7 @@ mod tests {
             .unwrap()
             .id;
         let choices = HashMap::from([(0usize, chosen_id)]);
-        let resolved = translate(&dict, &grid, " ", "run", &choices);
+        let resolved = translate(&dict, &grid, " ", "run", &choices, &no_affixes());
         assert!(resolved.complete);
         assert_eq!(resolved.output, "koro");
     }
@@ -399,7 +598,7 @@ mod tests {
     fn unfilled_required_slot_is_reported() {
         let dict = build(&[("kala", &["dog"], &["Subject"])]);
         let grid = grid(vec![tag("Subject"), tag("Verb")]);
-        let report = translate(&dict, &grid, " ", "dog", &HashMap::new());
+        let report = translate(&dict, &grid, " ", "dog", &HashMap::new(), &no_affixes());
         assert_eq!(report.unfilled, vec![1]);
         assert!(!report.complete);
     }
@@ -410,18 +609,34 @@ mod tests {
         // word + literal attach directly
         let attached = grid(vec![tag("Verb"), ClauseSlot::Literal { text: "ka".into() }]);
         assert_eq!(
-            translate(&dict, &attached, " ", "run", &HashMap::new()).output,
+            translate(&dict, &attached, " ", "run", &HashMap::new(), &no_affixes()).output,
             "veloka"
         );
         // a spacer between word and literal emits the separator
         let spaced = grid(vec![
             tag("Verb"),
-            ClauseSlot::Spacer,
+            ClauseSlot::Spacer { text: None },
             ClauseSlot::Literal { text: "ka".into() },
         ]);
         assert_eq!(
-            translate(&dict, &spaced, " ", "run", &HashMap::new()).output,
+            translate(&dict, &spaced, " ", "run", &HashMap::new(), &no_affixes()).output,
             "velo ka"
+        );
+    }
+
+    #[test]
+    fn custom_spacer_text_overrides_separator() {
+        let dict = build(&[("velo", &["to run"], &["Verb"])]);
+        let grid = grid(vec![
+            tag("Verb"),
+            ClauseSlot::Spacer {
+                text: Some("·".into()),
+            },
+            ClauseSlot::Literal { text: "ka".into() },
+        ]);
+        assert_eq!(
+            translate(&dict, &grid, " ", "run", &HashMap::new(), &no_affixes()).output,
+            "velo·ka"
         );
     }
 
@@ -429,7 +644,7 @@ mod tests {
     fn substring_matching_when_no_exact() {
         let dict = build(&[("kala", &["speaker"], &[])]);
         let grid = grid(vec![ClauseSlot::Wildcard]);
-        let report = translate(&dict, &grid, " ", "speak", &HashMap::new());
+        let report = translate(&dict, &grid, " ", "speak", &HashMap::new(), &no_affixes());
         assert_eq!(report.output, "kala");
     }
 }

@@ -12,7 +12,8 @@ use std::time::{Duration, Instant};
 use uuid::Uuid;
 
 use crate::config::{
-    GrammarConfig, GridViewState, LanguageConfig, TranslationConfig, WorkspaceSettings,
+    GrammarConfig, GridViewState, LanguageConfig, TranslationConfig, TranslationOptions,
+    WorkspaceSettings,
 };
 use crate::model::{
     Dictionary, FieldType, FieldValue, TagDef, TagKindChange, TagRemoval, WordEntry, DEFINITION_TAG,
@@ -535,6 +536,35 @@ impl Workspace {
         Ok(())
     }
 
+    /// The separator and morphology rules the translation view edits.
+    pub fn translation_options(&self) -> TranslationOptions {
+        TranslationOptions {
+            separator: self
+                .translation
+                .settings
+                .get("word_separator")
+                .cloned()
+                .unwrap_or_else(|| " ".to_string()),
+            affixes: self.translation.affixes.clone(),
+        }
+    }
+
+    /// Replace the separator and morphology rules, then persist.
+    pub fn set_translation_options(
+        &mut self,
+        options: TranslationOptions,
+    ) -> Result<(), StorageError> {
+        if options.separator.is_empty() {
+            self.translation.settings.remove("word_separator");
+        } else {
+            self.translation
+                .settings
+                .insert("word_separator".to_string(), options.separator);
+        }
+        self.translation.affixes = options.affixes;
+        self.save_translation()
+    }
+
     /// Insert or replace a translation preset by name, then persist.
     pub fn save_preset(&mut self, grid: SyntaxGrid) -> Result<(), StorageError> {
         match self
@@ -824,13 +854,13 @@ mod tests {
             }],
         };
 
-        let before = translate::translate(&ws.dictionary, &grid, " ", "dog", &HashMap::new());
+        let before = translate::translate(&ws.dictionary, &grid, " ", "dog", &HashMap::new(), &[]);
         assert!(!before.complete);
 
         ws.create_defined_entry("lexicon", "kala", "dog", &["Subject".to_string()])
             .unwrap();
 
-        let after = translate::translate(&ws.dictionary, &grid, " ", "dog", &HashMap::new());
+        let after = translate::translate(&ws.dictionary, &grid, " ", "dog", &HashMap::new(), &[]);
         assert!(after.complete);
         assert_eq!(after.output, "kala");
     }
@@ -928,5 +958,28 @@ mod tests {
         let grandchild = ws.create_entry("words", "grandchild").unwrap().unwrap();
         ws.add_parent("words", grandchild, child).unwrap();
         assert!(!ws.set_parent_only("words", child, grandchild).unwrap());
+    }
+
+    #[test]
+    fn translation_options_persist() {
+        use crate::config::{AffixKind, AffixRule};
+
+        let dir = tempfile::tempdir().unwrap();
+        let mut ws = Workspace::new(dir.path()).unwrap();
+        ws.set_translation_options(TranslationOptions {
+            separator: "".into(),
+            affixes: vec![AffixRule {
+                kind: AffixKind::Suffix,
+                english: "s".into(),
+                conlang: "i".into(),
+            }],
+        })
+        .unwrap();
+
+        let reloaded = Workspace::load(dir.path()).unwrap();
+        let options = reloaded.translation_options();
+        assert_eq!(options.separator, " ", "empty separator resets to default");
+        assert_eq!(options.affixes.len(), 1);
+        assert_eq!(options.affixes[0].conlang, "i");
     }
 }

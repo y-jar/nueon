@@ -7,7 +7,7 @@ use tauri::{AppHandle, State};
 use uuid::Uuid;
 
 use langloom_core::model::TranslationReport;
-use langloom_core::SyntaxGrid;
+use langloom_core::{SyntaxGrid, TranslationOptions};
 
 use super::changed;
 use crate::state::AppState;
@@ -91,7 +91,46 @@ pub fn execute_translation(
         separator,
         &input_text,
         &resolved,
+        &workspace.translation.affixes,
     ))
+}
+
+/// The separator and morphology rules the translation view edits.
+#[tauri::command]
+pub fn translation_options(state: State<'_, Shared>) -> Result<TranslationOptions, String> {
+    let state = state.lock().map_err(|_| "state poisoned".to_string())?;
+    Ok(state.workspace()?.translation_options())
+}
+
+/// Replace the separator and morphology rules, then persist.
+#[tauri::command]
+pub fn set_translation_options(
+    app: AppHandle,
+    state: State<'_, Shared>,
+    options: TranslationOptions,
+) -> Result<(), String> {
+    let mut state = state.lock().map_err(|_| "state poisoned".to_string())?;
+    state
+        .workspace_mut()?
+        .set_translation_options(options)
+        .map_err(|err| err.to_string())?;
+    drop(state);
+    changed(&app, "translation");
+    Ok(())
+}
+
+/// Write presets to a JSON file chosen by the user.
+#[tauri::command]
+pub fn export_presets(path: String, grids: Vec<SyntaxGrid>) -> Result<(), String> {
+    let json = serde_json::to_vec_pretty(&grids).map_err(|err| err.to_string())?;
+    std::fs::write(&path, json).map_err(|err| err.to_string())
+}
+
+/// Read presets from a JSON file chosen by the user.
+#[tauri::command]
+pub fn import_presets(path: String) -> Result<Vec<SyntaxGrid>, String> {
+    let bytes = std::fs::read(&path).map_err(|err| err.to_string())?;
+    serde_json::from_slice(&bytes).map_err(|err| err.to_string())
 }
 
 /// Create a word from a missing translation token (writes to the dictionary and

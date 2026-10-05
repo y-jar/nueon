@@ -918,3 +918,34 @@ sup.cm-footnote {
 .derivation .row select {
   flex: 1;
 }
+
+/* -- translation options ------------------------------------------------- */
+
+.options {
+  position: relative;
+}
+
+.options summary {
+  cursor: pointer;
+  font-size: 12px;
+}
+
+.options .picker-body {
+  position: static;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  padding: 8px;
+  background: var(--panel);
+  border: 1px solid var(--border);
+  border-radius: 4px;
+}
+
+.options .row {
+  align-items: center;
+}
+
+.options .row input {
+  width: 130px;
+}

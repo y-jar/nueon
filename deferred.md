@@ -42,11 +42,11 @@ were completed during the Tauri migration (R0–R8).
 
 ## Translation engine
 
-- Multi-clause / sentence-level grids (current grids are a single clause). (D3)
-- Morphology: inflection, agreement, and tense transforms. (D3)
-- Smarter English tokenization / lemmatization (plurals, tense, stopwords). (D3)
-- Per-slot custom spacer text (a `Spacer` currently emits the global separator). (D3)
-- Import/export presets. (D3)
+- Multi-clause / sentence-level grids (current grids are a single clause). (D3+)
+- ~~Morphology: inflection, agreement, and tense transforms.~~ (D3, minimal rule-based affixes)
+- ~~Smarter English tokenization / lemmatization (plurals, tense, stopwords).~~ (D3)
+- ~~Per-slot custom spacer text (a `Spacer` currently emits the global separator).~~ (D3)
+- ~~Import/export presets.~~ (D3)
 
 ## Version control
 

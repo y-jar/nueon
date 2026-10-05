@@ -11,8 +11,8 @@ pub mod vcs;
 pub mod workspace;
 
 pub use config::{
-    GrammarConfig, GrammarRule, GridViewState, LanguageConfig, SortSpec, TextDirection,
-    TranslationConfig, WorkspaceSettings,
+    AffixKind, AffixRule, GrammarConfig, GrammarRule, GridViewState, LanguageConfig, SortSpec,
+    TextDirection, TranslationConfig, TranslationOptions, WorkspaceSettings,
 };
 pub use global::{GlobalConfig, WorkspaceEntry};
 pub use model::{

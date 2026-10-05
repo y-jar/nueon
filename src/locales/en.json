@@ -102,7 +102,14 @@
     "unfilledSlots": "Unfilled slots",
     "slot": "slot {index}",
     "breakdown": "Breakdown",
-    "newPreset": "New preset"
+    "newPreset": "New preset",
+    "exportPresets": "Export",
+    "importPresets": "Import",
+    "morphology": "Morphology",
+    "suffix": "suffix",
+    "prefix": "prefix",
+    "englishAffix": "English affix",
+    "conlangAffix": "conlang affix"
   },
   "derivation": {
     "title": "Derivation",
