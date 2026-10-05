@@ -12,7 +12,7 @@ pub mod workspace;
 
 pub use config::{
     AffixKind, AffixRule, GrammarConfig, GrammarRule, GridViewState, LanguageConfig, SortSpec,
-    TextDirection, TranslationConfig, TranslationOptions, WorkspaceSettings,
+    TextDirection, TranslationConfig, TranslationOptions, UiLayout, WorkspaceSettings,
 };
 pub use global::{GlobalConfig, WindowLayout, WorkspaceEntry};
 pub use model::{

@@ -1,34 +1,49 @@
 <script lang="ts">
   import { t } from "svelte-i18n";
-  import { FilePlus, Table2, Languages, NotebookPen } from "@lucide/svelte";
-  import type { NoteNode } from "../lib/api";
-  import { ui, createNote, setActivity } from "../lib/state.svelte";
+  import {
+    FilePlus,
+    Table2,
+    Languages,
+    NotebookPen,
+    Plus,
+  } from "@lucide/svelte";
+  import * as api from "../lib/api";
+  import {
+    ui,
+    createNote,
+    setActivity,
+    refreshTables,
+    selectTable,
+  } from "../lib/state.svelte";
+  import { uniqueNotePath } from "../lib/explorer";
 
+  let newTableName = $state("");
   let error = $state("");
 
-  function collect(nodes: NoteNode[], out: Set<string>): void {
-    for (const node of nodes) {
-      if (!node.is_dir) out.add(node.path);
-      if (node.children.length) collect(node.children, out);
-    }
-  }
-
-  function uniqueNotePath(): string {
-    const paths = new Set<string>();
-    collect(ui.tree, paths);
-    let name = "untitled";
-    let n = 2;
-    while (paths.has(name)) {
-      name = `untitled ${n}`;
-      n += 1;
-    }
-    return name;
-  }
+  const noTables = $derived(ui.tables.length === 0);
 
   async function newNote() {
     error = "";
     try {
-      await createNote(uniqueNotePath());
+      await createNote(uniqueNotePath(ui.tree));
+    } catch (e) {
+      error = String(e);
+    }
+  }
+
+  async function createFirstTable() {
+    const name = newTableName.trim();
+    if (!name) return;
+    try {
+      const created = await api.createTable(name);
+      if (!created) {
+        error = $t("tables.exists");
+        return;
+      }
+      newTableName = "";
+      error = "";
+      await refreshTables();
+      await selectTable(name);
     } catch (e) {
       error = String(e);
     }
@@ -36,19 +51,40 @@
 </script>
 
 <div class="center-empty">
-  <NotebookPen size={44} />
-  <h2>{$t("tabs.emptyTitle")}</h2>
-  <p class="muted">{$t("tabs.emptyHint")}</p>
-  <div class="row">
-    <button onclick={newNote}>
-      <FilePlus size={15} /> {$t("tabs.newNote")}
-    </button>
-    <button onclick={() => setActivity("dictionary")}>
-      <Table2 size={15} /> {$t("activity.dictionary")}
-    </button>
-    <button onclick={() => setActivity("translation")}>
-      <Languages size={15} /> {$t("activity.translation")}
-    </button>
-  </div>
+  {#if ui.activity === "dictionary"}
+    <Table2 size={44} />
+    {#if noTables}
+      <h2>{$t("wizard.firstTableTitle")}</h2>
+      <p class="muted">{$t("wizard.firstTableHint")}</p>
+      <div class="row">
+        <input
+          placeholder={$t("tables.namePlaceholder")}
+          bind:value={newTableName}
+          onkeydown={(e) => e.key === "Enter" && createFirstTable()}
+        />
+        <button onclick={createFirstTable}>
+          <Plus size={15} /> {$t("tables.create")}
+        </button>
+      </div>
+    {:else}
+      <h2>{$t("wizard.pickTableTitle")}</h2>
+      <p class="muted">{$t("wizard.pickTableHint")}</p>
+    {/if}
+  {:else}
+    <NotebookPen size={44} />
+    <h2>{$t("tabs.emptyTitle")}</h2>
+    <p class="muted">{$t("tabs.emptyHint")}</p>
+    <div class="row">
+      <button onclick={newNote}>
+        <FilePlus size={15} /> {$t("tabs.newNote")}
+      </button>
+      <button onclick={() => setActivity("dictionary")}>
+        <Table2 size={15} /> {$t("activity.dictionary")}
+      </button>
+      <button onclick={() => setActivity("translation")}>
+        <Languages size={15} /> {$t("activity.translation")}
+      </button>
+    </div>
+  {/if}
   {#if error}<p class="error">{error}</p>{/if}
 </div>

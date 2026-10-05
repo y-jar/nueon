@@ -35,6 +35,31 @@ pub struct GridViewState {
     pub hidden_columns: Vec<String>,
 }
 
+/// Persisted shell layout (activity, panels) for the workspace.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(default)]
+pub struct UiLayout {
+    /// Active activity ribbon item: `notes`, `dictionary`, `translation`, `git`.
+    pub activity: String,
+    /// Whether the sidebar is shown.
+    pub sidebar_open: bool,
+    /// Whether the inspector is shown.
+    pub inspector_open: bool,
+    /// Inspector dock side: `left` or `right`.
+    pub inspector_dock: String,
+}
+
+impl Default for UiLayout {
+    fn default() -> Self {
+        Self {
+            activity: "notes".to_string(),
+            sidebar_open: true,
+            inspector_open: false,
+            inspector_dock: "right".to_string(),
+        }
+    }
+}
+
 /// User preferences stored in `config/settings`.
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 #[serde(default)]
@@ -50,11 +75,12 @@ pub struct WorkspaceSettings {
     #[serde(skip_serializing_if = "BTreeMap::is_empty")]
     pub grid_views: BTreeMap<String, GridViewState>,
     /// Whether the user dismissed the git init/install prompt for good.
-    #[serde(default)]
     pub git_prompt_dismissed: bool,
     /// Keys of one-time warnings the user silenced.
-    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    #[serde(skip_serializing_if = "Vec::is_empty")]
     pub dismissed_warnings: Vec<String>,
+    /// Persisted shell layout.
+    pub ui: UiLayout,
 }
 
 impl Default for WorkspaceSettings {
@@ -66,6 +92,7 @@ impl Default for WorkspaceSettings {
             grid_views: BTreeMap::new(),
             git_prompt_dismissed: false,
             dismissed_warnings: Vec::new(),
+            ui: UiLayout::default(),
         }
     }
 }

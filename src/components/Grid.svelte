@@ -31,6 +31,7 @@
   let columnFilters = $state<ColumnFiltersState>([]);
   let columnVisibility = $state<VisibilityState>({});
   let newWord = $state("");
+  let firstWord = $state("");
   let newTable = $state("");
   let error = $state("");
   let loadedTable: string | null = null;
@@ -216,6 +217,18 @@
     try {
       await api.createWord(ui.currentTable, name);
       newWord = "";
+      error = "";
+    } catch (e) {
+      error = String(e);
+    }
+  }
+
+  async function addFirstWord() {
+    const name = firstWord.trim();
+    if (!name || !ui.currentTable) return;
+    try {
+      await api.createWord(ui.currentTable, name);
+      firstWord = "";
       error = "";
     } catch (e) {
       error = String(e);
@@ -471,8 +484,7 @@
   </div>
 
   {#if error}<p class="error">{error}</p>{/if}
-  {#if spellingIssue}
-    <p class="error">
+  {#if spellingIssue}    <p class="error">
       {$t("grid.spelling", {
         values: {
           word: spellingIssue.word,
@@ -496,6 +508,20 @@
       <div class="row">
         <button onclick={confirmRemove}>{$t("grid.removeTag")}</button>
         <button onclick={() => (pendingRemove = null)}>{$t("grid.cancel")}</button>
+      </div>
+    </div>
+  {/if}
+
+  {#if ui.table && ui.table.entries.length === 0}
+    <div class="grid-empty">
+      <p class="muted">{$t("grid.noWords")}</p>
+      <div class="row">
+        <input
+          placeholder={$t("grid.firstWordPlaceholder")}
+          bind:value={firstWord}
+          onkeydown={(e) => e.key === "Enter" && addFirstWord()}
+        />
+        <button onclick={addFirstWord}>{$t("grid.addWord")}</button>
       </div>
     </div>
   {/if}
@@ -570,11 +596,17 @@
             </td>
             <td>{parentNames(row.original) || "—"}</td>
             {#each tagColumns as tag (tag.name)}
-              <td onclick={(e) => e.stopPropagation()}>
+              <td
+                class:editable={tag.kind === "text" ||
+                  tag.kind === "tag_list" ||
+                  tag.kind === "boolean"}
+                onclick={(e) => e.stopPropagation()}
+              >
                 {#if tag.kind === "text"}
                   {#if tag.format === "multiline"}
                     <textarea
                       rows="2"
+                      placeholder="—"
                       value={textValue(row.original.values[tag.name])}
                       onblur={(e) =>
                         commitText(
@@ -590,6 +622,7 @@
                         : tag.format === "measurement"
                           ? "number"
                           : "text"}
+                      placeholder="—"
                       value={textValue(row.original.values[tag.name])}
                       onblur={(e) =>
                         commitText(
@@ -608,6 +641,7 @@
                   />
                 {:else if tag.kind === "tag_list"}
                   <input
+                    placeholder="—"
                     value={listValue(row.original.values[tag.name])}
                     onblur={(e) =>
                       commitList(row.original, tag.name, e.currentTarget.value)}

@@ -377,6 +377,17 @@ export const layoutGet = (): Promise<WindowLayout> =>
 export const layoutSetGitPanel = (open: boolean): Promise<void> =>
   invoke("layout_set_git_panel", { open });
 
+export interface UiLayout {
+  activity: string;
+  sidebar_open: boolean;
+  inspector_open: boolean;
+  inspector_dock: string;
+}
+
+export const uiLayoutGet = (): Promise<UiLayout> => invoke("ui_layout_get");
+export const uiLayoutSet = (layout: UiLayout): Promise<void> =>
+  invoke("ui_layout_set", { layout });
+
 // -- version control -----------------------------------------------------
 export interface StatusEntry {
   code: string;

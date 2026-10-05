@@ -44,6 +44,12 @@
     "filter": "Filter files…",
     "noMatches": "No matching files."
   },
+  "wizard": {
+    "firstTableTitle": "Create your first table",
+    "firstTableHint": "Tables are the dictionary: each holds words and their fields.",
+    "pickTableTitle": "Pick a table",
+    "pickTableHint": "Choose a table from the sidebar to start editing words."
+  },
   "editor": {
     "selectNote": "Select a note, or create one from the sidebar."
   },
@@ -113,7 +119,9 @@
     "undo": "Undo",
     "redo": "Redo",
     "dontShowAgain": "Don't show this warning again",
-    "cancel": "Cancel"
+    "cancel": "Cancel",
+    "noWords": "No words yet — add the first one.",
+    "firstWordPlaceholder": "first word"
   },
   "inspector": {
     "title": "Inspector",

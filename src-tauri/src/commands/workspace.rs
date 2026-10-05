@@ -6,7 +6,7 @@ use std::sync::Mutex;
 use serde::Serialize;
 use tauri::{AppHandle, State};
 
-use langloom_core::{WindowLayout, Workspace, WorkspaceEntry};
+use langloom_core::{UiLayout, WindowLayout, Workspace, WorkspaceEntry};
 
 use super::changed;
 use crate::state::{default_name, AppState};
@@ -208,6 +208,23 @@ pub fn layout_set_git_panel(state: State<'_, Shared>, open: bool) -> Result<(), 
     let mut state = state.lock().map_err(|_| "state poisoned".to_string())?;
     state.global.set_git_panel_open(open);
     state.global.save().map_err(|err| err.to_string())
+}
+
+/// The persisted shell layout for the current workspace.
+#[tauri::command]
+pub fn ui_layout_get(state: State<'_, Shared>) -> Result<UiLayout, String> {
+    let state = state.lock().map_err(|_| "state poisoned".to_string())?;
+    Ok(state.workspace()?.ui_layout())
+}
+
+/// Persist the shell layout for the current workspace.
+#[tauri::command]
+pub fn ui_layout_set(state: State<'_, Shared>, layout: UiLayout) -> Result<(), String> {
+    let mut state = state.lock().map_err(|_| "state poisoned".to_string())?;
+    state
+        .workspace_mut()?
+        .set_ui_layout(layout)
+        .map_err(|err| err.to_string())
 }
 
 /// Whether dictionary undo/redo steps are available.

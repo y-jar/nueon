@@ -1,7 +1,12 @@
 <script lang="ts">
   import { onMount } from "svelte";
   import * as api from "./lib/api";
-  import { ui, init, closeTab } from "./lib/state.svelte";
+  import {
+    ui,
+    init,
+    closeTab,
+    type Activity,
+  } from "./lib/state.svelte";
   import Onboarding from "./components/Onboarding.svelte";
   import ActivityBar from "./components/ActivityBar.svelte";
   import SidebarHost from "./components/SidebarHost.svelte";
@@ -14,8 +19,35 @@
   import EmptyState from "./components/EmptyState.svelte";
   import ContextMenu from "./components/ContextMenu.svelte";
 
-  onMount(() => {
-    init();
+  const ACTIVITIES: Activity[] = ["notes", "dictionary", "translation", "git"];
+  let layoutLoaded = $state(false);
+
+  onMount(async () => {
+    await init();
+    try {
+      const layout = await api.uiLayoutGet();
+      ui.activity = ACTIVITIES.includes(layout.activity as Activity)
+        ? (layout.activity as Activity)
+        : "notes";
+      ui.sidebarOpen = layout.sidebar_open;
+      ui.inspectorOpen = layout.inspector_open;
+      ui.inspectorDock = layout.inspector_dock === "left" ? "left" : "right";
+    } catch {
+      // Layout is best-effort.
+    }
+    layoutLoaded = true;
+  });
+
+  // Persist shell layout when it changes.
+  $effect(() => {
+    const snapshot = {
+      activity: ui.activity,
+      sidebar_open: ui.sidebarOpen,
+      inspector_open: ui.inspectorOpen,
+      inspector_dock: ui.inspectorDock,
+    };
+    if (!layoutLoaded || !ui.root) return;
+    api.uiLayoutSet(snapshot).catch(() => {});
   });
 
   $effect(() => {

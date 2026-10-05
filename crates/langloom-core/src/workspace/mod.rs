@@ -12,7 +12,7 @@ use std::time::{Duration, Instant};
 use uuid::Uuid;
 
 use crate::config::{
-    GrammarConfig, GridViewState, LanguageConfig, TranslationConfig, TranslationOptions,
+    GrammarConfig, GridViewState, LanguageConfig, TranslationConfig, TranslationOptions, UiLayout,
     WorkspaceSettings,
 };
 use crate::model::{
@@ -765,6 +765,17 @@ impl Workspace {
         self.save_settings()
     }
 
+    /// The persisted shell layout.
+    pub fn ui_layout(&self) -> UiLayout {
+        self.settings.ui.clone()
+    }
+
+    /// Persist the shell layout (activity, panel visibility, inspector dock).
+    pub fn set_ui_layout(&mut self, layout: UiLayout) -> Result<(), StorageError> {
+        self.settings.ui = layout;
+        self.save_settings()
+    }
+
     /// Read a config section (`language`, `grammar`, `translation`, `settings`)
     /// as JSON.
     pub fn config_json(&self, section: &str) -> Result<serde_json::Value, StorageError> {
@@ -1366,5 +1377,27 @@ mod tests {
         ws.create_table("nouns").unwrap();
         assert!(!ws.rename_table("actions", "nouns").unwrap());
         assert!(!ws.rename_table("missing", "x").unwrap());
+    }
+
+    #[test]
+    fn ui_layout_persists() {
+        let dir = tempfile::tempdir().unwrap();
+        let mut ws = Workspace::new(dir.path()).unwrap();
+        assert_eq!(ws.ui_layout(), UiLayout::default());
+
+        ws.set_ui_layout(UiLayout {
+            activity: "dictionary".into(),
+            sidebar_open: false,
+            inspector_open: true,
+            inspector_dock: "left".into(),
+        })
+        .unwrap();
+
+        let reloaded = Workspace::load(dir.path()).unwrap();
+        let layout = reloaded.ui_layout();
+        assert_eq!(layout.activity, "dictionary");
+        assert!(!layout.sidebar_open);
+        assert!(layout.inspector_open);
+        assert_eq!(layout.inspector_dock, "left");
     }
 }

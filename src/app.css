@@ -1392,3 +1392,30 @@ table.dict-grid td textarea:focus {
   color: var(--text);
   margin-bottom: 6px;
 }
+
+/* -- grid affordances ---------------------------------------------------- */
+
+.grid-empty {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  padding: 8px 10px;
+  background: var(--panel);
+  border: 1px dashed var(--border);
+  border-radius: 4px;
+}
+
+table.dict-grid td.editable:hover {
+  background: rgba(255, 255, 255, 0.03);
+}
+
+table.dict-grid tbody tr:hover {
+  background: rgba(255, 255, 255, 0.02);
+}
+
+table.dict-grid input::placeholder,
+table.dict-grid textarea::placeholder {
+  color: var(--muted);
+  opacity: 0.5;
+}
