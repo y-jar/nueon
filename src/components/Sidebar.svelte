@@ -5,7 +5,6 @@
     ui,
     createNote,
     createFolder,
-    selectTable,
     renamePath,
     consumeNew,
     openContextMenu,
@@ -115,13 +114,4 @@
       <p class="muted">{$t("sidebar.noNotes")}</p>
     {/if}
   </div>
-
-  <div class="pane-title">{$t("sidebar.tables")}</div>
-  {#each ui.tables as table (table.name)}
-    <button
-      class="tree-name {ui.currentTable === table.name ? 'selected' : ''}"
-      onclick={() => selectTable(table.name)}
-      >{table.name} ({table.word_count})</button
-    >
-  {/each}
 </aside>

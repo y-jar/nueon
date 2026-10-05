@@ -119,8 +119,10 @@ export async function refreshTables(): Promise<void> {
     (tab) => tab.kind === "table" && tab.ref !== null && !names.has(tab.ref),
   );
   if (stale.length) {
+    const activeStale = stale.find((tab) => tab.id === ui.activeTabId);
+    const removedIndex = activeStale ? ui.tabs.indexOf(activeStale) : -1;
     ui.tabs = ui.tabs.filter((tab) => !stale.includes(tab));
-    if (stale.some((tab) => tab.id === ui.activeTabId)) activateNeighbor();
+    if (removedIndex !== -1) activateNeighbor(removedIndex);
   }
 
   if (ui.currentTable && !names.has(ui.currentTable)) {
@@ -171,16 +173,23 @@ export function closeSettings(): void {
 
 // -- tabs ----------------------------------------------------------------
 
-function activateNeighbor(): void {
-  const index = ui.tabs.findIndex((tab) => tab.id === ui.activeTabId);
-  if (index === -1) {
-    ui.activeTabId = ui.tabs[0]?.id ?? null;
+function clearDocument(): void {
+  ui.view = "notes";
+  ui.selected = null;
+  ui.noteContent = "";
+  ui.dirty = false;
+  ui.currentTable = null;
+  ui.table = null;
+  ui.selectedEntry = null;
+}
+
+function activateNeighbor(removedIndex: number): void {
+  const next = ui.tabs[removedIndex] ?? ui.tabs[removedIndex - 1] ?? null;
+  ui.activeTabId = next?.id ?? null;
+  if (next) {
+    void activateTab(next.id);
   } else {
-    const next = ui.tabs[index + 1] ?? ui.tabs[index - 1] ?? null;
-    ui.activeTabId = next?.id ?? null;
-  }
-  if (ui.activeTabId) {
-    void activateTab(ui.activeTabId);
+    clearDocument();
   }
 }
 
@@ -258,20 +267,24 @@ export async function deleteTable(name: string): Promise<void> {
   const removed = ui.tabs.filter(
     (tab) => tab.kind === "table" && tab.ref === name,
   );
+  const activeRemoved = removed.find((tab) => tab.id === ui.activeTabId);
+  const removedIndex = activeRemoved ? ui.tabs.indexOf(activeRemoved) : -1;
   ui.tabs = ui.tabs.filter((tab) => !removed.includes(tab));
   if (ui.currentTable === name) {
     ui.currentTable = null;
     ui.table = null;
   }
-  if (removed.some((tab) => tab.id === ui.activeTabId)) activateNeighbor();
+  if (removedIndex !== -1) activateNeighbor(removedIndex);
   await refreshTables();
   ui.status = `deleted table ${name}`;
 }
 
 export function closeTab(id: string): void {
+  const index = ui.tabs.findIndex((tab) => tab.id === id);
+  if (index === -1) return;
   const wasActive = ui.activeTabId === id;
   ui.tabs = ui.tabs.filter((tab) => tab.id !== id);
-  if (wasActive) activateNeighbor();
+  if (wasActive) activateNeighbor(index);
 }
 
 export function reorderTabs(items: Tab[]): void {
@@ -449,8 +462,10 @@ export async function deletePath(relPath: string): Promise<void> {
       (tab.ref === relPath || tab.ref.startsWith(prefix)),
   );
   if (removed.length) {
+    const activeRemoved = removed.find((tab) => tab.id === ui.activeTabId);
+    const removedIndex = activeRemoved ? ui.tabs.indexOf(activeRemoved) : -1;
     ui.tabs = ui.tabs.filter((tab) => !removed.includes(tab));
-    if (removed.some((tab) => tab.id === ui.activeTabId)) activateNeighbor();
+    if (removedIndex !== -1) activateNeighbor(removedIndex);
   }
   if (ui.selected === relPath || ui.selected?.startsWith(prefix)) {
     ui.selected = null;

@@ -225,6 +225,7 @@ textarea:focus {
   flex-direction: column;
   min-height: 0;
   overflow: hidden;
+  background: var(--bg);
 }
 
 .inspector {
@@ -534,7 +535,7 @@ textarea:focus {
   display: flex;
   align-items: stretch;
   gap: 4px;
-  padding: 4px 6px;
+  padding: 4px 6px 0;
   background: var(--panel);
   border-bottom: 1px solid var(--border);
 }
@@ -542,7 +543,7 @@ textarea:focus {
 .tab-strip {
   display: flex;
   flex: 1;
-  align-items: center;
+  align-items: flex-end;
   gap: 4px;
   min-height: 30px;
   overflow-x: auto;
@@ -554,12 +555,15 @@ textarea:focus {
   max-width: 200px;
   background: var(--faint);
   border: 1px solid var(--border);
-  border-radius: 5px;
+  border-bottom: 1px solid var(--border);
+  border-radius: 6px 6px 0 0;
 }
 
 .tab.active {
   background: var(--bg);
-  border-color: var(--accent);
+  border-color: var(--border);
+  border-bottom-color: var(--bg);
+  margin-bottom: -1px;
 }
 
 .tab-label {
