@@ -15,7 +15,13 @@
 {#if node.type === "leaf"}
   <GroupPane groupId={node.groupId} />
 {:else}
-  <Splitpanes horizontal={node.direction === "row"}>
+  <!-- "row" lays panes out side by side; splitpanes calls that non-horizontal. -->
+  <Splitpanes
+    horizontal={node.direction === "column"}
+    on:resized={(event) => {
+      node.sizes = event.detail.map((pane) => pane.size);
+    }}
+  >
     {#each node.children as child, i (i)}
       <Pane size={paneSize(node.sizes, node.children.length, i)} minSize={15}>
         <SplitView node={child} />

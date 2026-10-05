@@ -13,6 +13,8 @@
     activateTab,
     closeTab,
     moveTab,
+    beginTabDrag,
+    endTabDrag,
     toggleInspector,
     toggleSidebar,
     setInspectorDock,
@@ -22,37 +24,48 @@
 
   let { group }: { group: TabGroup } = $props();
 
+  let marker = $state<{ id: string; after: boolean } | null>(null);
+
   function onDragStart(event: DragEvent, tab: Tab) {
-    ui.dragTab = { tabId: tab.id, fromGroupId: group.id };
     event.dataTransfer?.setData("text/plain", tab.id);
     if (event.dataTransfer) event.dataTransfer.effectAllowed = "move";
+    beginTabDrag(tab.id, group.id);
   }
 
   function onDragEnd() {
-    ui.dragTab = null;
+    marker = null;
+    endTabDrag();
   }
 
-  function onTabOver(event: DragEvent) {
+  function onTabOver(event: DragEvent, tab: Tab) {
     if (!ui.dragTab) return;
     event.preventDefault();
     event.stopPropagation();
+    if (event.dataTransfer) event.dataTransfer.dropEffect = "move";
+    const rect = (event.currentTarget as HTMLElement).getBoundingClientRect();
+    marker = { id: tab.id, after: event.clientX > rect.left + rect.width / 2 };
   }
 
-  function onTabDrop(event: DragEvent, beforeTab: Tab) {
+  function onTabDrop(event: DragEvent, tab: Tab) {
     const drag = ui.dragTab;
+    const after = marker?.after ?? false;
     event.preventDefault();
     event.stopPropagation();
+    marker = null;
+    endTabDrag();
     if (!drag) return;
-    ui.dragTab = null;
-    moveTab(drag.tabId, drag.fromGroupId, group.id, beforeTab.id);
+    const index = group.tabs.findIndex((candidate) => candidate.id === tab.id);
+    const before = after ? (group.tabs[index + 1]?.id ?? null) : tab.id;
+    void moveTab(drag.tabId, drag.fromGroupId, group.id, before);
   }
 
   function onStripDrop(event: DragEvent) {
     const drag = ui.dragTab;
     if (!drag) return;
     event.preventDefault();
-    ui.dragTab = null;
-    moveTab(drag.tabId, drag.fromGroupId, group.id, null);
+    marker = null;
+    endTabDrag();
+    void moveTab(drag.tabId, drag.fromGroupId, group.id, null);
   }
 
   function onAuxClick(event: MouseEvent, id: string) {
@@ -77,7 +90,13 @@
     role="tablist"
     tabindex="0"
     ondragover={(e) => {
-      if (ui.dragTab) e.preventDefault();
+      if (!ui.dragTab) return;
+      e.preventDefault();
+      if (e.dataTransfer) e.dataTransfer.dropEffect = "move";
+    }}
+    ondragleave={(e) => {
+      if (!(e.currentTarget as HTMLElement).contains(e.relatedTarget as Node))
+        marker = null;
     }}
     ondrop={onStripDrop}
   >
@@ -86,12 +105,14 @@
         class="tab"
         class:active={tab.id === group.activeTabId}
         class:dragging={ui.dragTab?.tabId === tab.id}
+        class:drop-before={marker?.id === tab.id && !marker.after}
+        class:drop-after={marker?.id === tab.id && marker.after}
         role="tab"
         tabindex="0"
         draggable="true"
         ondragstart={(e) => onDragStart(e, tab)}
         ondragend={onDragEnd}
-        ondragover={onTabOver}
+        ondragover={(e) => onTabOver(e, tab)}
         ondrop={(e) => onTabDrop(e, tab)}
       >
         <button

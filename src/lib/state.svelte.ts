@@ -413,6 +413,30 @@ export async function reloadGroupTable(groupId: string): Promise<void> {
   await syncGroupTable(groupId);
 }
 
+let dragTimer: ReturnType<typeof setTimeout> | null = null;
+
+/**
+ * Start a tab drag. Publishing the drag (which mounts the drop overlays) is
+ * deferred past `dragstart`: changing the DOM under the cursor inside that
+ * event makes WebKit cancel the drag before it begins.
+ */
+export function beginTabDrag(tabId: string, fromGroupId: string): void {
+  if (dragTimer) clearTimeout(dragTimer);
+  dragTimer = setTimeout(() => {
+    dragTimer = null;
+    ui.dragTab = { tabId, fromGroupId };
+  }, 0);
+}
+
+/** End (or cancel) the current tab drag. */
+export function endTabDrag(): void {
+  if (dragTimer) {
+    clearTimeout(dragTimer);
+    dragTimer = null;
+  }
+  ui.dragTab = null;
+}
+
 /** Remove a group and collapse the split tree around it. */
 export function removeGroup(groupId: string): void {
   if (ui.groups.length <= 1) return;
@@ -440,7 +464,9 @@ function removeLeaf(node: SplitNode, groupId: string): SplitNode | null {
     .map((child) => removeLeaf(child, groupId))
     .filter((child): child is SplitNode => child !== null);
   if (children.length === 0) return null;
-  return { ...node, children };
+  // Stored divider sizes no longer match once a pane is gone.
+  const sizes = children.length === node.children.length ? node.sizes : undefined;
+  return { ...node, children, sizes };
 }
 
 function collapseTree(node: SplitNode | null): SplitNode {
@@ -462,6 +488,8 @@ export async function splitGroup(
 ): Promise<void> {
   const source = ui.groups.find((group) => group.id === fromGroupId);
   if (!source) return;
+  // Splitting a group's only tab against itself would delete the target.
+  if (fromGroupId === targetGroupId && source.tabs.length <= 1) return;
   const index = source.tabs.findIndex((tab) => tab.id === tabId);
   if (index === -1) return;
   const tab = source.tabs[index];
