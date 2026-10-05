@@ -1786,3 +1786,96 @@ button.primary {
 .modal.add-word-modal {
   width: min(420px, 90vw);
 }
+
+/* -- notion grid cells --------------------------------------------------- */
+
+.pill-cell {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 3px;
+}
+
+.pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 2px;
+  padding: 1px 3px 1px 7px;
+  background: var(--faint);
+  border: 1px solid var(--border);
+  border-radius: 999px;
+  font-size: 11px;
+}
+
+.pill button {
+  display: grid;
+  place-items: center;
+  padding: 0 2px;
+  background: transparent;
+  border: none;
+  color: var(--muted);
+}
+
+.pill button:hover {
+  color: #d6785a;
+}
+
+.pill-input {
+  flex: 1;
+  min-width: 70px;
+  padding: 2px 4px;
+  background: transparent;
+  border: 1px solid transparent;
+}
+
+.pill-input:focus {
+  border-color: var(--accent);
+  background: var(--bg);
+}
+
+button.check-cell {
+  display: grid;
+  place-items: center;
+  width: 22px;
+  height: 22px;
+  padding: 0;
+  background: transparent;
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  color: var(--accent);
+}
+
+button.check-cell.on {
+  background: rgba(196, 148, 92, 0.18);
+  border-color: var(--accent);
+}
+
+tr.ghost input {
+  color: var(--muted);
+  font-style: italic;
+}
+
+table.dict-grid th.select-col,
+table.dict-grid td.select-col {
+  position: sticky;
+  left: 0;
+  z-index: 4;
+  background: var(--panel);
+}
+
+table.dict-grid td.select-col {
+  background: var(--bg);
+}
+
+table.dict-grid th.wordname-col,
+table.dict-grid td.wordname-col {
+  position: sticky;
+  left: 28px;
+  z-index: 4;
+  background: var(--panel);
+  border-right: 1px solid var(--border);
+}
+
+table.dict-grid td.wordname-col {
+  background: var(--bg);
+}

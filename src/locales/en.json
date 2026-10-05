@@ -126,7 +126,10 @@
     "sort": "Sort",
     "sortColumn": "Sort by",
     "ascending": "Ascending",
-    "descending": "Descending"
+    "descending": "Descending",
+    "addPill": "Add…",
+    "addRelation": "Link word…",
+    "ghostPlaceholder": "New word…"
   },
   "inspector": {
     "title": "Inspector",

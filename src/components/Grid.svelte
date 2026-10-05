@@ -18,17 +18,17 @@
     Undo2,
     Redo2,
     X,
+    Check,
   } from "@lucide/svelte";
   import * as api from "../lib/api";
   import {
     boolValue,
     displayValue,
-    listValue,
-    parseList,
     textValue,
   } from "../lib/dictionary";
   import { misspelledWords } from "../lib/spellcheck";
   import { ui, selectTable, type DocState } from "../lib/state.svelte";
+  import PillCell from "./PillCell.svelte";
 
   let {
     doc,
@@ -38,7 +38,7 @@
   let sorting = $state<SortingState>([{ id: "wordname", desc: false }]);
   let filter = $state("");
   let columnVisibility = $state<VisibilityState>({});
-  let firstWord = $state("");
+  let ghostName = $state("");
   let error = $state("");
   let loadedTable: string | null = null;
   let saveTimer: ReturnType<typeof setTimeout> | null = null;
@@ -132,6 +132,17 @@
   );
 
   const rows = $derived(table.getRowModel().rows);
+
+  const relationOptions = $derived.by(() => {
+    const seen = new Map<string, { id: string; label: string }>();
+    for (const hits of Object.values(ui.wordIndex)) {
+      for (const hit of hits) {
+        const label = `${hit.wordname} · ${hit.table}`;
+        if (!seen.has(label)) seen.set(label, { id: hit.id, label });
+      }
+    }
+    return [...seen.values()].sort((a, b) => a.label.localeCompare(b.label));
+  });
 
   // Load persisted view state when the active table changes.
   $effect(() => {
@@ -230,13 +241,14 @@
     }
   }
 
-  async function addFirstWord() {
-    const name = firstWord.trim();
+  async function createGhost() {
+    const name = ghostName.trim();
     if (!name || !doc.currentTable) return;
     try {
       await api.createWord(doc.currentTable, name);
-      firstWord = "";
+      ghostName = "";
       error = "";
+      onRefresh();
     } catch (e) {
       error = String(e);
     }
@@ -266,21 +278,91 @@
     await api.saveWordEntry(doc.currentTable, { ...entry, values });
   }
 
-  async function commitList(entry: api.WordEntry, tag: string, value: string) {
+  function listValues(entry: api.WordEntry, tag: string): string[] {
+    const value = entry.values[tag];
+    return value && value.type === "tag_list" ? value.value : [];
+  }
+
+  function refValues(entry: api.WordEntry, tag: string): string[] {
+    const value = entry.values[tag];
+    if (!value) return [];
+    if (value.type === "references") return value.value;
+    if (value.type === "reference") return [value.value];
+    return [];
+  }
+
+  async function setListValues(
+    entry: api.WordEntry,
+    tag: string,
+    values: string[],
+  ) {
     if (!doc.currentTable) return;
-    const values = { ...entry.values };
-    const items = parseList(value);
-    if (items.length) values[tag] = { type: "tag_list", value: items };
-    else delete values[tag];
-    await api.saveWordEntry(doc.currentTable, { ...entry, values });
+    const next = { ...entry.values };
+    if (values.length) next[tag] = { type: "tag_list", value: values };
+    else delete next[tag];
+    await api.saveWordEntry(doc.currentTable, { ...entry, values: next });
     if (tag === "definition") {
-      const words = await misspelledWords(value);
+      const words = await misspelledWords(values.join(", "));
       spellingIssue = words.length
         ? { word: entry.wordname, words }
         : spellingIssue?.word === entry.wordname
           ? null
           : spellingIssue;
     }
+  }
+
+  async function setRefValues(
+    entry: api.WordEntry,
+    tag: string,
+    values: string[],
+  ) {
+    if (!doc.currentTable) return;
+    const next = { ...entry.values };
+    if (values.length) next[tag] = { type: "references", value: values };
+    else delete next[tag];
+    await api.saveWordEntry(doc.currentTable, { ...entry, values: next });
+  }
+
+  async function addToList(entry: api.WordEntry, tag: string, text: string) {
+    const current = listValues(entry, tag);
+    if (current.includes(text)) return;
+    await setListValues(entry, tag, [...current, text]);
+  }
+
+  async function removeFromList(
+    entry: api.WordEntry,
+    tag: string,
+    id: string,
+  ) {
+    await setListValues(
+      entry,
+      tag,
+      listValues(entry, tag).filter((item) => item !== id),
+    );
+  }
+
+  async function addRelation(
+    entry: api.WordEntry,
+    tag: string,
+    label: string,
+  ) {
+    const option = relationOptions.find((item) => item.label === label);
+    if (!option) return;
+    const current = refValues(entry, tag);
+    if (current.includes(option.id)) return;
+    await setRefValues(entry, tag, [...current, option.id]);
+  }
+
+  async function removeRelation(
+    entry: api.WordEntry,
+    tag: string,
+    id: string,
+  ) {
+    await setRefValues(
+      entry,
+      tag,
+      refValues(entry, tag).filter((item) => item !== id),
+    );
   }
 
   async function removeWord(entry: api.WordEntry) {
@@ -547,20 +629,6 @@
     </div>
   {/if}
 
-  {#if doc.table && doc.table.entries.length === 0}
-    <div class="grid-empty">
-      <p class="muted">{$t("grid.noWords")}</p>
-      <div class="row">
-        <input
-          placeholder={$t("grid.firstWordPlaceholder")}
-          bind:value={firstWord}
-          onkeydown={(e) => e.key === "Enter" && addFirstWord()}
-        />
-        <button onclick={addFirstWord}>{$t("grid.addWord")}</button>
-      </div>
-    </div>
-  {/if}
-
   <div class="grid-scroll">
     <table class="dict-grid">
       <thead>
@@ -574,7 +642,7 @@
               />
             </th>
             {#each group.headers as header (header.id)}
-              <th>
+              <th class:wordname-col={header.column.id === "wordname"}>
                 <button
                   class="sort"
                   onclick={header.column.getToggleSortingHandler()}
@@ -644,18 +712,41 @@
                     />
                   {/if}
                 {:else if tag.kind === "boolean"}
-                  <input
-                    type="checkbox"
-                    checked={boolValue(row.original.values[tag.name])}
-                    onchange={(e) =>
-                      commitBool(row.original, tag.name, e.currentTarget.checked)}
-                  />
+                  <button
+                    class="check-cell"
+                    class:on={boolValue(row.original.values[tag.name])}
+                    onclick={() =>
+                      commitBool(
+                        row.original,
+                        tag.name,
+                        !boolValue(row.original.values[tag.name]),
+                      )}
+                  >
+                    {#if boolValue(row.original.values[tag.name])}
+                      <Check size={14} />
+                    {/if}
+                  </button>
                 {:else if tag.kind === "tag_list"}
-                  <input
-                    placeholder="—"
-                    value={listValue(row.original.values[tag.name])}
-                    onblur={(e) =>
-                      commitList(row.original, tag.name, e.currentTarget.value)}
+                  <PillCell
+                    pills={listValues(row.original, tag.name).map((value) => ({
+                      id: value,
+                      label: value,
+                    }))}
+                    placeholder={$t("grid.addPill")}
+                    onAdd={(text) => addToList(row.original, tag.name, text)}
+                    onRemove={(id) => removeFromList(row.original, tag.name, id)}
+                  />
+                {:else if tag.kind === "references" ||
+                  tag.kind === "reference"}
+                  <PillCell
+                    pills={refValues(row.original, tag.name).map((id) => ({
+                      id,
+                      label: ui.nameById[id] ?? "?",
+                    }))}
+                    placeholder={$t("grid.addRelation")}
+                    options={relationOptions}
+                    onAdd={(label) => addRelation(row.original, tag.name, label)}
+                    onRemove={(id) => removeRelation(row.original, tag.name, id)}
                   />
                 {:else}
                   {displayValue(row.original.values[tag.name]) || "—"}
@@ -672,6 +763,22 @@
             </td>
           </tr>
         {/each}
+        <tr class="ghost">
+          <td class="select-col"></td>
+          <td class="wordname-col">
+            <input
+              placeholder={$t("grid.ghostPlaceholder")}
+              bind:value={ghostName}
+              onkeydown={(e) => e.key === "Enter" && createGhost()}
+              onblur={createGhost}
+            />
+          </td>
+          <td></td>
+          {#each tagColumns as tag (tag.name)}
+            <td></td>
+          {/each}
+          <td></td>
+        </tr>
       </tbody>
     </table>
   </div>
