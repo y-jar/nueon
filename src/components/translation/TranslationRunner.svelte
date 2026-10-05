@@ -7,7 +7,7 @@
     TranslationReport,
     WordHit,
   } from "../../lib/api";
-  import { ui } from "../../lib/state.svelte";
+  import { ui, activeDoc } from "../../lib/state.svelte";
   import InterlinearGloss from "../InterlinearGloss.svelte";
 
   interface Draft {
@@ -57,7 +57,7 @@
   function missingDraft(index: number): Draft {
     return (
       drafts[index] ?? {
-        table: ui.currentTable ?? tables[0]?.name ?? "",
+        table: activeDoc().currentTable ?? tables[0]?.name ?? "",
         wordname: "",
         tags: "",
       }

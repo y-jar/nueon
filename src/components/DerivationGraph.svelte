@@ -1,7 +1,7 @@
 <script lang="ts">
   import { t } from "svelte-i18n";
   import * as api from "../lib/api";
-  import { ui, refreshTable, refreshTree } from "../lib/state.svelte";
+  import { ui, activeDoc, refreshTable, refreshTree } from "../lib/state.svelte";
 
   let { id }: { id: string } = $props();
 
@@ -61,8 +61,9 @@
   });
 
   async function addParent() {
-    if (!chosen || !ui.currentTable) return;
-    const ok = await api.setParent(ui.currentTable, id, chosen);
+    const table = activeDoc().currentTable;
+    if (!chosen || !table) return;
+    const ok = await api.setParent(table, id, chosen);
     if (!ok) {
       error = $t("inspector.cannotAddParent");
       return;
@@ -74,8 +75,9 @@
   }
 
   async function reparentTo(parent: string) {
-    if (!parent || !ui.currentTable) return;
-    const ok = await api.reparentWord(ui.currentTable, id, parent);
+    const table = activeDoc().currentTable;
+    if (!parent || !table) return;
+    const ok = await api.reparentWord(table, id, parent);
     if (!ok) {
       error = $t("inspector.cannotAddParent");
       return;
@@ -87,8 +89,9 @@
   }
 
   async function dropParent(parent: string) {
-    if (!ui.currentTable) return;
-    await api.removeParent(ui.currentTable, id, parent);
+    const table = activeDoc().currentTable;
+    if (!table) return;
+    await api.removeParent(table, id, parent);
     await reload();
     await refreshTable();
   }
@@ -140,7 +143,7 @@
 
 {#snippet branch(node: api.DerivationNode)}
   <li>
-    <button class="node" onclick={() => (ui.selectedEntry = node.id)}>
+    <button class="node" onclick={() => (activeDoc().selectedEntry = node.id)}>
       {node.wordname}
     </button>
     {#if childrenOf(node.id).length}
@@ -161,7 +164,7 @@
       <ul class="ancestor-chain">
         {#each [...ancestors].reverse() as node (node.id)}
           <li>
-            <button class="node" onclick={() => (ui.selectedEntry = node.id)}>
+            <button class="node" onclick={() => (activeDoc().selectedEntry = node.id)}>
               {node.wordname}
             </button>
           </li>
@@ -171,7 +174,7 @@
     {/if}
 
     <div class="current-node">
-      <button class="node current" onclick={() => (ui.selectedEntry = id)}>
+      <button class="node current" onclick={() => (activeDoc().selectedEntry = id)}>
         {current.wordname}
       </button>
     </div>
@@ -179,7 +182,7 @@
     <ul class="parent-chips">
       {#each directParents as parent (parent.id)}
         <li>
-          <button class="node" onclick={() => (ui.selectedEntry = parent.id)}>
+          <button class="node" onclick={() => (activeDoc().selectedEntry = parent.id)}>
             {parent.wordname}
           </button>
           <button

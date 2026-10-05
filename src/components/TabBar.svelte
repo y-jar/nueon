@@ -1,7 +1,14 @@
 <script lang="ts">
   import { t } from "svelte-i18n";
   import { dndzone } from "svelte-dnd-action";
-  import { FileText, Table2, Languages, X, PanelRight, PanelLeft } from "@lucide/svelte";
+  import {
+    FileText,
+    Table2,
+    Languages,
+    X,
+    PanelRight,
+    PanelLeft,
+  } from "@lucide/svelte";
   import {
     ui,
     activateTab,
@@ -11,16 +18,19 @@
     toggleSidebar,
     setInspectorDock,
     type Tab,
+    type TabGroup,
   } from "../lib/state.svelte";
 
+  let { group }: { group: TabGroup } = $props();
+
   function handleDnd(event: CustomEvent<{ items: Tab[] }>) {
-    reorderTabs(event.detail.items);
+    reorderTabs(group.id, event.detail.items);
   }
 
   function onAuxClick(event: MouseEvent, id: string) {
     if (event.button === 1) {
       event.preventDefault();
-      closeTab(id);
+      closeTab(group.id, id);
     }
   }
 </script>
@@ -36,15 +46,15 @@
 
   <div
     class="tab-strip"
-    use:dndzone={{ items: ui.tabs, flipDurationMs: 120 }}
+    use:dndzone={{ items: group.tabs, flipDurationMs: 120 }}
     onconsider={handleDnd}
     onfinalize={handleDnd}
   >
-    {#each ui.tabs as tab (tab.id)}
-      <div class="tab" class:active={tab.id === ui.activeTabId}>
+    {#each group.tabs as tab (tab.id)}
+      <div class="tab" class:active={tab.id === group.activeTabId}>
         <button
           class="tab-label"
-          onclick={() => activateTab(tab.id)}
+          onclick={() => activateTab(group.id, tab.id)}
           onauxclick={(e) => onAuxClick(e, tab.id)}
         >
           {#if tab.kind === "note"}
@@ -55,7 +65,9 @@
             <Languages size={13} />
           {/if}
           <span class="tab-title">{tab.title}</span>
-          {#if tab.kind === "note" && ui.selected === tab.ref && ui.dirty}
+          {#if tab.kind === "note" &&
+            group.doc.selected === tab.ref &&
+            group.doc.dirty}
             <span class="tab-dot">•</span>
           {/if}
         </button>
@@ -64,7 +76,7 @@
           title={$t("tabs.close")}
           onclick={(e) => {
             e.stopPropagation();
-            closeTab(tab.id);
+            closeTab(group.id, tab.id);
           }}
         >
           <X size={12} />

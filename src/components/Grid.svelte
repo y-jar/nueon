@@ -21,10 +21,14 @@
   import { misspelledWords } from "../lib/spellcheck";
   import {
     ui,
-    refreshTable,
-    selectEntry,
     selectTable,
+    type DocState,
   } from "../lib/state.svelte";
+
+  let {
+    doc,
+    onRefresh,
+  }: { doc: DocState; onRefresh: () => void } = $props();
 
   let sorting = $state<SortingState>([{ id: "wordname", desc: false }]);
   let filter = $state("");
@@ -64,7 +68,7 @@
   // Dynamic columns are derived from the table's tag set. New tags appear
   // without disturbing sorting/selection (TanStack keeps state by id).
   const tagColumns = $derived(
-    (ui.table?.tags ?? []).filter(
+    (doc.table?.tags ?? []).filter(
       (tag) => tag.name !== "wordname" && tag.name !== "parent",
     ),
   );
@@ -93,7 +97,7 @@
 
   const table = $derived.by(() =>
     createTable<api.WordEntry>({
-      data: ui.table?.entries ?? [],
+      data: doc.table?.entries ?? [],
       columns,
       state: { sorting, globalFilter: filter, columnFilters, columnVisibility },
       onStateChange: () => {},
@@ -132,12 +136,12 @@
 
   // Load persisted view state when the active table changes.
   $effect(() => {
-    const name = ui.currentTable;
+    const name = doc.currentTable;
     if (!name || name === loadedTable) return;
     api
       .gridViewGet(name)
       .then((view) => {
-        if (ui.currentTable !== name) return;
+        if (doc.currentTable !== name) return;
         sorting = view.sorting.length
           ? view.sorting.map((spec) => ({ id: spec.id, desc: spec.desc }))
           : [{ id: "wordname", desc: false }];
@@ -158,7 +162,7 @@
 
   // Persist view state (debounced) whenever the grid presentation changes.
   $effect(() => {
-    const name = ui.currentTable;
+    const name = doc.currentTable;
     const snapshot: api.GridViewState = {
       sorting: sorting.map((spec) => ({ id: spec.id, desc: spec.desc })),
       search: filter,
@@ -185,6 +189,10 @@
       knownTags = [];
     }
   });
+
+  function selectRow(id: string) {
+    doc.selectedEntry = doc.selectedEntry === id ? null : id;
+  }
 
   function parentNames(entry: api.WordEntry): string {
     const value = entry.values["parent"];
@@ -213,9 +221,9 @@
 
   async function createNewWord() {
     const name = newWord.trim();
-    if (!name || !ui.currentTable) return;
+    if (!name || !doc.currentTable) return;
     try {
-      await api.createWord(ui.currentTable, name);
+      await api.createWord(doc.currentTable, name);
       newWord = "";
       error = "";
     } catch (e) {
@@ -225,9 +233,9 @@
 
   async function addFirstWord() {
     const name = firstWord.trim();
-    if (!name || !ui.currentTable) return;
+    if (!name || !doc.currentTable) return;
     try {
-      await api.createWord(ui.currentTable, name);
+      await api.createWord(doc.currentTable, name);
       firstWord = "";
       error = "";
     } catch (e) {
@@ -249,35 +257,35 @@
 
   async function commitWordname(entry: api.WordEntry, value: string) {
     const next = value.trim();
-    if (!next || next === entry.wordname || !ui.currentTable) return;
-    await api.saveWordEntry(ui.currentTable, { ...entry, wordname: next });
+    if (!next || next === entry.wordname || !doc.currentTable) return;
+    await api.saveWordEntry(doc.currentTable, { ...entry, wordname: next });
   }
 
   async function commitText(entry: api.WordEntry, tag: string, value: string) {
-    if (!ui.currentTable) return;
+    if (!doc.currentTable) return;
     const values = {
       ...entry.values,
       [tag]: { type: "text" as const, value },
     };
-    await api.saveWordEntry(ui.currentTable, { ...entry, values });
+    await api.saveWordEntry(doc.currentTable, { ...entry, values });
   }
 
   async function commitBool(entry: api.WordEntry, tag: string, value: boolean) {
-    if (!ui.currentTable) return;
+    if (!doc.currentTable) return;
     const values = {
       ...entry.values,
       [tag]: { type: "boolean" as const, value },
     };
-    await api.saveWordEntry(ui.currentTable, { ...entry, values });
+    await api.saveWordEntry(doc.currentTable, { ...entry, values });
   }
 
   async function commitList(entry: api.WordEntry, tag: string, value: string) {
-    if (!ui.currentTable) return;
+    if (!doc.currentTable) return;
     const values = { ...entry.values };
     const items = parseList(value);
     if (items.length) values[tag] = { type: "tag_list", value: items };
     else delete values[tag];
-    await api.saveWordEntry(ui.currentTable, { ...entry, values });
+    await api.saveWordEntry(doc.currentTable, { ...entry, values });
     if (tag === "definition") {
       const words = await misspelledWords(value);
       spellingIssue = words.length
@@ -289,8 +297,8 @@
   }
 
   async function removeWord(entry: api.WordEntry) {
-    if (!ui.currentTable) return;
-    await api.deleteWord(ui.currentTable, entry.id);
+    if (!doc.currentTable) return;
+    await api.deleteWord(doc.currentTable, entry.id);
   }
 
   function toggleSelected(id: string, checked: boolean) {
@@ -304,19 +312,19 @@
   }
 
   async function deleteSelected() {
-    if (!ui.currentTable || selectedIds.length === 0) return;
+    if (!doc.currentTable || selectedIds.length === 0) return;
     for (const id of selectedIds) {
-      await api.deleteWord(ui.currentTable, id);
+      await api.deleteWord(doc.currentTable, id);
     }
     selectedIds = [];
   }
 
   async function addTag() {
     const name = newTagName.trim();
-    if (!name || !ui.currentTable) return;
+    if (!name || !doc.currentTable) return;
     try {
       const added = await api.addTag(
-        ui.currentTable,
+        doc.currentTable,
         name,
         newTagKind as api.FieldType,
       );
@@ -326,18 +334,18 @@
       }
       newTagName = "";
       tagError = "";
-      await refreshTable();
+      await onRefresh();
     } catch (e) {
       tagError = String(e);
     }
   }
 
   async function removeTag(name: string) {
-    if (!ui.currentTable) return;
-    const affected = await api.removeTagPreview(ui.currentTable, name);
+    if (!doc.currentTable) return;
+    const affected = await api.removeTagPreview(doc.currentTable, name);
     if (warnDismissed) {
-      await api.removeTag(ui.currentTable, name);
-      await refreshTable();
+      await api.removeTag(doc.currentTable, name);
+      await onRefresh();
       return;
     }
     dontWarnAgain = false;
@@ -345,43 +353,43 @@
   }
 
   async function confirmRemove() {
-    if (!pendingRemove || !ui.currentTable) return;
+    if (!pendingRemove || !doc.currentTable) return;
     if (dontWarnAgain) {
       await api.dismissWarning("remove-tag");
       warnDismissed = true;
     }
-    await api.removeTag(ui.currentTable, pendingRemove.tag);
+    await api.removeTag(doc.currentTable, pendingRemove.tag);
     pendingRemove = null;
-    await refreshTable();
+    await onRefresh();
   }
 
   async function changeKind(name: string, kind: api.FieldType) {
-    if (!ui.currentTable) return;
-    await api.setTagKind(ui.currentTable, name, kind);
-    await refreshTable();
+    if (!doc.currentTable) return;
+    await api.setTagKind(doc.currentTable, name, kind);
+    await onRefresh();
   }
 
   async function changeFormat(name: string, format: api.TagFormat) {
-    if (!ui.currentTable) return;
-    await api.setTagFormat(ui.currentTable, name, format);
-    await refreshTable();
+    if (!doc.currentTable) return;
+    await api.setTagFormat(doc.currentTable, name, format);
+    await onRefresh();
   }
 
   async function doUndo() {
     await api.undo();
-    await refreshTable();
+    await onRefresh();
   }
 
   async function doRedo() {
     await api.redo();
-    await refreshTable();
+    await onRefresh();
   }
 </script>
 
 <div class="grid-view">
   <div class="grid-toolbar">
     <select
-      value={ui.currentTable ?? ""}
+      value={doc.currentTable ?? ""}
       onchange={(e) => selectTable(e.currentTarget.value)}
     >
       {#each ui.tables as t (t.name)}
@@ -512,7 +520,7 @@
     </div>
   {/if}
 
-  {#if ui.table && ui.table.entries.length === 0}
+  {#if doc.table && doc.table.entries.length === 0}
     <div class="grid-empty">
       <p class="muted">{$t("grid.noWords")}</p>
       <div class="row">
@@ -576,8 +584,8 @@
       <tbody>
         {#each rows as row (row.id)}
           <tr
-            class:selected={ui.selectedEntry === row.original.id}
-            onclick={() => selectEntry(row.original.id)}
+            class:selected={doc.selectedEntry === row.original.id}
+            onclick={() => selectRow(row.original.id)}
           >
             <td class="select-col" onclick={(e) => e.stopPropagation()}>
               <input

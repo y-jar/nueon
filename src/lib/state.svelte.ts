@@ -16,8 +16,54 @@ export interface Tab {
   title: string;
 }
 
-/** Which panel the center pane is rendering (driven by the active tab). */
+/** Which panel a group's center pane is rendering. */
 export type View = "notes" | "dictionary" | "translation";
+
+/** The loaded document for one tab group. */
+export interface DocState {
+  view: View;
+  selected: string | null;
+  noteContent: string;
+  dirty: boolean;
+  currentTable: string | null;
+  table: api.WordTable | null;
+  selectedEntry: string | null;
+}
+
+/** A pane of tabs. Split view composes several of these. */
+export interface TabGroup {
+  id: string;
+  tabs: Tab[];
+  activeTabId: string | null;
+  doc: DocState;
+}
+
+/** A node in the recursive split layout. */
+export type SplitNode =
+  | { type: "leaf"; groupId: string }
+  | { type: "split"; direction: "row" | "column"; children: SplitNode[] };
+
+function newId(): string {
+  return crypto.randomUUID();
+}
+
+function emptyDoc(): DocState {
+  return {
+    view: "notes",
+    selected: null,
+    noteContent: "",
+    dirty: false,
+    currentTable: null,
+    table: null,
+    selectedEntry: null,
+  };
+}
+
+function makeGroup(): TabGroup {
+  return { id: newId(), tabs: [], activeTabId: null, doc: emptyDoc() };
+}
+
+const firstGroup = makeGroup();
 
 /** Global reactive UI state (Svelte 5 runes). */
 export const ui = $state({
@@ -27,23 +73,19 @@ export const ui = $state({
   // Shell chrome.
   activity: "notes" as Activity,
   sidebarOpen: true,
-  view: "notes" as View,
-  tabs: [] as Tab[],
-  activeTabId: null as string | null,
   inspectorOpen: false,
   inspectorDock: "right" as "left" | "right",
   settingsOpen: false,
 
-  // Active document state.
+  // Tiling layout.
+  groups: [firstGroup] as TabGroup[],
+  activeGroupId: firstGroup.id as string,
+  splitRoot: { type: "leaf", groupId: firstGroup.id } as SplitNode,
+
+  // Workspace data shared across groups.
   tree: [] as api.NoteNode[],
-  selected: null as string | null,
-  noteContent: "",
-  dirty: false,
   status: "",
   tables: [] as api.TableSummary[],
-  currentTable: null as string | null,
-  table: null as api.WordTable | null,
-  selectedEntry: null as string | null,
   wordIndex: {} as api.WordIndex,
   nameById: {} as Record<string, string>,
   vcsRevision: 0,
@@ -62,12 +104,36 @@ export const ui = $state({
   collapseAllSignal: 0,
 });
 
-function baseName(path: string): string {
-  return path.split("/").filter(Boolean).pop() ?? path;
+// -- group helpers -------------------------------------------------------
+
+export function activeGroup(): TabGroup {
+  return (
+    ui.groups.find((group) => group.id === ui.activeGroupId) ?? ui.groups[0]
+  );
 }
 
-function newTabId(): string {
-  return crypto.randomUUID();
+export function activeDoc(): DocState {
+  return activeGroup().doc;
+}
+
+export function setActiveGroup(groupId: string): void {
+  if (ui.groups.some((group) => group.id === groupId)) {
+    ui.activeGroupId = groupId;
+  }
+}
+
+function clearDoc(doc: DocState): void {
+  doc.view = "notes";
+  doc.selected = null;
+  doc.noteContent = "";
+  doc.dirty = false;
+  doc.currentTable = null;
+  doc.table = null;
+  doc.selectedEntry = null;
+}
+
+function baseName(path: string): string {
+  return path.split("/").filter(Boolean).pop() ?? path;
 }
 
 // -- data loading --------------------------------------------------------
@@ -107,40 +173,44 @@ export async function loadWordIndex(): Promise<void> {
 export async function refreshTables(): Promise<void> {
   ui.tables = ui.root ? await api.listTables() : [];
   if (!ui.root) {
-    ui.currentTable = null;
-    ui.table = null;
-    ui.tabs = ui.tabs.filter((tab) => tab.kind !== "table");
+    for (const group of ui.groups) {
+      group.tabs = group.tabs.filter((tab) => tab.kind !== "table");
+      if (group.doc.view === "dictionary") clearDoc(group.doc);
+    }
     return;
   }
 
-  // Drop tabs whose table no longer exists.
   const names = new Set(ui.tables.map((table) => table.name));
-  const stale = ui.tabs.filter(
-    (tab) => tab.kind === "table" && tab.ref !== null && !names.has(tab.ref),
-  );
-  if (stale.length) {
-    const activeStale = stale.find((tab) => tab.id === ui.activeTabId);
-    const removedIndex = activeStale ? ui.tabs.indexOf(activeStale) : -1;
-    ui.tabs = ui.tabs.filter((tab) => !stale.includes(tab));
-    if (removedIndex !== -1) activateNeighbor(removedIndex);
-  }
-
-  if (ui.currentTable && !names.has(ui.currentTable)) {
-    ui.currentTable = null;
-    ui.table = null;
-  } else if (ui.currentTable) {
-    await refreshTable();
+  for (const group of ui.groups) {
+    const stale = group.tabs.filter(
+      (tab) => tab.kind === "table" && tab.ref !== null && !names.has(tab.ref),
+    );
+    if (stale.length) {
+      const activeStale = stale.find((tab) => tab.id === group.activeTabId);
+      const removedIndex = activeStale ? group.tabs.indexOf(activeStale) : -1;
+      group.tabs = group.tabs.filter((tab) => !stale.includes(tab));
+      if (removedIndex !== -1) activateNeighbor(group, removedIndex);
+    }
+    if (group.doc.currentTable && !names.has(group.doc.currentTable)) {
+      group.doc.currentTable = null;
+      group.doc.table = null;
+    } else if (group.doc.currentTable) {
+      group.doc.table = await api.getTable(group.doc.currentTable);
+    }
   }
 }
 
+/** Reload the active group's table from disk. */
 export async function refreshTable(): Promise<void> {
-  if (ui.currentTable) {
-    ui.table = await api.getTable(ui.currentTable);
+  const doc = activeDoc();
+  if (doc.currentTable) {
+    doc.table = await api.getTable(doc.currentTable);
   }
 }
 
 export function selectEntry(id: string): void {
-  ui.selectedEntry = ui.selectedEntry === id ? null : id;
+  const doc = activeDoc();
+  doc.selectedEntry = doc.selectedEntry === id ? null : id;
 }
 
 // -- shell chrome --------------------------------------------------------
@@ -173,90 +243,113 @@ export function closeSettings(): void {
 
 // -- tabs ----------------------------------------------------------------
 
-function clearDocument(): void {
-  ui.view = "notes";
-  ui.selected = null;
-  ui.noteContent = "";
-  ui.dirty = false;
-  ui.currentTable = null;
-  ui.table = null;
-  ui.selectedEntry = null;
-}
-
-function activateNeighbor(removedIndex: number): void {
-  const next = ui.tabs[removedIndex] ?? ui.tabs[removedIndex - 1] ?? null;
-  ui.activeTabId = next?.id ?? null;
+function activateNeighbor(group: TabGroup, removedIndex: number): void {
+  const next = group.tabs[removedIndex] ?? group.tabs[removedIndex - 1] ?? null;
+  group.activeTabId = next?.id ?? null;
   if (next) {
-    void activateTab(next.id);
+    void activateTab(group.id, next.id);
   } else {
-    clearDocument();
+    clearDoc(group.doc);
   }
 }
 
-export async function activateTab(id: string): Promise<void> {
-  const tab = ui.tabs.find((candidate) => candidate.id === id);
+export async function activateTab(
+  groupId: string,
+  id: string,
+): Promise<void> {
+  const group = ui.groups.find((candidate) => candidate.id === groupId);
+  if (!group) return;
+  const tab = group.tabs.find((candidate) => candidate.id === id);
   if (!tab) return;
-  ui.activeTabId = id;
+  ui.activeGroupId = groupId;
+  group.activeTabId = id;
   if (tab.kind === "note" && tab.ref) {
-    ui.view = "notes";
-    await loadNote(tab.ref);
+    group.doc.view = "notes";
+    await loadNote(group.doc, tab.ref);
   } else if (tab.kind === "table" && tab.ref) {
-    ui.view = "dictionary";
-    await loadTable(tab.ref);
+    group.doc.view = "dictionary";
+    await loadTable(group.doc, tab.ref);
   } else {
-    ui.view = "translation";
+    group.doc.view = "translation";
   }
 }
 
 export async function openNote(path: string): Promise<void> {
+  const group = activeGroup();
   ui.activity = "notes";
-  let tab = ui.tabs.find((t) => t.kind === "note" && t.ref === path);
+  let tab = group.tabs.find((t) => t.kind === "note" && t.ref === path);
   if (!tab) {
-    tab = { id: newTabId(), kind: "note", ref: path, title: baseName(path) };
-    ui.tabs = [...ui.tabs, tab];
+    tab = { id: newId(), kind: "note", ref: path, title: baseName(path) };
+    group.tabs = [...group.tabs, tab];
   }
-  await activateTab(tab.id);
+  await activateTab(group.id, tab.id);
 }
 
 export async function openTable(name: string): Promise<void> {
+  const group = activeGroup();
   ui.activity = "dictionary";
-  let tab = ui.tabs.find((t) => t.kind === "table" && t.ref === name);
+  let tab = group.tabs.find((t) => t.kind === "table" && t.ref === name);
   if (!tab) {
-    tab = { id: newTabId(), kind: "table", ref: name, title: name };
-    ui.tabs = [...ui.tabs, tab];
+    tab = { id: newId(), kind: "table", ref: name, title: name };
+    group.tabs = [...group.tabs, tab];
   }
-  await activateTab(tab.id);
+  await activateTab(group.id, tab.id);
 }
 
 export async function openTranslation(): Promise<void> {
-  let tab = ui.tabs.find((t) => t.kind === "translation");
+  const group = activeGroup();
+  let tab = group.tabs.find((t) => t.kind === "translation");
   if (!tab) {
     tab = {
-      id: newTabId(),
+      id: newId(),
       kind: "translation",
       ref: null,
       title: "Translation",
     };
-    ui.tabs = [...ui.tabs, tab];
+    group.tabs = [...group.tabs, tab];
   }
-  await activateTab(tab.id);
+  await activateTab(group.id, tab.id);
 }
 
-/** Rename a table, keeping any open tab in sync. */
+export function closeTab(groupId: string, id: string): void {
+  const group = ui.groups.find((candidate) => candidate.id === groupId);
+  if (!group) return;
+  const index = group.tabs.findIndex((tab) => tab.id === id);
+  if (index === -1) return;
+  const wasActive = group.activeTabId === id;
+  group.tabs = group.tabs.filter((tab) => tab.id !== id);
+  if (wasActive) activateNeighbor(group, index);
+}
+
+export function reorderTabs(groupId: string, items: Tab[]): void {
+  const group = ui.groups.find((candidate) => candidate.id === groupId);
+  if (group) group.tabs = [...items];
+}
+
+export function closeAllTabs(): void {
+  for (const group of ui.groups) {
+    group.tabs = [];
+    group.activeTabId = null;
+    clearDoc(group.doc);
+  }
+}
+
+/** Rename a table, keeping every open tab in sync. */
 export async function renameTable(from: string, to: string): Promise<void> {
   const ok = await api.renameTable(from, to);
   if (!ok) {
     ui.status = `could not rename ${from}`;
     return;
   }
-  ui.tabs = ui.tabs.map((tab) =>
-    tab.kind === "table" && tab.ref === from
-      ? { ...tab, ref: to, title: to }
-      : tab,
-  );
-  if (ui.currentTable === from) ui.currentTable = to;
+  for (const group of ui.groups) {
+    group.tabs = group.tabs.map((tab) =>
+      tab.kind === "table" && tab.ref === from
+        ? { ...tab, ref: to, title: to }
+        : tab,
+    );
+    if (group.doc.currentTable === from) group.doc.currentTable = to;
+  }
   await refreshTables();
-  if (ui.currentTable === to) await refreshTable();
   ui.status = `renamed ${from} to ${to}`;
 }
 
@@ -264,51 +357,36 @@ export async function renameTable(from: string, to: string): Promise<void> {
 export async function deleteTable(name: string): Promise<void> {
   const ok = await api.deleteTable(name);
   if (!ok) return;
-  const removed = ui.tabs.filter(
-    (tab) => tab.kind === "table" && tab.ref === name,
-  );
-  const activeRemoved = removed.find((tab) => tab.id === ui.activeTabId);
-  const removedIndex = activeRemoved ? ui.tabs.indexOf(activeRemoved) : -1;
-  ui.tabs = ui.tabs.filter((tab) => !removed.includes(tab));
-  if (ui.currentTable === name) {
-    ui.currentTable = null;
-    ui.table = null;
+  for (const group of ui.groups) {
+    const removed = group.tabs.filter(
+      (tab) => tab.kind === "table" && tab.ref === name,
+    );
+    const activeRemoved = removed.find((tab) => tab.id === group.activeTabId);
+    const removedIndex = activeRemoved ? group.tabs.indexOf(activeRemoved) : -1;
+    group.tabs = group.tabs.filter((tab) => !removed.includes(tab));
+    if (group.doc.currentTable === name) {
+      group.doc.currentTable = null;
+      group.doc.table = null;
+    }
+    if (removedIndex !== -1) activateNeighbor(group, removedIndex);
   }
-  if (removedIndex !== -1) activateNeighbor(removedIndex);
   await refreshTables();
   ui.status = `deleted table ${name}`;
 }
 
-export function closeTab(id: string): void {
-  const index = ui.tabs.findIndex((tab) => tab.id === id);
-  if (index === -1) return;
-  const wasActive = ui.activeTabId === id;
-  ui.tabs = ui.tabs.filter((tab) => tab.id !== id);
-  if (wasActive) activateNeighbor(index);
-}
-
-export function reorderTabs(items: Tab[]): void {
-  ui.tabs = [...items];
-}
-
-export function closeAllTabs(): void {
-  ui.tabs = [];
-  ui.activeTabId = null;
-}
-
 // -- active document loaders --------------------------------------------
 
-async function loadNote(path: string): Promise<void> {
+async function loadNote(doc: DocState, path: string): Promise<void> {
   const content = await api.readNote(path);
-  ui.selected = path;
-  ui.noteContent = content;
-  ui.dirty = false;
+  doc.selected = path;
+  doc.noteContent = content;
+  doc.dirty = false;
 }
 
-async function loadTable(name: string): Promise<void> {
-  ui.currentTable = name;
-  ui.table = await api.getTable(name);
-  ui.selectedEntry = null;
+async function loadTable(doc: DocState, name: string): Promise<void> {
+  doc.currentTable = name;
+  doc.table = await api.getTable(name);
+  doc.selectedEntry = null;
 }
 
 // -- notes CRUD ----------------------------------------------------------
@@ -407,14 +485,10 @@ export async function createWorkspace(
 }
 
 function resetDocuments(): void {
-  ui.selected = null;
-  ui.noteContent = "";
-  ui.dirty = false;
-  ui.currentTable = null;
-  ui.table = null;
-  ui.selectedEntry = null;
-  ui.tabs = [];
-  ui.activeTabId = null;
+  const group = makeGroup();
+  ui.groups = [group];
+  ui.activeGroupId = group.id;
+  ui.splitRoot = { type: "leaf", groupId: group.id };
   ui.activity = "notes";
 }
 
@@ -434,42 +508,49 @@ export async function renamePath(
   newPath: string,
 ): Promise<void> {
   await api.moveOrRenameNote(oldPath, newPath);
-  if (ui.selected === oldPath) {
-    ui.selected = newPath;
-  }
   const prefix = `${oldPath}/`;
-  ui.tabs = ui.tabs.map((tab) => {
-    if (tab.kind !== "note" || !tab.ref) return tab;
-    if (tab.ref === oldPath) {
-      return { ...tab, ref: newPath, title: baseName(newPath) };
-    }
-    if (tab.ref.startsWith(prefix)) {
-      const ref = `${newPath}/${tab.ref.slice(prefix.length)}`;
-      return { ...tab, ref, title: baseName(ref) };
-    }
-    return tab;
-  });
+  for (const group of ui.groups) {
+    if (group.doc.selected === oldPath) group.doc.selected = newPath;
+    group.tabs = group.tabs.map((tab) => {
+      if (tab.kind !== "note" || !tab.ref) return tab;
+      if (tab.ref === oldPath) {
+        return { ...tab, ref: newPath, title: baseName(newPath) };
+      }
+      if (tab.ref.startsWith(prefix)) {
+        const ref = `${newPath}/${tab.ref.slice(prefix.length)}`;
+        return { ...tab, ref, title: baseName(ref) };
+      }
+      return tab;
+    });
+  }
   ui.status = `renamed to ${newPath}`;
 }
 
 export async function deletePath(relPath: string): Promise<void> {
   await api.deleteNote(relPath);
   const prefix = `${relPath}/`;
-  const removed = ui.tabs.filter(
-    (tab) =>
-      tab.kind === "note" &&
-      tab.ref !== null &&
-      (tab.ref === relPath || tab.ref.startsWith(prefix)),
-  );
-  if (removed.length) {
-    const activeRemoved = removed.find((tab) => tab.id === ui.activeTabId);
-    const removedIndex = activeRemoved ? ui.tabs.indexOf(activeRemoved) : -1;
-    ui.tabs = ui.tabs.filter((tab) => !removed.includes(tab));
-    if (removedIndex !== -1) activateNeighbor(removedIndex);
-  }
-  if (ui.selected === relPath || ui.selected?.startsWith(prefix)) {
-    ui.selected = null;
-    ui.noteContent = "";
+  for (const group of ui.groups) {
+    const removed = group.tabs.filter(
+      (tab) =>
+        tab.kind === "note" &&
+        tab.ref !== null &&
+        (tab.ref === relPath || tab.ref.startsWith(prefix)),
+    );
+    if (removed.length) {
+      const activeRemoved = removed.find((tab) => tab.id === group.activeTabId);
+      const removedIndex = activeRemoved
+        ? group.tabs.indexOf(activeRemoved)
+        : -1;
+      group.tabs = group.tabs.filter((tab) => !removed.includes(tab));
+      if (removedIndex !== -1) activateNeighbor(group, removedIndex);
+    }
+    if (
+      group.doc.selected === relPath ||
+      group.doc.selected?.startsWith(prefix)
+    ) {
+      group.doc.selected = null;
+      group.doc.noteContent = "";
+    }
   }
   ui.status = `deleted ${relPath}`;
 }

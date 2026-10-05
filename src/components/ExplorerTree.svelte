@@ -10,6 +10,7 @@
   import type { NoteNode } from "../lib/api";
   import {
     ui,
+    activeDoc,
     selectNote,
     renamePath,
     openContextMenu,
@@ -102,7 +103,7 @@
         class="tree-row"
         role="treeitem"
         tabindex="-1"
-        aria-selected={ui.selected === node.path}
+        aria-selected={activeDoc().selected === node.path}
         class:drop-target={dragOver === node.path && node.is_dir}
         draggable={editing !== node.path}
         ondragstart={(e) => onDragStart(e, node)}
@@ -145,7 +146,7 @@
           />
         {:else}
           <button
-            class="tree-name {ui.selected === node.path ? 'selected' : ''} {node.is_dir
+            class="tree-name {activeDoc().selected === node.path ? 'selected' : ''} {node.is_dir
               ? 'dir'
               : ''}"
             onclick={() =>

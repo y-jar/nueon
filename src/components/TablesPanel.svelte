@@ -4,6 +4,7 @@
   import * as api from "../lib/api";
   import {
     ui,
+    activeDoc,
     refreshTables,
     selectTable,
     renameTable,
@@ -111,7 +112,7 @@
 
   <div class="table-list">
     {#each visible as table (table.name)}
-      <div class="table-row" class:active={ui.currentTable === table.name}>
+      <div class="table-row" class:active={activeDoc().currentTable === table.name}>
         {#if editing === table.name}
           <input
             class="new-input"

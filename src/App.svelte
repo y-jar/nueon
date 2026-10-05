@@ -6,6 +6,9 @@
     init,
     closeTab,
     openTranslation,
+    activeGroup,
+    activeDoc,
+    refreshTable,
     type Activity,
   } from "./lib/state.svelte";
   import Onboarding from "./components/Onboarding.svelte";
@@ -62,9 +65,9 @@
       } else if ((event.key === "z" && event.shiftKey) || event.key === "y") {
         event.preventDefault();
         api.redo().catch(() => {});
-      } else if (event.key === "w" && ui.activeTabId) {
+      } else if (event.key === "w" && activeGroup().activeTabId) {
         event.preventDefault();
-        closeTab(ui.activeTabId);
+        closeTab(ui.activeGroupId, activeGroup().activeTabId!);
       }
     };
     window.addEventListener("keydown", handler);
@@ -84,17 +87,17 @@
       <SidebarHost />
     {/if}
     <main class="center">
-      <TabBar />
+      <TabBar group={activeGroup()} />
       <div class="center-body">
-        {#if !ui.activeTabId}
+        {#if activeGroup().tabs.length === 0}
           <EmptyState />
-        {:else if ui.view === "notes"}
-          {#key ui.selected}
-            <Editor />
+        {:else if activeDoc().view === "notes"}
+          {#key activeGroup().id + (activeDoc().selected ?? "")}
+            <Editor doc={activeDoc()} />
           {/key}
-        {:else if ui.view === "dictionary"}
-          {#key ui.currentTable}
-            <Grid />
+        {:else if activeDoc().view === "dictionary"}
+          {#key activeGroup().id + (activeDoc().currentTable ?? "")}
+            <Grid doc={activeDoc()} onRefresh={refreshTable} />
           {/key}
         {:else}
           <Translation />

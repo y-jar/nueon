@@ -3,7 +3,7 @@
   import { t } from "svelte-i18n";
   import { open, save } from "@tauri-apps/plugin-dialog";
   import * as api from "../lib/api";
-  import { ui } from "../lib/state.svelte";
+  import { ui, activeDoc } from "../lib/state.svelte";
   import TranslationToolbar from "./translation/TranslationToolbar.svelte";
   import MorphologyDrawer from "./translation/MorphologyDrawer.svelte";
   import SlotPalette from "./translation/SlotPalette.svelte";
@@ -200,7 +200,7 @@
   } {
     return (
       drafts[index] ?? {
-        table: ui.currentTable ?? ui.tables[0]?.name ?? "",
+        table: activeDoc().currentTable ?? ui.tables[0]?.name ?? "",
         wordname: "",
         tags: "",
       }
@@ -240,7 +240,7 @@
   async function createDraft(index: number) {
     const token = report?.tokens[index];
     const table =
-      missingDraft(index).table || ui.currentTable || ui.tables[0]?.name;
+      missingDraft(index).table || activeDoc().currentTable || ui.tables[0]?.name;
     if (!token || !table) return;
     const typed = missingDraft(index).wordname.trim();
     const wordname = typed || `*${token.text}*`;

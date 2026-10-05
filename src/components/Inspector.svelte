@@ -9,7 +9,7 @@
     textValue,
   } from "../lib/dictionary";
   import { misspelledWords, spellSuggestions } from "../lib/spellcheck";
-  import { ui, refreshTable } from "../lib/state.svelte";
+  import { ui, activeDoc, refreshTable } from "../lib/state.svelte";
   import DerivationGraph from "./DerivationGraph.svelte";
 
   let draft = $state<api.WordEntry | null>(null);
@@ -23,7 +23,7 @@
   // in-progress edit is not clobbered by a data-changed refetch.
   $effect(() => {
     const entry =
-      ui.table?.entries.find((item) => item.id === ui.selectedEntry) ?? null;
+      activeDoc().table?.entries.find((item) => item.id === activeDoc().selectedEntry) ?? null;
     if (!entry) {
       draft = null;
       activeId = null;
@@ -50,7 +50,7 @@
   });
 
   const fieldTags = $derived(
-    (ui.table?.tags ?? []).filter(
+    (activeDoc().table?.tags ?? []).filter(
       (tag) =>
         tag.name !== "wordname" &&
         tag.name !== "parent" &&
@@ -66,13 +66,14 @@
     knownTags.filter(
       (name) =>
         !RESERVED.includes(name) &&
-        !(ui.table?.tags ?? []).some((tag) => tag.name === name),
+        !(activeDoc().table?.tags ?? []).some((tag) => tag.name === name),
     ),
   );
 
   async function save() {
-    if (!draft || !ui.currentTable) return;
-    await api.saveWordEntry(ui.currentTable, draft);
+    const table = activeDoc().currentTable;
+    if (!draft || !table) return;
+    await api.saveWordEntry(table, draft);
   }
 
   async function setWordname(value: string) {
@@ -126,8 +127,9 @@
   }
 
   async function attachTag(name: string) {
-    if (!draft || !ui.currentTable || !name) return;
-    await api.addTag(ui.currentTable, name, "boolean");
+    const table = activeDoc().currentTable;
+    if (!draft || !table || !name) return;
+    await api.addTag(table, name, "boolean");
     await refreshTable();
     await setField(name, { type: "boolean", value: true });
   }
@@ -135,7 +137,7 @@
 
 <aside class="inspector">
   <div class="pane-title">{$t("inspector.title")}</div>
-  {#if draft && ui.view === "dictionary"}
+  {#if draft && activeDoc().view === "dictionary"}
     <label class="field"
       >{$t("inspector.wordname")}
       <input
