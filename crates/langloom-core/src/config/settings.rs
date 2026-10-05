@@ -52,6 +52,9 @@ pub struct WorkspaceSettings {
     /// Whether the user dismissed the git init/install prompt for good.
     #[serde(default)]
     pub git_prompt_dismissed: bool,
+    /// Keys of one-time warnings the user silenced.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub dismissed_warnings: Vec<String>,
 }
 
 impl Default for WorkspaceSettings {
@@ -62,6 +65,7 @@ impl Default for WorkspaceSettings {
             default_table: None,
             grid_views: BTreeMap::new(),
             git_prompt_dismissed: false,
+            dismissed_warnings: Vec::new(),
         }
     }
 }

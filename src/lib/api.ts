@@ -88,7 +88,10 @@ export interface TagDef {
   color?: string | null;
   kind: FieldType;
   builtin: boolean;
+  format: TagFormat;
 }
+
+export type TagFormat = "default" | "multiline" | "date" | "measurement";
 
 export interface WordEntry {
   id: string;
@@ -184,6 +187,23 @@ export const setTagKind = (
   kind: FieldType,
 ): Promise<TagKindChange | null> =>
   invoke("set_tag_kind", { table, tag, kind });
+export const setTagFormat = (
+  table: string,
+  tag: string,
+  format: TagFormat,
+): Promise<boolean> => invoke("set_tag_format", { table, tag, format });
+export interface HistoryStatus {
+  can_undo: boolean;
+  can_redo: boolean;
+}
+export const historyStatus = (): Promise<HistoryStatus> =>
+  invoke("history_status");
+export const undo = (): Promise<boolean> => invoke("undo");
+export const redo = (): Promise<boolean> => invoke("redo");
+export const warningDismissed = (key: string): Promise<boolean> =>
+  invoke("warning_dismissed", { key });
+export const dismissWarning = (key: string): Promise<void> =>
+  invoke("dismiss_warning", { key });
 export const knownTagNames = (): Promise<string[]> =>
   invoke("known_tag_names");
 export const gridViewGet = (table: string): Promise<GridViewState> =>

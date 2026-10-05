@@ -26,6 +26,21 @@ pub fn is_reserved(name: &str) -> bool {
     reserved_kind(name).is_some()
 }
 
+/// Widget/formatting hints for how a tag's value should be edited.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum TagFormat {
+    /// The default widget for the tag's kind.
+    #[default]
+    Default,
+    /// A multi-line text area.
+    Multiline,
+    /// A date picker.
+    Date,
+    /// A numeric/measurement input.
+    Measurement,
+}
+
 /// A tag is a column in a table's database view. Tags are scoped per table.
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct TagDef {
@@ -40,6 +55,13 @@ pub struct TagDef {
     /// Whether the app owns this tag (e.g. `wordname`), preventing removal.
     #[serde(default)]
     pub builtin: bool,
+    /// Optional widget/formatting hint for the UI.
+    #[serde(default, skip_serializing_if = "is_default_format")]
+    pub format: TagFormat,
+}
+
+fn is_default_format(format: &TagFormat) -> bool {
+    *format == TagFormat::Default
 }
 
 impl TagDef {
@@ -53,6 +75,7 @@ impl TagDef {
             description: String::new(),
             color: None,
             kind,
+            format: TagFormat::Default,
         }
     }
 
@@ -64,6 +87,7 @@ impl TagDef {
             color: None,
             kind: FieldType::Text,
             builtin: true,
+            format: TagFormat::Default,
         }
     }
 

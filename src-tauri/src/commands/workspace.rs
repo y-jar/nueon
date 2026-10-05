@@ -3,6 +3,7 @@
 use std::path::PathBuf;
 use std::sync::Mutex;
 
+use serde::Serialize;
 use tauri::{AppHandle, State};
 
 use langloom_core::{WindowLayout, Workspace, WorkspaceEntry};
@@ -207,4 +208,64 @@ pub fn layout_set_git_panel(state: State<'_, Shared>, open: bool) -> Result<(), 
     let mut state = state.lock().map_err(|_| "state poisoned".to_string())?;
     state.global.set_git_panel_open(open);
     state.global.save().map_err(|err| err.to_string())
+}
+
+/// Whether dictionary undo/redo steps are available.
+#[derive(Debug, Clone, Serialize)]
+pub struct HistoryStatus {
+    pub can_undo: bool,
+    pub can_redo: bool,
+}
+
+#[tauri::command]
+pub fn history_status(state: State<'_, Shared>) -> Result<HistoryStatus, String> {
+    let state = state.lock().map_err(|_| "state poisoned".to_string())?;
+    let workspace = state.workspace()?;
+    Ok(HistoryStatus {
+        can_undo: workspace.can_undo(),
+        can_redo: workspace.can_redo(),
+    })
+}
+
+#[tauri::command]
+pub fn undo(app: AppHandle, state: State<'_, Shared>) -> Result<bool, String> {
+    let mut state = state.lock().map_err(|_| "state poisoned".to_string())?;
+    let did = state
+        .workspace_mut()?
+        .undo()
+        .map_err(|err| err.to_string())?;
+    drop(state);
+    if did {
+        changed(&app, "dictionary");
+    }
+    Ok(did)
+}
+
+#[tauri::command]
+pub fn redo(app: AppHandle, state: State<'_, Shared>) -> Result<bool, String> {
+    let mut state = state.lock().map_err(|_| "state poisoned".to_string())?;
+    let did = state
+        .workspace_mut()?
+        .redo()
+        .map_err(|err| err.to_string())?;
+    drop(state);
+    if did {
+        changed(&app, "dictionary");
+    }
+    Ok(did)
+}
+
+#[tauri::command]
+pub fn warning_dismissed(state: State<'_, Shared>, key: String) -> Result<bool, String> {
+    let state = state.lock().map_err(|_| "state poisoned".to_string())?;
+    Ok(state.workspace()?.is_warning_dismissed(&key))
+}
+
+#[tauri::command]
+pub fn dismiss_warning(state: State<'_, Shared>, key: String) -> Result<(), String> {
+    let mut state = state.lock().map_err(|_| "state poisoned".to_string())?;
+    state
+        .workspace_mut()?
+        .dismiss_warning(&key)
+        .map_err(|err| err.to_string())
 }

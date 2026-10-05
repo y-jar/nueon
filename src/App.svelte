@@ -26,6 +26,24 @@
   $effect(() => {
     api.layoutSetGitPanel(ui.gitPanelOpen).catch(() => {});
   });
+
+  $effect(() => {
+    const handler = (event: KeyboardEvent) => {
+      if (!(event.ctrlKey || event.metaKey) || !ui.root) return;
+      if (event.key === "z" && !event.shiftKey) {
+        event.preventDefault();
+        api.undo().catch(() => {});
+      } else if (
+        (event.key === "z" && event.shiftKey) ||
+        event.key === "y"
+      ) {
+        event.preventDefault();
+        api.redo().catch(() => {});
+      }
+    };
+    window.addEventListener("keydown", handler);
+    return () => window.removeEventListener("keydown", handler);
+  });
 </script>
 
 {#if ui.root}

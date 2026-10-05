@@ -5,7 +5,7 @@ use uuid::Uuid;
 
 use super::entry::WordEntry;
 use super::field::FieldType;
-use super::tag::{reserved_kind, TagDef, WORDNAME_TAG};
+use super::tag::{reserved_kind, TagDef, TagFormat, WORDNAME_TAG};
 
 /// The result of changing a tag's field type.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
@@ -149,6 +149,17 @@ impl WordTable {
             affected,
             dropped,
         })
+    }
+
+    /// Set a tag's widget/format hint. Returns `false` for unknown tags.
+    pub fn set_tag_format(&mut self, name: &str, format: TagFormat) -> bool {
+        match self.tags.iter_mut().find(|tag| tag.name == name) {
+            Some(tag) => {
+                tag.format = format;
+                true
+            }
+            None => false,
+        }
     }
 
     /// Insert an entry.

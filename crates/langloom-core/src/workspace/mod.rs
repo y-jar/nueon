@@ -16,7 +16,8 @@ use crate::config::{
     WorkspaceSettings,
 };
 use crate::model::{
-    Dictionary, FieldType, FieldValue, TagDef, TagKindChange, TagRemoval, WordEntry, DEFINITION_TAG,
+    Dictionary, FieldType, FieldValue, TagDef, TagFormat, TagKindChange, TagRemoval, WordEntry,
+    DEFINITION_TAG,
 };
 use crate::translation::SyntaxGrid;
 use crate::vcs::{AutoCheckin, GitRepo, GitStatus, VcsError};
@@ -41,6 +42,42 @@ pub struct Workspace {
     /// Detected version-control state.
     pub vcs: GitStatus,
     auto: AutoCheckin,
+    history: History,
+}
+
+/// A bounded stack of whole-dictionary snapshots for undo/redo.
+#[derive(Debug)]
+struct History {
+    undo: Vec<Dictionary>,
+    redo: Vec<Dictionary>,
+}
+
+impl History {
+    /// Maximum number of retained undo snapshots.
+    const LIMIT: usize = 50;
+
+    fn new() -> Self {
+        Self {
+            undo: Vec::new(),
+            redo: Vec::new(),
+        }
+    }
+
+    fn record(&mut self, snapshot: Dictionary) {
+        self.undo.push(snapshot);
+        if self.undo.len() > Self::LIMIT {
+            self.undo.remove(0);
+        }
+        self.redo.clear();
+    }
+
+    fn can_undo(&self) -> bool {
+        !self.undo.is_empty()
+    }
+
+    fn can_redo(&self) -> bool {
+        !self.redo.is_empty()
+    }
 }
 
 impl Workspace {
@@ -71,6 +108,7 @@ impl Workspace {
             settings,
             vcs,
             auto,
+            history: History::new(),
         })
     }
 
@@ -114,6 +152,7 @@ impl Workspace {
             settings,
             vcs,
             auto,
+            history: History::new(),
         })
     }
 
@@ -156,9 +195,11 @@ impl Workspace {
 
     /// Create a table and persist it.
     pub fn create_table(&mut self, name: &str) -> Result<bool, StorageError> {
-        if !self.dictionary.add_table(name) {
+        if self.dictionary.table(name).is_some() {
             return Ok(false);
         }
+        self.record();
+        self.dictionary.add_table(name);
         self.save_table(name)?;
         self.mark_change(Instant::now(), format!("langloom: create table \"{name}\""));
         Ok(true)
@@ -166,9 +207,11 @@ impl Workspace {
 
     /// Delete a table and its backing file.
     pub fn delete_table(&mut self, name: &str) -> Result<bool, StorageError> {
-        if self.dictionary.remove_table(name).is_none() {
+        if self.dictionary.table(name).is_none() {
             return Ok(false);
         }
+        self.record();
+        self.dictionary.remove_table(name);
         storage::delete_table(&self.dictionary_dir(), name)?;
         self.mark_change(Instant::now(), format!("langloom: delete table \"{name}\""));
         Ok(true)
@@ -198,12 +241,14 @@ impl Workspace {
         table: &str,
         wordname: impl Into<String>,
     ) -> Result<Option<Uuid>, StorageError> {
+        if self.dictionary.table(table).is_none() {
+            return Ok(None);
+        }
+        self.record();
         let entry = WordEntry::new(wordname);
         let id = entry.id;
         let wordname = entry.wordname.clone();
-        if self.dictionary.add_entry(table, entry).is_none() {
-            return Ok(None);
-        }
+        self.dictionary.add_entry(table, entry);
         self.save_table(table)?;
         self.mark_change(
             Instant::now(),
@@ -226,6 +271,7 @@ impl Workspace {
         if self.dictionary.table(table).is_none() {
             return Err(StorageError::TableMissing(table.to_string()));
         }
+        self.record();
         for tag in tags {
             let declared = self.dictionary.table(table).is_some_and(|t| t.has_tag(tag));
             if !declared {
@@ -272,18 +318,26 @@ impl Workspace {
     /// Replace an existing word's data and persist it.
     pub fn replace_entry(&mut self, table: &str, entry: WordEntry) -> Result<bool, StorageError> {
         let id = entry.id;
-        match self.dictionary.get_entry_mut(table, id) {
-            Some(existing) => *existing = entry,
-            None => return Ok(false),
+        if self.dictionary.get_entry(table, id).is_none() {
+            return Ok(false);
+        }
+        self.record();
+        if let Some(existing) = self.dictionary.get_entry_mut(table, id) {
+            *existing = entry;
         }
         self.save_entry(table, id)
     }
 
     /// Move a word to another table and persist both tables.
     pub fn move_entry(&mut self, from: &str, to: &str, id: Uuid) -> Result<bool, StorageError> {
-        if !self.dictionary.move_entry(from, to, id) {
+        if from == to
+            || self.dictionary.table(to).is_none()
+            || self.dictionary.get_entry(from, id).is_none()
+        {
             return Ok(false);
         }
+        self.record();
+        self.dictionary.move_entry(from, to, id);
         self.save_table(from)?;
         self.save_table(to)?;
         self.mark_change(
@@ -300,9 +354,13 @@ impl Workspace {
         child: Uuid,
         parent: Uuid,
     ) -> Result<bool, StorageError> {
-        if !self.dictionary.add_parent(table, child, parent) {
+        if !self.dictionary.can_be_parent(child, parent)
+            || self.dictionary.get_entry(table, child).is_none()
+        {
             return Ok(false);
         }
+        self.record();
+        self.dictionary.add_parent(table, child, parent);
         self.save_table_edits(table)?;
         Ok(true)
     }
@@ -314,7 +372,12 @@ impl Workspace {
         child: Uuid,
         parent: Uuid,
     ) -> Result<bool, StorageError> {
+        if self.dictionary.get_entry(table, child).is_none() {
+            return Ok(false);
+        }
+        self.record();
         if !self.dictionary.remove_parent(table, child, parent) {
+            self.history.undo.pop();
             return Ok(false);
         }
         self.save_table_edits(table)?;
@@ -333,9 +396,12 @@ impl Workspace {
         if !self.dictionary.can_be_parent(child, parent) {
             return Ok(false);
         }
-        match self.dictionary.get_entry_mut(table, child) {
-            Some(entry) => entry.set_parents(&[parent]),
-            None => return Ok(false),
+        if self.dictionary.get_entry(table, child).is_none() {
+            return Ok(false);
+        }
+        self.record();
+        if let Some(entry) = self.dictionary.get_entry_mut(table, child) {
+            entry.set_parents(&[parent]);
         }
         self.save_table_edits(table)?;
         Ok(true)
@@ -347,6 +413,10 @@ impl Workspace {
         table: &str,
         id: Uuid,
     ) -> Result<Option<WordEntry>, StorageError> {
+        if self.dictionary.get_entry(table, id).is_none() {
+            return Ok(None);
+        }
+        self.record();
         let removed = match self.dictionary.remove_entry(table, id) {
             Some(entry) => entry,
             None => return Ok(None),
@@ -367,9 +437,15 @@ impl Workspace {
     /// Add a column to a table.
     pub fn add_tag(&mut self, table: &str, tag: TagDef) -> Result<bool, StorageError> {
         let name = tag.name.clone();
-        if !self.dictionary.add_tag(table, tag) {
+        let exists = self
+            .dictionary
+            .table(table)
+            .is_some_and(|t| t.has_tag(&name));
+        if exists || self.dictionary.table(table).is_none() {
             return Ok(false);
         }
+        self.record();
+        self.dictionary.add_tag(table, tag);
         self.save_table(table)?;
         self.mark_change(
             Instant::now(),
@@ -390,13 +466,17 @@ impl Workspace {
         tag: &str,
         kind: FieldType,
     ) -> Result<Option<TagKindChange>, StorageError> {
+        self.record();
         let change = match self
             .dictionary
             .table_mut(table)
             .and_then(|t| t.set_tag_kind(tag, kind))
         {
             Some(change) => change,
-            None => return Ok(None),
+            None => {
+                self.history.undo.pop();
+                return Ok(None);
+            }
         };
         self.save_table(table)?;
         self.mark_change(
@@ -411,6 +491,30 @@ impl Workspace {
         self.dictionary.entries_with_tag(table, tag).len()
     }
 
+    /// Set a tag's widget/format hint.
+    pub fn set_tag_format(
+        &mut self,
+        table: &str,
+        tag: &str,
+        format: TagFormat,
+    ) -> Result<bool, StorageError> {
+        let exists = self.dictionary.table(table).is_some_and(|t| t.has_tag(tag));
+        if !exists {
+            return Ok(false);
+        }
+        self.record();
+        self.dictionary
+            .table_mut(table)
+            .expect("checked above")
+            .set_tag_format(tag, format);
+        self.save_table(table)?;
+        self.mark_change(
+            Instant::now(),
+            format!("langloom: change format of tag \"{tag}\" in table \"{table}\""),
+        );
+        Ok(true)
+    }
+
     /// Remove a column, strip its values, and force a revertible check-in.
     ///
     /// The check-in is committed immediately (regardless of the auto-check-in
@@ -420,9 +524,13 @@ impl Workspace {
         table: &str,
         tag: &str,
     ) -> Result<Option<TagRemoval>, StorageError> {
+        self.record();
         let removal = match self.dictionary.remove_tag(table, tag) {
             Some(removal) => removal,
-            None => return Ok(None),
+            None => {
+                self.history.undo.pop();
+                return Ok(None);
+            }
         };
         self.save_table(table)?;
         let message = format!(
@@ -687,6 +795,63 @@ impl Workspace {
         Ok(())
     }
 
+    // -- undo / redo ----------------------------------------------------
+
+    /// Snapshot the dictionary before a mutation.
+    fn record(&mut self) {
+        self.history.record(self.dictionary.clone());
+    }
+
+    /// Whether an undo step is available.
+    pub fn can_undo(&self) -> bool {
+        self.history.can_undo()
+    }
+
+    /// Whether a redo step is available.
+    pub fn can_redo(&self) -> bool {
+        self.history.can_redo()
+    }
+
+    /// Restore the previous dictionary snapshot and persist it.
+    pub fn undo(&mut self) -> Result<bool, StorageError> {
+        let Some(previous) = self.history.undo.pop() else {
+            return Ok(false);
+        };
+        let current = std::mem::replace(&mut self.dictionary, previous);
+        self.history.redo.push(current);
+        self.persist_dictionary()?;
+        self.mark_change(Instant::now(), "langloom: undo");
+        Ok(true)
+    }
+
+    /// Re-apply the next dictionary snapshot and persist it.
+    pub fn redo(&mut self) -> Result<bool, StorageError> {
+        let Some(next) = self.history.redo.pop() else {
+            return Ok(false);
+        };
+        let current = std::mem::replace(&mut self.dictionary, next);
+        self.history.undo.push(current);
+        self.persist_dictionary()?;
+        self.mark_change(Instant::now(), "langloom: redo");
+        Ok(true)
+    }
+
+    /// Write every table to disk and remove files for tables that vanished.
+    fn persist_dictionary(&self) -> Result<(), StorageError> {
+        let dir = self.dictionary_dir();
+        let mut keep = std::collections::HashSet::new();
+        for table in self.dictionary.tables() {
+            storage::write_table(&dir, table)?;
+            keep.insert(storage::table_path(&dir, &table.name));
+        }
+        for path in storage::list_files(&dir)? {
+            if !keep.contains(&path) {
+                storage::remove_file(&path)?;
+            }
+        }
+        Ok(())
+    }
+
     // -- check-ins ------------------------------------------------------
 
     /// Commit all pending changes immediately with an explicit message.
@@ -704,6 +869,22 @@ impl Workspace {
     /// Persist the "don't show the git prompt again" preference.
     pub fn set_git_prompt_dismissed(&mut self, dismissed: bool) -> Result<(), StorageError> {
         self.settings.git_prompt_dismissed = dismissed;
+        self.save_settings()
+    }
+
+    /// Whether a one-time warning has been silenced.
+    pub fn is_warning_dismissed(&self, key: &str) -> bool {
+        self.settings
+            .dismissed_warnings
+            .iter()
+            .any(|item| item == key)
+    }
+
+    /// Silence a one-time warning and persist the preference.
+    pub fn dismiss_warning(&mut self, key: &str) -> Result<(), StorageError> {
+        if !self.is_warning_dismissed(key) {
+            self.settings.dismissed_warnings.push(key.to_string());
+        }
         self.save_settings()
     }
 
@@ -1098,5 +1279,39 @@ mod tests {
 
         assert!(ws.config_json("nope").is_err());
         assert!(ws.set_config_json("nope", serde_json::json!({})).is_err());
+    }
+
+    #[test]
+    fn undo_and_redo_restore_dictionary_and_persist() {
+        let dir = tempfile::tempdir().unwrap();
+        let mut ws = Workspace::new(dir.path()).unwrap();
+        ws.create_table("verbs").unwrap();
+        ws.create_entry("verbs", "kala").unwrap();
+        assert!(ws.can_undo());
+        assert!(!ws.can_redo());
+
+        assert!(ws.undo().unwrap());
+        assert!(ws.dictionary.table("verbs").unwrap().entries.is_empty());
+        assert!(ws.can_redo());
+
+        assert!(ws.redo().unwrap());
+        assert_eq!(ws.dictionary.table("verbs").unwrap().entries.len(), 1);
+
+        let reloaded = Workspace::load(dir.path()).unwrap();
+        assert_eq!(reloaded.dictionary.table("verbs").unwrap().entries.len(), 1);
+    }
+
+    #[test]
+    fn undo_restores_a_deleted_table_file() {
+        let dir = tempfile::tempdir().unwrap();
+        let mut ws = Workspace::new(dir.path()).unwrap();
+        ws.create_table("verbs").unwrap();
+        ws.delete_table("verbs").unwrap();
+        assert!(ws.dictionary.table("verbs").is_none());
+
+        assert!(ws.undo().unwrap());
+        assert!(ws.dictionary.table("verbs").is_some());
+        let reloaded = Workspace::load(dir.path()).unwrap();
+        assert!(reloaded.dictionary.table("verbs").is_some());
     }
 }

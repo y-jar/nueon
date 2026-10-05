@@ -78,7 +78,11 @@
     "removeTagConfirm": "Remove tag \"{tag}\" and its values from {count} word(s)?",
     "selected": "{count} selected",
     "deleteSelected": "Delete selected",
-    "spelling": "Possible misspelling in \"{word}\": {words}"
+    "spelling": "Possible misspelling in \"{word}\": {words}",
+    "undo": "Undo",
+    "redo": "Redo",
+    "dontShowAgain": "Don't show this warning again",
+    "cancel": "Cancel"
   },
   "inspector": {
     "title": "Inspector",

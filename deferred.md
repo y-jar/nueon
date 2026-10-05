@@ -68,11 +68,8 @@ were completed during the Tauri migration (R0–R8).
 
 ## Data model
 
-- **Per-tag field formatting/widget hints** on `TagDef`: a format enum so the
-  UI knows how to render/edit a tag's data (e.g. reference links, dates,
-  measurements, multi-line text). Motivated by the note that "tag field data can
-  be formatted in different ways". (D6)
-- Non-JSON storage formats per table (if ever needed). (D6)
-- Undo/redo history for dictionary edits. (D6)
-- One-time warnings with a "don't show again" checkbox (tag removal,
-  dependency warnings). (D6)
+- ~~**Per-tag field formatting/widget hints** on `TagDef` (`TagFormat`).~~ (D6)
+- Non-JSON storage formats per table (if ever needed). (D6+)
+- ~~Undo/redo history for dictionary edits.~~ (D6, backend snapshots)
+- ~~One-time warnings with a "don't show again" checkbox (tag removal,
+  dependency warnings).~~ (D6)

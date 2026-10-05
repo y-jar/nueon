@@ -981,3 +981,34 @@ sup.cm-footnote {
   flex-direction: column;
   gap: 4px;
 }
+
+/* -- grid extras --------------------------------------------------------- */
+
+table.dict-grid td textarea {
+  width: 100%;
+  background: transparent;
+  border: 1px solid transparent;
+  padding: 2px 4px;
+  font: inherit;
+  resize: vertical;
+}
+
+table.dict-grid td textarea:focus {
+  border-color: var(--accent);
+  background: var(--bg);
+}
+
+.warn-panel {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  padding: 8px;
+  background: var(--panel);
+  border: 1px solid var(--border);
+  border-radius: 4px;
+}
+
+.warn-panel .row {
+  display: flex;
+  gap: 6px;
+}

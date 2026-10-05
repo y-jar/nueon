@@ -9,7 +9,7 @@ use uuid::Uuid;
 
 use langloom_core::model::{derivation, DerivationNode, RelatedWord};
 use langloom_core::{
-    FieldType, GridViewState, TagDef, TagKindChange, WordEntry, WordHit, WordTable,
+    FieldType, GridViewState, TagDef, TagFormat, TagKindChange, WordEntry, WordHit, WordTable,
 };
 
 use super::changed;
@@ -223,6 +223,25 @@ pub fn set_tag_kind(
     drop(state);
     changed(&app, "dictionary");
     Ok(change)
+}
+
+/// Set a tag's widget/format hint.
+#[tauri::command]
+pub fn set_tag_format(
+    app: AppHandle,
+    state: State<'_, Shared>,
+    table: String,
+    tag: String,
+    format: TagFormat,
+) -> Result<bool, String> {
+    let mut state = state.lock().map_err(|_| "state poisoned".to_string())?;
+    let changed_ok = state
+        .workspace_mut()?
+        .set_tag_format(&table, &tag, format)
+        .map_err(|err| err.to_string())?;
+    drop(state);
+    changed(&app, "dictionary");
+    Ok(changed_ok)
 }
 
 /// Every non-builtin tag name used across all tables, for suggestions.

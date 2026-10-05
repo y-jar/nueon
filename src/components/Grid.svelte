@@ -42,6 +42,9 @@
   let knownTags = $state<string[]>([]);
   let tagError = $state("");
   let spellingIssue = $state<{ word: string; words: string[] } | null>(null);
+  let pendingRemove = $state<{ tag: string; affected: number } | null>(null);
+  let warnDismissed = $state(false);
+  let dontWarnAgain = $state(false);
 
   const KINDS: api.FieldType[] = [
     "text",
@@ -49,6 +52,12 @@
     "tag_list",
     "reference",
     "references",
+  ];
+  const FORMATS: api.TagFormat[] = [
+    "default",
+    "multiline",
+    "date",
+    "measurement",
   ];
 
   // Dynamic columns are derived from the table's tag set. New tags appear
@@ -167,6 +176,10 @@
   $effect(() => {
     if (ui.root) {
       api.knownTagNames().then((names) => (knownTags = names)).catch(() => {});
+      api
+        .warningDismissed("remove-tag")
+        .then((value) => (warnDismissed = value))
+        .catch(() => {});
     } else {
       knownTags = [];
     }
@@ -309,17 +322,45 @@
   async function removeTag(name: string) {
     if (!ui.currentTable) return;
     const affected = await api.removeTagPreview(ui.currentTable, name);
-    const question = $t("grid.removeTagConfirm", {
-      values: { tag: name, count: affected },
-    });
-    if (!window.confirm(question)) return;
-    await api.removeTag(ui.currentTable, name);
+    if (warnDismissed) {
+      await api.removeTag(ui.currentTable, name);
+      await refreshTable();
+      return;
+    }
+    dontWarnAgain = false;
+    pendingRemove = { tag: name, affected };
+  }
+
+  async function confirmRemove() {
+    if (!pendingRemove || !ui.currentTable) return;
+    if (dontWarnAgain) {
+      await api.dismissWarning("remove-tag");
+      warnDismissed = true;
+    }
+    await api.removeTag(ui.currentTable, pendingRemove.tag);
+    pendingRemove = null;
     await refreshTable();
   }
 
   async function changeKind(name: string, kind: api.FieldType) {
     if (!ui.currentTable) return;
     await api.setTagKind(ui.currentTable, name, kind);
+    await refreshTable();
+  }
+
+  async function changeFormat(name: string, format: api.TagFormat) {
+    if (!ui.currentTable) return;
+    await api.setTagFormat(ui.currentTable, name, format);
+    await refreshTable();
+  }
+
+  async function doUndo() {
+    await api.undo();
+    await refreshTable();
+  }
+
+  async function doRedo() {
+    await api.redo();
     await refreshTable();
   }
 </script>
@@ -340,6 +381,8 @@
     <input placeholder={$t("grid.newWord")} bind:value={newWord} onkeydown={(e) =>
       e.key === "Enter" && createNewWord()} />
     <button onclick={createNewWord}>{$t("grid.addWord")}</button>
+    <button title={$t("grid.undo")} onclick={doUndo}>↶</button>
+    <button title={$t("grid.redo")} onclick={doRedo}>↷</button>
 
     <details class="col-picker">
       <summary>{$t("grid.columns")}</summary>
@@ -375,6 +418,18 @@
               >
                 {#each KINDS as kind (kind)}
                   <option value={kind}>{kind}</option>
+                {/each}
+              </select>
+              <select
+                value={tag.format ?? "default"}
+                onchange={(e) =>
+                  changeFormat(
+                    tag.name,
+                    e.currentTarget.value as api.TagFormat,
+                  )}
+              >
+                {#each FORMATS as format (format)}
+                  <option value={format}>{format}</option>
                 {/each}
               </select>
               <button
@@ -426,6 +481,23 @@
       })}
       <button onclick={() => (spellingIssue = null)}>✕</button>
     </p>
+  {/if}
+  {#if pendingRemove}
+    <div class="warn-panel">
+      <p class="error">
+        {$t("grid.removeTagConfirm", {
+          values: { tag: pendingRemove.tag, count: pendingRemove.affected },
+        })}
+      </p>
+      <label class="muted">
+        <input type="checkbox" bind:checked={dontWarnAgain} />
+        {$t("grid.dontShowAgain")}
+      </label>
+      <div class="row">
+        <button onclick={confirmRemove}>{$t("grid.removeTag")}</button>
+        <button onclick={() => (pendingRemove = null)}>{$t("grid.cancel")}</button>
+      </div>
+    </div>
   {/if}
 
   <div class="grid-scroll">
@@ -500,11 +572,33 @@
             {#each tagColumns as tag (tag.name)}
               <td onclick={(e) => e.stopPropagation()}>
                 {#if tag.kind === "text"}
-                  <input
-                    value={textValue(row.original.values[tag.name])}
-                    onblur={(e) =>
-                      commitText(row.original, tag.name, e.currentTarget.value)}
-                  />
+                  {#if tag.format === "multiline"}
+                    <textarea
+                      rows="2"
+                      value={textValue(row.original.values[tag.name])}
+                      onblur={(e) =>
+                        commitText(
+                          row.original,
+                          tag.name,
+                          e.currentTarget.value,
+                        )}
+                    ></textarea>
+                  {:else}
+                    <input
+                      type={tag.format === "date"
+                        ? "date"
+                        : tag.format === "measurement"
+                          ? "number"
+                          : "text"}
+                      value={textValue(row.original.values[tag.name])}
+                      onblur={(e) =>
+                        commitText(
+                          row.original,
+                          tag.name,
+                          e.currentTarget.value,
+                        )}
+                    />
+                  {/if}
                 {:else if tag.kind === "boolean"}
                   <input
                     type="checkbox"
