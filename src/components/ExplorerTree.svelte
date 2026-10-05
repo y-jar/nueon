@@ -1,4 +1,5 @@
 <script lang="ts">
+  import { autofocus } from "../lib/actions";
   import {
     ChevronDown,
     ChevronRight,
@@ -136,6 +137,7 @@
 
         {#if editing === node.path}
           <input
+            use:autofocus={{ select: true }}
             class="new-input"
             bind:value={editValue}
             onkeydown={(e) => {

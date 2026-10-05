@@ -1,4 +1,5 @@
 <script lang="ts">
+  import { autofocus } from "../lib/actions";
   import { t } from "svelte-i18n";
   import { open } from "@tauri-apps/plugin-dialog";
   import { ui, openWorkspace, createWorkspace } from "../lib/state.svelte";
@@ -83,7 +84,11 @@
   <div class="cols">
     <section>
       <h2>{$t("onboarding.createNew")}</h2>
-      <input placeholder={$t("onboarding.namePlaceholder")} bind:value={name} />
+      <input
+        use:autofocus
+        placeholder={$t("onboarding.namePlaceholder")}
+        bind:value={name}
+      />
       <div class="row">
         <input
           placeholder={$t("onboarding.destinationPlaceholder")}

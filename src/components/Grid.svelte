@@ -1,4 +1,5 @@
 <script lang="ts">
+  import { autofocus } from "../lib/actions";
   import { t } from "svelte-i18n";
   import {
     createTable,
@@ -677,6 +678,7 @@
       <div class="picker-body">
         <div class="tag-row">
           <input
+            use:autofocus
             placeholder={$t("grid.newTag")}
             bind:value={newTagName}
             list="known-tags"
@@ -747,7 +749,7 @@
   {#if searchOpen}
     <div class="grid-search">
       <Search size={14} />
-      <input placeholder={$t("grid.search")} bind:value={filter} />
+      <input use:autofocus placeholder={$t("grid.search")} bind:value={filter} />
     </div>
   {/if}
 

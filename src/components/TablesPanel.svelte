@@ -1,4 +1,5 @@
 <script lang="ts">
+  import { autofocus } from "../lib/actions";
   import { t } from "svelte-i18n";
   import { Table2, Plus, Pencil, Trash2, Search } from "@lucide/svelte";
   import * as api from "../lib/api";
@@ -90,6 +91,7 @@
   {#if newOpen}
     <div class="row">
       <input
+        use:autofocus
         class="new-input"
         placeholder={$t("tables.namePlaceholder")}
         bind:value={newName}
@@ -115,6 +117,7 @@
       <div class="table-row" class:active={activeDoc().currentTable === table.name}>
         {#if editing === table.name}
           <input
+            use:autofocus={{ select: true }}
             class="new-input"
             bind:value={editName}
             onkeydown={(e) => {

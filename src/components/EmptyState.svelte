@@ -1,4 +1,5 @@
 <script lang="ts">
+  import { autofocus } from "../lib/actions";
   import { t } from "svelte-i18n";
   import {
     FilePlus,
@@ -58,6 +59,7 @@
       <p class="muted">{$t("wizard.firstTableHint")}</p>
       <div class="row">
         <input
+          use:autofocus
           placeholder={$t("tables.namePlaceholder")}
           bind:value={newTableName}
           onkeydown={(e) => e.key === "Enter" && createFirstTable()}

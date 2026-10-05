@@ -1,4 +1,5 @@
 <script lang="ts">
+  import { autofocus } from "../lib/actions";
   import { t } from "svelte-i18n";
   import { Search } from "@lucide/svelte";
   import {
@@ -82,6 +83,7 @@
 
   {#if newKind}
     <input
+      use:autofocus
       class="new-input"
       placeholder={newKind === "note"
         ? $t("sidebar.notePathPlaceholder")
