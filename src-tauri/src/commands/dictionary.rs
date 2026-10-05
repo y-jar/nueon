@@ -8,7 +8,9 @@ use tauri::{AppHandle, State};
 use uuid::Uuid;
 
 use langloom_core::model::{derivation, RelatedWord};
-use langloom_core::{FieldType, TagDef, WordEntry, WordHit, WordTable};
+use langloom_core::{
+    FieldType, GridViewState, TagDef, TagKindChange, WordEntry, WordHit, WordTable,
+};
 
 use super::changed;
 use crate::state::AppState;
@@ -202,6 +204,55 @@ pub fn remove_tag_preview(
     let state = state.lock().map_err(|_| "state poisoned".to_string())?;
     let workspace = state.workspace()?;
     Ok(workspace.preview_remove_tag(&table, &tag))
+}
+
+/// Change a tag's field type, migrating stored values where possible.
+#[tauri::command]
+pub fn set_tag_kind(
+    app: AppHandle,
+    state: State<'_, Shared>,
+    table: String,
+    tag: String,
+    kind: FieldType,
+) -> Result<Option<TagKindChange>, String> {
+    let mut state = state.lock().map_err(|_| "state poisoned".to_string())?;
+    let change = state
+        .workspace_mut()?
+        .set_tag_kind(&table, &tag, kind)
+        .map_err(|err| err.to_string())?;
+    drop(state);
+    changed(&app, "dictionary");
+    Ok(change)
+}
+
+/// Every non-builtin tag name used across all tables, for suggestions.
+#[tauri::command]
+pub fn known_tag_names(state: State<'_, Shared>) -> Result<Vec<String>, String> {
+    let state = state.lock().map_err(|_| "state poisoned".to_string())?;
+    let workspace = state.workspace()?;
+    Ok(workspace.known_tag_names())
+}
+
+/// The persisted grid presentation state for a table.
+#[tauri::command]
+pub fn grid_view_get(state: State<'_, Shared>, table: String) -> Result<GridViewState, String> {
+    let state = state.lock().map_err(|_| "state poisoned".to_string())?;
+    let workspace = state.workspace()?;
+    Ok(workspace.grid_view(&table))
+}
+
+/// Persist the grid presentation state for a table.
+#[tauri::command]
+pub fn grid_view_set(
+    state: State<'_, Shared>,
+    table: String,
+    view: GridViewState,
+) -> Result<(), String> {
+    let mut state = state.lock().map_err(|_| "state poisoned".to_string())?;
+    state
+        .workspace_mut()?
+        .set_grid_view(&table, view)
+        .map_err(|err| err.to_string())
 }
 
 #[tauri::command]

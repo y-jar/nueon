@@ -458,6 +458,85 @@ table.dict-grid td input:focus {
   background: var(--bg);
 }
 
+table.dict-grid th.select-col,
+table.dict-grid td.select-col {
+  width: 28px;
+  text-align: center;
+}
+
+table.dict-grid th button.sort {
+  background: transparent;
+  border: none;
+  padding: 0;
+  color: inherit;
+  font: inherit;
+  font-weight: 600;
+}
+
+table.dict-grid input.col-filter {
+  width: 100%;
+  min-width: 60px;
+  font-size: 11px;
+  padding: 1px 4px;
+}
+
+.col-picker {
+  position: relative;
+}
+
+.col-picker summary {
+  cursor: pointer;
+  font-size: 12px;
+  padding: 3px 8px;
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  background: var(--faint);
+}
+
+.col-picker .picker-body {
+  position: absolute;
+  z-index: 20;
+  top: 100%;
+  left: 0;
+  min-width: 200px;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  padding: 8px;
+  background: var(--panel);
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  box-shadow: 0 6px 24px rgba(0, 0, 0, 0.4);
+}
+
+.picker-row,
+.tag-row {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 12px;
+}
+
+.tag-row span {
+  flex: 1;
+}
+
+.tag-row input {
+  flex: 1;
+  min-width: 80px;
+}
+
+/* -- spelling guard ------------------------------------------------------- */
+
+.spelling {
+  margin: 6px 0;
+}
+
+.spelling .row {
+  align-items: center;
+  flex-wrap: wrap;
+}
+
 /* -- inspector forms ------------------------------------------------------ */
 
 .inspector label.field {

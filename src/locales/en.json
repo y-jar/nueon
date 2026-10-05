@@ -49,7 +49,17 @@
     "newTable": "new table",
     "search": "search…",
     "newWord": "new word",
-    "addWord": "＋ word"
+    "addWord": "＋ word",
+    "columns": "Columns",
+    "tags": "Tags",
+    "newTag": "new tag",
+    "add": "Add",
+    "tagExists": "That tag already exists",
+    "removeTag": "Remove tag",
+    "removeTagConfirm": "Remove tag \"{tag}\" and its values from {count} word(s)?",
+    "selected": "{count} selected",
+    "deleteSelected": "Delete selected",
+    "spelling": "Possible misspelling in \"{word}\": {words}"
   },
   "inspector": {
     "title": "Inspector",
@@ -59,7 +69,10 @@
     "parents": "Parents",
     "addParent": "add parent…",
     "selectWord": "Select a dictionary word to edit it.",
-    "cannotAddParent": "Cannot add parent: it would create a cycle"
+    "cannotAddParent": "Cannot add parent: it would create a cycle",
+    "addField": "add field…",
+    "spelling": "Possible misspellings: {words}",
+    "apply": "Apply"
   },
   "translation": {
     "loadPreset": "load preset…",

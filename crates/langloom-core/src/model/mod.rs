@@ -15,7 +15,7 @@ pub use derivation::{
 pub use dictionary::{Dictionary, WordHit};
 pub use entry::WordEntry;
 pub use field::{FieldType, FieldValue};
-pub use table::{TagRemoval, WordTable};
+pub use table::{TagKindChange, TagRemoval, WordTable};
 pub use tag::{TagDef, DEFINITION_TAG, PARENT_TAG, WORDNAME_TAG};
 pub use translate::{
     token_candidates, tokenize, translate, Candidate, SlotOutcome, Symbol, Token, TranslationReport,

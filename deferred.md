@@ -19,16 +19,17 @@ were completed during the Tauri migration (R0–R8).
 
 ## Dictionary grid
 
-- Persist hidden columns / sort / filter state across restarts. (D1)
-- Per-column filter / search / column-hide UI. (D1)
-- Misspelling guard for `definition` fields against a standard dependency
-  dictionary (PSD §B); never applied to `wordname`. (D1)
-- Tag management UI: add/remove tags on a word, tag suggestion dropdown when
-  adding a tag (backend `known_tag_names` exists). (D1)
-- Bulk edit / multi-select of rows. (D1)
-- Field-type editing or migration after tags are created. (D1)
-- Rich cell editors for `TagList` (currently display-only in the grid);
-  reference cells are display-only (edit via the inspector parent picker). (D1)
+- ~~Persist hidden columns / sort / filter state across restarts.~~ (D1)
+- ~~Per-column filter / search / column-hide UI.~~ (D1)
+- ~~Misspelling guard for `definition` fields against a standard dependency
+  dictionary (PSD §B); never applied to `wordname`.~~ (D1, nspell)
+- ~~Tag management UI: add/remove tags on a word, tag suggestion dropdown when
+  adding a tag (backend `known_tag_names` exists).~~ (D1)
+- ~~Multi-select of rows with bulk delete.~~ (D1)
+- Bulk value edit: apply one value to every selected row at once. (D1+)
+- ~~Field-type editing or migration after tags are created.~~ (D1)
+- ~~Rich cell editors for `TagList`; reference cells are display-only (edit via
+  the inspector parent picker).~~ (D1)
 
 ## Etymology / derivation
 

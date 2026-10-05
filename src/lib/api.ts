@@ -120,6 +120,26 @@ export interface DerivationTree {
   descendants: RelatedWord[];
 }
 
+export interface SortSpec {
+  id: string;
+  desc: boolean;
+}
+
+export interface GridViewState {
+  sorting: SortSpec[];
+  search: string;
+  column_filters: Record<string, string>;
+  hidden_columns: string[];
+}
+
+export interface TagKindChange {
+  tag: string;
+  from: FieldType;
+  to: FieldType;
+  affected: number;
+  dropped: number;
+}
+
 export const wordIndex = (): Promise<WordIndex> => invoke("word_index");
 export const listTables = (): Promise<TableSummary[]> => invoke("list_tables");
 export const getTable = (table: string): Promise<WordTable> =>
@@ -154,6 +174,20 @@ export const removeTagPreview = (
 ): Promise<number> => invoke("remove_tag_preview", { table, tag });
 export const removeTag = (table: string, tag: string): Promise<boolean> =>
   invoke("remove_tag", { table, tag });
+export const setTagKind = (
+  table: string,
+  tag: string,
+  kind: FieldType,
+): Promise<TagKindChange | null> =>
+  invoke("set_tag_kind", { table, tag, kind });
+export const knownTagNames = (): Promise<string[]> =>
+  invoke("known_tag_names");
+export const gridViewGet = (table: string): Promise<GridViewState> =>
+  invoke("grid_view_get", { table });
+export const gridViewSet = (
+  table: string,
+  view: GridViewState,
+): Promise<void> => invoke("grid_view_set", { table, view });
 export const setParent = (
   table: string,
   child: string,

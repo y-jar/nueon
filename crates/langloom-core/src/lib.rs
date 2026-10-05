@@ -11,12 +11,13 @@ pub mod vcs;
 pub mod workspace;
 
 pub use config::{
-    GrammarConfig, GrammarRule, LanguageConfig, TextDirection, TranslationConfig, WorkspaceSettings,
+    GrammarConfig, GrammarRule, GridViewState, LanguageConfig, SortSpec, TextDirection,
+    TranslationConfig, WorkspaceSettings,
 };
 pub use global::{GlobalConfig, WorkspaceEntry};
 pub use model::{
-    Dictionary, FieldType, FieldValue, TagDef, TagRemoval, WordEntry, WordHit, WordTable,
-    DEFINITION_TAG, PARENT_TAG, WORDNAME_TAG,
+    Dictionary, FieldType, FieldValue, TagDef, TagKindChange, TagRemoval, WordEntry, WordHit,
+    WordTable, DEFINITION_TAG, PARENT_TAG, WORDNAME_TAG,
 };
 pub use translation::{ClauseSlot, SyntaxGrid};
 pub use vcs::{AutoCheckin, Commit, GitRepo, GitStatus, StatusEntry, VcsError};

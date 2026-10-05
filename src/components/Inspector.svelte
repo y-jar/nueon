@@ -8,12 +8,17 @@
     parseList,
     textValue,
   } from "../lib/dictionary";
-  import { ui } from "../lib/state.svelte";
+  import { misspelledWords, spellSuggestions } from "../lib/spellcheck";
+  import { ui, refreshTable } from "../lib/state.svelte";
 
   let draft = $state<api.WordEntry | null>(null);
   let candidates = $state<api.RelatedWord[]>([]);
   let activeId: string | null = null;
   let error = $state("");
+  let definitionInput = $state("");
+  let misspelled = $state<string[]>([]);
+  let spellOptions = $state<Record<string, string[]>>({});
+  let knownTags = $state<string[]>([]);
 
   // Rebuild the local draft only when the selected entry changes, so an
   // in-progress edit is not clobbered by a data-changed refetch.
@@ -29,10 +34,24 @@
       draft = structuredClone(entry);
       activeId = entry.id;
       candidates = [];
+      definitionInput = listValue(entry.values["definition"]);
+      misspelled = [];
+      spellOptions = {};
       api
         .parentCandidates(entry.id)
         .then((value) => (candidates = value))
         .catch(() => (candidates = []));
+    }
+  });
+
+  $effect(() => {
+    if (ui.root) {
+      api
+        .knownTagNames()
+        .then((names) => (knownTags = names))
+        .catch(() => {});
+    } else {
+      knownTags = [];
     }
   });
 
@@ -42,6 +61,18 @@
         tag.name !== "wordname" &&
         tag.name !== "parent" &&
         tag.name !== "definition",
+    ),
+  );
+
+  const RESERVED = ["wordname", "parent", "definition"];
+
+  // Known tags from other tables that can be attached to this word. Adding one
+  // declares it as a Boolean column in the current table.
+  const attachableTags = $derived(
+    knownTags.filter(
+      (name) =>
+        !RESERVED.includes(name) &&
+        !(ui.table?.tags ?? []).some((tag) => tag.name === name),
     ),
   );
 
@@ -71,6 +102,14 @@
     await save();
   }
 
+  async function dropField(tag: string) {
+    if (!draft) return;
+    const values = { ...draft.values };
+    delete values[tag];
+    draft = { ...draft, values };
+    await save();
+  }
+
   async function setDefinition(input: string) {
     if (!draft) return;
     const senses = parseList(input);
@@ -82,6 +121,30 @@
     }
     draft = { ...draft, values };
     await save();
+  }
+
+  async function commitDefinition() {
+    await setDefinition(definitionInput);
+    const words = await misspelledWords(definitionInput);
+    misspelled = words;
+    const options: Record<string, string[]> = {};
+    for (const word of words) {
+      options[word] = await spellSuggestions(word);
+    }
+    spellOptions = options;
+  }
+
+  async function applySuggestion(from: string, to: string) {
+    definitionInput = definitionInput.split(from).join(to);
+    misspelled = misspelled.filter((word) => word !== from);
+    await commitDefinition();
+  }
+
+  async function attachTag(name: string) {
+    if (!draft || !ui.currentTable || !name) return;
+    await api.addTag(ui.currentTable, name, "boolean");
+    await refreshTable();
+    await setField(name, { type: "boolean", value: true });
   }
 
   async function addParent(parent: api.RelatedWord) {
@@ -127,10 +190,30 @@
     <label class="field"
       >{$t("inspector.definition")}
       <input
-        value={listValue(draft.values["definition"])}
-        onblur={(e) => setDefinition(e.currentTarget.value)}
+        bind:value={definitionInput}
+        onblur={commitDefinition}
       />
     </label>
+
+    {#if misspelled.length}
+      <div class="spelling">
+        <p class="error">
+          {$t("inspector.spelling", {
+            values: { words: misspelled.join(", ") },
+          })}
+        </p>
+        {#each misspelled as word (word)}
+          <div class="row">
+            <span class="muted">{word}</span>
+            {#each spellOptions[word] ?? [] as option (option)}
+              <button class="chip" onclick={() => applySuggestion(word, option)}
+                >{option}</button
+              >
+            {/each}
+          </div>
+        {/each}
+      </div>
+    {/if}
 
     {#if fieldTags.length}
       <div class="section-title">{$t("inspector.fields")}</div>
@@ -170,18 +253,36 @@
               >{displayValue(draft.values[tag.name]) || "—"}</span
             >
           {/if}
+          {#if draft.values[tag.name]}
+            <button
+              title={$t("grid.removeTag")}
+              onclick={() => dropField(tag.name)}>✕</button
+            >
+          {/if}
         </label>
       {/each}
+    {/if}
+
+    {#if attachableTags.length}
+      <select
+        onchange={(e) => {
+          const value = e.currentTarget.value;
+          if (value) attachTag(value);
+          e.currentTarget.value = "";
+        }}
+      >
+        <option value="">{$t("inspector.addField")}</option>
+        {#each attachableTags as name (name)}
+          <option value={name}>{name}</option>
+        {/each}
+      </select>
     {/if}
 
     <div class="section-title">{$t("inspector.parents")}</div>
     <ul class="parents">
       {#each parentIds(draft) as id (id)}
         <li>
-          <button
-            class="link"
-            onclick={() => (ui.selectedEntry = id)}
-          >
+          <button class="link" onclick={() => (ui.selectedEntry = id)}>
             {ui.nameById[id] ?? "?"}
           </button>
           <button onclick={() => dropParent(id)}>✕</button>

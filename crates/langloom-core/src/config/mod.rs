@@ -7,5 +7,5 @@ mod translation;
 
 pub use grammar::{GrammarConfig, GrammarRule};
 pub use language::{LanguageConfig, TextDirection};
-pub use settings::WorkspaceSettings;
+pub use settings::{GridViewState, SortSpec, WorkspaceSettings};
 pub use translation::TranslationConfig;

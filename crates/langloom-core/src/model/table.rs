@@ -4,7 +4,23 @@ use serde::{Deserialize, Serialize};
 use uuid::Uuid;
 
 use super::entry::WordEntry;
-use super::tag::{TagDef, WORDNAME_TAG};
+use super::field::FieldType;
+use super::tag::{reserved_kind, TagDef, WORDNAME_TAG};
+
+/// The result of changing a tag's field type.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct TagKindChange {
+    /// The tag that was migrated.
+    pub tag: String,
+    /// The previous value type.
+    pub from: FieldType,
+    /// The new value type.
+    pub to: FieldType,
+    /// How many words carried a value for the tag.
+    pub affected: usize,
+    /// How many of those values could not be converted and were dropped.
+    pub dropped: usize,
+}
 
 /// The result of stripping a tag from a table.
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -89,6 +105,49 @@ impl WordTable {
         Some(TagRemoval {
             tag: name.to_string(),
             affected,
+        })
+    }
+
+    /// Change a tag's field type, converting each stored value where possible
+    /// and dropping those that cannot be represented.
+    ///
+    /// Returns `None` for unknown/reserved tags or a no-op change.
+    pub fn set_tag_kind(&mut self, name: &str, kind: FieldType) -> Option<TagKindChange> {
+        if reserved_kind(name).is_some() {
+            return None;
+        }
+        let from = self.tag(name)?.kind;
+        if from == kind {
+            return None;
+        }
+        if let Some(tag) = self.tags.iter_mut().find(|tag| tag.name == name) {
+            tag.kind = kind;
+        }
+
+        let mut affected = 0;
+        let mut dropped = 0;
+        for entry in &mut self.entries {
+            let Some(value) = entry.values.get(name).cloned() else {
+                continue;
+            };
+            affected += 1;
+            match value.coerce_to(kind) {
+                Some(converted) => {
+                    entry.set(name, converted);
+                }
+                None => {
+                    entry.values.remove(name);
+                    dropped += 1;
+                }
+            }
+        }
+
+        Some(TagKindChange {
+            tag: name.to_string(),
+            from,
+            to: kind,
+            affected,
+            dropped,
         })
     }
 
@@ -205,5 +264,46 @@ mod tests {
         let mut indices = [table.homograph_index(aid), table.homograph_index(bid)];
         indices.sort();
         assert_eq!(indices, [Some(0), Some(1)]);
+    }
+
+    #[test]
+    fn changing_tag_kind_migrates_values() {
+        let mut table = WordTable::new("t");
+        let mut entry = WordEntry::new("a");
+        entry.set("flagged", FieldValue::Text("yes".into()));
+        table.add_entry(entry);
+        table.add_tag(TagDef::new("flagged", FieldType::Text));
+
+        let change = table.set_tag_kind("flagged", FieldType::Boolean).unwrap();
+        assert_eq!(change.affected, 1);
+        assert_eq!(change.dropped, 0);
+        assert_eq!(
+            table.entries[0].get("flagged"),
+            Some(&FieldValue::Boolean(true))
+        );
+        assert_eq!(table.tag("flagged").unwrap().kind, FieldType::Boolean);
+    }
+
+    #[test]
+    fn unconvertible_values_are_dropped_on_kind_change() {
+        let mut table = WordTable::new("t");
+        let mut entry = WordEntry::new("a");
+        entry.set("ref", FieldValue::Text("not-a-uuid".into()));
+        table.add_entry(entry);
+        table.add_tag(TagDef::new("ref", FieldType::Text));
+
+        let change = table.set_tag_kind("ref", FieldType::Reference).unwrap();
+        assert_eq!(change.affected, 1);
+        assert_eq!(change.dropped, 1);
+        assert!(!table.entries[0].has("ref"));
+    }
+
+    #[test]
+    fn reserved_and_unknown_tags_cannot_change_kind() {
+        let mut table = WordTable::new("t");
+        assert!(table
+            .set_tag_kind(WORDNAME_TAG, FieldType::Boolean)
+            .is_none());
+        assert!(table.set_tag_kind("missing", FieldType::Text).is_none());
     }
 }

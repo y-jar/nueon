@@ -11,9 +11,11 @@ use std::time::{Duration, Instant};
 
 use uuid::Uuid;
 
-use crate::config::{GrammarConfig, LanguageConfig, TranslationConfig, WorkspaceSettings};
+use crate::config::{
+    GrammarConfig, GridViewState, LanguageConfig, TranslationConfig, WorkspaceSettings,
+};
 use crate::model::{
-    Dictionary, FieldType, FieldValue, TagDef, TagRemoval, WordEntry, DEFINITION_TAG,
+    Dictionary, FieldType, FieldValue, TagDef, TagKindChange, TagRemoval, WordEntry, DEFINITION_TAG,
 };
 use crate::translation::SyntaxGrid;
 use crate::vcs::{AutoCheckin, GitRepo, GitStatus, VcsError};
@@ -355,6 +357,34 @@ impl Workspace {
         Ok(true)
     }
 
+    /// Every non-builtin tag name used across all tables, for suggestions.
+    pub fn known_tag_names(&self) -> Vec<String> {
+        self.dictionary.known_tag_names().into_iter().collect()
+    }
+
+    /// Change a tag's field type, migrating stored values where possible.
+    pub fn set_tag_kind(
+        &mut self,
+        table: &str,
+        tag: &str,
+        kind: FieldType,
+    ) -> Result<Option<TagKindChange>, StorageError> {
+        let change = match self
+            .dictionary
+            .table_mut(table)
+            .and_then(|t| t.set_tag_kind(tag, kind))
+        {
+            Some(change) => change,
+            None => return Ok(None),
+        };
+        self.save_table(table)?;
+        self.mark_change(
+            Instant::now(),
+            format!("langloom: change type of tag \"{tag}\" in table \"{table}\""),
+        );
+        Ok(Some(change))
+    }
+
     /// How many words would lose a value if `tag` were removed.
     pub fn preview_remove_tag(&self, table: &str, tag: &str) -> usize {
         self.dictionary.entries_with_tag(table, tag).len()
@@ -523,6 +553,35 @@ impl Workspace {
         Ok(())
     }
 
+    /// Persist the workspace settings file.
+    pub fn save_settings(&mut self) -> Result<(), StorageError> {
+        storage::save_json(
+            &self.config_dir().join(storage::SETTINGS_FILE),
+            &self.settings,
+        )
+    }
+
+    /// The persisted grid presentation state for a table (default empty).
+    pub fn grid_view(&self, table: &str) -> GridViewState {
+        self.settings
+            .grid_views
+            .get(table)
+            .cloned()
+            .unwrap_or_default()
+    }
+
+    /// Persist the grid presentation state for a table.
+    ///
+    /// Presentation-only: does not schedule a content check-in.
+    pub fn set_grid_view(&mut self, table: &str, view: GridViewState) -> Result<(), StorageError> {
+        if view == GridViewState::default() {
+            self.settings.grid_views.remove(table);
+        } else {
+            self.settings.grid_views.insert(table.to_string(), view);
+        }
+        self.save_settings()
+    }
+
     // -- check-ins ------------------------------------------------------
 
     /// Commit all pending changes immediately with an explicit message.
@@ -559,6 +618,7 @@ mod tests {
     use super::*;
     use crate::model::{FieldType, FieldValue};
     use crate::vcs::git_available;
+    use crate::WORDNAME_TAG;
 
     fn sample_workspace(dir: &std::path::Path) -> Workspace {
         let mut ws = Workspace::new(dir).unwrap();
@@ -771,5 +831,63 @@ mod tests {
 
         ws.delete_note("Grammar").unwrap();
         assert!(ws.notes.is_empty());
+    }
+
+    #[test]
+    fn grid_view_state_persists_across_reload() {
+        let dir = tempfile::tempdir().unwrap();
+        let mut ws = Workspace::new(dir.path()).unwrap();
+        ws.create_table("verbs").unwrap();
+
+        let view = GridViewState {
+            sorting: vec![crate::config::SortSpec {
+                id: "wordname".into(),
+                desc: true,
+            }],
+            search: "ka".into(),
+            hidden_columns: vec!["parent".into()],
+            ..Default::default()
+        };
+        ws.set_grid_view("verbs", view.clone()).unwrap();
+
+        let reloaded = Workspace::load(dir.path()).unwrap();
+        assert_eq!(reloaded.grid_view("verbs"), view);
+        assert_eq!(reloaded.grid_view("missing"), GridViewState::default());
+    }
+
+    #[test]
+    fn set_tag_kind_migrates_and_persists() {
+        let dir = tempfile::tempdir().unwrap();
+        let mut ws = Workspace::new(dir.path()).unwrap();
+        ws.create_table("verbs").unwrap();
+        let id = ws.create_entry("verbs", "kala").unwrap().unwrap();
+        ws.add_tag("verbs", TagDef::new("flag", FieldType::Text))
+            .unwrap();
+        ws.dictionary
+            .get_entry_mut("verbs", id)
+            .unwrap()
+            .set("flag", FieldValue::Text("yes".into()));
+        ws.save_entry("verbs", id).unwrap();
+
+        let change = ws
+            .set_tag_kind("verbs", "flag", FieldType::Boolean)
+            .unwrap()
+            .unwrap();
+        assert_eq!(change.affected, 1);
+        assert_eq!(change.dropped, 0);
+        assert!(ws
+            .set_tag_kind("verbs", WORDNAME_TAG, FieldType::Boolean)
+            .unwrap()
+            .is_none());
+
+        let reloaded = Workspace::load(dir.path()).unwrap();
+        assert_eq!(
+            reloaded
+                .dictionary
+                .get_entry("verbs", id)
+                .unwrap()
+                .get("flag"),
+            Some(&FieldValue::Boolean(true))
+        );
     }
 }
