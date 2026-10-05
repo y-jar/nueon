@@ -120,6 +120,10 @@ export interface DerivationTree {
   descendants: RelatedWord[];
 }
 
+export interface DerivationNode extends RelatedWord {
+  parents: string[];
+}
+
 export interface SortSpec {
   id: string;
   desc: boolean;
@@ -198,10 +202,17 @@ export const removeParent = (
   child: string,
   parent: string,
 ): Promise<boolean> => invoke("remove_parent", { table, child, parent });
+export const reparentWord = (
+  table: string,
+  child: string,
+  parent: string,
+): Promise<boolean> => invoke("reparent_word", { table, child, parent });
 export const parentCandidates = (child: string): Promise<RelatedWord[]> =>
   invoke("parent_candidates", { child });
 export const derivationTree = (id: string): Promise<DerivationTree> =>
   invoke("derivation_tree", { id });
+export const derivationGraph = (id: string): Promise<DerivationNode[]> =>
+  invoke("derivation_graph", { id });
 
 // -- translation ---------------------------------------------------------
 export type ClauseSlot =

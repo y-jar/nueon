@@ -10,11 +10,10 @@
   } from "../lib/dictionary";
   import { misspelledWords, spellSuggestions } from "../lib/spellcheck";
   import { ui, refreshTable } from "../lib/state.svelte";
+  import DerivationGraph from "./DerivationGraph.svelte";
 
   let draft = $state<api.WordEntry | null>(null);
-  let candidates = $state<api.RelatedWord[]>([]);
   let activeId: string | null = null;
-  let error = $state("");
   let definitionInput = $state("");
   let misspelled = $state<string[]>([]);
   let spellOptions = $state<Record<string, string[]>>({});
@@ -33,14 +32,9 @@
     if (entry.id !== activeId) {
       draft = structuredClone(entry);
       activeId = entry.id;
-      candidates = [];
       definitionInput = listValue(entry.values["definition"]);
       misspelled = [];
       spellOptions = {};
-      api
-        .parentCandidates(entry.id)
-        .then((value) => (candidates = value))
-        .catch(() => (candidates = []));
     }
   });
 
@@ -76,18 +70,9 @@
     ),
   );
 
-  function parentIds(entry: api.WordEntry): string[] {
-    const value = entry.values["parent"];
-    if (!value) return [];
-    if (value.type === "references") return value.value;
-    if (value.type === "reference") return [value.value];
-    return [];
-  }
-
   async function save() {
     if (!draft || !ui.currentTable) return;
     await api.saveWordEntry(ui.currentTable, draft);
-    error = "";
   }
 
   async function setWordname(value: string) {
@@ -146,34 +131,6 @@
     await refreshTable();
     await setField(name, { type: "boolean", value: true });
   }
-
-  async function addParent(parent: api.RelatedWord) {
-    if (!draft || !ui.currentTable) return;
-    const ok = await api.setParent(ui.currentTable, draft.id, parent.id);
-    if (!ok) {
-      error = $t("inspector.cannotAddParent");
-      return;
-    }
-    error = "";
-    const ids = parentIds(draft);
-    if (!ids.includes(parent.id)) ids.push(parent.id);
-    draft = {
-      ...draft,
-      values: { ...draft.values, parent: { type: "references", value: ids } },
-    };
-    candidates = await api.parentCandidates(draft.id);
-  }
-
-  async function dropParent(id: string) {
-    if (!draft || !ui.currentTable) return;
-    await api.removeParent(ui.currentTable, draft.id, id);
-    const ids = parentIds(draft).filter((value) => value !== id);
-    const values = { ...draft.values };
-    if (ids.length) values["parent"] = { type: "references", value: ids };
-    else delete values["parent"];
-    draft = { ...draft, values };
-    candidates = await api.parentCandidates(draft.id);
-  }
 </script>
 
 <aside class="inspector">
@@ -189,10 +146,7 @@
 
     <label class="field"
       >{$t("inspector.definition")}
-      <input
-        bind:value={definitionInput}
-        onblur={commitDefinition}
-      />
+      <input bind:value={definitionInput} onblur={commitDefinition} />
     </label>
 
     {#if misspelled.length}
@@ -278,38 +232,7 @@
       </select>
     {/if}
 
-    <div class="section-title">{$t("inspector.parents")}</div>
-    <ul class="parents">
-      {#each parentIds(draft) as id (id)}
-        <li>
-          <button class="link" onclick={() => (ui.selectedEntry = id)}>
-            {ui.nameById[id] ?? "?"}
-          </button>
-          <button onclick={() => dropParent(id)}>✕</button>
-        </li>
-      {/each}
-    </ul>
-    <select
-      onchange={(e) => {
-        const value = e.currentTarget.value;
-        if (value) {
-          addParent({
-            id: value,
-            wordname: ui.nameById[value] ?? "",
-            table: "",
-          });
-        }
-        e.currentTarget.value = "";
-      }}
-    >
-      <option value="">{$t("inspector.addParent")}</option>
-      {#each candidates as candidate (candidate.id)}
-        <option value={candidate.id}
-          >{candidate.wordname} · {candidate.table}</option
-        >
-      {/each}
-    </select>
-    {#if error}<p class="error">{error}</p>{/if}
+    <DerivationGraph id={draft.id} />
   {:else}
     <p class="muted">{$t("inspector.selectWord")}</p>
   {/if}

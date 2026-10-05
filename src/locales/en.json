@@ -104,8 +104,20 @@
     "breakdown": "Breakdown",
     "newPreset": "New preset"
   },
-  "git": {
-    "sourceControl": "Source Control",
+  "derivation": {
+    "title": "Derivation",
+    "ancestors": "Ancestors",
+    "descendants": "Descendants",
+    "noDescendants": "No derived words.",
+    "add": "Add",
+    "reparent": "Reparent",
+    "makeSole": "Make sole parent",
+    "remove": "Remove parent",
+    "export": "Export",
+    "exportPath": "note path",
+    "exportDone": "Exported derivation to {path}"
+  },
+  "git": {    "sourceControl": "Source Control",
     "noWorkspace": "No workspace open.",
     "gitMissing": "git is not installed.",
     "installHint": "Install git to enable version control.",

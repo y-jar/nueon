@@ -10,7 +10,8 @@ pub mod tag;
 pub mod translate;
 
 pub use derivation::{
-    apply_rename, parent_candidates, plan_substring_rename, RelatedWord, RenameTarget,
+    apply_rename, graph, parent_candidates, plan_substring_rename, DerivationNode, RelatedWord,
+    RenameTarget,
 };
 pub use dictionary::{Dictionary, WordHit};
 pub use entry::WordEntry;

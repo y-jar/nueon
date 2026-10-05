@@ -24,6 +24,54 @@ pub struct RelatedWord {
     pub wordname: String,
 }
 
+/// A node in the derivation graph: a word plus its parents within the graph.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct DerivationNode {
+    pub id: Uuid,
+    pub table: String,
+    pub wordname: String,
+    /// Parent ids that are also present in the graph.
+    pub parents: Vec<Uuid>,
+}
+
+/// The self + ancestor + descendant subgraph around `id`, for visualisation.
+///
+/// `parents` on each node are restricted to ids also present in the returned
+/// set, so the frontend can render a nested tree without dangling edges.
+pub fn graph(dict: &Dictionary, id: Uuid) -> Vec<DerivationNode> {
+    if dict.find_entry(id).is_none() {
+        return Vec::new();
+    }
+
+    let mut ids: Vec<Uuid> = vec![id];
+    for ancestor in dict.ancestors_of(id) {
+        if !ids.contains(&ancestor.id) {
+            ids.push(ancestor.id);
+        }
+    }
+    for descendant in dict.descendants_of(id) {
+        if !ids.contains(&descendant.id) {
+            ids.push(descendant.id);
+        }
+    }
+
+    let present: HashSet<Uuid> = ids.iter().copied().collect();
+    ids.into_iter()
+        .filter_map(|uid| {
+            dict.find_entry(uid).map(|(table, entry)| DerivationNode {
+                id: entry.id,
+                table: table.to_string(),
+                wordname: entry.wordname.clone(),
+                parents: entry
+                    .parents()
+                    .into_iter()
+                    .filter(|parent| present.contains(parent))
+                    .collect(),
+            })
+        })
+        .collect()
+}
+
 /// Words that may legally become a parent of `child_id`.
 ///
 /// Excludes the word itself, its descendants (which would create a cycle),
@@ -211,5 +259,18 @@ mod tests {
             dict.get_entry("all words", grandchild).unwrap().parents(),
             vec![child_a]
         );
+    }
+
+    #[test]
+    fn graph_contains_ancestors_descendants_and_local_edges() {
+        let (dict, root_id, child_a, _child_b, grandchild) = build();
+        let nodes = graph(&dict, child_a);
+        let by_id = |id: Uuid| nodes.iter().find(|node| node.id == id).unwrap();
+
+        assert_eq!(nodes.len(), 3, "root, a, grandchild");
+        assert!(by_id(root_id).parents.is_empty());
+        assert_eq!(by_id(child_a).parents, vec![root_id]);
+        assert_eq!(by_id(grandchild).parents, vec![child_a]);
+        assert!(graph(&dict, Uuid::new_v4()).is_empty());
     }
 }

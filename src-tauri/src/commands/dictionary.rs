@@ -7,7 +7,7 @@ use serde::Serialize;
 use tauri::{AppHandle, State};
 use uuid::Uuid;
 
-use langloom_core::model::{derivation, RelatedWord};
+use langloom_core::model::{derivation, DerivationNode, RelatedWord};
 use langloom_core::{
     FieldType, GridViewState, TagDef, TagKindChange, WordEntry, WordHit, WordTable,
 };
@@ -313,6 +313,27 @@ pub fn remove_parent(
     Ok(removed)
 }
 
+/// Replace a word's parents with a single parent, in one step.
+#[tauri::command]
+pub fn reparent_word(
+    app: AppHandle,
+    state: State<'_, Shared>,
+    table: String,
+    child: String,
+    parent: String,
+) -> Result<bool, String> {
+    let child = parse_id(&child)?;
+    let parent = parse_id(&parent)?;
+    let mut state = state.lock().map_err(|_| "state poisoned".to_string())?;
+    let replaced = state
+        .workspace_mut()?
+        .set_parent_only(&table, child, parent)
+        .map_err(|err| err.to_string())?;
+    drop(state);
+    changed(&app, "dictionary");
+    Ok(replaced)
+}
+
 #[tauri::command]
 pub fn parent_candidates(
     state: State<'_, Shared>,
@@ -322,6 +343,18 @@ pub fn parent_candidates(
     let state = state.lock().map_err(|_| "state poisoned".to_string())?;
     let workspace = state.workspace()?;
     Ok(derivation::parent_candidates(&workspace.dictionary, child))
+}
+
+/// The self + ancestor + descendant subgraph around a word, for visualisation.
+#[tauri::command]
+pub fn derivation_graph(
+    state: State<'_, Shared>,
+    id: String,
+) -> Result<Vec<DerivationNode>, String> {
+    let id = parse_id(&id)?;
+    let state = state.lock().map_err(|_| "state poisoned".to_string())?;
+    let workspace = state.workspace()?;
+    Ok(derivation::graph(&workspace.dictionary, id))
 }
 
 #[tauri::command]

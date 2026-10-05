@@ -320,6 +320,26 @@ impl Workspace {
         Ok(true)
     }
 
+    /// Replace a word's parents with the single given parent, in one step.
+    ///
+    /// Rejects cycles (the parent may not be the word or its descendant).
+    pub fn set_parent_only(
+        &mut self,
+        table: &str,
+        child: Uuid,
+        parent: Uuid,
+    ) -> Result<bool, StorageError> {
+        if !self.dictionary.can_be_parent(child, parent) {
+            return Ok(false);
+        }
+        match self.dictionary.get_entry_mut(table, child) {
+            Some(entry) => entry.set_parents(&[parent]),
+            None => return Ok(false),
+        }
+        self.save_table_edits(table)?;
+        Ok(true)
+    }
+
     /// Remove a word from its table and persist the change.
     pub fn delete_entry(
         &mut self,
@@ -889,5 +909,24 @@ mod tests {
                 .get("flag"),
             Some(&FieldValue::Boolean(true))
         );
+    }
+
+    #[test]
+    fn set_parent_only_replaces_and_guards_cycles() {
+        let dir = tempfile::tempdir().unwrap();
+        let mut ws = Workspace::new(dir.path()).unwrap();
+        ws.create_table("words").unwrap();
+        let root = ws.create_entry("words", "root").unwrap().unwrap();
+        let other = ws.create_entry("words", "other").unwrap().unwrap();
+        let child = ws.create_entry("words", "child").unwrap().unwrap();
+
+        ws.add_parent("words", child, root).unwrap();
+        assert!(ws.set_parent_only("words", child, other).unwrap());
+        assert_eq!(ws.dictionary.parents_of(child), vec![other]);
+
+        // A word cannot become the parent of its own descendant.
+        let grandchild = ws.create_entry("words", "grandchild").unwrap().unwrap();
+        ws.add_parent("words", grandchild, child).unwrap();
+        assert!(!ws.set_parent_only("words", child, grandchild).unwrap());
     }
 }
