@@ -1,4 +1,5 @@
 <script lang="ts">
+  import { t } from "svelte-i18n";
   import * as api from "../lib/api";
   import {
     boolValue,
@@ -87,7 +88,7 @@
     if (!draft || !ui.currentTable) return;
     const ok = await api.setParent(ui.currentTable, draft.id, parent.id);
     if (!ok) {
-      error = "Cannot add parent: it would create a cycle";
+      error = $t("inspector.cannotAddParent");
       return;
     }
     error = "";
@@ -113,10 +114,10 @@
 </script>
 
 <aside class="inspector">
-  <div class="pane-title">Inspector</div>
+  <div class="pane-title">{$t("inspector.title")}</div>
   {#if draft && ui.view === "dictionary"}
     <label class="field"
-      >wordname
+      >{$t("inspector.wordname")}
       <input
         value={draft.wordname}
         onblur={(e) => setWordname(e.currentTarget.value)}
@@ -124,7 +125,7 @@
     </label>
 
     <label class="field"
-      >definition
+      >{$t("inspector.definition")}
       <input
         value={listValue(draft.values["definition"])}
         onblur={(e) => setDefinition(e.currentTarget.value)}
@@ -132,7 +133,7 @@
     </label>
 
     {#if fieldTags.length}
-      <div class="section-title">Fields</div>
+      <div class="section-title">{$t("inspector.fields")}</div>
       {#each fieldTags as tag (tag.name)}
         <label class="field"
           >{tag.name}
@@ -173,7 +174,7 @@
       {/each}
     {/if}
 
-    <div class="section-title">Parents</div>
+    <div class="section-title">{$t("inspector.parents")}</div>
     <ul class="parents">
       {#each parentIds(draft) as id (id)}
         <li>
@@ -200,7 +201,7 @@
         e.currentTarget.value = "";
       }}
     >
-      <option value="">add parent…</option>
+      <option value="">{$t("inspector.addParent")}</option>
       {#each candidates as candidate (candidate.id)}
         <option value={candidate.id}
           >{candidate.wordname} · {candidate.table}</option
@@ -209,6 +210,6 @@
     </select>
     {#if error}<p class="error">{error}</p>{/if}
   {:else}
-    <p class="muted">Select a dictionary word to edit it.</p>
+    <p class="muted">{$t("inspector.selectWord")}</p>
   {/if}
 </aside>

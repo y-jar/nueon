@@ -1,0 +1,114 @@
+{
+  "app": {
+    "brand": "langloom"
+  },
+  "onboarding": {
+    "tagline": "A conlang editor and creation app.",
+    "openWorkspace": "Open a workspace",
+    "createNew": "Create new",
+    "openExisting": "Open existing",
+    "namePlaceholder": "name",
+    "destinationPlaceholder": "destination folder",
+    "pathPlaceholder": "folder path",
+    "browse": "Browse…",
+    "create": "Create",
+    "open": "Open",
+    "chooseFolder": "Choose folder",
+    "nameAndDestinationRequired": "Name and destination are required",
+    "pathRequired": "Path is required"
+  },
+  "sidebar": {
+    "notes": "Notes",
+    "tables": "Tables",
+    "workspace": "Workspace",
+    "openWorkspace": "Open workspace",
+    "newNoteTooltip": "New note",
+    "newFolderTooltip": "New folder",
+    "noteButton": "＋note",
+    "folderButton": "＋dir",
+    "notePathPlaceholder": "path/to/note",
+    "folderPathPlaceholder": "path/to/folder",
+    "noNotes": "No notes yet."
+  },
+  "contextMenu": {
+    "open": "Open",
+    "newNote": "New note",
+    "newFolder": "New folder",
+    "rename": "Rename",
+    "delete": "Delete"
+  },
+  "editor": {
+    "selectNote": "Select a note, or create one from the sidebar."
+  },
+  "tabs": {
+    "notes": "Notes",
+    "dictionary": "Dictionary",
+    "translation": "Translation"
+  },
+  "grid": {
+    "newTable": "new table",
+    "search": "search…",
+    "newWord": "new word",
+    "addWord": "＋ word"
+  },
+  "inspector": {
+    "title": "Inspector",
+    "wordname": "wordname",
+    "definition": "definition",
+    "fields": "Fields",
+    "parents": "Parents",
+    "addParent": "add parent…",
+    "selectWord": "Select a dictionary word to edit it.",
+    "cannotAddParent": "Cannot add parent: it would create a cycle"
+  },
+  "translation": {
+    "loadPreset": "load preset…",
+    "presetName": "preset name",
+    "savePreset": "Save preset",
+    "delete": "Delete",
+    "tags": "Tags",
+    "add": "Add",
+    "literal": "literal",
+    "wildcard": "wildcard",
+    "spacer": "spacer",
+    "wildcardLabel": "* wildcard",
+    "spacerLabel": "␣ spacer",
+    "emptyHint": "Add tags to build a clause structure.",
+    "separator": "separator",
+    "englishPlaceholder": "English sentence",
+    "translate": "Translate",
+    "empty": "(empty)",
+    "complete": "complete",
+    "incomplete": "incomplete",
+    "conflicts": "Conflicts",
+    "choose": "choose…",
+    "missingWords": "Missing words",
+    "wordname": "wordname",
+    "tagsComma": "tags (comma)",
+    "create": "＋ Create",
+    "unfilledSlots": "Unfilled slots",
+    "slot": "slot {index}",
+    "breakdown": "Breakdown",
+    "newPreset": "New preset"
+  },
+  "git": {
+    "sourceControl": "Source Control",
+    "noWorkspace": "No workspace open.",
+    "gitMissing": "git is not installed.",
+    "installHint": "Install git to enable version control.",
+    "notARepo": "This workspace is not a git repository.",
+    "initialize": "Initialize repository",
+    "branch": "branch: {branch}",
+    "autoCheckin": "auto check-in ({secs}s idle)",
+    "changes": "Changes ({count})",
+    "clean": "clean",
+    "revertFile": "Revert file",
+    "commitMessage": "commit message",
+    "checkIn": "Check in",
+    "diff": "Diff: {path}",
+    "noDiff": "(no diff — untracked or binary)",
+    "truncated": "… truncated",
+    "history": "History",
+    "loading": "Loading…"
+  }
+}

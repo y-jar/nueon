@@ -1,5 +1,6 @@
 <script lang="ts">
   import { onMount } from "svelte";
+  import { t } from "svelte-i18n";
   import { dndzone } from "svelte-dnd-action";
   import * as api from "../lib/api";
   import { ui } from "../lib/state.svelte";
@@ -10,7 +11,7 @@
   }
 
   let presets = $state<api.SyntaxGrid[]>([]);
-  let draftName = $state("New preset");
+  let draftName = $state($t("translation.newPreset"));
   let slots = $state<SlotItem[]>([]);
   let separator = $state(" ");
   let inputText = $state("");
@@ -183,21 +184,21 @@
         e.currentTarget.value = "";
       }}
     >
-      <option value="">load preset…</option>
+      <option value="">{$t("translation.loadPreset")}</option>
       {#each presets as preset (preset.preset_name)}
         <option value={preset.preset_name}>{preset.preset_name}</option>
       {/each}
     </select>
-    <input placeholder="preset name" bind:value={draftName} />
-    <button onclick={savePreset}>Save preset</button>
+    <input placeholder={$t("translation.presetName")} bind:value={draftName} />
+    <button onclick={savePreset}>{$t("translation.savePreset")}</button>
     {#if presets.some((p) => p.preset_name === draftName)}
-      <button onclick={() => deletePreset(draftName)}>Delete</button>
+      <button onclick={() => deletePreset(draftName)}>{$t("translation.delete")}</button>
     {/if}
   </div>
 
   <div class="builder">
     <div class="palette">
-      <div class="pane-title">Tags</div>
+      <div class="pane-title">{$t("translation.tags")}</div>
       {#each palette as name (name)}
         <button
           class="chip"
@@ -205,17 +206,18 @@
           >#{name}</button
         >
       {/each}
-      <div class="pane-title">Add</div>
+      <div class="pane-title">{$t("translation.add")}</div>
       <div class="chip-row">
         <button
           class="chip"
-          onclick={() => addSlot({ kind: "literal", text: "ka" })}>literal</button
+          onclick={() => addSlot({ kind: "literal", text: "ka" })}
+          >{$t("translation.literal")}</button
         >
         <button class="chip" onclick={() => addSlot({ kind: "wildcard" })}
-          >wildcard</button
+          >{$t("translation.wildcard")}</button
         >
         <button class="chip" onclick={() => addSlot({ kind: "spacer" })}
-          >spacer</button
+          >{$t("translation.spacer")}</button
         >
       </div>
     </div>
@@ -255,41 +257,41 @@
                 })}
             />
           {:else if item.slot.kind === "wildcard"}
-            <em>* wildcard</em>
+            <em>{$t("translation.wildcardLabel")}</em>
           {:else}
-            <em>␣ spacer</em>
+            <em>{$t("translation.spacerLabel")}</em>
           {/if}
           <button onclick={() => removeSlot(item.id)}>✕</button>
         </div>
       {/each}
       {#if slots.length === 0}
-        <p class="muted">Add tags to build a clause structure.</p>
+        <p class="muted">{$t("translation.emptyHint")}</p>
       {/if}
     </div>
   </div>
 
   <div class="runner">
     <div class="row">
-      <span class="muted">separator</span
+      <span class="muted">{$t("translation.separator")}</span
       ><input bind:value={separator} size="3" onblur={run} />
       <textarea
-        placeholder="English sentence"
+        placeholder={$t("translation.englishPlaceholder")}
         bind:value={inputText}
         rows="2"
       ></textarea>
-      <button onclick={run}>Translate</button>
+      <button onclick={run}>{$t("translation.translate")}</button>
     </div>
 
     {#if error}<p class="error">{error}</p>{/if}
 
     {#if report}
-      <div class="output">{report.output || "(empty)"}</div>
+      <div class="output">{report.output || $t("translation.empty")}</div>
       <div class:ok={report.complete} class:warn={!report.complete}>
-        {report.complete ? "complete" : "incomplete"}
+        {report.complete ? $t("translation.complete") : $t("translation.incomplete")}
       </div>
 
       {#if report.conflicts.length}
-        <div class="section-title">Conflicts</div>
+        <div class="section-title">{$t("translation.conflicts")}</div>
         {#each report.conflicts as index (index)}
           <div class="row">
             <span class="muted">{report.tokens[index]?.text}</span>
@@ -297,7 +299,7 @@
               value={choices[String(index)] ?? ""}
               onchange={(e) => pickChoice(index, e.currentTarget.value)}
             >
-              <option value="">choose…</option>
+              <option value="">{$t("translation.choose")}</option>
               {#each candidatesFor(index) as hit (hit.id)}
                 <option value={hit.id}>{hit.wordname} · {hit.table}</option>
               {/each}
@@ -307,7 +309,7 @@
       {/if}
 
       {#if report.missing.length}
-        <div class="section-title">Missing words</div>
+        <div class="section-title">{$t("translation.missingWords")}</div>
         {#each report.missing as index (index)}
           <div class="row">
             <span class="muted">{report.tokens[index]?.text}</span>
@@ -321,31 +323,35 @@
               {/each}
             </select>
             <input
-              placeholder="wordname"
+              placeholder={$t("translation.wordname")}
               value={missingDraft(index).wordname}
               oninput={(e) =>
                 setDraft(index, { wordname: e.currentTarget.value })}
             />
             <input
-              placeholder="tags (comma)"
+              placeholder={$t("translation.tagsComma")}
               value={missingDraft(index).tags}
               oninput={(e) => setDraft(index, { tags: e.currentTarget.value })}
             />
-            <button onclick={() => createMissing(index)}>＋ Create</button>
+            <button onclick={() => createMissing(index)}
+              >{$t("translation.create")}</button
+            >
           </div>
         {/each}
       {/if}
 
       {#if report.unfilled.length}
-        <div class="section-title">Unfilled slots</div>
+        <div class="section-title">{$t("translation.unfilledSlots")}</div>
         <p class="muted">
           {#each report.unfilled as index (index)}
-            {#if index > 0}, {/if}slot {index}
+            {#if index > 0}, {/if}{$t("translation.slot", {
+              values: { index },
+            })}
           {/each}
         </p>
       {/if}
 
-      <div class="section-title">Breakdown</div>
+      <div class="section-title">{$t("translation.breakdown")}</div>
       {#each report.slots as outcome (outcome.index)}
         <div class="row">
           <span class="muted">{outcome.slot.kind} {outcome.index}</span>

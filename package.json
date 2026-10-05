@@ -30,6 +30,7 @@
     "svelte": "^5",
     "svelte-check": "^4",
     "svelte-dnd-action": "^0.9",
+    "svelte-i18n": "^4",
     "typescript": "^5.5",
     "vite": "^5"
   }

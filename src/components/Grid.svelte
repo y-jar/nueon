@@ -1,4 +1,5 @@
 <script lang="ts">
+  import { t } from "svelte-i18n";
   import {
     createTable,
     getCoreRowModel,
@@ -138,12 +139,12 @@
         <option value={t.name}>{t.name} ({t.word_count})</option>
       {/each}
     </select>
-    <input placeholder="new table" bind:value={newTable} onkeydown={(e) =>
+    <input placeholder={$t("grid.newTable")} bind:value={newTable} onkeydown={(e) =>
       e.key === "Enter" && createNewTable()} />
-    <input class="filter" placeholder="search…" bind:value={filter} />
-    <input placeholder="new word" bind:value={newWord} onkeydown={(e) =>
+    <input class="filter" placeholder={$t("grid.search")} bind:value={filter} />
+    <input placeholder={$t("grid.newWord")} bind:value={newWord} onkeydown={(e) =>
       e.key === "Enter" && createNewWord()} />
-    <button onclick={createNewWord}>＋ word</button>
+    <button onclick={createNewWord}>{$t("grid.addWord")}</button>
   </div>
 
   {#if error}<p class="error">{error}</p>{/if}

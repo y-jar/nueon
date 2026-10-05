@@ -1,4 +1,5 @@
 <script lang="ts">
+  import { t } from "svelte-i18n";
   import {
     ui,
     closeContextMenu,
@@ -72,23 +73,31 @@
           onclick={() => {
             selectNote(ui.contextMenu!.path);
             closeContextMenu();
-          }}>Open</button
+          }}>{$t("contextMenu.open")}</button
         >
       {/if}
-      <button onclick={() => requestNew("note", base)}>New note</button>
-      <button onclick={() => requestNew("folder", base)}>New folder</button>
+      <button onclick={() => requestNew("note", base)}
+        >{$t("contextMenu.newNote")}</button
+      >
+      <button onclick={() => requestNew("folder", base)}
+        >{$t("contextMenu.newFolder")}</button
+      >
       <button onclick={() => requestRename(ui.contextMenu!.path)}
-        >Rename</button
+        >{$t("contextMenu.rename")}</button
       >
       <button
         onclick={() => {
           deletePath(ui.contextMenu!.path);
           closeContextMenu();
-        }}>Delete</button
+        }}>{$t("contextMenu.delete")}</button
       >
     {:else}
-      <button onclick={() => requestNew("note", "")}>New note</button>
-      <button onclick={() => requestNew("folder", "")}>New folder</button>
+      <button onclick={() => requestNew("note", "")}
+        >{$t("contextMenu.newNote")}</button
+      >
+      <button onclick={() => requestNew("folder", "")}
+        >{$t("contextMenu.newFolder")}</button
+      >
     {/if}
   </div>
 {/if}

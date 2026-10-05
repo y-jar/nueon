@@ -1,5 +1,6 @@
 <script lang="ts">
   import { onMount } from "svelte";
+  import { t } from "svelte-i18n";
   import { ui, init, setView, toggleGitPanel } from "./lib/state.svelte";
   import Onboarding from "./components/Onboarding.svelte";
   import Sidebar from "./components/Sidebar.svelte";
@@ -18,10 +19,9 @@
 {#if ui.root}
   <div class="shell">
     <header class="topbar">
-      <span class="brand">langloom</span>
-      <button
-        class:active={ui.gitPanelOpen}
-        onclick={toggleGitPanel}>Source Control</button
+      <span class="brand">{$t("app.brand")}</span>
+      <button class:active={ui.gitPanelOpen} onclick={toggleGitPanel}
+        >{$t("git.sourceControl")}</button
       >
       <span class="muted">{ui.status}</span>
     </header>
@@ -29,15 +29,15 @@
     <main class="center">
       <div class="tabs">
         <button class:active={ui.view === "notes"} onclick={() => setView("notes")}
-          >Notes</button
+          >{$t("tabs.notes")}</button
         >
         <button
           class:active={ui.view === "dictionary"}
-          onclick={() => setView("dictionary")}>Dictionary</button
+          onclick={() => setView("dictionary")}>{$t("tabs.dictionary")}</button
         >
         <button
           class:active={ui.view === "translation"}
-          onclick={() => setView("translation")}>Translation</button
+          onclick={() => setView("translation")}>{$t("tabs.translation")}</button
         >
       </div>
       {#if ui.view === "notes"}

@@ -1,4 +1,5 @@
 <script lang="ts">
+  import { t } from "svelte-i18n";
   import * as api from "../lib/api";
   import { ui } from "../lib/state.svelte";
   import { codemirror } from "../lib/editor/action";
@@ -22,5 +23,5 @@
     ></div>
   </div>
 {:else}
-  <div class="placeholder">Select a note, or create one from the sidebar.</div>
+  <div class="placeholder">{$t("editor.selectNote")}</div>
 {/if}

@@ -1,4 +1,5 @@
 <script lang="ts">
+  import { t } from "svelte-i18n";
   import { open } from "@tauri-apps/plugin-dialog";
   import { ui, openWorkspace, createWorkspace } from "../lib/state.svelte";
 
@@ -11,7 +12,7 @@
     const selected = await open({
       directory: true,
       multiple: false,
-      title: "Choose folder",
+      title: $t("onboarding.chooseFolder"),
     });
     if (typeof selected === "string") {
       if (field === "destination") destination = selected;
@@ -22,7 +23,7 @@
   async function doCreate() {
     error = "";
     if (!name.trim() || !destination.trim()) {
-      error = "name and destination are required";
+      error = $t("onboarding.nameAndDestinationRequired");
       return;
     }
     try {
@@ -35,7 +36,7 @@
   async function doOpen() {
     error = "";
     if (!path.trim()) {
-      error = "path is required";
+      error = $t("onboarding.pathRequired");
       return;
     }
     try {
@@ -47,12 +48,12 @@
 </script>
 
 <div class="onboarding">
-  <h1>langloom</h1>
-  <p class="muted">A conlang editor and creation app.</p>
+  <h1>{$t("app.brand")}</h1>
+  <p class="muted">{$t("onboarding.tagline")}</p>
 
   {#if ui.workspaces.length}
     <section>
-      <h2>Open a workspace</h2>
+      <h2>{$t("onboarding.openWorkspace")}</h2>
       <ul class="ws-open">
         {#each ui.workspaces as ws (ws.path)}
           <li>
@@ -67,22 +68,30 @@
 
   <div class="cols">
     <section>
-      <h2>Create new</h2>
-      <input placeholder="name" bind:value={name} />
+      <h2>{$t("onboarding.createNew")}</h2>
+      <input placeholder={$t("onboarding.namePlaceholder")} bind:value={name} />
       <div class="row">
-        <input placeholder="destination folder" bind:value={destination} />
-        <button onclick={() => browse("destination")}>Browse…</button>
+        <input
+          placeholder={$t("onboarding.destinationPlaceholder")}
+          bind:value={destination}
+        />
+        <button onclick={() => browse("destination")}
+          >{$t("onboarding.browse")}</button
+        >
       </div>
-      <button onclick={doCreate}>Create</button>
+      <button onclick={doCreate}>{$t("onboarding.create")}</button>
     </section>
 
     <section>
-      <h2>Open existing</h2>
+      <h2>{$t("onboarding.openExisting")}</h2>
       <div class="row">
-        <input placeholder="folder path" bind:value={path} />
-        <button onclick={() => browse("path")}>Browse…</button>
+        <input
+          placeholder={$t("onboarding.pathPlaceholder")}
+          bind:value={path}
+        />
+        <button onclick={() => browse("path")}>{$t("onboarding.browse")}</button>
       </div>
-      <button onclick={doOpen}>Open</button>
+      <button onclick={doOpen}>{$t("onboarding.open")}</button>
     </section>
   </div>
 

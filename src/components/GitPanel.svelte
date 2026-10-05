@@ -1,4 +1,5 @@
 <script lang="ts">
+  import { t } from "svelte-i18n";
   import * as api from "../lib/api";
   import { ui } from "../lib/state.svelte";
 
@@ -109,18 +110,20 @@
 </script>
 
 <aside class="inspector git-panel">
-  <div class="pane-title">Source Control</div>
+  <div class="pane-title">{$t("git.sourceControl")}</div>
 
   {#if !ui.root}
-    <p class="muted">No workspace open.</p>
+    <p class="muted">{$t("git.noWorkspace")}</p>
   {:else if info?.state === "git_missing"}
-    <p class="error">git is not installed.</p>
-    <p class="muted">Install git to enable version control.</p>
+    <p class="error">{$t("git.gitMissing")}</p>
+    <p class="muted">{$t("git.installHint")}</p>
   {:else if info?.state === "not_a_repo"}
-    <p class="muted">This workspace is not a git repository.</p>
-    <button onclick={initRepo}>Initialize repository</button>
+    <p class="muted">{$t("git.notARepo")}</p>
+    <button onclick={initRepo}>{$t("git.initialize")}</button>
   {:else if info?.state === "ready"}
-    <p class="muted">branch: {info.branch ?? "HEAD"}</p>
+    <p class="muted">
+      {$t("git.branch", { values: { branch: info.branch ?? "HEAD" } })}
+    </p>
 
     <label class="field inline">
       <input
@@ -128,12 +131,14 @@
         checked={auto.enabled}
         onchange={(e) => toggleAuto(e.currentTarget.checked)}
       />
-      auto check-in ({auto.secs}s idle)
+      {$t("git.autoCheckin", { values: { secs: auto.secs } })}
     </label>
 
-    <div class="section-title">Changes ({status.length})</div>
+    <div class="section-title">
+      {$t("git.changes", { values: { count: status.length } })}
+    </div>
     {#if status.length === 0}
-      <p class="muted">clean</p>
+      <p class="muted">{$t("git.clean")}</p>
     {/if}
     <ul class="vcs-status">
       {#each status as entry (entry.path)}
@@ -141,28 +146,35 @@
           <button class="link" onclick={() => loadDiff(entry.path)}
             >{entry.code} {entry.path}</button
           >
-          <button title="Revert file" onclick={() => revert(entry.path)}
+          <button title={$t("git.revertFile")} onclick={() => revert(entry.path)}
             >↺</button
           >
         </li>
       {/each}
     </ul>
 
-    <textarea rows="2" placeholder="commit message" bind:value={message}
+    <textarea
+      rows="2"
+      placeholder={$t("git.commitMessage")}
+      bind:value={message}
     ></textarea>
-    <button onclick={commit}>Check in</button>
+    <button onclick={commit}>{$t("git.checkIn")}</button>
 
     {#if diffPath}
-      <div class="section-title">Diff: {diffPath}</div>
+      <div class="section-title">
+        {$t("git.diff", { values: { path: diffPath } })}
+      </div>
       {#if diff.trim() === ""}
-        <p class="muted">(no diff — untracked or binary)</p>
+        <p class="muted">{$t("git.noDiff")}</p>
       {:else}
         {@const view = truncate(diff)}
-        <pre class="diff">{view.text}{view.clipped ? "\n… truncated" : ""}</pre>
+        <pre class="diff">{view.text}{view.clipped
+            ? "\n" + $t("git.truncated")
+            : ""}</pre>
       {/if}
     {/if}
 
-    <div class="section-title">History</div>
+    <div class="section-title">{$t("git.history")}</div>
     <ul class="vcs-log">
       {#each log as entry (entry.id)}
         <li>
@@ -172,7 +184,7 @@
       {/each}
     </ul>
   {:else}
-    <p class="muted">Loading…</p>
+    <p class="muted">{$t("git.loading")}</p>
   {/if}
 
   {#if error}<p class="error">{error}</p>{/if}

@@ -1,4 +1,5 @@
 <script lang="ts">
+  import { t } from "svelte-i18n";
   import {
     ui,
     openWorkspace,
@@ -66,21 +67,21 @@
 
 <aside class="sidebar">
   <div class="pane-head">
-    <span class="pane-title">Notes</span>
+    <span class="pane-title">{$t("sidebar.notes")}</span>
     <span class="actions">
       <button
-        title="New note"
+        title={$t("sidebar.newNoteTooltip")}
         onclick={() => {
           newKind = "note";
           newName = "";
-        }}>＋note</button
+        }}>{$t("sidebar.noteButton")}</button
       >
       <button
-        title="New folder"
+        title={$t("sidebar.newFolderTooltip")}
         onclick={() => {
           newKind = "folder";
           newName = "";
-        }}>＋dir</button
+        }}>{$t("sidebar.folderButton")}</button
       >
     </span>
   </div>
@@ -88,7 +89,9 @@
   {#if newKind}
     <input
       class="new-input"
-      placeholder={newKind === "note" ? "path/to/note" : "path/to/folder"}
+      placeholder={newKind === "note"
+        ? $t("sidebar.notePathPlaceholder")
+        : $t("sidebar.folderPathPlaceholder")}
       bind:value={newName}
       onkeydown={(e) => {
         if (e.key === "Enter") submitNew();
@@ -112,11 +115,11 @@
     {#if ui.tree.length}
       <Tree nodes={ui.tree} depth={0} />
     {:else}
-      <p class="muted">No notes yet.</p>
+      <p class="muted">{$t("sidebar.noNotes")}</p>
     {/if}
   </div>
 
-  <div class="pane-title">Tables</div>
+  <div class="pane-title">{$t("sidebar.tables")}</div>
   {#each ui.tables as table (table.name)}
     <button
       class="tree-name {ui.currentTable === table.name ? 'selected' : ''}"
@@ -128,9 +131,9 @@
   <div class="grow"></div>
 
   <div class="switcher">
-    <span class="pane-title">Workspace</span>
+    <span class="pane-title">{$t("sidebar.workspace")}</span>
     <button class="ws-button" onclick={() => (wsMenu = !wsMenu)}>
-      {ui.root ?? "Open workspace"}
+      {ui.root ?? $t("sidebar.openWorkspace")}
     </button>
     {#if wsMenu}
       <ul class="ws-menu">
