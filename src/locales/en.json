@@ -178,7 +178,11 @@
     "suffix": "suffix",
     "prefix": "prefix",
     "englishAffix": "English affix",
-    "conlangAffix": "conlang affix"
+    "conlangAffix": "conlang affix",
+    "primitives": "Primitives",
+    "dropHint": "Drag or click chips above to build the clause.",
+    "confirmDelete": "Delete?",
+    "noAffixes": "No affix rules yet."
   },
   "derivation": {
     "title": "Derivation",

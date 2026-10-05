@@ -940,16 +940,102 @@ button.link {
   overflow: auto;
 }
 
-.builder {
+.translation-toolbar {
   display: flex;
-  gap: 10px;
+  align-items: center;
+  gap: 6px;
+  padding: 4px 6px;
+  background: var(--panel);
+  border: 1px solid var(--border);
+  border-radius: 6px;
 }
 
-.palette {
-  width: 190px;
+.translation-toolbar .name-input {
+  width: 160px;
+}
+
+.translation-toolbar button.active {
+  color: var(--accent);
+  border-color: var(--accent);
+}
+
+.confirm-group {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  font-size: 12px;
+}
+
+.confirm-group button.danger {
+  color: #d6785a;
+  border-color: #d6785a;
+}
+
+.morph-drawer {
+  max-height: 0;
+  overflow: hidden;
+  transition: max-height 220ms ease;
+}
+
+.morph-drawer.open {
+  max-height: 260px;
+}
+
+.morph-drawer .drawer-inner {
   display: flex;
   flex-direction: column;
   gap: 4px;
+  padding: 8px 10px;
+  background: var(--panel);
+  border: 1px solid var(--border);
+  border-radius: 6px;
+}
+
+.morph-drawer .row {
+  margin: 0;
+}
+
+.palette-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 14px;
+  padding: 6px 8px;
+  background: var(--panel);
+  border: 1px solid var(--border);
+  border-radius: 6px;
+}
+
+.palette-group {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 4px;
+}
+
+.palette-label {
+  font-size: 11px;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  color: var(--muted);
+  margin-right: 2px;
+}
+
+.palette-chip {
+  padding: 2px 8px;
+  font-size: 12px;
+  background: var(--faint);
+  border: 1px solid var(--border);
+  border-radius: 999px;
+  cursor: grab;
+}
+
+.palette-chip:hover {
+  border-color: var(--accent);
+  color: var(--accent);
+}
+
+.palette-chip.tag {
+  color: var(--accent);
 }
 
 .chip-row {

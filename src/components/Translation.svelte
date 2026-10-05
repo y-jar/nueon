@@ -6,6 +6,9 @@
   import * as api from "../lib/api";
   import { ui } from "../lib/state.svelte";
   import InterlinearGloss from "./InterlinearGloss.svelte";
+  import TranslationToolbar from "./translation/TranslationToolbar.svelte";
+  import MorphologyDrawer from "./translation/MorphologyDrawer.svelte";
+  import SlotPalette from "./translation/SlotPalette.svelte";
 
   interface SlotItem {
     id: string;
@@ -19,9 +22,7 @@
   let slots = $state<SlotItem[]>([]);
   let separator = $state(" ");
   let affixes = $state<api.AffixRule[]>([]);
-  let newAffixKind = $state("suffix");
-  let newAffixEnglish = $state("");
-  let newAffixConlang = $state("");
+  let showMorphology = $state(false);
   let inputText = $state("");
   let choices = $state<Record<string, string>>({});
   let report = $state<api.TranslationReport | null>(null);
@@ -29,6 +30,10 @@
     Record<number, { table: string; wordname: string; tags: string }>
   >({});
   let error = $state("");
+
+  const hasPreset = $derived(
+    presets.some((preset) => preset.preset_name === draftName),
+  );
 
   // Tag palette = union of all table tag names.
   const palette = $derived(
@@ -80,22 +85,18 @@
     }
   }
 
-  async function addAffix() {
-    const english = newAffixEnglish.trim();
-    const conlang = newAffixConlang.trim();
-    if (!english || !conlang) return;
-    affixes = [
-      ...affixes,
-      { kind: newAffixKind as api.AffixKind, english, conlang },
-    ];
-    newAffixEnglish = "";
-    newAffixConlang = "";
-    await persistOptions();
+  function addAffix(rule: api.AffixRule) {
+    affixes = [...affixes, rule];
+    persistOptions();
   }
 
-  async function removeAffix(index: number) {
+  function removeAffix(index: number) {
     affixes = affixes.filter((_, i) => i !== index);
-    await persistOptions();
+    persistOptions();
+  }
+
+  function toggleMorphology() {
+    showMorphology = !showMorphology;
   }
 
   async function exportPresets() {
@@ -275,139 +276,88 @@
 </script>
 
 <div class="translation">
-  <div class="grid-toolbar">
-    <select
-      onchange={(e) => {
-        const value = e.currentTarget.value;
-        if (value) loadPreset(value);
-        e.currentTarget.value = "";
-      }}
-    >
-      <option value="">{$t("translation.loadPreset")}</option>
-      {#each presets as preset (preset.preset_name)}
-        <option value={preset.preset_name}>{preset.preset_name}</option>
-      {/each}
-    </select>
-    <input placeholder={$t("translation.presetName")} bind:value={draftName} />
-    <button onclick={savePreset}>{$t("translation.savePreset")}</button>
-    {#if presets.some((p) => p.preset_name === draftName)}
-      <button onclick={() => deletePreset(draftName)}>{$t("translation.delete")}</button>
+  <TranslationToolbar
+    {presets}
+    bind:draftName
+    {hasPreset}
+    {showMorphology}
+    onLoad={loadPreset}
+    onSave={savePreset}
+    onDelete={() => deletePreset(draftName)}
+    onExport={exportPresets}
+    onImport={importPresets}
+    onToggleMorphology={toggleMorphology}
+  />
+
+  <MorphologyDrawer
+    open={showMorphology}
+    {affixes}
+    onAdd={addAffix}
+    onRemove={removeAffix}
+  />
+
+  <SlotPalette
+    tags={palette}
+    onAddTag={(name) => addSlot({ kind: "required_tag", tag: name })}
+    onAddPrimitive={(slot) => addSlot(slot)}
+  />
+
+  <div
+    class="slot-list"
+    use:dndzone={{ items: slots, flipDurationMs: 120, type: "clause" }}
+    onconsider={handleDnd}
+    onfinalize={handleDnd}
+  >
+    {#each slots as item (item.id)}
+      <div class="slot-card">
+        <span class="grip">⠿</span>
+        {#if item.slot.kind === "required_tag"}
+          <span>#</span>
+          <select
+            value={item.slot.tag}
+            onpointerdown={(e) => e.stopPropagation()}
+            onchange={(e) =>
+              updateSlot(item.id, {
+                kind: "required_tag",
+                tag: e.currentTarget.value,
+              })}
+          >
+            {#each palette as name (name)}
+              <option value={name}>{name}</option>
+            {/each}
+          </select>
+        {:else if item.slot.kind === "literal"}
+          <input
+            value={item.slot.text}
+            onpointerdown={(e) => e.stopPropagation()}
+            onblur={(e) =>
+              updateSlot(item.id, {
+                kind: "literal",
+                text: e.currentTarget.value,
+              })}
+          />
+        {:else if item.slot.kind === "wildcard"}
+          <em>{$t("translation.wildcardLabel")}</em>
+        {:else}
+          <em>{$t("translation.spacerLabel")}</em>
+          <input
+            value={item.slot.text ?? ""}
+            placeholder={separator}
+            size="4"
+            onpointerdown={(e) => e.stopPropagation()}
+            onblur={(e) =>
+              updateSlot(item.id, {
+                kind: "spacer",
+                text: e.currentTarget.value || null,
+              })}
+          />
+        {/if}
+        <button onclick={() => removeSlot(item.id)}>✕</button>
+      </div>
+    {/each}
+    {#if slots.length === 0}
+      <p class="muted">{$t("translation.dropHint")}</p>
     {/if}
-    <button onclick={exportPresets}>{$t("translation.exportPresets")}</button>
-    <button onclick={importPresets}>{$t("translation.importPresets")}</button>
-  </div>
-
-  <details class="options">
-    <summary>{$t("translation.morphology")}</summary>
-    <div class="picker-body">
-      {#each affixes as rule, index (index)}
-        <div class="row">
-          <span class="muted">{rule.kind}</span>
-          <span class="mono">{rule.english} → {rule.conlang}</span>
-          <button onclick={() => removeAffix(index)}>✕</button>
-        </div>
-      {/each}
-      <div class="row">
-        <select bind:value={newAffixKind}>
-          <option value="suffix">{$t("translation.suffix")}</option>
-          <option value="prefix">{$t("translation.prefix")}</option>
-        </select>
-        <input
-          placeholder={$t("translation.englishAffix")}
-          bind:value={newAffixEnglish}
-        />
-        <input
-          placeholder={$t("translation.conlangAffix")}
-          bind:value={newAffixConlang}
-        />
-        <button onclick={addAffix}>{$t("translation.add")}</button>
-      </div>
-    </div>
-  </details>
-
-  <div class="builder">
-    <div class="palette">
-      <div class="pane-title">{$t("translation.tags")}</div>
-      {#each palette as name (name)}
-        <button
-          class="chip"
-          onclick={() => addSlot({ kind: "required_tag", tag: name })}
-          >#{name}</button
-        >
-      {/each}
-      <div class="pane-title">{$t("translation.add")}</div>
-      <div class="chip-row">
-        <button
-          class="chip"
-          onclick={() => addSlot({ kind: "literal", text: "ka" })}
-          >{$t("translation.literal")}</button
-        >
-        <button class="chip" onclick={() => addSlot({ kind: "wildcard" })}
-          >{$t("translation.wildcard")}</button
-        >
-        <button class="chip" onclick={() => addSlot({ kind: "spacer" })}
-          >{$t("translation.spacer")}</button
-        >
-      </div>
-    </div>
-
-    <div
-      class="slot-list"
-      use:dndzone={{ items: slots, flipDurationMs: 120 }}
-      onconsider={handleDnd}
-      onfinalize={handleDnd}
-    >
-      {#each slots as item (item.id)}
-        <div class="slot-card">
-          <span class="grip">⠿</span>
-          {#if item.slot.kind === "required_tag"}
-            <span>#</span>
-            <select
-              value={item.slot.tag}
-              onpointerdown={(e) => e.stopPropagation()}
-              onchange={(e) =>
-                updateSlot(item.id, {
-                  kind: "required_tag",
-                  tag: e.currentTarget.value,
-                })}
-            >
-              {#each palette as name (name)}
-                <option value={name}>{name}</option>
-              {/each}
-            </select>
-          {:else if item.slot.kind === "literal"}
-            <input
-              value={item.slot.text}
-              onpointerdown={(e) => e.stopPropagation()}
-              onblur={(e) =>
-                updateSlot(item.id, {
-                  kind: "literal",
-                  text: e.currentTarget.value,
-                })}
-            />
-          {:else if item.slot.kind === "wildcard"}
-            <em>{$t("translation.wildcardLabel")}</em>
-          {:else}
-            <em>{$t("translation.spacerLabel")}</em>
-            <input
-              value={item.slot.text ?? ""}
-              placeholder={separator}
-              size="4"
-              onpointerdown={(e) => e.stopPropagation()}
-              onblur={(e) =>
-                updateSlot(item.id, {
-                  kind: "spacer",
-                  text: e.currentTarget.value || null,
-                })}
-            />
-          {/if}
-          <button onclick={() => removeSlot(item.id)}>✕</button>
-        </div>
-      {/each}
-      {#if slots.length === 0}
-        <p class="muted">{$t("translation.emptyHint")}</p>
-      {/if}
-    </div>
   </div>
 
   <div class="runner">
