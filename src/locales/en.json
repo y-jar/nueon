@@ -122,6 +122,7 @@
     "wordname": "wordname",
     "tagsComma": "tags (comma)",
     "create": "＋ Create",
+    "draft": "＋ draft",
     "unfilledSlots": "Unfilled slots",
     "slot": "slot {index}",
     "breakdown": "Breakdown",

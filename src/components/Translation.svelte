@@ -11,6 +11,8 @@
     slot: api.ClauseSlot;
   }
 
+  const DRAFT_TAG = "draft";
+
   let presets = $state<api.SyntaxGrid[]>([]);
   let draftName = $state($t("translation.newPreset"));
   let slots = $state<SlotItem[]>([]);
@@ -226,6 +228,23 @@
         token.text,
         tags,
       );
+      drafts = { ...drafts };
+      await run();
+      error = "";
+    } catch (e) {
+      error = String(e);
+    }
+  }
+
+  async function createDraft(index: number) {
+    const token = report?.tokens[index];
+    const table =
+      missingDraft(index).table || ui.currentTable || ui.tables[0]?.name;
+    if (!token || !table) return;
+    const typed = missingDraft(index).wordname.trim();
+    const wordname = typed || `*${token.text}*`;
+    try {
+      await api.createTranslationWord(table, wordname, token.text, [DRAFT_TAG]);
       drafts = { ...drafts };
       await run();
       error = "";
@@ -458,6 +477,9 @@
             />
             <button onclick={() => createMissing(index)}
               >{$t("translation.create")}</button
+            >
+            <button onclick={() => createDraft(index)}
+              >{$t("translation.draft")}</button
             >
           </div>
         {/each}
