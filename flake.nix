@@ -56,6 +56,16 @@
         src = ./.;
         cargoLock.lockFile = ./Cargo.lock;
 
+        # Build the Tauri app with the production `custom-protocol` feature so
+        # `generate_context!` embeds the built frontend instead of pointing at
+        # the Vite dev server (http://localhost:1420).
+        cargoBuildFlags = [
+          "-p"
+          "langloom-tauri"
+          "--features"
+          "custom-protocol"
+        ];
+
         nativeBuildInputs = with pkgs; [
           pkg-config
           wrapGAppsHook3

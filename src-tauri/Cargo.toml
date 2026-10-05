@@ -24,3 +24,8 @@ serde = { version = "1", features = ["derive"] }
 serde_json = "1"
 uuid = { version = "1", features = ["serde"] }
 langloom-core = { path = "../crates/langloom-core" }
+
+[features]
+# Production builds embed the built frontend and skip the dev-server URL.
+# Enabled by the Nix package (see flake.nix); the Tauri CLI sets it for `tauri build`.
+custom-protocol = ["tauri/custom-protocol"]
