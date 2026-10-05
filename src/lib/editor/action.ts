@@ -21,13 +21,15 @@ import {
   setWordIndex,
   wordIndexField,
 } from "./dictionary";
-import { livePreview } from "./livePreview";
+import { livePreview, setAssetBase } from "./livePreview";
 import { highlight, theme } from "./theme";
 
 export interface EditorParams {
   path: string;
   content: string;
   index: WordIndex;
+  /** Absolute `notes/` directory for resolving local images. */
+  assetBase: string;
   onDirty: (dirty: boolean) => void;
   onSave: (path: string, text: string) => Promise<void>;
 }
@@ -92,6 +94,7 @@ export const codemirror: Action<HTMLElement, EditorParams> = (node, params) => {
   });
 
   view.dispatch({ effects: setWordIndex.of(params.index) });
+  setAssetBase(params.assetBase);
 
   async function flush(): Promise<void> {
     if (timer) {
@@ -132,6 +135,7 @@ export const codemirror: Action<HTMLElement, EditorParams> = (node, params) => {
             // ignore; the note remains on disk as last saved
           }
           current = next;
+          setAssetBase(next.assetBase);
           view.dispatch({
             changes: { from: 0, to: view.state.doc.length, insert: next.content },
             selection: { anchor: 0 },
@@ -142,6 +146,10 @@ export const codemirror: Action<HTMLElement, EditorParams> = (node, params) => {
       } else {
         if (next.index !== current.index) {
           view.dispatch({ effects: setWordIndex.of(next.index) });
+        }
+        if (next.assetBase !== current.assetBase) {
+          setAssetBase(next.assetBase);
+          view.dispatch({});
         }
         current = next;
       }

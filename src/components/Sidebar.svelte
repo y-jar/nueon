@@ -5,13 +5,28 @@
     createNote,
     createFolder,
     selectTable,
+    renamePath,
+    consumeNew,
+    openContextMenu,
   } from "../lib/state.svelte";
   import Tree from "./Tree.svelte";
 
   let newName = $state("");
   let newKind = $state<"note" | "folder" | null>(null);
+  let newBase = $state("");
   let wsMenu = $state(false);
   let error = $state("");
+
+  // Context-menu "new note/folder here" requests.
+  $effect(() => {
+    const request = ui.newRequest;
+    if (request) {
+      newKind = request.kind;
+      newBase = request.base;
+      newName = "";
+      consumeNew();
+    }
+  });
 
   async function submitNew() {
     const name = newName.trim();
@@ -19,16 +34,33 @@
       newKind = null;
       return;
     }
+    const target = newBase ? `${newBase}/${name}` : name;
     error = "";
     try {
-      if (newKind === "note") await createNote(name);
-      else await createFolder(name);
+      if (newKind === "note") await createNote(target);
+      else await createFolder(target);
     } catch (e) {
       error = String(e);
     } finally {
       newName = "";
       newKind = null;
     }
+  }
+
+  function onRootDragOver(event: DragEvent) {
+    if (ui.dragPath) {
+      event.preventDefault();
+    }
+  }
+
+  async function onRootDrop(event: DragEvent) {
+    event.preventDefault();
+    const src = ui.dragPath;
+    ui.dragPath = null;
+    if (!src) return;
+    const name = src.split("/").pop() ?? src;
+    if (name === src) return;
+    await renamePath(src, name);
   }
 </script>
 
@@ -66,7 +98,17 @@
   {/if}
   {#if error}<p class="error">{error}</p>{/if}
 
-  <div class="tree">
+  <div
+    class="tree"
+    role="tree"
+    tabindex="-1"
+    ondragover={onRootDragOver}
+    ondrop={onRootDrop}
+    oncontextmenu={(e) => {
+      e.preventDefault();
+      openContextMenu(e.clientX, e.clientY, "", true);
+    }}
+  >
     {#if ui.tree.length}
       <Tree nodes={ui.tree} depth={0} />
     {:else}

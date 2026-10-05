@@ -15,6 +15,7 @@
         path: ui.selected,
         content: ui.noteContent,
         index: ui.wordIndex,
+        assetBase: ui.root ? `${ui.root}/notes` : "",
         onDirty: (dirty: boolean) => (ui.dirty = dirty),
         onSave: api.saveNote,
       }}

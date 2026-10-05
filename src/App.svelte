@@ -8,6 +8,7 @@
   import Translation from "./components/Translation.svelte";
   import Inspector from "./components/Inspector.svelte";
   import GitPanel from "./components/GitPanel.svelte";
+  import ContextMenu from "./components/ContextMenu.svelte";
 
   onMount(() => {
     init();
@@ -56,3 +57,5 @@
 {:else}
   <Onboarding />
 {/if}
+
+<ContextMenu />

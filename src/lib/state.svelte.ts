@@ -21,6 +21,15 @@ export const ui = $state({
   nameById: {} as Record<string, string>,
   gitPanelOpen: false,
   vcsRevision: 0,
+  dragPath: null as string | null,
+  contextMenu: null as {
+    x: number;
+    y: number;
+    path: string;
+    isDir: boolean;
+  } | null,
+  renameTarget: null as string | null,
+  newRequest: null as { kind: "note" | "folder"; base: string } | null,
 });
 
 export async function refreshWorkspaces(): Promise<void> {
@@ -98,6 +107,37 @@ export function setView(view: View): void {
 
 export function toggleGitPanel(): void {
   ui.gitPanelOpen = !ui.gitPanelOpen;
+}
+
+export function openContextMenu(
+  x: number,
+  y: number,
+  path: string,
+  isDir: boolean,
+): void {
+  ui.contextMenu = { x, y, path, isDir };
+}
+
+export function closeContextMenu(): void {
+  ui.contextMenu = null;
+}
+
+export function requestRename(path: string): void {
+  ui.renameTarget = path;
+  ui.contextMenu = null;
+}
+
+export function consumeRename(): void {
+  ui.renameTarget = null;
+}
+
+export function requestNew(kind: "note" | "folder", base: string): void {
+  ui.newRequest = { kind, base };
+  ui.contextMenu = null;
+}
+
+export function consumeNew(): void {
+  ui.newRequest = null;
 }
 
 /** Initial load + backend event subscription. */

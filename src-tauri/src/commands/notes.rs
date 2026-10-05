@@ -90,6 +90,15 @@ pub fn move_or_rename_note(
     old_path: String,
     new_path: String,
 ) -> Result<(), String> {
+    let old_path = old_path.trim_matches('/').to_string();
+    let new_path = new_path.trim_matches('/').to_string();
+    if new_path.is_empty() {
+        return Err("target path is empty".to_string());
+    }
+    // Cycle prevention: a folder cannot be moved into itself or a subfolder.
+    if new_path == old_path || new_path.starts_with(&format!("{old_path}/")) {
+        return Err("cannot move a folder into itself or its own subfolder".to_string());
+    }
     let mut state = state.lock().map_err(|_| "state poisoned".to_string())?;
     state
         .workspace_mut()?
