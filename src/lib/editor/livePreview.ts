@@ -8,6 +8,8 @@ import {
   WidgetType,
 } from "@codemirror/view";
 import { convertFileSrc } from "@tauri-apps/api/core";
+import katex from "katex";
+import "katex/dist/katex.min.css";
 
 // Absolute `notes/` directory, used to resolve local image references.
 let assetBase = "";
@@ -155,6 +157,52 @@ class FootnoteWidget extends WidgetType {
   }
 }
 
+/** Render TeX with KaTeX; invalid input falls back to raw text. */
+class MathWidget extends WidgetType {
+  constructor(
+    readonly tex: string,
+    readonly display: boolean,
+  ) {
+    super();
+  }
+
+  eq(other: MathWidget): boolean {
+    return other.tex === this.tex && other.display === this.display;
+  }
+
+  toDOM(): HTMLElement {
+    const el = document.createElement(this.display ? "div" : "span");
+    el.className = this.display ? "cm-math-display" : "cm-math";
+    try {
+      katex.render(this.tex, el, {
+        displayMode: this.display,
+        throwOnError: false,
+      });
+    } catch {
+      el.textContent = this.tex;
+    }
+    return el;
+  }
+}
+
+/** Render an HTML block verbatim (user-authored notes). */
+class HtmlWidget extends WidgetType {
+  constructor(readonly html: string) {
+    super();
+  }
+
+  eq(other: HtmlWidget): boolean {
+    return other.html === this.html;
+  }
+
+  toDOM(): HTMLElement {
+    const wrap = document.createElement("div");
+    wrap.className = "cm-html-block";
+    wrap.innerHTML = this.html;
+    return wrap;
+  }
+}
+
 function activeLines(state: EditorView["state"]): Set<number> {
   const lines = new Set<number>();
   for (const range of state.selection.ranges) {
@@ -254,6 +302,16 @@ function decorateLine(
     conceal(ranges, start + 1 + match[1].length, start + match[0].length);
   }
 
+  const inlineMath = /(^|[^$])\$([^$\n]+?)\$(?!\$)/g;
+  while ((match = inlineMath.exec(text))) {
+    const start = from + match.index + match[1].length;
+    ranges.push(
+      Decoration.replace({
+        widget: new MathWidget(match[2], false),
+      }).range(start, start + match[2].length + 2),
+    );
+  }
+
   const image = /!\[([^\]]*)\]\(([^)]+)\)/g;
   while ((match = image.exec(text))) {
     const start = from + match.index;
@@ -330,6 +388,75 @@ function build(view: EditorView): DecorationSet {
           );
           if (state.doc.line(last).to >= visible.to) break;
           pos = state.doc.line(last).to + 1;
+          continue;
+        }
+      }
+
+      // Display math block: $$ ... $$ (single- or multi-line).
+      if (line.text.trimStart().startsWith("$$")) {
+        let last = line.number;
+        let raw = line.text;
+        if (raw.indexOf("$$", raw.indexOf("$$") + 2) === -1) {
+          while (last < state.doc.lines) {
+            last += 1;
+            const nextText = state.doc.line(last).text;
+            raw += `\n${nextText}`;
+            if (nextText.includes("$$")) break;
+          }
+        }
+        const innerStart = raw.indexOf("$$") + 2;
+        const innerEnd = raw.indexOf("$$", innerStart);
+        if (innerEnd !== -1) {
+          let blockActive = false;
+          for (let n = line.number; n <= last; n += 1) {
+            if (active.has(n)) {
+              blockActive = true;
+              break;
+            }
+          }
+          if (!blockActive) {
+            const blockFrom = line.from;
+            const blockTo = state.doc.line(last).to;
+            ranges.push(
+              Decoration.replace({
+                widget: new MathWidget(raw.slice(innerStart, innerEnd), true),
+              }).range(blockFrom, blockTo),
+            );
+            if (blockTo >= visible.to) break;
+            pos = blockTo + 1;
+            continue;
+          }
+        }
+      }
+
+      // Raw HTML block: consecutive non-blank lines starting with a tag.
+      if (/^\s*<(?!https?:)[a-zA-Z!/]/.test(line.text)) {
+        let last = line.number;
+        while (
+          last < state.doc.lines &&
+          state.doc.line(last + 1).text.trim() !== ""
+        ) {
+          last += 1;
+        }
+        let blockActive = false;
+        for (let n = line.number; n <= last; n += 1) {
+          if (active.has(n)) {
+            blockActive = true;
+            break;
+          }
+        }
+        if (!blockActive) {
+          const blockFrom = line.from;
+          const blockTo = state.doc.line(last).to;
+          ranges.push(
+            Decoration.replace({
+              widget: new HtmlWidget(
+                state.doc.sliceString(blockFrom, blockTo),
+              ),
+            }).range(blockFrom, blockTo),
+          );
+          if (blockTo >= visible.to) break;
+          pos = blockTo + 1;
           continue;
         }
       }

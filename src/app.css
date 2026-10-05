@@ -1012,3 +1012,19 @@ table.dict-grid td textarea:focus {
   display: flex;
   gap: 6px;
 }
+
+/* -- live preview math + HTML -------------------------------------------- */
+
+.cm-math-display {
+  display: block;
+  text-align: center;
+  margin: 6px 0;
+}
+
+.cm-math {
+  padding: 0 1px;
+}
+
+.cm-html-block {
+  margin: 6px 0;
+}

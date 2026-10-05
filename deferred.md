@@ -9,13 +9,13 @@ were completed during the Tauri migration (R0–R8).
 ## Notes editor
 
 - ~~Inline images and image files stored in the workspace.~~ (R7)
-- ~~GFM tables, task lists (`- [ ]`), footnotes, HTML blocks, inline/display math.~~ (R7)
+- ~~GFM tables, task lists (`- [ ]`), footnotes.~~ (R7)
 - Cross-block keyboard navigation (Up/Down across region boundaries, Home/End).
 - ~~Find/replace within a note.~~ (R7)
 - ~~Optional debounced disk writes (currently every keystroke).~~ (R7)
 - ~~Cache the dictionary word index (currently rebuilt on each rendered frame).~~ (R7)
-- Inline/display **math via KaTeX** rendering. (D7)
-- HTML block rendering. (D7)
+- ~~Inline/display **math via KaTeX** rendering.~~ (D7)
+- ~~HTML block rendering.~~ (D7)
 
 ## Dictionary grid
 
