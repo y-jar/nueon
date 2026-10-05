@@ -11,10 +11,18 @@ use langloom_core::{
     WorkspaceEntry,
 };
 
-use super::changed;
+use super::{changed, destroy_windows, secondary_labels};
 use crate::state::{default_name, AppState};
 
 type Shared = Mutex<AppState>;
+
+/// Mark every secondary window as app-closed (so its saved layout survives)
+/// and return the labels to destroy once the state lock is released.
+fn retire_secondary_windows(app: &AppHandle, state: &mut AppState) -> Vec<String> {
+    let labels = secondary_labels(app);
+    state.silent_close.extend(labels.iter().cloned());
+    labels
+}
 
 /// Registered workspaces (name + path).
 #[tauri::command]
@@ -62,12 +70,14 @@ pub fn workspace_open(
     let root = workspace.root_path.display().to_string();
 
     let mut state = state.lock().map_err(|_| "state poisoned".to_string())?;
+    let stale = retire_secondary_windows(&app, &mut state);
     state.workspace = Some(workspace);
     let path = PathBuf::from(path);
     state.global.add(path.clone(), default_name(&path));
     state.global.last = Some(path);
     let _ = state.global.save();
     drop(state);
+    destroy_windows(&app, &stale);
 
     changed(&app, "workspace");
     changed(&app, "notes");
@@ -87,11 +97,13 @@ pub fn workspace_create(
     let root = workspace.root_path.display().to_string();
 
     let mut state = state.lock().map_err(|_| "state poisoned".to_string())?;
+    let stale = retire_secondary_windows(&app, &mut state);
     state.workspace = Some(workspace);
     state.global.add(target.clone(), name);
     state.global.last = Some(target);
     let _ = state.global.save();
     drop(state);
+    destroy_windows(&app, &stale);
 
     changed(&app, "workspace");
     changed(&app, "notes");

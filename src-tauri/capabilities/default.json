@@ -1,6 +1,6 @@
 {
   "identifier": "default",
-  "description": "Default capability for the main window.",
-  "windows": ["main"],
+  "description": "Default capability for the main window and torn-off tab windows.",
+  "windows": ["main", "tear-*"],
   "permissions": ["core:default", "opener:default", "dialog:default"]
 }

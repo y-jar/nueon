@@ -189,6 +189,12 @@ export interface LayoutState {
   windows?: SecondaryWindow[];
 }
 
+export const windowSpawn = (
+  tab: TabLayout,
+  geometry?: WindowGeometry | null,
+): Promise<string> => invoke("window_spawn", { tab, geometry: geometry ?? null });
+export const windowCloseSelf = (): Promise<void> => invoke("window_close_self");
+export const windowsRestore = (): Promise<number> => invoke("windows_restore");
 export const layoutStateGet = (): Promise<LayoutState> =>
   invoke("layout_state_get");
 export const tilingSave = (

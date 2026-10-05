@@ -22,6 +22,8 @@
     type TabGroup,
   } from "../lib/state.svelte";
 
+  import { isMainWindow } from "../lib/window";
+
   let { group }: { group: TabGroup } = $props();
 
   let marker = $state<{ id: string; after: boolean } | null>(null);
@@ -77,13 +79,15 @@
 </script>
 
 <div class="tabbar">
-  <button
-    class="tab-action"
-    title={$t("activity.toggleSidebar")}
-    onclick={toggleSidebar}
-  >
-    <PanelLeft size={16} />
-  </button>
+  {#if isMainWindow}
+    <button
+      class="tab-action"
+      title={$t("activity.toggleSidebar")}
+      onclick={toggleSidebar}
+    >
+      <PanelLeft size={16} />
+    </button>
+  {/if}
 
   <div
     class="tab-strip"
@@ -148,6 +152,7 @@
     {/each}
   </div>
 
+  {#if isMainWindow}
   <button
     class="tab-action"
     class:active={ui.inspectorOpen}
@@ -160,4 +165,5 @@
   >
     <PanelRight size={16} />
   </button>
+  {/if}
 </div>

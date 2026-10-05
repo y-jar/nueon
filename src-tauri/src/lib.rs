@@ -46,6 +46,30 @@ fn background_pump(handle: tauri::AppHandle) {
     }
 }
 
+/// Persist secondary windows' geometry, then close them so quitting the main
+/// window ends the whole app while their layout stays saved for next launch.
+fn quit_secondary_windows(app: &tauri::AppHandle) {
+    let labels = commands::secondary_labels(app);
+    if labels.is_empty() {
+        return;
+    }
+    {
+        let state = app.state::<Mutex<AppState>>();
+        let Ok(mut guard) = state.lock() else {
+            return;
+        };
+        for label in &labels {
+            if let Some(geometry) = commands::window_geometry(app, label) {
+                if let Some(workspace) = guard.workspace.as_mut() {
+                    let _ = workspace.set_window_geometry(label, geometry);
+                }
+            }
+            guard.silent_close.insert(label.clone());
+        }
+    }
+    commands::destroy_windows(app, &labels);
+}
+
 /// Build and run the Tauri application.
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
@@ -69,27 +93,46 @@ pub fn run() {
             }
             Ok(())
         })
-        .on_window_event(|window, event| match event {
-            tauri::WindowEvent::CloseRequested { .. } => {
-                let app_state = window.state::<Mutex<AppState>>();
-                let mut guard = match app_state.lock() {
-                    Ok(guard) => guard,
-                    Err(_) => return,
-                };
-                if let Some(workspace) = guard.workspace.as_mut() {
-                    let _ = workspace.close_checkin();
+        .on_window_event(|window, event| {
+            let label = window.label().to_string();
+            match event {
+                tauri::WindowEvent::CloseRequested { .. } if label == "main" => {
+                    quit_secondary_windows(window.app_handle());
+                    let app_state = window.state::<Mutex<AppState>>();
+                    let mut guard = match app_state.lock() {
+                        Ok(guard) => guard,
+                        Err(_) => return,
+                    };
+                    if let Some(workspace) = guard.workspace.as_mut() {
+                        let _ = workspace.close_checkin();
+                    }
                 }
+                tauri::WindowEvent::Resized(size) if label == "main" => {
+                    let app_state = window.state::<Mutex<AppState>>();
+                    let mut guard = match app_state.lock() {
+                        Ok(guard) => guard,
+                        Err(_) => return,
+                    };
+                    guard.global.set_window_size(size.width, size.height);
+                    let _ = guard.global.save();
+                }
+                // A secondary window the user closed is forgotten; ones the
+                // app closes itself (quit, workspace switch) stay saved.
+                tauri::WindowEvent::Destroyed if label != "main" => {
+                    let app_state = window.state::<Mutex<AppState>>();
+                    let mut guard = match app_state.lock() {
+                        Ok(guard) => guard,
+                        Err(_) => return,
+                    };
+                    if guard.silent_close.remove(&label) {
+                        return;
+                    }
+                    if let Some(workspace) = guard.workspace.as_mut() {
+                        let _ = workspace.remove_window_layout(&label);
+                    }
+                }
+                _ => {}
             }
-            tauri::WindowEvent::Resized(size) => {
-                let app_state = window.state::<Mutex<AppState>>();
-                let mut guard = match app_state.lock() {
-                    Ok(guard) => guard,
-                    Err(_) => return,
-                };
-                guard.global.set_window_size(size.width, size.height);
-                let _ = guard.global.save();
-            }
-            _ => {}
         })
         .invoke_handler(tauri::generate_handler![
             ping,
@@ -109,6 +152,9 @@ pub fn run() {
             commands::ui_layout_set,
             commands::layout_state_get,
             commands::tiling_save,
+            commands::window_spawn,
+            commands::window_close_self,
+            commands::windows_restore,
             commands::list_workspace,
             commands::read_note,
             commands::save_note,

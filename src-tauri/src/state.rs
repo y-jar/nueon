@@ -1,5 +1,6 @@
 //! Shared application state owned by the Tauri runtime.
 
+use std::collections::HashSet;
 use std::path::{Path, PathBuf};
 
 use langloom_core::global::GlobalConfig;
@@ -12,6 +13,9 @@ pub struct AppState {
     pub global: GlobalConfig,
     /// The currently open workspace, if any.
     pub workspace: Option<Workspace>,
+    /// Secondary windows being closed by the app itself (quit or workspace
+    /// switch); their saved layout is kept instead of pruned.
+    pub silent_close: HashSet<String>,
 }
 
 impl AppState {
@@ -47,7 +51,11 @@ impl AppState {
         if pruned {
             let _ = global.save();
         }
-        Self { global, workspace }
+        Self {
+            global,
+            workspace,
+            silent_close: HashSet::new(),
+        }
     }
 
     /// The open workspace, or an error string.

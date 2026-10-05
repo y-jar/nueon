@@ -668,6 +668,19 @@ export async function restoreTiling(layout: api.TilingLayout): Promise<void> {
       : live[0].id;
 }
 
+/** Restore this secondary window's saved tiling and enable persistence. */
+export async function restoreSecondaryTiling(label: string): Promise<void> {
+  try {
+    const state = await api.layoutStateGet();
+    const saved = state.windows?.find((window) => window.label === label);
+    if (saved) await restoreTiling(saved.tiling);
+  } catch (error) {
+    ui.status = `could not restore window layout: ${String(error)}`;
+  } finally {
+    ui.layoutReady = true;
+  }
+}
+
 /** Restore the saved main-window layout (if any) and enable persistence. */
 export async function restoreMainTiling(): Promise<void> {
   try {

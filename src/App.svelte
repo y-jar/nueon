@@ -9,9 +9,10 @@
     activeGroup,
     serializeTiling,
     restoreMainTiling,
+    restoreSecondaryTiling,
     type Activity,
   } from "./lib/state.svelte";
-  import { windowLabel } from "./lib/window";
+  import { windowLabel, isMainWindow } from "./lib/window";
   import Onboarding from "./components/Onboarding.svelte";
   import ActivityBar from "./components/ActivityBar.svelte";
   import SidebarHost from "./components/SidebarHost.svelte";
@@ -25,6 +26,12 @@
 
   onMount(async () => {
     await init();
+    if (!isMainWindow) {
+      // Torn-off windows show only tab groups; they restore their own tiling.
+      await restoreSecondaryTiling(windowLabel);
+      layoutLoaded = true;
+      return;
+    }
     try {
       const layout = await api.uiLayoutGet();
       ui.activity = ACTIVITIES.includes(layout.activity as Activity)
@@ -40,6 +47,14 @@
     // Restore the translation tool as a tab when it was the active activity.
     if (ui.activity === "translation") await openTranslation();
     layoutLoaded = true;
+  });
+
+  // A torn-off window with no tabs left has nothing to show: close it.
+  $effect(() => {
+    if (isMainWindow || !ui.layoutReady) return;
+    if (ui.groups.every((group) => group.tabs.length === 0)) {
+      api.windowCloseSelf().catch(() => {});
+    }
   });
 
   // Persist this window's tab groups and splits (debounced).
@@ -65,7 +80,7 @@
       inspector_open: ui.inspectorOpen,
       inspector_dock: ui.inspectorDock,
     };
-    if (!layoutLoaded || !ui.root) return;
+    if (!isMainWindow || !layoutLoaded || !ui.root) return;
     api.uiLayoutSet(snapshot).catch(() => {});
   });
 
@@ -88,7 +103,13 @@
   });
 </script>
 
-{#if ui.root && !ui.showWorkspacePicker}
+{#if ui.root && !isMainWindow}
+  <div class="shell secondary">
+    <main class="center">
+      <SplitView node={ui.splitRoot} />
+    </main>
+  </div>
+{:else if ui.root && !ui.showWorkspacePicker}
   <div
     class="shell"
     class:has-sidebar={ui.sidebarOpen}

@@ -89,6 +89,12 @@ textarea:focus {
   color: var(--text);
 }
 
+.shell.secondary {
+  grid-template-columns: 1fr;
+  grid-template-rows: 1fr;
+  grid-template-areas: "center";
+}
+
 .shell.has-sidebar {
   grid-template-columns: 48px 260px 1fr;
   grid-template-areas:

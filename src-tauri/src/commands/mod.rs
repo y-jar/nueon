@@ -4,12 +4,14 @@ mod dictionary;
 mod notes;
 mod translation;
 mod vcs;
+mod windows;
 mod workspace;
 
 pub use dictionary::*;
 pub use notes::*;
 pub use translation::*;
 pub use vcs::*;
+pub use windows::*;
 pub use workspace::*;
 
 use tauri::{AppHandle, Emitter};
