@@ -783,8 +783,18 @@ button.wide {
 
 table.dict-grid {
   border-collapse: collapse;
-  width: 100%;
+  table-layout: fixed;
   font-size: 13px;
+}
+
+table.dict-grid td {
+  overflow: hidden;
+}
+
+table.dict-grid th > button.sort {
+  max-width: calc(100% - 8px);
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
 
 table.dict-grid th {
@@ -1976,4 +1986,38 @@ table.dict-grid th[draggable="true"] {
 .sort-ind.on {
   color: var(--accent);
   opacity: 1;
+}
+
+/* -- column resize handle ------------------------------------------------- */
+
+.col-resizer {
+  position: absolute;
+  top: 0;
+  right: -3px;
+  bottom: 0;
+  z-index: 6;
+  width: 7px;
+  cursor: col-resize;
+}
+
+.col-resizer::after {
+  content: "";
+  position: absolute;
+  top: 25%;
+  bottom: 25%;
+  left: 3px;
+  width: 1px;
+  background: var(--border);
+}
+
+.col-resizer:hover::after {
+  width: 2px;
+  left: 2px;
+  background: var(--accent);
+}
+
+body.col-resizing,
+body.col-resizing * {
+  cursor: col-resize !important;
+  user-select: none !important;
 }

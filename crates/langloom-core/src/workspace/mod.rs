@@ -1191,6 +1191,7 @@ mod tests {
             search: "ka".into(),
             hidden_columns: vec!["parent".into()],
             column_order: vec!["wordname".into(), "def".into(), "parent".into()],
+            column_widths: [("def".to_string(), 240)].into_iter().collect(),
             ..Default::default()
         };
         ws.set_grid_view("verbs", view.clone()).unwrap();

@@ -7,6 +7,7 @@
     getFilteredRowModel,
     getSortedRowModel,
     type ColumnDef,
+    type ColumnSizingState,
     type SortingState,
     type VisibilityState,
   } from "@tanstack/table-core";
@@ -43,6 +44,7 @@
   let filter = $state("");
   let columnVisibility = $state<VisibilityState>({});
   let columnOrder = $state<string[]>([]);
+  let columnSizing = $state<ColumnSizingState>({});
   let dragColumn = $state<string | null>(null);
   let dropTarget = $state<{ id: string; after: boolean } | null>(null);
   let ghostName = $state("");
@@ -85,6 +87,11 @@
     ),
   );
 
+  const DEFAULT_COLUMN_WIDTH = 180;
+  const MIN_COLUMN_WIDTH = 60;
+  const SELECT_COLUMN_WIDTH = 28;
+  const ACTION_COLUMN_WIDTH = 44;
+
   const columns = $derived<ColumnDef<api.WordEntry, string>[]>([
     {
       id: "wordname",
@@ -112,6 +119,13 @@
       data: doc.table?.entries ?? [],
       columns,
       state: {},
+      enableColumnResizing: true,
+      columnResizeMode: "onChange",
+      defaultColumn: { size: DEFAULT_COLUMN_WIDTH, minSize: MIN_COLUMN_WIDTH },
+      onColumnSizingChange: (updater) => {
+        columnSizing =
+          typeof updater === "function" ? updater(columnSizing) : updater;
+      },
       onStateChange: () => {},
       renderFallbackValue: null,
       onSortingChange: (updater) => {
@@ -150,6 +164,7 @@
         sorting,
         globalFilter: filter,
         columnVisibility,
+        columnSizing,
         // `wordname` is pinned first and never reordered.
         columnOrder: columnOrder.length
           ? ["wordname", ...columnOrder.filter((id) => id !== "wordname")]
@@ -161,6 +176,11 @@
 
   const rows = $derived(table.getRowModel().rows);
   const visibleColumns = $derived(table.getVisibleLeafColumns());
+  const tableWidth = $derived(
+    SELECT_COLUMN_WIDTH +
+      ACTION_COLUMN_WIDTH +
+      visibleColumns.reduce((sum, column) => sum + column.getSize(), 0),
+  );
 
   function tagOf(name: string): api.TagDef | undefined {
     return tagColumns.find((tag) => tag.name === name);
@@ -193,6 +213,7 @@
           view.hidden_columns.map((id) => [id, false]),
         );
         columnOrder = view.column_order ?? [];
+        columnSizing = view.column_widths ?? {};
         selectedIds = [];
         loadedTable = name;
       })
@@ -212,6 +233,9 @@
         .filter(([, visible]) => !visible)
         .map(([id]) => id),
       column_order: [...columnOrder],
+      column_widths: Object.fromEntries(
+        Object.entries(columnSizing).map(([id, width]) => [id, Math.round(width)]),
+      ),
     };
     if (!name || name !== loadedTable) return;
     if (saveTimer) clearTimeout(saveTimer);
@@ -272,7 +296,39 @@
     return current.desc ? "▼" : "▲";
   }
 
+  /** Drag a header's right edge to resize; the width is kept in TanStack state. */
+  function startResize(event: MouseEvent, id: string, startWidth: number) {
+    event.preventDefault();
+    event.stopPropagation();
+    const startX = event.clientX;
+    const onMove = (move: MouseEvent) => {
+      const width = Math.max(
+        MIN_COLUMN_WIDTH,
+        Math.round(startWidth + move.clientX - startX),
+      );
+      columnSizing = { ...columnSizing, [id]: width };
+    };
+    const onUp = () => {
+      window.removeEventListener("mousemove", onMove);
+      window.removeEventListener("mouseup", onUp);
+      document.body.classList.remove("col-resizing");
+    };
+    document.body.classList.add("col-resizing");
+    window.addEventListener("mousemove", onMove);
+    window.addEventListener("mouseup", onUp);
+  }
+
+  function resetWidth(id: string) {
+    const next = { ...columnSizing };
+    delete next[id];
+    columnSizing = next;
+  }
+
   function onColumnDragStart(event: DragEvent, id: string) {
+    if ((event.target as HTMLElement | null)?.closest(".col-resizer")) {
+      event.preventDefault();
+      return;
+    }
     dragColumn = id;
     event.dataTransfer?.setData("text/plain", id);
     if (event.dataTransfer) event.dataTransfer.effectAllowed = "move";
@@ -784,7 +840,14 @@
   {/if}
 
   <div class="grid-scroll">
-    <table class="dict-grid">
+    <table class="dict-grid" style:width="{tableWidth}px">
+      <colgroup>
+        <col style:width="{SELECT_COLUMN_WIDTH}px" />
+        {#each visibleColumns as column (column.id)}
+          <col style:width="{column.getSize()}px" />
+        {/each}
+        <col style:width="{ACTION_COLUMN_WIDTH}px" />
+      </colgroup>
       <thead>
         <tr>
           <th class="select-col">
@@ -820,6 +883,15 @@
                   >{sortIndicator(column.id)}</span
                 >
               </button>
+              <!-- svelte-ignore a11y_no_noninteractive_element_interactions -->
+              <span
+                class="col-resizer"
+                role="separator"
+                aria-orientation="vertical"
+                title={$t("grid.resizeHint")}
+                onmousedown={(e) => startResize(e, column.id, column.getSize())}
+                ondblclick={() => resetWidth(column.id)}
+              ></span>
             </th>
           {/each}
           <th></th>

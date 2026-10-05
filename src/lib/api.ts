@@ -139,6 +139,8 @@ export interface GridViewState {
   hidden_columns: string[];
   /** Column ids in display order; empty means the default order. */
   column_order: string[];
+  /** User-adjusted column widths in pixels, keyed by column id. */
+  column_widths: Record<string, number>;
 }
 
 export interface TagKindChange {

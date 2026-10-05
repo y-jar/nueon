@@ -36,6 +36,9 @@ pub struct GridViewState {
     /// Column ids in the user's preferred display order; empty means default.
     #[serde(skip_serializing_if = "Vec::is_empty")]
     pub column_order: Vec<String>,
+    /// User-adjusted column widths in pixels, keyed by column id.
+    #[serde(skip_serializing_if = "BTreeMap::is_empty")]
+    pub column_widths: BTreeMap<String, u32>,
 }
 
 /// Persisted shell layout (activity, panels) for the workspace.
@@ -126,6 +129,7 @@ mod tests {
                 column_filters: BTreeMap::from([("pos".into(), "verb".into())]),
                 hidden_columns: vec!["parent".into()],
                 column_order: vec!["wordname".into(), "def".into()],
+                column_widths: BTreeMap::from([("def".into(), 240)]),
             },
         );
         let json = serde_json::to_string(&settings).unwrap();
@@ -135,5 +139,6 @@ mod tests {
         assert_eq!(view.search, "ka");
         assert_eq!(view.hidden_columns, ["parent"]);
         assert_eq!(view.column_order, ["wordname", "def"]);
+        assert_eq!(view.column_widths["def"], 240);
     }
 }

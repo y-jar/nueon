@@ -133,6 +133,7 @@
     "addRelation": "Link word…",
     "ghostPlaceholder": "New word…",
     "addParent": "Link parent…",
+    "resizeHint": "Drag to resize; double-click to reset",
     "sortHint": "Click to sort: ascending, descending, default",
     "wordnameRequired": "A wordname is required.",
     "createFailed": "Could not create the word.",
