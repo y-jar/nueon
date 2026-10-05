@@ -99,11 +99,11 @@
     })),
   ]);
 
-  const table = $derived.by(() =>
-    createTable<api.WordEntry>({
+  const table = $derived.by(() => {
+    const instance = createTable<api.WordEntry>({
       data: doc.table?.entries ?? [],
       columns,
-      state: { sorting, globalFilter: filter, columnVisibility },
+      state: {},
       onStateChange: () => {},
       renderFallbackValue: null,
       onSortingChange: (updater) => {
@@ -128,8 +128,20 @@
           displayValue(v).toLowerCase().includes(needle),
         );
       },
-    }),
-  );
+    });
+    // The raw table-core API does not merge defaults, so supply the full
+    // state (columnPinning, expanded, ...) or `getState()` reads undefined.
+    instance.setOptions((prev) => ({
+      ...prev,
+      state: {
+        ...instance.initialState,
+        sorting,
+        globalFilter: filter,
+        columnVisibility,
+      },
+    }));
+    return instance;
+  });
 
   const rows = $derived(table.getRowModel().rows);
 
@@ -581,7 +593,7 @@
     </details>
 
     <button class="primary" onclick={() => (addWordOpen = true)}>
-      <Plus size={14} /> {$t("grid.addWord")}
+      {$t("grid.addWord")}
     </button>
 
     {#if selectedIds.length}
