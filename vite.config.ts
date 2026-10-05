@@ -15,7 +15,9 @@ export default defineConfig({
   server: {
     port: 1420,
     strictPort: true,
-    host: host || false,
+    // Bind IPv4 explicitly: `localhost` can resolve to ::1 only, which the
+    // WebKitGTK webview fails to reach (it connects over 127.0.0.1).
+    host: host || "127.0.0.1",
     hmr: host ? { protocol: "ws", host, port: 1421 } : undefined,
     watch: {
       // Tauri handles Rust sources; don't watch them here.
