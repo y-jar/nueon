@@ -5,7 +5,7 @@ use std::sync::Mutex;
 
 use tauri::{AppHandle, State};
 
-use langloom_core::{Workspace, WorkspaceEntry};
+use langloom_core::{WindowLayout, Workspace, WorkspaceEntry};
 
 use super::changed;
 use crate::state::{default_name, AppState};
@@ -163,4 +163,48 @@ pub fn workspace_delete_from_disk(
 
     changed(&app, "workspace");
     Ok(())
+}
+
+/// Read a per-conlang config section (`language`, `grammar`, `translation`,
+/// `settings`) as JSON.
+#[tauri::command]
+pub fn config_get(state: State<'_, Shared>, section: String) -> Result<serde_json::Value, String> {
+    let state = state.lock().map_err(|_| "state poisoned".to_string())?;
+    state
+        .workspace()?
+        .config_json(&section)
+        .map_err(|err| err.to_string())
+}
+
+/// Replace a per-conlang config section from JSON and persist it.
+#[tauri::command]
+pub fn config_set(
+    app: AppHandle,
+    state: State<'_, Shared>,
+    section: String,
+    value: serde_json::Value,
+) -> Result<(), String> {
+    let mut state = state.lock().map_err(|_| "state poisoned".to_string())?;
+    state
+        .workspace_mut()?
+        .set_config_json(&section, value)
+        .map_err(|err| err.to_string())?;
+    drop(state);
+    changed(&app, "config");
+    Ok(())
+}
+
+/// The persisted window geometry and dock layout.
+#[tauri::command]
+pub fn layout_get(state: State<'_, Shared>) -> Result<WindowLayout, String> {
+    let state = state.lock().map_err(|_| "state poisoned".to_string())?;
+    Ok(state.global.window.clone())
+}
+
+/// Persist whether the git pane is open.
+#[tauri::command]
+pub fn layout_set_git_panel(state: State<'_, Shared>, open: bool) -> Result<(), String> {
+    let mut state = state.lock().map_err(|_| "state poisoned".to_string())?;
+    state.global.set_git_panel_open(open);
+    state.global.save().map_err(|err| err.to_string())
 }

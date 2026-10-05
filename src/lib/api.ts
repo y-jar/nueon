@@ -298,13 +298,57 @@ export const exportPresets = (
 export const importPresets = (path: string): Promise<SyntaxGrid[]> =>
   invoke("import_presets", { path });
 
+// -- config & layout -----------------------------------------------------
+export type TextDirection = "ltr" | "rtl";
+
+export interface LanguageConfig {
+  name: string;
+  author: string;
+  description: string;
+  script: string;
+  direction: TextDirection;
+}
+
+export interface GrammarRule {
+  name: string;
+  description: string;
+  slots: ClauseSlot[];
+}
+
+export interface GrammarConfig {
+  rules: GrammarRule[];
+}
+
+export interface WindowLayout {
+  width: number;
+  height: number;
+  git_panel_open: boolean;
+}
+
+export const configGet = <T>(section: string): Promise<T> =>
+  invoke("config_get", { section });
+export const configSet = <T>(
+  section: string,
+  value: T,
+): Promise<void> => invoke("config_set", { section, value });
+export const languageGet = (): Promise<LanguageConfig> =>
+  configGet<LanguageConfig>("language");
+export const languageSet = (value: LanguageConfig): Promise<void> =>
+  configSet("language", value);
+export const grammarGet = (): Promise<GrammarConfig> =>
+  configGet<GrammarConfig>("grammar");
+export const grammarSet = (value: GrammarConfig): Promise<void> =>
+  configSet("grammar", value);
+export const layoutGet = (): Promise<WindowLayout> =>
+  invoke("layout_get");
+export const layoutSetGitPanel = (open: boolean): Promise<void> =>
+  invoke("layout_set_git_panel", { open });
+
 // -- version control -----------------------------------------------------
 export interface StatusEntry {
   code: string;
   path: string;
-}
-
-export interface Commit {
+}export interface Commit {
   id: string;
   author: string;
   date: string;

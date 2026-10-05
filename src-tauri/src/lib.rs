@@ -56,10 +56,21 @@ pub fn run() {
         .setup(|app| {
             let handle = app.handle().clone();
             std::thread::spawn(move || background_pump(handle));
+
+            if let Some(window) = app.get_webview_window("main") {
+                let state = app.state::<Mutex<AppState>>();
+                let guard = match state.lock() {
+                    Ok(guard) => guard,
+                    Err(_) => return Ok(()),
+                };
+                let layout = guard.global.window.clone();
+                drop(guard);
+                let _ = window.set_size(tauri::PhysicalSize::new(layout.width, layout.height));
+            }
             Ok(())
         })
-        .on_window_event(|window, event| {
-            if matches!(event, tauri::WindowEvent::CloseRequested { .. }) {
+        .on_window_event(|window, event| match event {
+            tauri::WindowEvent::CloseRequested { .. } => {
                 let app_state = window.state::<Mutex<AppState>>();
                 let mut guard = match app_state.lock() {
                     Ok(guard) => guard,
@@ -69,6 +80,16 @@ pub fn run() {
                     let _ = workspace.close_checkin();
                 }
             }
+            tauri::WindowEvent::Resized(size) => {
+                let app_state = window.state::<Mutex<AppState>>();
+                let mut guard = match app_state.lock() {
+                    Ok(guard) => guard,
+                    Err(_) => return,
+                };
+                guard.global.set_window_size(size.width, size.height);
+                let _ = guard.global.save();
+            }
+            _ => {}
         })
         .invoke_handler(tauri::generate_handler![
             ping,
@@ -80,6 +101,10 @@ pub fn run() {
             commands::workspace_rename,
             commands::workspace_set_path,
             commands::workspace_delete_from_disk,
+            commands::config_get,
+            commands::config_set,
+            commands::layout_get,
+            commands::layout_set_git_panel,
             commands::list_workspace,
             commands::read_note,
             commands::save_note,

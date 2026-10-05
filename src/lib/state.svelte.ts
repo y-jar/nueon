@@ -1,7 +1,7 @@
 import { listen } from "@tauri-apps/api/event";
 import * as api from "./api";
 
-export type View = "notes" | "dictionary" | "translation";
+export type View = "notes" | "dictionary" | "translation" | "settings";
 
 /** Global reactive UI state (Svelte 5 runes). */
 export const ui = $state({

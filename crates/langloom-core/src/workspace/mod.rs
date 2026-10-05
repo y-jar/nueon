@@ -632,6 +632,61 @@ impl Workspace {
         self.save_settings()
     }
 
+    /// Read a config section (`language`, `grammar`, `translation`, `settings`)
+    /// as JSON.
+    pub fn config_json(&self, section: &str) -> Result<serde_json::Value, StorageError> {
+        let value = match section {
+            "language" => serde_json::to_value(&self.language),
+            "grammar" => serde_json::to_value(&self.grammar),
+            "translation" => serde_json::to_value(&self.translation),
+            "settings" => serde_json::to_value(&self.settings),
+            other => {
+                return Err(StorageError::Config(
+                    other.to_string(),
+                    "unknown config section".to_string(),
+                ))
+            }
+        };
+        value.map_err(|err| StorageError::Config(section.to_string(), err.to_string()))
+    }
+
+    /// Replace a config section from JSON and persist it.
+    pub fn set_config_json(
+        &mut self,
+        section: &str,
+        value: serde_json::Value,
+    ) -> Result<(), StorageError> {
+        let dir = self.config_dir();
+        let invalid =
+            |err: serde_json::Error| StorageError::Config(section.to_string(), err.to_string());
+        match section {
+            "language" => {
+                self.language = serde_json::from_value(value).map_err(invalid)?;
+                storage::save_json(&dir.join(storage::LANGUAGE_FILE), &self.language)?;
+            }
+            "grammar" => {
+                self.grammar = serde_json::from_value(value).map_err(invalid)?;
+                storage::save_json(&dir.join(storage::GRAMMAR_FILE), &self.grammar)?;
+            }
+            "translation" => {
+                self.translation = serde_json::from_value(value).map_err(invalid)?;
+                storage::save_json(&dir.join(storage::TRANSLATION_FILE), &self.translation)?;
+            }
+            "settings" => {
+                self.settings = serde_json::from_value(value).map_err(invalid)?;
+                storage::save_json(&dir.join(storage::SETTINGS_FILE), &self.settings)?;
+            }
+            other => {
+                return Err(StorageError::Config(
+                    other.to_string(),
+                    "unknown config section".to_string(),
+                ))
+            }
+        }
+        self.mark_change(Instant::now(), format!("langloom: update {section} config"));
+        Ok(())
+    }
+
     // -- check-ins ------------------------------------------------------
 
     /// Commit all pending changes immediately with an explicit message.
@@ -1019,5 +1074,29 @@ mod tests {
 
         assert!(ws.close_checkin().is_some());
         assert!(ws.git().unwrap().is_clean().unwrap());
+    }
+
+    #[test]
+    fn config_sections_round_trip_through_json() {
+        let dir = tempfile::tempdir().unwrap();
+        let mut ws = Workspace::new(dir.path()).unwrap();
+
+        let mut value = ws.config_json("language").unwrap();
+        value["name"] = serde_json::json!("Kalan");
+        ws.set_config_json("language", value).unwrap();
+        assert_eq!(ws.config_json("language").unwrap()["name"], "Kalan");
+
+        let grammar = serde_json::json!({
+            "rules": [{
+                "name": "SVO",
+                "description": "",
+                "slots": [{ "kind": "required_tag", "tag": "Subject" }]
+            }]
+        });
+        ws.set_config_json("grammar", grammar).unwrap();
+        assert_eq!(ws.grammar.rules.len(), 1);
+
+        assert!(ws.config_json("nope").is_err());
+        assert!(ws.set_config_json("nope", serde_json::json!({})).is_err());
     }
 }

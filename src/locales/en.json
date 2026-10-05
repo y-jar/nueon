@@ -43,7 +43,26 @@
   "tabs": {
     "notes": "Notes",
     "dictionary": "Dictionary",
-    "translation": "Translation"
+    "translation": "Translation",
+    "settings": "Settings"
+  },
+  "settings": {
+    "language": "Language",
+    "name": "name",
+    "author": "author",
+    "script": "script",
+    "description": "description",
+    "direction": "direction",
+    "ltr": "left-to-right",
+    "rtl": "right-to-left",
+    "grammar": "Grammar rules",
+    "grammarHint": "Slots use #tag, \"literal\", *, and ␣ for a spacer.",
+    "ruleName": "rule name",
+    "ruleDescription": "description",
+    "slotsPlaceholder": "#Subject \"ka\" * ␣",
+    "addRule": "Add rule",
+    "untitledRule": "Untitled rule",
+    "saved": "Saved"
   },
   "grid": {
     "newTable": "new table",

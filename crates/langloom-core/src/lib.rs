@@ -14,7 +14,7 @@ pub use config::{
     AffixKind, AffixRule, GrammarConfig, GrammarRule, GridViewState, LanguageConfig, SortSpec,
     TextDirection, TranslationConfig, TranslationOptions, WorkspaceSettings,
 };
-pub use global::{GlobalConfig, WorkspaceEntry};
+pub use global::{GlobalConfig, WindowLayout, WorkspaceEntry};
 pub use model::{
     Dictionary, FieldType, FieldValue, TagDef, TagKindChange, TagRemoval, WordEntry, WordHit,
     WordTable, DEFINITION_TAG, PARENT_TAG, WORDNAME_TAG,

@@ -1,6 +1,7 @@
 <script lang="ts">
   import { onMount } from "svelte";
   import { t } from "svelte-i18n";
+  import * as api from "./lib/api";
   import { ui, init, setView, toggleGitPanel } from "./lib/state.svelte";
   import Onboarding from "./components/Onboarding.svelte";
   import Sidebar from "./components/Sidebar.svelte";
@@ -9,10 +10,21 @@
   import Translation from "./components/Translation.svelte";
   import Inspector from "./components/Inspector.svelte";
   import GitPanel from "./components/GitPanel.svelte";
+  import Settings from "./components/Settings.svelte";
   import ContextMenu from "./components/ContextMenu.svelte";
 
-  onMount(() => {
-    init();
+  onMount(async () => {
+    await init();
+    try {
+      const layout = await api.layoutGet();
+      ui.gitPanelOpen = layout.git_panel_open;
+    } catch {
+      // Layout persistence is best-effort.
+    }
+  });
+
+  $effect(() => {
+    api.layoutSetGitPanel(ui.gitPanelOpen).catch(() => {});
   });
 </script>
 
@@ -39,13 +51,19 @@
           class:active={ui.view === "translation"}
           onclick={() => setView("translation")}>{$t("tabs.translation")}</button
         >
+        <button
+          class:active={ui.view === "settings"}
+          onclick={() => setView("settings")}>{$t("tabs.settings")}</button
+        >
       </div>
       {#if ui.view === "notes"}
         <Editor />
       {:else if ui.view === "dictionary"}
         <Grid />
-      {:else}
+      {:else if ui.view === "translation"}
         <Translation />
+      {:else}
+        <Settings />
       {/if}
     </main>
     {#if ui.gitPanelOpen}

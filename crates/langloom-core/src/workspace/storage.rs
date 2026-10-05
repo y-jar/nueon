@@ -65,6 +65,8 @@ pub enum StorageError {
     AlreadyExists(PathBuf),
     #[error("not found: {0}")]
     NotFound(PathBuf),
+    #[error("invalid config for {0}: {1}")]
+    Config(String, String),
 }
 
 fn io_err(path: impl Into<PathBuf>, source: io::Error) -> StorageError {

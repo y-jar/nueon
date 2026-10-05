@@ -14,6 +14,28 @@ pub struct WorkspaceEntry {
     pub path: PathBuf,
 }
 
+/// Persisted window geometry and dock layout.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(default)]
+pub struct WindowLayout {
+    /// Window width in physical pixels.
+    pub width: u32,
+    /// Window height in physical pixels.
+    pub height: u32,
+    /// Whether the source-control (git) pane was open.
+    pub git_panel_open: bool,
+}
+
+impl Default for WindowLayout {
+    fn default() -> Self {
+        Self {
+            width: 1280,
+            height: 800,
+            git_panel_open: false,
+        }
+    }
+}
+
 /// The app-global configuration stored under `config.toml`.
 #[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(default)]
@@ -22,6 +44,8 @@ pub struct GlobalConfig {
     pub last: Option<PathBuf>,
     /// Known workspaces.
     pub workspaces: Vec<WorkspaceEntry>,
+    /// Window geometry and dock layout.
+    pub window: WindowLayout,
 }
 
 /// Result type for global configuration operations.
@@ -126,6 +150,17 @@ impl GlobalConfig {
         if self.last.as_deref() == Some(from) {
             self.last = Some(to);
         }
+    }
+
+    /// Record the current window size.
+    pub fn set_window_size(&mut self, width: u32, height: u32) {
+        self.window.width = width.max(1);
+        self.window.height = height.max(1);
+    }
+
+    /// Record whether the git pane is open.
+    pub fn set_git_panel_open(&mut self, open: bool) {
+        self.window.git_panel_open = open;
     }
 }
 

@@ -59,10 +59,10 @@ were completed during the Tauri migration (R0–R8).
 
 ## Workspace & app shell
 
-- Window size and dock layout persistence. (D5)
-- Settings screen (language metadata editor, script/direction rendering). (D5)
-- Grammar rules editor UI (`config/grammar`); expose `config_get`/`config_set`
-  commands to the frontend. (D5)
+- ~~Window size and dock layout persistence.~~ (D5)
+- ~~Settings screen (language metadata editor, script/direction rendering).~~ (D5)
+- ~~Grammar rules editor UI (`config/grammar`); expose `config_get`/`config_set`
+  commands to the frontend.~~ (D5)
 - ~~Nix flake for packaging, app icon, `.desktop` entry.~~ (R8)
 - ~~Internationalization.~~ (D0)
 
