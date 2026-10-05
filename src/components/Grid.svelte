@@ -28,17 +28,21 @@
   } from "../lib/dictionary";
   import { misspelledWords } from "../lib/spellcheck";
   import { ui, selectTable, type DocState } from "../lib/state.svelte";
+  import { createWordWithValues } from "../lib/words";
   import PillCell from "./PillCell.svelte";
 
   let {
     doc,
     onRefresh,
-  }: { doc: DocState; onRefresh: () => void } = $props();
+  }: { doc: DocState; onRefresh: () => void | Promise<void> } = $props();
 
   let sorting = $state<SortingState>([{ id: "wordname", desc: false }]);
   let filter = $state("");
   let columnVisibility = $state<VisibilityState>({});
   let ghostName = $state("");
+  let ghostValues = $state<Record<string, api.FieldValue>>({});
+  let ghostParents = $state<string[]>([]);
+  let ghostBusy = false;
   let error = $state("");
   let loadedTable: string | null = null;
   let saveTimer: ReturnType<typeof setTimeout> | null = null;
@@ -144,6 +148,11 @@
   });
 
   const rows = $derived(table.getRowModel().rows);
+  const visibleColumns = $derived(table.getVisibleLeafColumns());
+
+  function tagOf(name: string): api.TagDef | undefined {
+    return tagColumns.find((tag) => tag.name === name);
+  }
 
   const relationOptions = $derived.by(() => {
     const seen = new Map<string, { id: string; label: string }>();
@@ -211,7 +220,7 @@
   });
 
   function parentNames(entry: api.WordEntry): string {
-    const value = entry.values["parent"];
+    const value = entry.values?.["parent"];
     if (!value) return "";
     if (value.type === "references") {
       return value.value.map((id) => ui.nameById[id] ?? "?").join(", ");
@@ -253,17 +262,94 @@
     }
   }
 
+  function setGhost(tag: string, value: api.FieldValue | null) {
+    const next = { ...ghostValues };
+    if (value) next[tag] = value;
+    else delete next[tag];
+    ghostValues = next;
+  }
+
+  function ghostList(tag: string): string[] {
+    const value = ghostValues[tag];
+    return value && value.type === "tag_list" ? value.value : [];
+  }
+
+  function ghostRefs(tag: string): string[] {
+    const value = ghostValues[tag];
+    return value && value.type === "references" ? value.value : [];
+  }
+
+  function ghostSetList(tag: string, items: string[]) {
+    setGhost(tag, items.length ? { type: "tag_list", value: items } : null);
+  }
+
+  function ghostSetRefs(tag: string, ids: string[]) {
+    setGhost(tag, ids.length ? { type: "references", value: ids } : null);
+  }
+
+  function optionId(label: string, excludeId?: string): string | null {
+    const option = relationOptions.find((item) => item.label === label);
+    return option && option.id !== excludeId ? option.id : null;
+  }
+
   async function createGhost() {
     const name = ghostName.trim();
-    if (!name || !doc.currentTable) return;
+    if (!name || !doc.currentTable || ghostBusy) return;
+    ghostBusy = true;
+    const values = { ...ghostValues };
+    const parents = [...ghostParents];
     try {
-      await api.createWord(doc.currentTable, name);
+      const result = await createWordWithValues(
+        doc.currentTable,
+        name,
+        values,
+        parents,
+      );
       ghostName = "";
-      error = "";
-      onRefresh();
+      ghostValues = {};
+      ghostParents = [];
+      error = result.rejectedParents ? $t("grid.parentRejected") : "";
+      await onRefresh();
     } catch (e) {
       error = String(e);
+    } finally {
+      ghostBusy = false;
     }
+  }
+
+  function onGhostFocusOut(event: FocusEvent) {
+    const row = event.currentTarget as HTMLElement;
+    // Create the word once focus leaves the whole ghost row, so Tab can
+    // move between its cells without committing a half-filled draft.
+    if (!row.contains(event.relatedTarget as Node | null)) void createGhost();
+  }
+
+  /** Enter commits (via blur); Escape reverts the edit. */
+  function onCellKey(event: KeyboardEvent, original: string) {
+    const field = event.currentTarget as HTMLInputElement | HTMLTextAreaElement;
+    if (event.key === "Escape") {
+      field.value = original;
+      field.blur();
+    } else if (
+      event.key === "Enter" &&
+      (field instanceof HTMLInputElement || event.ctrlKey)
+    ) {
+      event.preventDefault();
+      field.blur();
+    }
+  }
+
+  async function addParent(entry: api.WordEntry, label: string) {
+    if (!doc.currentTable) return;
+    const id = optionId(label, entry.id);
+    if (!id || refValues(entry, "parent").includes(id)) return;
+    const ok = await api.setParent(doc.currentTable, entry.id, id);
+    error = ok ? "" : $t("grid.parentRejected");
+  }
+
+  async function removeParentOf(entry: api.WordEntry, id: string) {
+    if (!doc.currentTable) return;
+    await api.removeParent(doc.currentTable, entry.id, id);
   }
 
   async function commitWordname(entry: api.WordEntry, value: string) {
@@ -274,10 +360,10 @@
 
   async function commitText(entry: api.WordEntry, tag: string, value: string) {
     if (!doc.currentTable) return;
-    const values = {
-      ...entry.values,
-      [tag]: { type: "text" as const, value },
-    };
+    if (textValue(entry.values[tag]) === value) return;
+    const values = { ...entry.values };
+    if (value === "") delete values[tag];
+    else values[tag] = { type: "text", value };
     await api.saveWordEntry(doc.currentTable, { ...entry, values });
   }
 
@@ -644,33 +730,28 @@
   <div class="grid-scroll">
     <table class="dict-grid">
       <thead>
-        {#each table.getHeaderGroups() as group (group.id)}
-          <tr>
-            <th class="select-col">
-              <input
-                type="checkbox"
-                checked={rows.length > 0 && selectedIds.length === rows.length}
-                onchange={(e) => toggleAll(e.currentTarget.checked)}
-              />
+        <tr>
+          <th class="select-col">
+            <input
+              type="checkbox"
+              checked={rows.length > 0 && selectedIds.length === rows.length}
+              onchange={(e) => toggleAll(e.currentTarget.checked)}
+            />
+          </th>
+          {#each visibleColumns as column (column.id)}
+            <th class:wordname-col={column.id === "wordname"}>
+              <button class="sort" onclick={column.getToggleSortingHandler()}>
+                {column.id}
+                {column.getIsSorted() === "asc"
+                  ? " ▲"
+                  : column.getIsSorted() === "desc"
+                    ? " ▼"
+                    : ""}
+              </button>
             </th>
-            {#each group.headers as header (header.id)}
-              <th class:wordname-col={header.column.id === "wordname"}>
-                <button
-                  class="sort"
-                  onclick={header.column.getToggleSortingHandler()}
-                >
-                  {header.column.id}
-                  {header.column.getIsSorted() === "asc"
-                    ? " ▲"
-                    : header.column.getIsSorted() === "desc"
-                      ? " ▼"
-                      : ""}
-                </button>
-              </th>
-            {/each}
-            <th></th>
-          </tr>
-        {/each}
+          {/each}
+          <th></th>
+        </tr>
       </thead>
       <tbody>
         {#each rows as row (row.id)}
@@ -686,84 +767,35 @@
                   toggleSelected(row.original.id, e.currentTarget.checked)}
               />
             </td>
-            <td class="wordname-col">
-              <input
-                value={row.original.wordname}
-                onclick={(e) => e.stopPropagation()}
-                onblur={(e) => commitWordname(row.original, e.currentTarget.value)}
-              />
-            </td>
-            <td>{parentNames(row.original) || "—"}</td>
-            {#each tagColumns as tag (tag.name)}
-              <td
-                class:editable={tag.kind === "text" ||
-                  tag.kind === "tag_list" ||
-                  tag.kind === "boolean"}
-                onclick={(e) => e.stopPropagation()}
-              >
-                {#if tag.kind === "text"}
-                  {#if tag.format === "multiline"}
-                    <textarea
-                      rows="2"
-                      placeholder="—"
-                      value={textValue(row.original.values[tag.name])}
-                      onblur={(e) =>
-                        commitText(row.original, tag.name, e.currentTarget.value)}
-                    ></textarea>
-                  {:else}
-                    <input
-                      type={tag.format === "date"
-                        ? "date"
-                        : tag.format === "measurement"
-                          ? "number"
-                          : "text"}
-                      placeholder="—"
-                      value={textValue(row.original.values[tag.name])}
-                      onblur={(e) =>
-                        commitText(row.original, tag.name, e.currentTarget.value)}
-                    />
-                  {/if}
-                {:else if tag.kind === "boolean"}
-                  <button
-                    class="check-cell"
-                    class:on={boolValue(row.original.values[tag.name])}
-                    onclick={() =>
-                      commitBool(
-                        row.original,
-                        tag.name,
-                        !boolValue(row.original.values[tag.name]),
-                      )}
-                  >
-                    {#if boolValue(row.original.values[tag.name])}
-                      <Check size={14} />
-                    {/if}
-                  </button>
-                {:else if tag.kind === "tag_list"}
-                  <PillCell
-                    pills={listValues(row.original, tag.name).map((value) => ({
-                      id: value,
-                      label: value,
-                    }))}
-                    placeholder={$t("grid.addPill")}
-                    onAdd={(text) => addToList(row.original, tag.name, text)}
-                    onRemove={(id) => removeFromList(row.original, tag.name, id)}
+            {#each visibleColumns as column (column.id)}
+              {#if column.id === "wordname"}
+                <td class="wordname-col" onclick={(e) => e.stopPropagation()}>
+                  <input
+                    value={row.original.wordname}
+                    onkeydown={(e) => onCellKey(e, row.original.wordname)}
+                    onblur={(e) =>
+                      commitWordname(row.original, e.currentTarget.value)}
                   />
-                {:else if tag.kind === "references" ||
-                  tag.kind === "reference"}
+                </td>
+              {:else if column.id === "parent"}
+                <td class="editable" onclick={(e) => e.stopPropagation()}>
                   <PillCell
-                    pills={refValues(row.original, tag.name).map((id) => ({
+                    pills={refValues(row.original, "parent").map((id) => ({
                       id,
                       label: ui.nameById[id] ?? "?",
                     }))}
-                    placeholder={$t("grid.addRelation")}
+                    placeholder={$t("grid.addParent")}
                     options={relationOptions}
-                    onAdd={(label) => addRelation(row.original, tag.name, label)}
-                    onRemove={(id) => removeRelation(row.original, tag.name, id)}
+                    onAdd={(label) => addParent(row.original, label)}
+                    onRemove={(id) => removeParentOf(row.original, id)}
                   />
-                {:else}
-                  {displayValue(row.original.values[tag.name]) || "—"}
-                {/if}
-              </td>
+                </td>
+              {:else}
+                {@const tag = tagOf(column.id)}
+                <td class="editable" onclick={(e) => e.stopPropagation()}>
+                  {#if tag}{@render tagCell(row.original, tag)}{/if}
+                </td>
+              {/if}
             {/each}
             <td>
               <button
@@ -775,19 +807,41 @@
             </td>
           </tr>
         {/each}
-        <tr class="ghost">
+        <tr class="ghost" onfocusout={onGhostFocusOut}>
           <td class="select-col"></td>
-          <td class="wordname-col">
-            <input
-              placeholder={$t("grid.ghostPlaceholder")}
-              bind:value={ghostName}
-              onkeydown={(e) => e.key === "Enter" && createGhost()}
-              onblur={createGhost}
-            />
-          </td>
-          <td></td>
-          {#each tagColumns as tag (tag.name)}
-            <td></td>
+          {#each visibleColumns as column (column.id)}
+            {#if column.id === "wordname"}
+              <td class="wordname-col">
+                <input
+                  placeholder={$t("grid.ghostPlaceholder")}
+                  bind:value={ghostName}
+                  onkeydown={(e) => e.key === "Enter" && createGhost()}
+                />
+              </td>
+            {:else if column.id === "parent"}
+              <td class="editable">
+                <PillCell
+                  pills={ghostParents.map((id) => ({
+                    id,
+                    label: ui.nameById[id] ?? "?",
+                  }))}
+                  placeholder={$t("grid.addParent")}
+                  options={relationOptions}
+                  onAdd={(label) => {
+                    const id = optionId(label);
+                    if (id && !ghostParents.includes(id))
+                      ghostParents = [...ghostParents, id];
+                  }}
+                  onRemove={(id) =>
+                    (ghostParents = ghostParents.filter((p) => p !== id))}
+                />
+              </td>
+            {:else}
+              {@const tag = tagOf(column.id)}
+              <td class="editable">
+                {#if tag}{@render ghostCell(tag)}{/if}
+              </td>
+            {/if}
           {/each}
           <td></td>
         </tr>
@@ -795,6 +849,133 @@
     </table>
   </div>
 </div>
+
+{#snippet tagCell(entry: api.WordEntry, tag: api.TagDef)}
+  {#if tag.kind === "text"}
+    {#if tag.format === "multiline"}
+      <textarea
+        rows="2"
+        placeholder="—"
+        value={textValue(entry.values[tag.name])}
+        onkeydown={(e) => onCellKey(e, textValue(entry.values[tag.name]))}
+        onblur={(e) => commitText(entry, tag.name, e.currentTarget.value)}
+      ></textarea>
+    {:else}
+      <input
+        type={tag.format === "date"
+          ? "date"
+          : tag.format === "measurement"
+            ? "number"
+            : "text"}
+        placeholder="—"
+        value={textValue(entry.values[tag.name])}
+        onkeydown={(e) => onCellKey(e, textValue(entry.values[tag.name]))}
+        onblur={(e) => commitText(entry, tag.name, e.currentTarget.value)}
+      />
+    {/if}
+  {:else if tag.kind === "boolean"}
+    <button
+      class="check-cell"
+      class:on={boolValue(entry.values[tag.name])}
+      onclick={() =>
+        commitBool(entry, tag.name, !boolValue(entry.values[tag.name]))}
+    >
+      {#if boolValue(entry.values[tag.name])}<Check size={14} />{/if}
+    </button>
+  {:else if tag.kind === "tag_list"}
+    <PillCell
+      pills={listValues(entry, tag.name).map((value) => ({
+        id: value,
+        label: value,
+      }))}
+      placeholder={$t("grid.addPill")}
+      onAdd={(text) => addToList(entry, tag.name, text)}
+      onRemove={(id) => removeFromList(entry, tag.name, id)}
+    />
+  {:else if tag.kind === "references" || tag.kind === "reference"}
+    <PillCell
+      pills={refValues(entry, tag.name).map((id) => ({
+        id,
+        label: ui.nameById[id] ?? "?",
+      }))}
+      placeholder={$t("grid.addRelation")}
+      options={relationOptions}
+      onAdd={(label) => addRelation(entry, tag.name, label)}
+      onRemove={(id) => removeRelation(entry, tag.name, id)}
+    />
+  {:else}
+    {displayValue(entry.values[tag.name]) || "—"}
+  {/if}
+{/snippet}
+
+{#snippet ghostCell(tag: api.TagDef)}
+  {#if tag.kind === "text"}
+    <input
+      type={tag.format === "date"
+        ? "date"
+        : tag.format === "measurement"
+          ? "number"
+          : "text"}
+      placeholder="—"
+      value={textValue(ghostValues[tag.name])}
+      oninput={(e) =>
+        setGhost(
+          tag.name,
+          e.currentTarget.value
+            ? { type: "text", value: e.currentTarget.value }
+            : null,
+        )}
+      onkeydown={(e) => e.key === "Enter" && createGhost()}
+    />
+  {:else if tag.kind === "boolean"}
+    <button
+      class="check-cell"
+      class:on={boolValue(ghostValues[tag.name])}
+      onclick={() =>
+        setGhost(
+          tag.name,
+          boolValue(ghostValues[tag.name])
+            ? null
+            : { type: "boolean", value: true },
+        )}
+    >
+      {#if boolValue(ghostValues[tag.name])}<Check size={14} />{/if}
+    </button>
+  {:else if tag.kind === "tag_list"}
+    <PillCell
+      pills={ghostList(tag.name).map((value) => ({ id: value, label: value }))}
+      placeholder={$t("grid.addPill")}
+      onAdd={(text) => {
+        const items = ghostList(tag.name);
+        if (!items.includes(text)) ghostSetList(tag.name, [...items, text]);
+      }}
+      onRemove={(id) =>
+        ghostSetList(
+          tag.name,
+          ghostList(tag.name).filter((item) => item !== id),
+        )}
+    />
+  {:else if tag.kind === "references" || tag.kind === "reference"}
+    <PillCell
+      pills={ghostRefs(tag.name).map((id) => ({
+        id,
+        label: ui.nameById[id] ?? "?",
+      }))}
+      placeholder={$t("grid.addRelation")}
+      options={relationOptions}
+      onAdd={(label) => {
+        const id = optionId(label);
+        const ids = ghostRefs(tag.name);
+        if (id && !ids.includes(id)) ghostSetRefs(tag.name, [...ids, id]);
+      }}
+      onRemove={(id) =>
+        ghostSetRefs(
+          tag.name,
+          ghostRefs(tag.name).filter((item) => item !== id),
+        )}
+    />
+  {/if}
+{/snippet}
 
 {#if addWordOpen}
   <!-- svelte-ignore a11y_click_events_have_key_events -->

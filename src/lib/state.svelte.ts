@@ -204,17 +204,37 @@ export async function refreshTables(): Promise<void> {
       group.doc.currentTable = null;
       group.doc.table = null;
     } else if (group.doc.currentTable) {
-      group.doc.table = await api.getTable(group.doc.currentTable);
+      await syncGroupTable(group.id);
     }
+  }
+}
+
+/** Latest table-fetch ticket per group, so a slow older fetch cannot win. */
+const tableTickets = new Map<string, number>();
+
+/**
+ * Reload one group's table from disk. Responses that arrive out of order are
+ * dropped, and a failed fetch is reported instead of aborting the caller.
+ */
+async function syncGroupTable(groupId: string): Promise<void> {
+  const group = ui.groups.find((candidate) => candidate.id === groupId);
+  const name = group?.doc.currentTable;
+  if (!group || !name) return;
+  const ticket = (tableTickets.get(groupId) ?? 0) + 1;
+  tableTickets.set(groupId, ticket);
+  try {
+    const table = await api.getTable(name);
+    if (tableTickets.get(groupId) === ticket && group.doc.currentTable === name) {
+      group.doc.table = table;
+    }
+  } catch (error) {
+    ui.status = `could not load table ${name}: ${String(error)}`;
   }
 }
 
 /** Reload the active group's table from disk. */
 export async function refreshTable(): Promise<void> {
-  const doc = activeDoc();
-  if (doc.currentTable) {
-    doc.table = await api.getTable(doc.currentTable);
-  }
+  await syncGroupTable(ui.activeGroupId);
 }
 
 export function selectEntry(id: string): void {
@@ -277,7 +297,10 @@ export async function activateTab(
     await loadNote(group.doc, tab.ref);
   } else if (tab.kind === "table" && tab.ref) {
     group.doc.view = "dictionary";
-    await loadTable(group.doc, tab.ref);
+    if (group.doc.currentTable !== tab.ref) group.doc.table = null;
+    group.doc.currentTable = tab.ref;
+    group.doc.selectedEntry = null;
+    await syncGroupTable(group.id);
   } else {
     group.doc.view = "translation";
   }
@@ -387,10 +410,7 @@ export async function deleteTable(name: string): Promise<void> {
 
 /** Reload one group's table from disk (used by that pane's Grid). */
 export async function reloadGroupTable(groupId: string): Promise<void> {
-  const group = ui.groups.find((candidate) => candidate.id === groupId);
-  if (group?.doc.currentTable) {
-    group.doc.table = await api.getTable(group.doc.currentTable);
-  }
+  await syncGroupTable(groupId);
 }
 
 /** Remove a group and collapse the split tree around it. */
@@ -511,12 +531,6 @@ async function loadNote(doc: DocState, path: string): Promise<void> {
   doc.selected = path;
   doc.noteContent = content;
   doc.dirty = false;
-}
-
-async function loadTable(doc: DocState, name: string): Promise<void> {
-  doc.currentTable = name;
-  doc.table = await api.getTable(name);
-  doc.selectedEntry = null;
 }
 
 // -- notes CRUD ----------------------------------------------------------

@@ -19,6 +19,9 @@
 
   const listId = `pill-options-${crypto.randomUUID()}`;
   let draft = $state("");
+  // Only the focused cell mounts its datalist: one per cell would otherwise
+  // multiply the dictionary size by the row count.
+  let active = $state(false);
 
   function commit() {
     const value = draft.trim();
@@ -44,11 +47,20 @@
     class="pill-input"
     {placeholder}
     bind:value={draft}
-    list={options.length ? listId : undefined}
+    list={options.length && active ? listId : undefined}
+    onfocus={() => (active = true)}
+    oninput={(e) => {
+      // Picking a suggestion fills the exact label; commit it right away.
+      const typed = e.currentTarget.value;
+      if (options.some((option) => option.label === typed)) commit();
+    }}
     onkeydown={(e) => e.key === "Enter" && commit()}
-    onblur={commit}
+    onblur={() => {
+      active = false;
+      commit();
+    }}
   />
-  {#if options.length}
+  {#if options.length && active}
     <datalist id={listId}>
       {#each options as option (option.id)}
         <option value={option.label}></option>

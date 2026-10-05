@@ -149,8 +149,23 @@ export interface TagKindChange {
 
 export const wordIndex = (): Promise<WordIndex> => invoke("word_index");
 export const listTables = (): Promise<TableSummary[]> => invoke("list_tables");
+/**
+ * The backend omits empty `values` maps when serializing entries, so every
+ * consumer would otherwise have to guard `entry.values`. Normalize once here.
+ */
+function normalizeTable(table: WordTable): WordTable {
+  return {
+    ...table,
+    tags: table.tags ?? [],
+    entries: (table.entries ?? []).map((entry) => ({
+      ...entry,
+      values: entry.values ?? {},
+    })),
+  };
+}
+
 export const getTable = (table: string): Promise<WordTable> =>
-  invoke("get_table", { table });
+  invoke<WordTable>("get_table", { table }).then(normalizeTable);
 export const createTable = (name: string): Promise<boolean> =>
   invoke("create_table", { name });
 export const deleteTable = (name: string): Promise<boolean> =>

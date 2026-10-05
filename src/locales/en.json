@@ -131,7 +131,9 @@
     "descending": "Descending",
     "addPill": "Add…",
     "addRelation": "Link word…",
-    "ghostPlaceholder": "New word…"
+    "ghostPlaceholder": "New word…",
+    "addParent": "Link parent…",
+    "parentRejected": "That word can't be a parent here (it would create a cycle)."
   },
   "inspector": {
     "title": "Inspector",
