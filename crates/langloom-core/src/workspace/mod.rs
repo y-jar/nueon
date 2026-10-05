@@ -1190,6 +1190,7 @@ mod tests {
             }],
             search: "ka".into(),
             hidden_columns: vec!["parent".into()],
+            column_order: vec!["wordname".into(), "def".into(), "parent".into()],
             ..Default::default()
         };
         ws.set_grid_view("verbs", view.clone()).unwrap();

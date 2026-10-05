@@ -33,6 +33,9 @@ pub struct GridViewState {
     /// Column ids the user has hidden.
     #[serde(skip_serializing_if = "Vec::is_empty")]
     pub hidden_columns: Vec<String>,
+    /// Column ids in the user's preferred display order; empty means default.
+    #[serde(skip_serializing_if = "Vec::is_empty")]
+    pub column_order: Vec<String>,
 }
 
 /// Persisted shell layout (activity, panels) for the workspace.
@@ -122,6 +125,7 @@ mod tests {
                 search: "ka".into(),
                 column_filters: BTreeMap::from([("pos".into(), "verb".into())]),
                 hidden_columns: vec!["parent".into()],
+                column_order: vec!["wordname".into(), "def".into()],
             },
         );
         let json = serde_json::to_string(&settings).unwrap();
@@ -130,5 +134,6 @@ mod tests {
         assert_eq!(view.sorting[0].id, "wordname");
         assert_eq!(view.search, "ka");
         assert_eq!(view.hidden_columns, ["parent"]);
+        assert_eq!(view.column_order, ["wordname", "def"]);
     }
 }

@@ -1713,11 +1713,7 @@ table.dict-grid textarea::placeholder {
   color: var(--muted);
 }
 
-.popover {
-  position: relative;
-}
-
-.popover summary {
+.popover-trigger {
   display: flex;
   align-items: center;
   gap: 4px;
@@ -1729,26 +1725,30 @@ table.dict-grid textarea::placeholder {
   cursor: pointer;
 }
 
-.popover summary::-webkit-details-marker {
-  display: none;
+.popover-trigger.active {
+  color: var(--accent);
+  border-color: var(--accent);
 }
 
-.popover .picker-body {
-  position: absolute;
-  top: 100%;
-  right: 0;
-  z-index: 30;
+/* Portaled to <body> and fixed-positioned so pane overflow never clips it. */
+.popover-panel {
+  position: fixed;
+  z-index: 3000;
   min-width: 240px;
-  max-height: 360px;
+  max-width: min(420px, calc(100vw - 16px));
+  max-height: min(420px, calc(100vh - 80px));
   overflow: auto;
-  display: flex;
-  flex-direction: column;
-  gap: 4px;
   padding: 8px;
   background: var(--panel);
   border: 1px solid var(--border);
-  border-radius: 4px;
-  box-shadow: 0 6px 24px rgba(0, 0, 0, 0.4);
+  border-radius: 6px;
+  box-shadow: 0 8px 28px rgba(0, 0, 0, 0.45);
+}
+
+.popover-panel .picker-body {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
 }
 
 .grid-search {
@@ -1946,4 +1946,34 @@ table.dict-grid td.wordname-col {
 
 table.dict-grid td.wordname-col {
   background: var(--bg);
+}
+
+/* -- sortable / reorderable headers --------------------------------------- */
+
+table.dict-grid th.dragging {
+  opacity: 0.45;
+}
+
+table.dict-grid th.drop-before {
+  box-shadow: inset 2px 0 0 var(--accent);
+}
+
+table.dict-grid th.drop-after {
+  box-shadow: inset -2px 0 0 var(--accent);
+}
+
+table.dict-grid th[draggable="true"] {
+  cursor: grab;
+}
+
+.sort-ind {
+  margin-left: 4px;
+  font-size: 10px;
+  color: var(--muted);
+  opacity: 0.55;
+}
+
+.sort-ind.on {
+  color: var(--accent);
+  opacity: 1;
 }

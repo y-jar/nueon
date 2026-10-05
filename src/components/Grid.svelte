@@ -31,6 +31,7 @@
   import { createWordWithValues } from "../lib/words";
   import PillCell from "./PillCell.svelte";
   import AddWordModal from "./AddWordModal.svelte";
+  import Popover from "./Popover.svelte";
 
   let {
     doc,
@@ -40,6 +41,9 @@
   let sorting = $state<SortingState>([{ id: "wordname", desc: false }]);
   let filter = $state("");
   let columnVisibility = $state<VisibilityState>({});
+  let columnOrder = $state<string[]>([]);
+  let dragColumn = $state<string | null>(null);
+  let dropTarget = $state<{ id: string; after: boolean } | null>(null);
   let ghostName = $state("");
   let ghostValues = $state<Record<string, api.FieldValue>>({});
   let ghostParents = $state<string[]>([]);
@@ -115,6 +119,10 @@
       onGlobalFilterChange: (updater) => {
         filter = typeof updater === "function" ? updater(filter) : updater;
       },
+      onColumnOrderChange: (updater) => {
+        columnOrder =
+          typeof updater === "function" ? updater(columnOrder) : updater;
+      },
       onColumnVisibilityChange: (updater) => {
         columnVisibility =
           typeof updater === "function" ? updater(columnVisibility) : updater;
@@ -141,6 +149,10 @@
         sorting,
         globalFilter: filter,
         columnVisibility,
+        // `wordname` is pinned first and never reordered.
+        columnOrder: columnOrder.length
+          ? ["wordname", ...columnOrder.filter((id) => id !== "wordname")]
+          : [],
       },
     }));
     return instance;
@@ -179,6 +191,7 @@
         columnVisibility = Object.fromEntries(
           view.hidden_columns.map((id) => [id, false]),
         );
+        columnOrder = view.column_order ?? [];
         selectedIds = [];
         loadedTable = name;
       })
@@ -197,6 +210,7 @@
       hidden_columns: Object.entries(columnVisibility)
         .filter(([, visible]) => !visible)
         .map(([id]) => id),
+      column_order: [...columnOrder],
     };
     if (!name || name !== loadedTable) return;
     if (saveTimer) clearTimeout(saveTimer);
@@ -238,6 +252,61 @@
 
   const sortId = $derived(sorting[0]?.id ?? "wordname");
   const sortDesc = $derived(Boolean(sorting[0]?.desc));
+
+  /** Ascending → descending → the default sort (wordname, ascending). */
+  function cycleSort(id: string) {
+    const current = sorting[0];
+    if (!current || current.id !== id) {
+      sorting = [{ id, desc: false }];
+    } else if (!current.desc) {
+      sorting = [{ id, desc: true }];
+    } else {
+      sorting = [{ id: "wordname", desc: false }];
+    }
+  }
+
+  function sortIndicator(id: string): string {
+    const current = sorting[0];
+    if (!current || current.id !== id) return "⇅";
+    return current.desc ? "▼" : "▲";
+  }
+
+  function onColumnDragStart(event: DragEvent, id: string) {
+    dragColumn = id;
+    event.dataTransfer?.setData("text/plain", id);
+    if (event.dataTransfer) event.dataTransfer.effectAllowed = "move";
+  }
+
+  function onColumnDragOver(event: DragEvent, id: string) {
+    if (!dragColumn || dragColumn === id) return;
+    event.preventDefault();
+    if (event.dataTransfer) event.dataTransfer.dropEffect = "move";
+    const rect = (event.currentTarget as HTMLElement).getBoundingClientRect();
+    // Dropping on the pinned wordname column inserts right after it.
+    const after = id === "wordname" || event.clientX > rect.left + rect.width / 2;
+    dropTarget = { id, after };
+  }
+
+  function onColumnDrop(event: DragEvent) {
+    event.preventDefault();
+    const target = dropTarget;
+    const moving = dragColumn;
+    dragColumn = null;
+    dropTarget = null;
+    if (!target || !moving || moving === target.id) return;
+    const ids = table
+      .getAllLeafColumns()
+      .map((column) => column.id)
+      .filter((id) => id !== moving);
+    const at = ids.indexOf(target.id) + (target.after ? 1 : 0);
+    ids.splice(at, 0, moving);
+    columnOrder = ids.filter((id) => id !== "wordname");
+  }
+
+  function onColumnDragEnd() {
+    dragColumn = null;
+    dropTarget = null;
+  }
 
   function setSortColumn(id: string) {
     sorting = [{ id, desc: sortDesc }];
@@ -554,8 +623,8 @@
       >{$t("grid.results", { values: { count: rows.length } })}</span
     >
 
-    <details class="popover" id="sort-pop">
-      <summary><ArrowUpDown size={14} /> {$t("grid.sort")}</summary>
+    <Popover>
+      {#snippet label()}<ArrowUpDown size={14} /> {$t("grid.sort")}{/snippet}
       <div class="picker-body">
         <label class="picker-row">
           <span class="muted">{$t("grid.sortColumn")}</span>
@@ -569,7 +638,7 @@
           {sortDesc ? $t("grid.descending") : $t("grid.ascending")}
         </button>
       </div>
-    </details>
+    </Popover>
 
     <button
       class="tool-btn"
@@ -585,8 +654,8 @@
     <button title={$t("grid.undo")} onclick={doUndo}><Undo2 size={14} /></button>
     <button title={$t("grid.redo")} onclick={doRedo}><Redo2 size={14} /></button>
 
-    <details class="popover">
-      <summary><Columns3 size={14} /> {$t("grid.columns")}</summary>
+    <Popover align="right">
+      {#snippet label()}<Columns3 size={14} /> {$t("grid.columns")}{/snippet}
       <div class="picker-body">
         {#each table.getAllLeafColumns() as column (column.id)}
           <label class="picker-row">
@@ -601,10 +670,10 @@
           </label>
         {/each}
       </div>
-    </details>
+    </Popover>
 
-    <details class="popover">
-      <summary><Tags size={14} /> {$t("grid.tags")}</summary>
+    <Popover align="right">
+      {#snippet label()}<Tags size={14} /> {$t("grid.tags")}{/snippet}
       <div class="picker-body">
         <div class="tag-row">
           <input
@@ -661,7 +730,7 @@
           </div>
         {/each}
       </div>
-    </details>
+    </Popover>
 
     <button class="primary" onclick={() => (addWordOpen = true)}>
       {$t("grid.addWord")}
@@ -724,14 +793,30 @@
             />
           </th>
           {#each visibleColumns as column (column.id)}
-            <th class:wordname-col={column.id === "wordname"}>
-              <button class="sort" onclick={column.getToggleSortingHandler()}>
+            <th
+              class:wordname-col={column.id === "wordname"}
+              class:dragging={dragColumn === column.id}
+              class:drop-before={dropTarget?.id === column.id &&
+                !dropTarget.after}
+              class:drop-after={dropTarget?.id === column.id &&
+                dropTarget.after}
+              draggable={column.id === "wordname" ? "false" : "true"}
+              ondragstart={(e) => onColumnDragStart(e, column.id)}
+              ondragover={(e) => onColumnDragOver(e, column.id)}
+              ondrop={onColumnDrop}
+              ondragend={onColumnDragEnd}
+            >
+              <button
+                class="sort"
+                title={$t("grid.sortHint")}
+                onclick={() => cycleSort(column.id)}
+              >
                 {column.id}
-                {column.getIsSorted() === "asc"
-                  ? " ▲"
-                  : column.getIsSorted() === "desc"
-                    ? " ▼"
-                    : ""}
+                <span
+                  class="sort-ind"
+                  class:on={sorting[0]?.id === column.id}
+                  >{sortIndicator(column.id)}</span
+                >
               </button>
             </th>
           {/each}

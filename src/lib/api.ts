@@ -137,6 +137,8 @@ export interface GridViewState {
   search: string;
   column_filters: Record<string, string>;
   hidden_columns: string[];
+  /** Column ids in display order; empty means the default order. */
+  column_order: string[];
 }
 
 export interface TagKindChange {
