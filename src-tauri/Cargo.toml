@@ -9,6 +9,10 @@ description = "Tauri v2 desktop shell for langloom."
 name = "langloom_tauri"
 crate-type = ["staticlib", "cdylib", "rlib"]
 
+[[bin]]
+name = "langloom"
+path = "src/main.rs"
+
 [build-dependencies]
 tauri-build = { version = "2", features = [] }
 

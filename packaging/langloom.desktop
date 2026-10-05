@@ -1,0 +1,11 @@
+[Desktop Entry]
+Type=Application
+Name=langloom
+GenericName=Conlang Editor
+Comment=Conlang editor and creation app
+Exec=langloom
+Icon=langloom
+Terminal=false
+Categories=Utility;Education;Office;
+Keywords=conlang;language;dictionary;linguistics;
+StartupWMClass=langloom

@@ -1,20 +1,20 @@
 # Architecture
 
 langloom is a **Tauri v2** desktop app: a Rust backend (the reusable
-`langloom-core` domain crate) and a **Svelte 5 + CodeMirror 6** frontend. The
-previous egui UI (`crates/langloom-egui`) is kept temporarily as a behavioral
-reference and will be removed at stage R8.
+`langloom-core` domain crate) and a **Svelte 5 + CodeMirror 6** frontend.
 
 ## Repository layout
 
 ```
 Cargo.toml                     # Cargo workspace
 crates/langloom-core/          # UI-agnostic domain logic (model, config, global, translation, vcs, workspace)
-crates/langloom-egui/          # TEMPORARY legacy egui UI (removed at R8)
 src-tauri/                     # Tauri v2 shell: state, commands, capabilities
 src/                           # Svelte frontend
   lib/api.ts                   # typed invoke() wrappers + DTOs
+  lib/editor/                  # CodeMirror extensions (live preview, dictionary, theme)
   App.svelte                   # three-pane shell
+flake.nix                      # dev shell + packaged app
+packaging/langloom.desktop     # launcher entry
 docs/                          # this spec, PSD.md, code ideas
 ```
 
@@ -103,8 +103,21 @@ needs, exports `LD_LIBRARY_PATH`, and sets
 `WEBKIT_DISABLE_DMABUF_RENDERER=1` / `WEBKIT_DISABLE_COMPOSITING_MODE=1` for
 reliable Wayland rendering. A reproducible Nix flake for packaging lands at R8.
 
+## Packaging (`flake.nix`)
+
+- `devShells.default` provides Rust, Node 22, and the WebKitGTK/GTK runtime
+  libraries, with `LD_LIBRARY_PATH` and the Wayland-safe WebKit env vars.
+- `packages.default` is a `rustPlatform.buildRustPackage` derivation:
+  - the frontend is built first with `buildNpmPackage` (lockfile-pinned
+    `npmDepsHash`) and copied to `dist/`, which Tauri embeds at compile time;
+  - `wrapGAppsHook3` + `autoPatchelfHook` wire the GTK/WebKit runtime, and the
+    wrapper bakes in `WEBKIT_DISABLE_DMABUF_RENDERER=1` and
+    `WEBKIT_DISABLE_COMPOSITING_MODE=1` via `gappsWrapperArgs`;
+  - the `.desktop` file and 32/128/256 px icons are installed under
+    `$out/share/{applications,icons/hicolor/...}`.
+
 ## Migration stages
 
 R0 workspace split · R1 toolchain + Tauri scaffold + shell · R2 registry + notes
 tree · R3 CodeMirror Live Preview · R4 grid + inspector · R5 translation · R6 git
-panel · R7 tree DnD + constructs · R8 packaging + purge legacy egui.
+panel · R7 tree DnD + constructs · R8 packaging + legacy purge. **Complete.**

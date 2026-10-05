@@ -129,10 +129,9 @@ translation re-runs immediately.
 
 ## Development
 
-> **Migration in progress:** the app is moving from egui to **Tauri v2 + Svelte 5
-> + CodeMirror 6**. The reusable Rust core lives in `crates/langloom-core`; the
-> interim egui UI lives in `crates/langloom-egui` and will be removed once the
-> Tauri UI reaches parity.
+> **Stack:** Tauri v2 shell (`src-tauri/`) + Svelte 5 / CodeMirror 6 frontend
+> (`src/`) over a UI-agnostic Rust core (`crates/langloom-core`). The legacy
+> egui UI was removed at R8.
 
 Everything is provided by the Nix shell (Rust + Node 22 + Tauri's WebKit/GTK
 libraries). The Tauri shell is at `src-tauri/` with the Svelte frontend in
@@ -148,28 +147,30 @@ cargo clippy --workspace --all-targets -- -D warnings
 cargo fmt --all --check
 ```
 
-Run the interim egui app against a workspace directory (defaults to
-`$XDG_DATA_HOME/langloom` or `~/.local/share/langloom`):
+Run the app or build a package with Nix:
 
 ```sh
-cargo run -p langloom-egui -- /path/to/workspace
-cargo run -p langloom-egui -- --check /path/to/workspace   # headless summary
+nix-shell                # dev shell (Rust + Node + WebKit/GTK)
+npm install
+npm run tauri dev        # launch the Tauri + Svelte app
+
+nix build                # build ./result/bin/langloom (Wayland-safe wrapper)
+nix develop              # equivalent to nix-shell via the flake
+```
+
+Core logic is UI-agnostic and tested independently:
+
+```sh
+cargo test -p langloom-core
+cargo clippy --workspace --all-targets -- -D warnings
+cargo fmt --all --check
 ```
 
 ## Roadmap
 
-Legacy egui UI (kept as a reference until the Tauri port is complete):
+Tauri v2 + Svelte 5 + CodeMirror 6 — migration complete:
 
-- [x] Three-pane shell, docked tabs, dictionary grid, git panel
-- [x] Block live-preview Markdown editor (click-to-reveal, autosave)
-- [x] Etymology/derivation DAG, parent picker, dependency warnings
-- [x] Grid column sort / filter / per-column search / visibility
-- [x] Translation builder + execution + inline missing-word creation
-- [x] Notes sidebar tree + workspace registry + switcher + manage wizard
-
-Tauri v2 + Svelte 5 + CodeMirror 6 (current effort):
-
-- [x] R0 — Cargo workspace split (`langloom-core` + legacy `langloom-egui`)
+- [x] R0 — Cargo workspace split (`langloom-core` + temporary egui reference)
 - [x] R1 — Toolchain + Tauri scaffold + blank three-pane shell
 - [x] R2 — Registry + notes tree
 - [x] R3 — CodeMirror Live Preview editor
@@ -177,7 +178,6 @@ Tauri v2 + Svelte 5 + CodeMirror 6 (current effort):
 - [x] R5 — Translation builder + runner
 - [x] R6 — Git panel + auto-check-in
 - [x] R7 — Tree DnD + constructs (images/tables/task lists/footnotes)
-- [ ] R8 — Nix flake packaging + purge legacy egui
+- [x] R8 — Nix flake packaging + purge legacy egui
 
-
-See [`deferred.md`](deferred.md) for the full register of deferred work.
+See [`deferred.md`](deferred.md) for the full register of remaining work.
