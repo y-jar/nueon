@@ -30,6 +30,7 @@
   import { ui, selectTable, type DocState } from "../lib/state.svelte";
   import { createWordWithValues } from "../lib/words";
   import PillCell from "./PillCell.svelte";
+  import AddWordModal from "./AddWordModal.svelte";
 
   let {
     doc,
@@ -49,8 +50,6 @@
 
   let searchOpen = $state(false);
   let addWordOpen = $state(false);
-  let addWordName = $state("");
-  let addWordError = $state("");
 
   let selectedIds = $state<string[]>([]);
   let newTagName = $state("");
@@ -246,20 +245,6 @@
 
   function toggleSortDir() {
     sorting = [{ id: sortId, desc: !sortDesc }];
-  }
-
-  async function submitAddWord() {
-    const name = addWordName.trim();
-    if (!name || !doc.currentTable) return;
-    try {
-      await api.createWord(doc.currentTable, name);
-      addWordName = "";
-      addWordOpen = false;
-      addWordError = "";
-      onRefresh();
-    } catch (e) {
-      addWordError = String(e);
-    }
   }
 
   function setGhost(tag: string, value: api.FieldValue | null) {
@@ -977,34 +962,13 @@
   {/if}
 {/snippet}
 
-{#if addWordOpen}
-  <!-- svelte-ignore a11y_click_events_have_key_events -->
-  <!-- svelte-ignore a11y_no_noninteractive_element_interactions -->
-  <div
-    class="modal-overlay"
-    role="presentation"
-    onclick={(e) => {
-      if (e.target === e.currentTarget) addWordOpen = false;
-    }}
-  >
-    <div class="modal add-word-modal" role="dialog" aria-modal="true" tabindex="-1">
-      <div class="modal-head">
-        <span class="pane-title">{$t("grid.addWord")}</span>
-        <button onclick={() => (addWordOpen = false)}><X size={16} /></button>
-      </div>
-      <div class="modal-body">
-        <div class="row">
-          <input
-            placeholder={$t("grid.newWord")}
-            bind:value={addWordName}
-            onkeydown={(e) => e.key === "Enter" && submitAddWord()}
-          />
-          <button class="primary" onclick={submitAddWord}>
-            {$t("grid.add")}
-          </button>
-        </div>
-        {#if addWordError}<p class="error">{addWordError}</p>{/if}
-      </div>
-    </div>
-  </div>
+{#if addWordOpen && doc.currentTable}
+  <AddWordModal
+    table={doc.currentTable}
+    tags={doc.table?.tags ?? []}
+    options={relationOptions}
+    nameById={ui.nameById}
+    onClose={() => (addWordOpen = false)}
+    onCreated={onRefresh}
+  />
 {/if}

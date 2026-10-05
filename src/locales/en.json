@@ -133,6 +133,9 @@
     "addRelation": "Link word…",
     "ghostPlaceholder": "New word…",
     "addParent": "Link parent…",
+    "wordnameRequired": "A wordname is required.",
+    "createFailed": "Could not create the word.",
+    "addWordHint": "Ctrl+Enter to add",
     "parentRejected": "That word can't be a parent here (it would create a cycle)."
   },
   "inspector": {
