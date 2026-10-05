@@ -4,11 +4,11 @@
   import { open, save } from "@tauri-apps/plugin-dialog";
   import * as api from "../lib/api";
   import { ui } from "../lib/state.svelte";
-  import InterlinearGloss from "./InterlinearGloss.svelte";
   import TranslationToolbar from "./translation/TranslationToolbar.svelte";
   import MorphologyDrawer from "./translation/MorphologyDrawer.svelte";
   import SlotPalette from "./translation/SlotPalette.svelte";
   import ClauseCanvas from "./translation/ClauseCanvas.svelte";
+  import TranslationRunner from "./translation/TranslationRunner.svelte";
   import type { SlotItem } from "./translation/types";
 
   const DRAFT_TAG = "draft";
@@ -89,6 +89,11 @@
   function removeAffix(index: number) {
     affixes = affixes.filter((_, i) => i !== index);
     persistOptions();
+  }
+
+  function onSeparatorCommit() {
+    persistOptions();
+    run();
   }
 
   function toggleMorphology() {
@@ -202,7 +207,10 @@
     );
   }
 
-  function setDraft(index: number, patch: Partial<{ table: string; wordname: string; tags: string }>) {
+  function setDraft(
+    index: number,
+    patch: Partial<{ table: string; wordname: string; tags: string }>,
+  ) {
     drafts = { ...drafts, [index]: { ...missingDraft(index), ...patch } };
   }
 
@@ -245,25 +253,6 @@
       error = String(e);
     }
   }
-
-  function candidatesFor(index: number): api.WordHit[] {
-    const token = report?.tokens[index];
-    if (!token) return [];
-    return ui.wordIndex[token.normalized] ?? [];
-  }
-
-  function symbolText(symbol: api.Symbol): string {
-    switch (symbol.kind) {
-      case "word":
-        return symbol.value;
-      case "literal":
-        return `"${symbol.value}"`;
-      case "separator":
-        return symbol.value ? symbol.value : "␣";
-      case "placeholder":
-        return `⟨${symbol.value}⟩`;
-    }
-  }
 </script>
 
 <div class="translation">
@@ -303,103 +292,19 @@
     onDropSlot={(slot) => addSlot(slot)}
   />
 
-  <div class="runner">
-    <div class="row">
-      <span class="muted">{$t("translation.separator")}</span
-      ><input bind:value={separator} size="3" onblur={() => {
-        persistOptions();
-        run();
-      }} />
-      <textarea
-        placeholder={$t("translation.englishPlaceholder")}
-        bind:value={inputText}
-        rows="2"
-      ></textarea>
-      <button onclick={run}>{$t("translation.translate")}</button>
-    </div>
-
-    {#if error}<p class="error">{error}</p>{/if}
-
-    {#if report}
-      <div class="output">{report.output || $t("translation.empty")}</div>
-      <div class:ok={report.complete} class:warn={!report.complete}>
-        {report.complete ? $t("translation.complete") : $t("translation.incomplete")}
-      </div>
-
-      <InterlinearGloss gloss={report.gloss} />
-
-      {#if report.conflicts.length}
-        <div class="section-title">{$t("translation.conflicts")}</div>
-        {#each report.conflicts as index (index)}
-          <div class="row">
-            <span class="muted">{report.tokens[index]?.text}</span>
-            <select
-              value={choices[String(index)] ?? ""}
-              onchange={(e) => pickChoice(index, e.currentTarget.value)}
-            >
-              <option value="">{$t("translation.choose")}</option>
-              {#each candidatesFor(index) as hit (hit.id)}
-                <option value={hit.id}>{hit.wordname} · {hit.table}</option>
-              {/each}
-            </select>
-          </div>
-        {/each}
-      {/if}
-
-      {#if report.missing.length}
-        <div class="section-title">{$t("translation.missingWords")}</div>
-        {#each report.missing as index (index)}
-          <div class="row">
-            <span class="muted">{report.tokens[index]?.text}</span>
-            <select
-              value={missingDraft(index).table}
-              onchange={(e) =>
-                setDraft(index, { table: e.currentTarget.value })}
-            >
-              {#each ui.tables as table (table.name)}
-                <option value={table.name}>{table.name}</option>
-              {/each}
-            </select>
-            <input
-              placeholder={$t("translation.wordname")}
-              value={missingDraft(index).wordname}
-              oninput={(e) =>
-                setDraft(index, { wordname: e.currentTarget.value })}
-            />
-            <input
-              placeholder={$t("translation.tagsComma")}
-              value={missingDraft(index).tags}
-              oninput={(e) => setDraft(index, { tags: e.currentTarget.value })}
-            />
-            <button onclick={() => createMissing(index)}
-              >{$t("translation.create")}</button
-            >
-            <button onclick={() => createDraft(index)}
-              >{$t("translation.draft")}</button
-            >
-          </div>
-        {/each}
-      {/if}
-
-      {#if report.unfilled.length}
-        <div class="section-title">{$t("translation.unfilledSlots")}</div>
-        <p class="muted">
-          {#each report.unfilled as index (index)}
-            {#if index > 0}, {/if}{$t("translation.slot", {
-              values: { index },
-            })}
-          {/each}
-        </p>
-      {/if}
-
-      <div class="section-title">{$t("translation.breakdown")}</div>
-      {#each report.slots as outcome (outcome.index)}
-        <div class="row">
-          <span class="muted">{outcome.slot.kind} {outcome.index}</span>
-          <span>→</span>
-          <span class="mono">{symbolText(outcome.symbol)}</span>
-        </div>
-      {/each}
-    {/if}
-  </div>
+  <TranslationRunner
+    bind:inputText
+    bind:separator
+    {report}
+    {choices}
+    {drafts}
+    tables={ui.tables}
+    {error}
+    onRun={run}
+    onSeparatorCommit={onSeparatorCommit}
+    onPickChoice={pickChoice}
+    onSetDraft={setDraft}
+    onCreateMissing={createMissing}
+    onCreateDraft={createDraft}
+  />
 </div>
