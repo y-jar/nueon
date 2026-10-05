@@ -1049,37 +1049,94 @@ button.link {
   font-size: 12px;
 }
 
-.slot-list {
+.clause-canvas {
   flex: 1;
   display: flex;
   flex-wrap: wrap;
   gap: 6px;
   align-content: flex-start;
+  min-height: 72px;
+  padding: 10px;
+  background: var(--bg);
   border: 1px dashed var(--border);
-  border-radius: 4px;
-  padding: 8px;
-  min-height: 60px;
+  border-radius: 6px;
+  transition: border-color 120ms ease, background 120ms ease;
+}
+
+.clause-canvas.drop-active {
+  border-color: var(--accent);
+  background: rgba(196, 148, 92, 0.08);
 }
 
 .slot-card {
   display: flex;
   align-items: center;
-  gap: 4px;
+  gap: 5px;
+  padding: 3px 4px 3px 2px;
   background: var(--faint);
   border: 1px solid var(--border);
-  border-radius: 4px;
-  padding: 2px 6px;
+  border-radius: 6px;
   font-size: 12px;
 }
 
 .slot-card .grip {
-  cursor: grab;
+  display: grid;
+  place-items: center;
   color: var(--muted);
+  cursor: grab;
 }
 
-.slot-card input,
-.slot-card select {
-  width: 120px;
+.slot-card .grip:active {
+  cursor: grabbing;
+}
+
+.slot-card .badge {
+  padding: 1px 6px;
+  border-radius: 4px;
+  background: var(--bg);
+  color: var(--muted);
+  font-size: 11px;
+  white-space: nowrap;
+}
+
+.slot-card .badge.tag {
+  color: var(--accent);
+}
+
+.slot-card .badge.wildcard {
+  color: var(--accent);
+}
+
+.slot-card select,
+.slot-card .slot-input {
+  width: 110px;
+}
+
+.slot-card .slot-input {
+  background: transparent;
+  border: 1px solid transparent;
+  padding: 2px 4px;
+}
+
+.slot-card .slot-input:focus {
+  border-color: var(--accent);
+  background: var(--bg);
+}
+
+.slot-card .slot-remove {
+  padding: 2px 4px;
+  background: transparent;
+  border: none;
+  color: var(--muted);
+  opacity: 0;
+}
+
+.slot-card:hover .slot-remove {
+  opacity: 1;
+}
+
+.slot-card .slot-remove:hover {
+  color: #d6785a;
 }
 
 .runner {

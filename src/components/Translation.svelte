@@ -1,7 +1,6 @@
 <script lang="ts">
   import { onMount } from "svelte";
   import { t } from "svelte-i18n";
-  import { dndzone } from "svelte-dnd-action";
   import { open, save } from "@tauri-apps/plugin-dialog";
   import * as api from "../lib/api";
   import { ui } from "../lib/state.svelte";
@@ -9,11 +8,8 @@
   import TranslationToolbar from "./translation/TranslationToolbar.svelte";
   import MorphologyDrawer from "./translation/MorphologyDrawer.svelte";
   import SlotPalette from "./translation/SlotPalette.svelte";
-
-  interface SlotItem {
-    id: string;
-    slot: api.ClauseSlot;
-  }
+  import ClauseCanvas from "./translation/ClauseCanvas.svelte";
+  import type { SlotItem } from "./translation/types";
 
   const DRAFT_TAG = "draft";
 
@@ -137,11 +133,6 @@
 
   function addSlot(slot: api.ClauseSlot) {
     slots = [...slots, { id: newId(), slot }];
-  }
-
-  function handleDnd(event: CustomEvent<{ items: SlotItem[] }>) {
-    // Guideline: operate on the immutable array the action provides.
-    slots = [...event.detail.items];
   }
 
   function removeSlot(id: string) {
@@ -302,63 +293,15 @@
     onAddPrimitive={(slot) => addSlot(slot)}
   />
 
-  <div
-    class="slot-list"
-    use:dndzone={{ items: slots, flipDurationMs: 120, type: "clause" }}
-    onconsider={handleDnd}
-    onfinalize={handleDnd}
-  >
-    {#each slots as item (item.id)}
-      <div class="slot-card">
-        <span class="grip">⠿</span>
-        {#if item.slot.kind === "required_tag"}
-          <span>#</span>
-          <select
-            value={item.slot.tag}
-            onpointerdown={(e) => e.stopPropagation()}
-            onchange={(e) =>
-              updateSlot(item.id, {
-                kind: "required_tag",
-                tag: e.currentTarget.value,
-              })}
-          >
-            {#each palette as name (name)}
-              <option value={name}>{name}</option>
-            {/each}
-          </select>
-        {:else if item.slot.kind === "literal"}
-          <input
-            value={item.slot.text}
-            onpointerdown={(e) => e.stopPropagation()}
-            onblur={(e) =>
-              updateSlot(item.id, {
-                kind: "literal",
-                text: e.currentTarget.value,
-              })}
-          />
-        {:else if item.slot.kind === "wildcard"}
-          <em>{$t("translation.wildcardLabel")}</em>
-        {:else}
-          <em>{$t("translation.spacerLabel")}</em>
-          <input
-            value={item.slot.text ?? ""}
-            placeholder={separator}
-            size="4"
-            onpointerdown={(e) => e.stopPropagation()}
-            onblur={(e) =>
-              updateSlot(item.id, {
-                kind: "spacer",
-                text: e.currentTarget.value || null,
-              })}
-          />
-        {/if}
-        <button onclick={() => removeSlot(item.id)}>✕</button>
-      </div>
-    {/each}
-    {#if slots.length === 0}
-      <p class="muted">{$t("translation.dropHint")}</p>
-    {/if}
-  </div>
+  <ClauseCanvas
+    items={slots}
+    tags={palette}
+    {separator}
+    onReorder={(items) => (slots = [...items])}
+    onUpdate={updateSlot}
+    onRemove={removeSlot}
+    onDropSlot={(slot) => addSlot(slot)}
+  />
 
   <div class="runner">
     <div class="row">
