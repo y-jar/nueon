@@ -69,7 +69,7 @@
   });
 </script>
 
-{#if ui.root}
+{#if ui.root && !ui.showWorkspacePicker}
   <div
     class="shell"
     class:has-sidebar={ui.sidebarOpen}

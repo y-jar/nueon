@@ -20,6 +20,15 @@
     }
   }
 
+  async function openExisting(target: string) {
+    error = "";
+    try {
+      await openWorkspace(target);
+    } catch (e) {
+      error = String(e);
+    }
+  }
+
   async function doCreate() {
     error = "";
     if (!name.trim() || !destination.trim()) {
@@ -48,6 +57,11 @@
 </script>
 
 <div class="onboarding">
+  {#if ui.root}
+    <button class="back" onclick={() => (ui.showWorkspacePicker = false)}>
+      {$t("onboarding.cancel")}
+    </button>
+  {/if}
   <h1>{$t("app.brand")}</h1>
   <p class="muted">{$t("onboarding.tagline")}</p>
 
@@ -57,7 +71,7 @@
       <ul class="ws-open">
         {#each ui.workspaces as ws (ws.path)}
           <li>
-            <button onclick={() => openWorkspace(ws.path)}
+            <button onclick={() => openExisting(ws.path)}
               >{ws.name || ws.path}</button
             >
           </li>

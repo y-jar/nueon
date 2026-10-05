@@ -81,6 +81,8 @@ export const ui = $state({
   inspectorOpen: false,
   inspectorDock: "right" as "left" | "right",
   settingsOpen: false,
+  /** Show the workspace picker/onboarding over an open workspace. */
+  showWorkspacePicker: false,
 
   // Tiling layout.
   groups: [firstGroup] as TabGroup[],
@@ -589,7 +591,15 @@ export async function init(): Promise<void> {
 
 export async function openWorkspace(path: string): Promise<void> {
   ui.status = `opening ${path}…`;
-  await api.workspaceOpen(path);
+  try {
+    await api.workspaceOpen(path);
+  } catch (error) {
+    // The backend prunes vanished folders from the registry; resync.
+    ui.status = "";
+    await refreshWorkspaces();
+    throw error;
+  }
+  ui.showWorkspacePicker = false;
   resetDocuments();
   await refreshWorkspaces();
   await refreshTree();
@@ -604,6 +614,7 @@ export async function createWorkspace(
 ): Promise<void> {
   ui.status = `creating ${name}…`;
   await api.workspaceCreate(name, destination);
+  ui.showWorkspacePicker = false;
   resetDocuments();
   await refreshWorkspaces();
   await refreshTree();

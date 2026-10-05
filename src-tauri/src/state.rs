@@ -1,9 +1,9 @@
 //! Shared application state owned by the Tauri runtime.
 
-use std::path::Path;
+use std::path::{Path, PathBuf};
 
 use langloom_core::global::GlobalConfig;
-use langloom_core::Workspace;
+use langloom_core::{StorageError, Workspace};
 
 /// State shared across commands.
 #[derive(Default)]
@@ -16,18 +16,37 @@ pub struct AppState {
 
 impl AppState {
     /// Load the registry and try to reopen the last-used workspace.
+    ///
+    /// Workspaces whose directory has vanished are pruned from the registry
+    /// rather than silently re-created, so the UI falls back to onboarding.
     pub fn load() -> Self {
-        let global = GlobalConfig::load_default();
-        let workspace = global
-            .last
-            .as_deref()
-            .and_then(|path| Workspace::load(path).ok())
-            .or_else(|| {
-                global
-                    .workspaces
-                    .first()
-                    .and_then(|entry| Workspace::load(&entry.path).ok())
-            });
+        let mut global = GlobalConfig::load_default();
+        let mut pruned = false;
+
+        let mut candidates: Vec<PathBuf> = Vec::new();
+        if let Some(last) = global.last.clone() {
+            candidates.push(last);
+        }
+        candidates.extend(global.workspaces.iter().map(|entry| entry.path.clone()));
+
+        let mut workspace = None;
+        for path in candidates {
+            match Workspace::open(&path) {
+                Ok(opened) => {
+                    workspace = Some(opened);
+                    break;
+                }
+                Err(StorageError::NotFound(_)) => {
+                    global.remove(&path);
+                    pruned = true;
+                }
+                Err(_) => {}
+            }
+        }
+
+        if pruned {
+            let _ = global.save();
+        }
         Self { global, workspace }
     }
 

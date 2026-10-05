@@ -112,6 +112,16 @@ impl Workspace {
         })
     }
 
+    /// Open an existing workspace, erroring instead of fabricating one when
+    /// `root_path` does not exist on disk.
+    pub fn open(root_path: impl Into<PathBuf>) -> Result<Self, StorageError> {
+        let root_path = root_path.into();
+        if !root_path.is_dir() {
+            return Err(StorageError::NotFound(root_path));
+        }
+        Self::load(root_path)
+    }
+
     /// Load an existing workspace, creating the layout if it is missing.
     pub fn load(root_path: impl Into<PathBuf>) -> Result<Self, StorageError> {
         let root_path = root_path.into();
@@ -1399,5 +1409,27 @@ mod tests {
         assert!(!layout.sidebar_open);
         assert!(layout.inspector_open);
         assert_eq!(layout.inspector_dock, "left");
+    }
+
+    #[test]
+    fn open_rejects_missing_directory_without_creating_it() {
+        let dir = tempfile::tempdir().unwrap();
+        let missing = dir.path().join("gone");
+
+        assert!(matches!(
+            Workspace::open(&missing),
+            Err(StorageError::NotFound(_))
+        ));
+        assert!(!missing.exists(), "open must not scaffold a missing dir");
+    }
+
+    #[test]
+    fn open_loads_an_existing_workspace() {
+        let dir = tempfile::tempdir().unwrap();
+        let mut ws = Workspace::new(dir.path()).unwrap();
+        ws.create_table("nouns").unwrap();
+
+        let opened = Workspace::open(dir.path()).unwrap();
+        assert!(opened.dictionary.tables.contains_key("nouns"));
     }
 }

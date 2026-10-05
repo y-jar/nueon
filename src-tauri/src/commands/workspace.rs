@@ -6,7 +6,7 @@ use std::sync::Mutex;
 use serde::Serialize;
 use tauri::{AppHandle, State};
 
-use langloom_core::{UiLayout, WindowLayout, Workspace, WorkspaceEntry};
+use langloom_core::{StorageError, UiLayout, WindowLayout, Workspace, WorkspaceEntry};
 
 use super::changed;
 use crate::state::{default_name, AppState};
@@ -40,7 +40,22 @@ pub fn workspace_open(
     state: State<'_, Shared>,
     path: String,
 ) -> Result<String, String> {
-    let workspace = Workspace::load(&path).map_err(|err| err.to_string())?;
+    let workspace = match Workspace::open(&path) {
+        Ok(workspace) => workspace,
+        Err(err) => {
+            // A vanished directory is dropped from the registry so the
+            // stale entry does not linger in the workspace list.
+            if matches!(err, StorageError::NotFound(_)) {
+                if let Ok(mut state) = state.lock() {
+                    state.global.remove(&PathBuf::from(&path));
+                    let _ = state.global.save();
+                }
+                changed(&app, "workspace");
+                return Err(format!("workspace folder not found: {path}"));
+            }
+            return Err(err.to_string());
+        }
+    };
     let root = workspace.root_path.display().to_string();
 
     let mut state = state.lock().map_err(|_| "state poisoned".to_string())?;

@@ -7,6 +7,7 @@
     GitBranch,
     Settings,
     FolderOpen,
+    FolderPlus,
   } from "@lucide/svelte";
   import {
     ui,
@@ -16,6 +17,17 @@
   } from "../lib/state.svelte";
 
   let wsMenu = $state(false);
+  let wsError = $state("");
+
+  async function switchTo(path: string) {
+    wsError = "";
+    try {
+      await openWorkspace(path);
+      wsMenu = false;
+    } catch (e) {
+      wsError = String(e);
+    }
+  }
 
   const items = [
     { id: "notes", icon: FileText, label: "activity.notes" },
@@ -61,16 +73,18 @@
   {#if wsMenu}
     <div class="ws-flyout">
       {#each ui.workspaces as ws (ws.path)}
-        <button
-          onclick={() => {
-            wsMenu = false;
-            openWorkspace(ws.path);
-          }}>{ws.name || ws.path}</button
-        >
+        <button onclick={() => switchTo(ws.path)}>{ws.name || ws.path}</button>
       {/each}
-      {#if !ui.workspaces.length}
-        <p class="muted">{$t("sidebar.openWorkspace")}</p>
-      {/if}
+      {#if wsError}<p class="error">{wsError}</p>{/if}
+      <button
+        class="ws-new"
+        onclick={() => {
+          wsMenu = false;
+          ui.showWorkspacePicker = true;
+        }}
+      >
+        <FolderPlus size={14} /> {$t("sidebar.switchOrNew")}
+      </button>
     </div>
   {/if}
 </nav>

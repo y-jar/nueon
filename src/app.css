@@ -196,6 +196,16 @@ textarea:focus {
   font-size: 12px;
 }
 
+.ws-flyout .ws-new {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin-top: 4px;
+  border-top: 1px solid var(--border);
+  border-radius: 0;
+  padding-top: 8px;
+}
+
 .ws-flyout button:hover {
   background: var(--faint);
 }

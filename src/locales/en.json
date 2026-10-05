@@ -15,13 +15,15 @@
     "open": "Open",
     "chooseFolder": "Choose folder",
     "nameAndDestinationRequired": "Name and destination are required",
-    "pathRequired": "Path is required"
+    "pathRequired": "Path is required",
+    "cancel": "Back to workspace"
   },
   "sidebar": {
     "notes": "Notes",
     "tables": "Tables",
     "workspace": "Workspace",
     "openWorkspace": "Open workspace",
+    "switchOrNew": "Switch / New Workspace",
     "newNoteTooltip": "New note",
     "newFolderTooltip": "New folder",
     "noteButton": "＋note",
