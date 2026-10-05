@@ -39,7 +39,7 @@
         pname = "langloom-frontend";
         version = "0.1.0";
         src = ./.;
-        npmDepsHash = "sha256-3h5wtpKiSVsnCaBzn0HZY/4YpDQN16Lc1vL94e0bedc=";
+        npmDepsHash = "sha256-XGjHRIZbnq3Y/L+YqLffOk1t39FwNk9NrKejLC3VPUc=";
         npmBuildScript = "build";
         installPhase = ''
           runHook preInstall

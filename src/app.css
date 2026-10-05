@@ -79,30 +79,125 @@ textarea:focus {
 
 .shell {
   display: grid;
-  grid-template-columns: 240px 1fr 260px;
-  grid-template-rows: 40px 1fr;
+  grid-template-columns: 48px 1fr;
+  grid-template-rows: 1fr 22px;
   grid-template-areas:
-    "top top top"
-    "sidebar center inspector";
+    "activity center"
+    "status status";
   height: 100%;
   background: var(--bg);
   color: var(--text);
 }
 
-.topbar {
-  grid-area: top;
-  display: flex;
-  align-items: baseline;
-  gap: 12px;
-  padding: 0 12px;
-  background: var(--panel);
-  border-bottom: 1px solid var(--border);
-  align-items: center;
+.shell.has-sidebar {
+  grid-template-columns: 48px 260px 1fr;
+  grid-template-areas:
+    "activity sidebar center"
+    "status status status";
 }
 
-.brand {
-  font-weight: 600;
-  letter-spacing: 0.02em;
+.shell.has-sidebar.has-inspector:not(.dock-left) {
+  grid-template-columns: 48px 260px 1fr 300px;
+  grid-template-areas:
+    "activity sidebar center inspector"
+    "status status status status";
+}
+
+.shell.has-sidebar.has-inspector.dock-left {
+  grid-template-columns: 48px 300px 260px 1fr;
+  grid-template-areas:
+    "activity inspector sidebar center"
+    "status status status status";
+}
+
+.shell.has-inspector:not(.has-sidebar):not(.dock-left) {
+  grid-template-columns: 48px 1fr 300px;
+  grid-template-areas:
+    "activity center inspector"
+    "status status status";
+}
+
+.shell.has-inspector:not(.has-sidebar).dock-left {
+  grid-template-columns: 48px 300px 1fr;
+  grid-template-areas:
+    "activity inspector center"
+    "status status status";
+}
+
+.activitybar {
+  grid-area: activity;
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 4px;
+  padding: 8px 0;
+  background: var(--panel);
+  border-right: 1px solid var(--border);
+}
+
+.activitybar .brand {
+  display: grid;
+  place-items: center;
+  width: 30px;
+  height: 30px;
+  margin-bottom: 8px;
+  border-radius: 8px;
+  background: var(--accent);
+  color: var(--bg);
+  font-weight: 700;
+}
+
+.activity {
+  display: grid;
+  place-items: center;
+  width: 34px;
+  height: 34px;
+  padding: 0;
+  background: transparent;
+  border: none;
+  border-radius: 6px;
+  color: var(--muted);
+}
+
+.activity:hover {
+  background: var(--faint);
+  color: var(--text);
+}
+
+.activity.active {
+  background: var(--faint);
+  color: var(--accent);
+}
+
+.ws-flyout {
+  position: absolute;
+  left: 52px;
+  bottom: 44px;
+  z-index: 900;
+  display: flex;
+  flex-direction: column;
+  min-width: 180px;
+  max-width: 320px;
+  padding: 4px;
+  background: var(--panel);
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  box-shadow: 0 8px 28px rgba(0, 0, 0, 0.45);
+}
+
+.ws-flyout button {
+  overflow: hidden;
+  text-align: left;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  background: transparent;
+  border: none;
+  font-size: 12px;
+}
+
+.ws-flyout button:hover {
+  background: var(--faint);
 }
 
 .sidebar {
@@ -118,9 +213,18 @@ textarea:focus {
 
 .center {
   grid-area: center;
-  overflow: hidden;
   display: flex;
   flex-direction: column;
+  min-width: 0;
+  overflow: hidden;
+}
+
+.center-body {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+  overflow: hidden;
 }
 
 .inspector {
@@ -129,6 +233,19 @@ textarea:focus {
   background: var(--panel);
   border-left: 1px solid var(--border);
   overflow: auto;
+}
+
+.statusbar {
+  grid-area: status;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 0 10px;
+  background: var(--panel);
+  border-top: 1px solid var(--border);
+  font-size: 11px;
+  white-space: nowrap;
+  overflow: hidden;
 }
 
 .pane-head {
@@ -369,25 +486,184 @@ textarea:focus {
 
 /* -- center tabs ---------------------------------------------------------- */
 
-.tabs {
+.tabbar {
   display: flex;
+  align-items: stretch;
   gap: 4px;
-  padding: 6px 8px 0;
+  padding: 4px 6px;
   background: var(--panel);
   border-bottom: 1px solid var(--border);
 }
 
-.tabs button {
-  background: transparent;
-  border: none;
-  border-bottom: 2px solid transparent;
-  border-radius: 0;
-  padding: 4px 10px;
+.tab-strip {
+  display: flex;
+  flex: 1;
+  align-items: center;
+  gap: 4px;
+  min-height: 30px;
+  overflow-x: auto;
 }
 
-.tabs button.active {
+.tab {
+  display: flex;
+  align-items: center;
+  max-width: 200px;
+  background: var(--faint);
+  border: 1px solid var(--border);
+  border-radius: 5px;
+}
+
+.tab.active {
+  background: var(--bg);
+  border-color: var(--accent);
+}
+
+.tab-label {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  max-width: 170px;
+  padding: 4px 6px;
+  background: transparent;
+  border: none;
+  color: var(--muted);
+}
+
+.tab.active .tab-label {
+  color: var(--text);
+}
+
+.tab-title {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.tab-dot {
   color: var(--accent);
-  border-bottom-color: var(--accent);
+}
+
+.tab-close {
+  padding: 2px 4px;
+  background: transparent;
+  border: none;
+  color: var(--muted);
+  opacity: 0;
+}
+
+.tab:hover .tab-close {
+  opacity: 1;
+}
+
+.tab-close:hover {
+  color: var(--text);
+}
+
+.tab-action {
+  display: grid;
+  place-items: center;
+  width: 30px;
+  background: transparent;
+  border: 1px solid transparent;
+  border-radius: 5px;
+  color: var(--muted);
+}
+
+.tab-action:hover {
+  background: var(--faint);
+  color: var(--text);
+}
+
+.tab-action.active {
+  color: var(--accent);
+  border-color: var(--accent);
+}
+
+/* -- empty states + modals ------------------------------------------------ */
+
+.center-empty {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  padding: 32px;
+  text-align: center;
+  color: var(--muted);
+}
+
+.center-empty h2 {
+  margin: 0;
+  color: var(--text);
+  font-size: 16px;
+}
+
+.center-empty .row {
+  flex-wrap: wrap;
+  justify-content: center;
+}
+
+.table-list {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.table-list .tree-name {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  width: 100%;
+  flex: none;
+}
+
+.sidebar .row input {
+  flex: 1;
+  min-width: 0;
+}
+
+button.wide {
+  width: 100%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  margin-top: 4px;
+}
+
+.modal-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 2000;
+  display: grid;
+  place-items: center;
+  background: rgba(0, 0, 0, 0.5);
+}
+
+.modal {
+  width: min(760px, 90vw);
+  max-height: 85vh;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  background: var(--panel);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  box-shadow: 0 12px 48px rgba(0, 0, 0, 0.5);
+}
+
+.modal-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 10px 14px;
+  border-bottom: 1px solid var(--border);
+}
+
+.modal-body {
+  overflow: auto;
+  padding-bottom: 8px;
 }
 
 /* -- dictionary grid ------------------------------------------------------ */
@@ -691,11 +967,6 @@ button.link {
 
 /* -- source control ------------------------------------------------------ */
 
-.topbar button.active {
-  color: var(--accent);
-  border-color: var(--accent);
-}
-
 .git-panel textarea {
   width: 100%;
   margin: 6px 0;
@@ -953,9 +1224,7 @@ sup.cm-footnote {
 /* -- settings ------------------------------------------------------------ */
 
 .settings {
-  padding: 12px;
-  overflow: auto;
-  height: 100%;
+  padding: 0 14px 8px;
 }
 
 .settings .field {

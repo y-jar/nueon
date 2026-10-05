@@ -2,7 +2,6 @@
   import { t } from "svelte-i18n";
   import {
     ui,
-    openWorkspace,
     createNote,
     createFolder,
     selectTable,
@@ -15,7 +14,6 @@
   let newName = $state("");
   let newKind = $state<"note" | "folder" | null>(null);
   let newBase = $state("");
-  let wsMenu = $state(false);
   let error = $state("");
 
   // Context-menu "new note/folder here" requests.
@@ -127,27 +125,4 @@
       >{table.name} ({table.word_count})</button
     >
   {/each}
-
-  <div class="grow"></div>
-
-  <div class="switcher">
-    <span class="pane-title">{$t("sidebar.workspace")}</span>
-    <button class="ws-button" onclick={() => (wsMenu = !wsMenu)}>
-      {ui.root ?? $t("sidebar.openWorkspace")}
-    </button>
-    {#if wsMenu}
-      <ul class="ws-menu">
-        {#each ui.workspaces as ws (ws.path)}
-          <li>
-            <button
-              onclick={() => {
-                wsMenu = false;
-                openWorkspace(ws.path);
-              }}>{ws.name || ws.path}</button
-            >
-          </li>
-        {/each}
-      </ul>
-    {/if}
-  </div>
 </aside>

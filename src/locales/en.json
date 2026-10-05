@@ -40,11 +40,30 @@
   "editor": {
     "selectNote": "Select a note, or create one from the sidebar."
   },
+  "activity": {
+    "notes": "Notes",
+    "dictionary": "Dictionary",
+    "translation": "Translation",
+    "git": "Source Control",
+    "settings": "Settings",
+    "toggleSidebar": "Toggle sidebar"
+  },
   "tabs": {
     "notes": "Notes",
     "dictionary": "Dictionary",
     "translation": "Translation",
-    "settings": "Settings"
+    "settings": "Settings",
+    "close": "Close tab",
+    "newNote": "New note",
+    "emptyTitle": "Nothing open",
+    "emptyHint": "Open a note or a table from the sidebar, or start something new."
+  },
+  "tables": {
+    "newTable": "New table",
+    "namePlaceholder": "table name",
+    "create": "Create",
+    "exists": "A table with that name already exists",
+    "empty": "No tables yet. Create one to start adding words."
   },
   "settings": {
     "language": "Language",
@@ -95,7 +114,8 @@
     "cannotAddParent": "Cannot add parent: it would create a cycle",
     "addField": "add field…",
     "spelling": "Possible misspellings: {words}",
-    "apply": "Apply"
+    "apply": "Apply",
+    "toggle": "Toggle Inspector"
   },
   "translation": {
     "loadPreset": "load preset…",

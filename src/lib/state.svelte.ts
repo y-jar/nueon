@@ -1,13 +1,40 @@
 import { listen } from "@tauri-apps/api/event";
 import * as api from "./api";
 
-export type View = "notes" | "dictionary" | "translation" | "settings";
+/** Left activity ribbon selection. */
+export type Activity = "notes" | "dictionary" | "translation" | "git";
+
+/** The kind of document a center tab represents. */
+export type TabKind = "note" | "table" | "translation";
+
+/** A center workspace tab. */
+export interface Tab {
+  id: string;
+  kind: TabKind;
+  /** Note path or table name; `null` for the translation tool. */
+  ref: string | null;
+  title: string;
+}
+
+/** Which panel the center pane is rendering (driven by the active tab). */
+export type View = "notes" | "dictionary" | "translation";
 
 /** Global reactive UI state (Svelte 5 runes). */
 export const ui = $state({
   workspaces: [] as api.WorkspaceEntry[],
   root: null as string | null,
+
+  // Shell chrome.
+  activity: "notes" as Activity,
+  sidebarOpen: true,
   view: "notes" as View,
+  tabs: [] as Tab[],
+  activeTabId: null as string | null,
+  inspectorOpen: false,
+  inspectorDock: "right" as "left" | "right",
+  settingsOpen: false,
+
+  // Active document state.
   tree: [] as api.NoteNode[],
   selected: null as string | null,
   noteContent: "",
@@ -19,8 +46,9 @@ export const ui = $state({
   selectedEntry: null as string | null,
   wordIndex: {} as api.WordIndex,
   nameById: {} as Record<string, string>,
-  gitPanelOpen: false,
   vcsRevision: 0,
+
+  // Notes drag/context-menu plumbing.
   dragPath: null as string | null,
   contextMenu: null as {
     x: number;
@@ -31,6 +59,16 @@ export const ui = $state({
   renameTarget: null as string | null,
   newRequest: null as { kind: "note" | "folder"; base: string } | null,
 });
+
+function baseName(path: string): string {
+  return path.split("/").filter(Boolean).pop() ?? path;
+}
+
+function newTabId(): string {
+  return crypto.randomUUID();
+}
+
+// -- data loading --------------------------------------------------------
 
 export async function refreshWorkspaces(): Promise<void> {
   ui.workspaces = await api.workspaceList();
@@ -69,26 +107,26 @@ export async function refreshTables(): Promise<void> {
   if (!ui.root) {
     ui.currentTable = null;
     ui.table = null;
+    ui.tabs = ui.tabs.filter((tab) => tab.kind !== "table");
     return;
   }
-  if (
-    ui.currentTable &&
-    !ui.tables.some((table) => table.name === ui.currentTable)
-  ) {
-    ui.currentTable = null;
+
+  // Drop tabs whose table no longer exists.
+  const names = new Set(ui.tables.map((table) => table.name));
+  const stale = ui.tabs.filter(
+    (tab) => tab.kind === "table" && tab.ref !== null && !names.has(tab.ref),
+  );
+  if (stale.length) {
+    ui.tabs = ui.tabs.filter((tab) => !stale.includes(tab));
+    if (stale.some((tab) => tab.id === ui.activeTabId)) activateNeighbor();
   }
-  if (!ui.currentTable && ui.tables.length) {
-    await selectTable(ui.tables[0].name);
+
+  if (ui.currentTable && !names.has(ui.currentTable)) {
+    ui.currentTable = null;
+    ui.table = null;
   } else if (ui.currentTable) {
     await refreshTable();
   }
-}
-
-export async function selectTable(name: string): Promise<void> {
-  ui.currentTable = name;
-  ui.table = await api.getTable(name);
-  ui.selectedEntry = null;
-  ui.view = "dictionary";
 }
 
 export async function refreshTable(): Promise<void> {
@@ -101,12 +139,136 @@ export function selectEntry(id: string): void {
   ui.selectedEntry = ui.selectedEntry === id ? null : id;
 }
 
-export function setView(view: View): void {
-  ui.view = view;
+// -- shell chrome --------------------------------------------------------
+
+export function setActivity(activity: Activity): void {
+  ui.activity = activity;
+  ui.sidebarOpen = true;
+  if (activity === "translation") openTranslation();
 }
 
-export function toggleGitPanel(): void {
-  ui.gitPanelOpen = !ui.gitPanelOpen;
+export function toggleSidebar(): void {
+  ui.sidebarOpen = !ui.sidebarOpen;
+}
+
+export function toggleInspector(): void {
+  ui.inspectorOpen = !ui.inspectorOpen;
+}
+
+export function setInspectorDock(side: "left" | "right"): void {
+  ui.inspectorDock = side;
+}
+
+export function openSettings(): void {
+  ui.settingsOpen = true;
+}
+
+export function closeSettings(): void {
+  ui.settingsOpen = false;
+}
+
+// -- tabs ----------------------------------------------------------------
+
+function activateNeighbor(): void {
+  const index = ui.tabs.findIndex((tab) => tab.id === ui.activeTabId);
+  if (index === -1) {
+    ui.activeTabId = ui.tabs[0]?.id ?? null;
+  } else {
+    const next = ui.tabs[index + 1] ?? ui.tabs[index - 1] ?? null;
+    ui.activeTabId = next?.id ?? null;
+  }
+  if (ui.activeTabId) {
+    void activateTab(ui.activeTabId);
+  }
+}
+
+export async function activateTab(id: string): Promise<void> {
+  const tab = ui.tabs.find((candidate) => candidate.id === id);
+  if (!tab) return;
+  ui.activeTabId = id;
+  if (tab.kind === "note" && tab.ref) {
+    ui.view = "notes";
+    await loadNote(tab.ref);
+  } else if (tab.kind === "table" && tab.ref) {
+    ui.view = "dictionary";
+    await loadTable(tab.ref);
+  } else {
+    ui.view = "translation";
+  }
+}
+
+export async function openNote(path: string): Promise<void> {
+  ui.activity = "notes";
+  let tab = ui.tabs.find((t) => t.kind === "note" && t.ref === path);
+  if (!tab) {
+    tab = { id: newTabId(), kind: "note", ref: path, title: baseName(path) };
+    ui.tabs = [...ui.tabs, tab];
+  }
+  await activateTab(tab.id);
+}
+
+export async function openTable(name: string): Promise<void> {
+  ui.activity = "dictionary";
+  let tab = ui.tabs.find((t) => t.kind === "table" && t.ref === name);
+  if (!tab) {
+    tab = { id: newTabId(), kind: "table", ref: name, title: name };
+    ui.tabs = [...ui.tabs, tab];
+  }
+  await activateTab(tab.id);
+}
+
+export async function openTranslation(): Promise<void> {
+  let tab = ui.tabs.find((t) => t.kind === "translation");
+  if (!tab) {
+    tab = {
+      id: newTabId(),
+      kind: "translation",
+      ref: null,
+      title: "Translation",
+    };
+    ui.tabs = [...ui.tabs, tab];
+  }
+  await activateTab(tab.id);
+}
+
+export function closeTab(id: string): void {
+  const wasActive = ui.activeTabId === id;
+  ui.tabs = ui.tabs.filter((tab) => tab.id !== id);
+  if (wasActive) activateNeighbor();
+}
+
+export function reorderTabs(items: Tab[]): void {
+  ui.tabs = [...items];
+}
+
+export function closeAllTabs(): void {
+  ui.tabs = [];
+  ui.activeTabId = null;
+}
+
+// -- active document loaders --------------------------------------------
+
+async function loadNote(path: string): Promise<void> {
+  const content = await api.readNote(path);
+  ui.selected = path;
+  ui.noteContent = content;
+  ui.dirty = false;
+}
+
+async function loadTable(name: string): Promise<void> {
+  ui.currentTable = name;
+  ui.table = await api.getTable(name);
+  ui.selectedEntry = null;
+}
+
+// -- notes CRUD ----------------------------------------------------------
+
+export async function selectNote(path: string): Promise<void> {
+  await openNote(path);
+}
+
+export async function selectTable(name: string): Promise<void> {
+  await openTable(name);
 }
 
 export function openContextMenu(
@@ -167,12 +329,7 @@ export async function init(): Promise<void> {
 export async function openWorkspace(path: string): Promise<void> {
   ui.status = `opening ${path}…`;
   await api.workspaceOpen(path);
-  ui.selected = null;
-  ui.noteContent = "";
-  ui.dirty = false;
-  ui.currentTable = null;
-  ui.table = null;
-  ui.selectedEntry = null;
+  resetDocuments();
   await refreshWorkspaces();
   await refreshTree();
   await loadWordIndex();
@@ -186,12 +343,7 @@ export async function createWorkspace(
 ): Promise<void> {
   ui.status = `creating ${name}…`;
   await api.workspaceCreate(name, destination);
-  ui.selected = null;
-  ui.noteContent = "";
-  ui.dirty = false;
-  ui.currentTable = null;
-  ui.table = null;
-  ui.selectedEntry = null;
+  resetDocuments();
   await refreshWorkspaces();
   await refreshTree();
   await loadWordIndex();
@@ -199,12 +351,16 @@ export async function createWorkspace(
   ui.status = "";
 }
 
-export async function selectNote(path: string): Promise<void> {
-  const content = await api.readNote(path);
-  ui.selected = path;
-  ui.noteContent = content;
+function resetDocuments(): void {
+  ui.selected = null;
+  ui.noteContent = "";
   ui.dirty = false;
-  ui.view = "notes";
+  ui.currentTable = null;
+  ui.table = null;
+  ui.selectedEntry = null;
+  ui.tabs = [];
+  ui.activeTabId = null;
+  ui.activity = "notes";
 }
 
 export async function createNote(relPath: string): Promise<void> {
@@ -226,12 +382,35 @@ export async function renamePath(
   if (ui.selected === oldPath) {
     ui.selected = newPath;
   }
+  const prefix = `${oldPath}/`;
+  ui.tabs = ui.tabs.map((tab) => {
+    if (tab.kind !== "note" || !tab.ref) return tab;
+    if (tab.ref === oldPath) {
+      return { ...tab, ref: newPath, title: baseName(newPath) };
+    }
+    if (tab.ref.startsWith(prefix)) {
+      const ref = `${newPath}/${tab.ref.slice(prefix.length)}`;
+      return { ...tab, ref, title: baseName(ref) };
+    }
+    return tab;
+  });
   ui.status = `renamed to ${newPath}`;
 }
 
 export async function deletePath(relPath: string): Promise<void> {
   await api.deleteNote(relPath);
-  if (ui.selected === relPath || ui.selected?.startsWith(`${relPath}/`)) {
+  const prefix = `${relPath}/`;
+  const removed = ui.tabs.filter(
+    (tab) =>
+      tab.kind === "note" &&
+      tab.ref !== null &&
+      (tab.ref === relPath || tab.ref.startsWith(prefix)),
+  );
+  if (removed.length) {
+    ui.tabs = ui.tabs.filter((tab) => !removed.includes(tab));
+    if (removed.some((tab) => tab.id === ui.activeTabId)) activateNeighbor();
+  }
+  if (ui.selected === relPath || ui.selected?.startsWith(prefix)) {
     ui.selected = null;
     ui.noteContent = "";
   }

@@ -160,7 +160,7 @@
   }
 </script>
 
-<aside class="inspector git-panel">
+<aside class="sidebar git-panel">
   <div class="pane-title">{$t("git.sourceControl")}</div>
 
   {#if !ui.root}
