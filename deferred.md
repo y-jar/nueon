@@ -73,3 +73,11 @@ were completed during the Tauri migration (R0–R8).
 - ~~Undo/redo history for dictionary edits.~~ (D6, backend snapshots)
 - ~~One-time warnings with a "don't show again" checkbox (tag removal,
   dependency warnings).~~ (D6)
+
+## Quality-of-life add-ons (from `tmp notes/QOL`)
+
+- Quick-add "Draft Word" stubs from the translation builder.
+- Rule-Based Affix & Declension Engine (full morphemic structure engine; the
+  D3 affix rules are the minimal precursor).
+- Interactive Phonology & IPA Chart with Sound Change Engine (SCA).
+- Automatic Interlinear Gloss Generator (Leipzig rules) + clipboard exports.
