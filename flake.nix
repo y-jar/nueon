@@ -108,21 +108,8 @@
         '';
       };
 
-      devShells.${system}.default = pkgs.mkShell {
-        nativeBuildInputs = with pkgs; [ pkg-config ];
-        buildInputs = runtimeLibs;
-        packages = with pkgs; [
-          cargo
-          rustc
-          rust-analyzer
-          clippy
-          rustfmt
-          git
-          nodejs_22
-        ];
-        LD_LIBRARY_PATH = pkgs.lib.makeLibraryPath runtimeLibs;
-        WEBKIT_DISABLE_DMABUF_RENDERER = "1";
-        WEBKIT_DISABLE_COMPOSITING_MODE = "1";
-      };
+      # Single source of truth: shell.nix defines the dev environment, tools,
+      # and `loom-*` commands (also reachable through short aliases in-shell).
+      devShells.${system}.default = import ./shell.nix { inherit pkgs; };
     };
 }

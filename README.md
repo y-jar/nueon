@@ -166,6 +166,21 @@ cargo clippy --workspace --all-targets -- -D warnings
 cargo fmt --all --check
 ```
 
+### Dev shell commands
+
+The Nix shell provides short aliases and matching `loom-*` commands:
+
+```sh
+deps dev run app pkg            # npm install / tauri dev / build+launch / launch / nix build
+fmt fmtcheck clippy ctest testall   # formatting, lints, core/workspace tests
+fecheck febuild clean gates     # frontend check/build, clean, full gate suite
+aliases                         # list every command
+```
+
+`run` builds the Nix package (`nix build .#`) and launches it; `dev` starts the
+hot-reload dev server. The `loom-*` names also work non-interactively, e.g.
+`nix develop --command loom-ctest`.
+
 ## Roadmap
 
 Tauri v2 + Svelte 5 + CodeMirror 6 — migration complete:
