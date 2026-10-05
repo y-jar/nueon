@@ -894,11 +894,15 @@ export async function restoreSecondaryTiling(label: string): Promise<void> {
   }
 }
 
-/** Restore the saved main-window layout (if any) and enable persistence. */
+/**
+ * Restore the saved main-window layout (if any), respawn the secondary
+ * windows saved with it, and enable persistence.
+ */
 export async function restoreMainTiling(): Promise<void> {
   try {
     const state = await api.layoutStateGet();
     if (state.main) await restoreTiling(state.main);
+    await api.windowsRestore();
   } catch (error) {
     ui.status = `could not restore layout: ${String(error)}`;
   } finally {
