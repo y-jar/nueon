@@ -7,20 +7,14 @@
     closeTab,
     openTranslation,
     activeGroup,
-    activeDoc,
-    refreshTable,
     type Activity,
   } from "./lib/state.svelte";
   import Onboarding from "./components/Onboarding.svelte";
   import ActivityBar from "./components/ActivityBar.svelte";
   import SidebarHost from "./components/SidebarHost.svelte";
-  import TabBar from "./components/TabBar.svelte";
-  import Editor from "./components/Editor.svelte";
-  import Grid from "./components/Grid.svelte";
-  import Translation from "./components/Translation.svelte";
+  import SplitView from "./components/SplitView.svelte";
   import Inspector from "./components/Inspector.svelte";
   import SettingsModal from "./components/SettingsModal.svelte";
-  import EmptyState from "./components/EmptyState.svelte";
   import ContextMenu from "./components/ContextMenu.svelte";
 
   const ACTIVITIES: Activity[] = ["notes", "dictionary", "translation", "git"];
@@ -87,22 +81,7 @@
       <SidebarHost />
     {/if}
     <main class="center">
-      <TabBar group={activeGroup()} />
-      <div class="center-body">
-        {#if activeGroup().tabs.length === 0}
-          <EmptyState />
-        {:else if activeDoc().view === "notes"}
-          {#key activeGroup().id + (activeDoc().selected ?? "")}
-            <Editor doc={activeDoc()} />
-          {/key}
-        {:else if activeDoc().view === "dictionary"}
-          {#key activeGroup().id + (activeDoc().currentTable ?? "")}
-            <Grid doc={activeDoc()} onRefresh={refreshTable} />
-          {/key}
-        {:else}
-          <Translation />
-        {/if}
-      </div>
+      <SplitView node={ui.splitRoot} />
     </main>
     {#if ui.inspectorOpen}
       <Inspector />

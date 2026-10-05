@@ -41,7 +41,12 @@ export interface TabGroup {
 /** A node in the recursive split layout. */
 export type SplitNode =
   | { type: "leaf"; groupId: string }
-  | { type: "split"; direction: "row" | "column"; children: SplitNode[] };
+  | {
+      type: "split";
+      direction: "row" | "column";
+      children: SplitNode[];
+      sizes?: number[];
+    };
 
 function newId(): string {
   return crypto.randomUUID();
@@ -102,6 +107,8 @@ export const ui = $state({
   renameTarget: null as string | null,
   newRequest: null as { kind: "note" | "folder"; base: string } | null,
   collapseAllSignal: 0,
+  /** Tab currently being dragged (native DnD), if any. */
+  dragTab: null as { tabId: string; fromGroupId: string } | null,
 });
 
 // -- group helpers -------------------------------------------------------
@@ -372,6 +379,127 @@ export async function deleteTable(name: string): Promise<void> {
   }
   await refreshTables();
   ui.status = `deleted table ${name}`;
+}
+
+// -- split layout --------------------------------------------------------
+
+/** Reload one group's table from disk (used by that pane's Grid). */
+export async function reloadGroupTable(groupId: string): Promise<void> {
+  const group = ui.groups.find((candidate) => candidate.id === groupId);
+  if (group?.doc.currentTable) {
+    group.doc.table = await api.getTable(group.doc.currentTable);
+  }
+}
+
+/** Remove a group and collapse the split tree around it. */
+export function removeGroup(groupId: string): void {
+  if (ui.groups.length <= 1) return;
+  ui.groups = ui.groups.filter((group) => group.id !== groupId);
+  ui.splitRoot = collapseTree(removeLeaf(ui.splitRoot, groupId));
+  if (ui.activeGroupId === groupId) ui.activeGroupId = ui.groups[0].id;
+}
+
+function replaceLeaf(
+  node: SplitNode,
+  groupId: string,
+  make: (leaf: Extract<SplitNode, { type: "leaf" }>) => SplitNode,
+): SplitNode {
+  if (node.type === "leaf") {
+    return node.groupId === groupId ? make(node) : node;
+  }
+  return { ...node, children: node.children.map((child) => replaceLeaf(child, groupId, make)) };
+}
+
+function removeLeaf(node: SplitNode, groupId: string): SplitNode | null {
+  if (node.type === "leaf") {
+    return node.groupId === groupId ? null : node;
+  }
+  const children = node.children
+    .map((child) => removeLeaf(child, groupId))
+    .filter((child): child is SplitNode => child !== null);
+  if (children.length === 0) return null;
+  return { ...node, children };
+}
+
+function collapseTree(node: SplitNode | null): SplitNode {
+  if (!node) {
+    return { type: "leaf", groupId: ui.groups[0].id };
+  }
+  if (node.type === "leaf") return node;
+  const children = node.children.map(collapseTree);
+  if (children.length === 1) return children[0];
+  return { ...node, children };
+}
+
+/** Drag a tab to `edge` of `targetGroupId`, creating a new pane. */
+export async function splitGroup(
+  fromGroupId: string,
+  tabId: string,
+  targetGroupId: string,
+  edge: "left" | "right" | "top" | "bottom",
+): Promise<void> {
+  const source = ui.groups.find((group) => group.id === fromGroupId);
+  if (!source) return;
+  const index = source.tabs.findIndex((tab) => tab.id === tabId);
+  if (index === -1) return;
+  const tab = source.tabs[index];
+  const wasActive = source.activeTabId === tabId;
+  source.tabs = source.tabs.filter((candidate) => candidate.id !== tabId);
+
+  const group = makeGroup();
+  group.tabs = [tab];
+  group.activeTabId = tab.id;
+  ui.groups = [...ui.groups, group];
+  await activateTab(group.id, tab.id);
+
+  const horizontal = edge === "left" || edge === "right";
+  const before = edge === "left" || edge === "top";
+  ui.splitRoot = replaceLeaf(ui.splitRoot, targetGroupId, (leaf) => ({
+    type: "split",
+    direction: horizontal ? "row" : "column",
+    children: before
+      ? [{ type: "leaf", groupId: group.id }, leaf]
+      : [leaf, { type: "leaf", groupId: group.id }],
+  }));
+  ui.activeGroupId = group.id;
+
+  if (source.tabs.length === 0) {
+    removeGroup(source.id);
+  } else if (wasActive) {
+    activateNeighbor(source, Math.min(index, source.tabs.length - 1));
+  }
+}
+
+/** Move or reorder a tab between/within groups. */
+export async function moveTab(
+  tabId: string,
+  fromGroupId: string,
+  toGroupId: string,
+  beforeTabId: string | null = null,
+): Promise<void> {
+  const source = ui.groups.find((group) => group.id === fromGroupId);
+  const target = ui.groups.find((group) => group.id === toGroupId);
+  if (!source || !target) return;
+  const index = source.tabs.findIndex((tab) => tab.id === tabId);
+  if (index === -1) return;
+  const tab = source.tabs[index];
+  const wasActive = source.activeTabId === tabId;
+  source.tabs = source.tabs.filter((candidate) => candidate.id !== tabId);
+
+  const insertAt = beforeTabId
+    ? target.tabs.findIndex((candidate) => candidate.id === beforeTabId)
+    : -1;
+  const at = insertAt === -1 ? target.tabs.length : insertAt;
+  target.tabs = [...target.tabs.slice(0, at), tab, ...target.tabs.slice(at)];
+
+  if (fromGroupId !== toGroupId) {
+    await activateTab(target.id, tab.id);
+    if (source.tabs.length === 0) {
+      removeGroup(source.id);
+    } else if (wasActive) {
+      activateNeighbor(source, Math.min(index, source.tabs.length - 1));
+    }
+  }
 }
 
 // -- active document loaders --------------------------------------------

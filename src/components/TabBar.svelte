@@ -1,6 +1,5 @@
 <script lang="ts">
   import { t } from "svelte-i18n";
-  import { dndzone } from "svelte-dnd-action";
   import {
     FileText,
     Table2,
@@ -13,7 +12,7 @@
     ui,
     activateTab,
     closeTab,
-    reorderTabs,
+    moveTab,
     toggleInspector,
     toggleSidebar,
     setInspectorDock,
@@ -23,8 +22,37 @@
 
   let { group }: { group: TabGroup } = $props();
 
-  function handleDnd(event: CustomEvent<{ items: Tab[] }>) {
-    reorderTabs(group.id, event.detail.items);
+  function onDragStart(event: DragEvent, tab: Tab) {
+    ui.dragTab = { tabId: tab.id, fromGroupId: group.id };
+    event.dataTransfer?.setData("text/plain", tab.id);
+    if (event.dataTransfer) event.dataTransfer.effectAllowed = "move";
+  }
+
+  function onDragEnd() {
+    ui.dragTab = null;
+  }
+
+  function onTabOver(event: DragEvent) {
+    if (!ui.dragTab) return;
+    event.preventDefault();
+    event.stopPropagation();
+  }
+
+  function onTabDrop(event: DragEvent, beforeTab: Tab) {
+    const drag = ui.dragTab;
+    event.preventDefault();
+    event.stopPropagation();
+    if (!drag) return;
+    ui.dragTab = null;
+    moveTab(drag.tabId, drag.fromGroupId, group.id, beforeTab.id);
+  }
+
+  function onStripDrop(event: DragEvent) {
+    const drag = ui.dragTab;
+    if (!drag) return;
+    event.preventDefault();
+    ui.dragTab = null;
+    moveTab(drag.tabId, drag.fromGroupId, group.id, null);
   }
 
   function onAuxClick(event: MouseEvent, id: string) {
@@ -46,12 +74,26 @@
 
   <div
     class="tab-strip"
-    use:dndzone={{ items: group.tabs, flipDurationMs: 120 }}
-    onconsider={handleDnd}
-    onfinalize={handleDnd}
+    role="tablist"
+    tabindex="0"
+    ondragover={(e) => {
+      if (ui.dragTab) e.preventDefault();
+    }}
+    ondrop={onStripDrop}
   >
     {#each group.tabs as tab (tab.id)}
-      <div class="tab" class:active={tab.id === group.activeTabId}>
+      <div
+        class="tab"
+        class:active={tab.id === group.activeTabId}
+        class:dragging={ui.dragTab?.tabId === tab.id}
+        role="tab"
+        tabindex="0"
+        draggable="true"
+        ondragstart={(e) => onDragStart(e, tab)}
+        ondragend={onDragEnd}
+        ondragover={onTabOver}
+        ondrop={(e) => onTabDrop(e, tab)}
+      >
         <button
           class="tab-label"
           onclick={() => activateTab(group.id, tab.id)}
