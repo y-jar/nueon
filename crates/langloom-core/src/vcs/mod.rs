@@ -266,11 +266,43 @@ impl GitRepo {
     }
 
     /// The current branch name (or `HEAD` when detached).
+    ///
+    /// Falls back to the symbolic ref so an unborn branch (a fresh repository
+    /// with no commits yet) still reports its name.
     pub fn branch(&self) -> Result<String, VcsError> {
+        let out = self.git(&["rev-parse", "--abbrev-ref", "HEAD"])?;
+        if out.status.success() {
+            return Ok(String::from_utf8_lossy(&out.stdout).trim().to_string());
+        }
         Ok(self
-            .checked(&["rev-parse", "--abbrev-ref", "HEAD"])?
+            .checked(&["symbolic-ref", "--short", "HEAD"])?
             .trim()
             .to_string())
+    }
+
+    /// Every local branch name, sorted.
+    pub fn branches(&self) -> Result<Vec<String>, VcsError> {
+        let out = self.checked(&["branch", "--format=%(refname:short)"])?;
+        let mut names: Vec<String> = out
+            .lines()
+            .map(str::trim)
+            .filter(|line| !line.is_empty())
+            .map(str::to_string)
+            .collect();
+        names.sort();
+        Ok(names)
+    }
+
+    /// Switch to an existing branch.
+    pub fn checkout(&self, name: &str) -> Result<(), VcsError> {
+        self.checked(&["checkout", name])?;
+        Ok(())
+    }
+
+    /// Create and switch to a new branch.
+    pub fn create_branch(&self, name: &str) -> Result<(), VcsError> {
+        self.checked(&["checkout", "-b", name])?;
+        Ok(())
     }
 
     /// Show a single commit.
@@ -340,5 +372,22 @@ mod tests {
         let status = repo.status().unwrap();
         assert_eq!(status.len(), 1);
         assert!(status[0].code.contains('M'));
+    }
+
+    #[test]
+    fn branches_can_be_created_and_switched() {
+        if !git_available() {
+            return;
+        }
+        let dir = tempfile::tempdir().unwrap();
+        std::fs::write(dir.path().join("words"), "a").unwrap();
+        let repo = GitRepo::init(dir.path()).unwrap();
+        repo.create_branch("grammar").unwrap();
+        assert_eq!(repo.branch().unwrap(), "grammar");
+        assert!(repo.branches().unwrap().contains(&"grammar".to_string()));
+        assert!(repo.branches().unwrap().contains(&"main".to_string()));
+
+        repo.checkout("main").unwrap();
+        assert_eq!(repo.branch().unwrap(), "main");
     }
 }

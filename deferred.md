@@ -50,11 +50,12 @@ were completed during the Tauri migration (R0–R8).
 
 ## Version control
 
-- ~~Per-file diff / revert / show in the Source Control panel.~~ (R6)
-- Commit on application close. (D4)
-- Branch display/switching, remotes, push/pull. (D4)
-- Conflict handling and resolution. (D4)
-- "Don't show again" for the git init/install prompt. (D4)
+- ~~Per-file diff / revert / show in the Source Control panel.~~ (R6, show in D4)
+- ~~Commit on application close.~~ (D4)
+- ~~Branch display/switching.~~ (D4)
+- Remotes, push/pull. (D4+)
+- Conflict handling and resolution. (D4+)
+- ~~"Don't show again" for the git init/install prompt.~~ (D4)
 
 ## Workspace & app shell
 

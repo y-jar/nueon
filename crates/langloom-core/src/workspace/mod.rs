@@ -640,6 +640,18 @@ impl Workspace {
         self.force_checkin(message)
     }
 
+    /// Commit pending changes when the application is closing.
+    pub fn close_checkin(&mut self) -> Option<String> {
+        self.auto.cancel();
+        self.force_checkin("langloom: session check-in")
+    }
+
+    /// Persist the "don't show the git prompt again" preference.
+    pub fn set_git_prompt_dismissed(&mut self, dismissed: bool) -> Result<(), StorageError> {
+        self.settings.git_prompt_dismissed = dismissed;
+        self.save_settings()
+    }
+
     /// Commit the pending auto-check-in if the workspace has been idle long
     /// enough. Intended to be called from the UI event loop.
     pub fn pump_auto_checkin(&mut self, now: Instant) -> Option<String> {
@@ -981,5 +993,31 @@ mod tests {
         assert_eq!(options.separator, " ", "empty separator resets to default");
         assert_eq!(options.affixes.len(), 1);
         assert_eq!(options.affixes[0].conlang, "i");
+    }
+
+    #[test]
+    fn git_prompt_dismissal_persists() {
+        let dir = tempfile::tempdir().unwrap();
+        let mut ws = Workspace::new(dir.path()).unwrap();
+        assert!(!ws.settings.git_prompt_dismissed);
+        ws.set_git_prompt_dismissed(true).unwrap();
+
+        let reloaded = Workspace::load(dir.path()).unwrap();
+        assert!(reloaded.settings.git_prompt_dismissed);
+    }
+
+    #[test]
+    fn close_checkin_commits_pending_changes() {
+        if !git_available() {
+            return;
+        }
+        let dir = tempfile::tempdir().unwrap();
+        let mut ws = Workspace::new(dir.path()).unwrap();
+        ws.init_git().unwrap();
+        ws.set_auto_checkin(false, 60);
+        ws.create_table("verbs").unwrap();
+
+        assert!(ws.close_checkin().is_some());
+        assert!(ws.git().unwrap().is_clean().unwrap());
     }
 }

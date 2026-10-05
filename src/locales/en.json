@@ -141,6 +141,10 @@
     "noDiff": "(no diff — untracked or binary)",
     "truncated": "… truncated",
     "history": "History",
-    "loading": "Loading…"
+    "loading": "Loading…",
+    "dontShowAgain": "Don't show again",
+    "newBranch": "new branch",
+    "createBranch": "Create branch",
+    "show": "Commit {id}"
   }
 }

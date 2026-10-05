@@ -90,6 +90,66 @@ pub fn vcs_show(state: State<'_, Shared>, id: String) -> Result<String, String> 
 }
 
 #[tauri::command]
+pub fn vcs_branches(state: State<'_, Shared>) -> Result<Vec<String>, String> {
+    let state = state.lock().map_err(|_| "state poisoned".to_string())?;
+    let workspace = state.workspace()?;
+    match workspace.git() {
+        Some(repo) => repo.branches().map_err(|err| err.to_string()),
+        None => Ok(Vec::new()),
+    }
+}
+
+#[tauri::command]
+pub fn vcs_checkout(app: AppHandle, state: State<'_, Shared>, name: String) -> Result<(), String> {
+    let state = state.lock().map_err(|_| "state poisoned".to_string())?;
+    let workspace = state.workspace()?;
+    if let Some(repo) = workspace.git() {
+        repo.checkout(&name).map_err(|err| err.to_string())?;
+    }
+    drop(state);
+    changed(&app, "vcs");
+    Ok(())
+}
+
+#[tauri::command]
+pub fn vcs_create_branch(
+    app: AppHandle,
+    state: State<'_, Shared>,
+    name: String,
+) -> Result<(), String> {
+    let state = state.lock().map_err(|_| "state poisoned".to_string())?;
+    let workspace = state.workspace()?;
+    if let Some(repo) = workspace.git() {
+        repo.create_branch(&name).map_err(|err| err.to_string())?;
+    }
+    drop(state);
+    changed(&app, "vcs");
+    Ok(())
+}
+
+#[tauri::command]
+pub fn git_prompt_dismissed(state: State<'_, Shared>) -> Result<bool, String> {
+    let state = state.lock().map_err(|_| "state poisoned".to_string())?;
+    Ok(state.workspace()?.settings.git_prompt_dismissed)
+}
+
+#[tauri::command]
+pub fn git_prompt_dismissed_set(
+    app: AppHandle,
+    state: State<'_, Shared>,
+    dismissed: bool,
+) -> Result<(), String> {
+    let mut state = state.lock().map_err(|_| "state poisoned".to_string())?;
+    state
+        .workspace_mut()?
+        .set_git_prompt_dismissed(dismissed)
+        .map_err(|err| err.to_string())?;
+    drop(state);
+    changed(&app, "vcs");
+    Ok(())
+}
+
+#[tauri::command]
 pub fn vcs_commit(
     app: AppHandle,
     state: State<'_, Shared>,

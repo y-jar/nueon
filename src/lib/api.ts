@@ -330,6 +330,15 @@ export const vcsDiff = (path: string | null): Promise<string> =>
   invoke("vcs_diff", { path });
 export const vcsShow = (id: string): Promise<string> =>
   invoke("vcs_show", { id });
+export const vcsBranches = (): Promise<string[]> => invoke("vcs_branches");
+export const vcsCheckout = (name: string): Promise<void> =>
+  invoke("vcs_checkout", { name });
+export const vcsCreateBranch = (name: string): Promise<void> =>
+  invoke("vcs_create_branch", { name });
+export const gitPromptDismissed = (): Promise<boolean> =>
+  invoke("git_prompt_dismissed");
+export const setGitPromptDismissed = (dismissed: boolean): Promise<void> =>
+  invoke("git_prompt_dismissed_set", { dismissed });
 export const vcsCommit = (message: string): Promise<string | null> =>
   invoke("vcs_commit", { message });
 export const vcsInit = (): Promise<void> => invoke("vcs_init");

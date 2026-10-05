@@ -58,6 +58,18 @@ pub fn run() {
             std::thread::spawn(move || background_pump(handle));
             Ok(())
         })
+        .on_window_event(|window, event| {
+            if matches!(event, tauri::WindowEvent::CloseRequested { .. }) {
+                let app_state = window.state::<Mutex<AppState>>();
+                let mut guard = match app_state.lock() {
+                    Ok(guard) => guard,
+                    Err(_) => return,
+                };
+                if let Some(workspace) = guard.workspace.as_mut() {
+                    let _ = workspace.close_checkin();
+                }
+            }
+        })
         .invoke_handler(tauri::generate_handler![
             ping,
             commands::workspace_list,
@@ -111,6 +123,11 @@ pub fn run() {
             commands::vcs_log,
             commands::vcs_diff,
             commands::vcs_show,
+            commands::vcs_branches,
+            commands::vcs_checkout,
+            commands::vcs_create_branch,
+            commands::git_prompt_dismissed,
+            commands::git_prompt_dismissed_set,
             commands::vcs_commit,
             commands::vcs_init,
             commands::vcs_revert_file,

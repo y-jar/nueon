@@ -49,6 +49,9 @@ pub struct WorkspaceSettings {
     /// Per-table grid presentation state, keyed by table name.
     #[serde(skip_serializing_if = "BTreeMap::is_empty")]
     pub grid_views: BTreeMap<String, GridViewState>,
+    /// Whether the user dismissed the git init/install prompt for good.
+    #[serde(default)]
+    pub git_prompt_dismissed: bool,
 }
 
 impl Default for WorkspaceSettings {
@@ -58,6 +61,7 @@ impl Default for WorkspaceSettings {
             auto_checkin_secs: DEFAULT_AUTO_CHECKIN_SECS,
             default_table: None,
             grid_views: BTreeMap::new(),
+            git_prompt_dismissed: false,
         }
     }
 }
