@@ -217,6 +217,31 @@ impl Workspace {
         Ok(true)
     }
 
+    /// Rename a table, moving its backing file to the new slug.
+    pub fn rename_table(&mut self, from: &str, to: &str) -> Result<bool, StorageError> {
+        if from == to
+            || to.trim().is_empty()
+            || self.dictionary.table(from).is_none()
+            || self.dictionary.table(to).is_some()
+        {
+            return Ok(false);
+        }
+        self.record();
+        let mut table = self
+            .dictionary
+            .remove_table(from)
+            .expect("existence checked above");
+        table.name = to.to_string();
+        self.dictionary.tables.insert(to.to_string(), table);
+        self.save_table(to)?;
+        storage::delete_table(&self.dictionary_dir(), from)?;
+        self.mark_change(
+            Instant::now(),
+            format!("langloom: rename table \"{from}\" to \"{to}\""),
+        );
+        Ok(true)
+    }
+
     /// Write a table to disk.
     pub fn save_table(&self, name: &str) -> Result<(), StorageError> {
         let table = self
@@ -1313,5 +1338,33 @@ mod tests {
         assert!(ws.dictionary.table("verbs").is_some());
         let reloaded = Workspace::load(dir.path()).unwrap();
         assert!(reloaded.dictionary.table("verbs").is_some());
+    }
+
+    #[test]
+    fn rename_table_moves_contents_and_file() {
+        let dir = tempfile::tempdir().unwrap();
+        let mut ws = Workspace::new(dir.path()).unwrap();
+        ws.create_table("verbs").unwrap();
+        ws.create_entry("verbs", "kala").unwrap();
+
+        assert!(ws.rename_table("verbs", "actions").unwrap());
+        assert!(ws.dictionary.table("verbs").is_none());
+        let table = ws.dictionary.table("actions").unwrap();
+        assert_eq!(table.name, "actions");
+        assert_eq!(table.entries.len(), 1);
+
+        // Old backing file is gone; new one exists and reloads with words.
+        assert!(!dir.path().join("dictionary").join("verbs").exists());
+        assert!(dir.path().join("dictionary").join("actions").exists());
+        let reloaded = Workspace::load(dir.path()).unwrap();
+        assert_eq!(
+            reloaded.dictionary.table("actions").unwrap().entries.len(),
+            1
+        );
+
+        // Rejects collisions and unknown sources.
+        ws.create_table("nouns").unwrap();
+        assert!(!ws.rename_table("actions", "nouns").unwrap());
+        assert!(!ws.rename_table("missing", "x").unwrap());
     }
 }

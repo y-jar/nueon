@@ -654,12 +654,40 @@ textarea:focus {
   gap: 2px;
 }
 
-.table-list .tree-name {
+.table-row {
   display: flex;
   align-items: center;
+  gap: 2px;
+  border-radius: 4px;
+}
+
+.table-row.active {
+  background: var(--faint);
+}
+
+.table-row .tree-name {
+  display: flex;
+  flex: 1;
+  align-items: center;
   gap: 6px;
-  width: 100%;
+  min-width: 0;
+}
+
+.table-row .row-action {
   flex: none;
+  padding: 2px 4px;
+  background: transparent;
+  border: none;
+  color: var(--muted);
+  opacity: 0;
+}
+
+.table-row:hover .row-action {
+  opacity: 1;
+}
+
+.table-row .row-action:hover {
+  color: var(--text);
 }
 
 .sidebar .row input {

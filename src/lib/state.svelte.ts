@@ -233,6 +233,41 @@ export async function openTranslation(): Promise<void> {
   await activateTab(tab.id);
 }
 
+/** Rename a table, keeping any open tab in sync. */
+export async function renameTable(from: string, to: string): Promise<void> {
+  const ok = await api.renameTable(from, to);
+  if (!ok) {
+    ui.status = `could not rename ${from}`;
+    return;
+  }
+  ui.tabs = ui.tabs.map((tab) =>
+    tab.kind === "table" && tab.ref === from
+      ? { ...tab, ref: to, title: to }
+      : tab,
+  );
+  if (ui.currentTable === from) ui.currentTable = to;
+  await refreshTables();
+  if (ui.currentTable === to) await refreshTable();
+  ui.status = `renamed ${from} to ${to}`;
+}
+
+/** Delete a table, closing any tab that referenced it. */
+export async function deleteTable(name: string): Promise<void> {
+  const ok = await api.deleteTable(name);
+  if (!ok) return;
+  const removed = ui.tabs.filter(
+    (tab) => tab.kind === "table" && tab.ref === name,
+  );
+  ui.tabs = ui.tabs.filter((tab) => !removed.includes(tab));
+  if (ui.currentTable === name) {
+    ui.currentTable = null;
+    ui.table = null;
+  }
+  if (removed.some((tab) => tab.id === ui.activeTabId)) activateNeighbor();
+  await refreshTables();
+  ui.status = `deleted table ${name}`;
+}
+
 export function closeTab(id: string): void {
   const wasActive = ui.activeTabId === id;
   ui.tabs = ui.tabs.filter((tab) => tab.id !== id);

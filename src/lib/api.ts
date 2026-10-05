@@ -155,6 +155,8 @@ export const createTable = (name: string): Promise<boolean> =>
   invoke("create_table", { name });
 export const deleteTable = (name: string): Promise<boolean> =>
   invoke("delete_table", { name });
+export const renameTable = (from: string, to: string): Promise<boolean> =>
+  invoke("rename_table", { from, to });
 export const createWord = (
   table: string,
   wordname: string,

@@ -70,7 +70,12 @@
     "namePlaceholder": "table name",
     "create": "Create",
     "exists": "A table with that name already exists",
-    "empty": "No tables yet. Create one to start adding words."
+    "empty": "No tables yet. Create one to start adding words.",
+    "filter": "Filter tables…",
+    "rename": "Rename",
+    "delete": "Delete",
+    "deleteConfirm": "Delete \"{name}\" and all of its words?",
+    "noMatches": "No matching tables."
   },
   "settings": {
     "language": "Language",

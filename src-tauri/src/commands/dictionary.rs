@@ -106,6 +106,23 @@ pub fn delete_table(
 }
 
 #[tauri::command]
+pub fn rename_table(
+    app: AppHandle,
+    state: State<'_, Shared>,
+    from: String,
+    to: String,
+) -> Result<bool, String> {
+    let mut state = state.lock().map_err(|_| "state poisoned".to_string())?;
+    let renamed = state
+        .workspace_mut()?
+        .rename_table(&from, &to)
+        .map_err(|err| err.to_string())?;
+    drop(state);
+    changed(&app, "dictionary");
+    Ok(renamed)
+}
+
+#[tauri::command]
 pub fn create_word(
     app: AppHandle,
     state: State<'_, Shared>,

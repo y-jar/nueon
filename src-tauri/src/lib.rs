@@ -117,6 +117,7 @@ pub fn run() {
             commands::get_table,
             commands::create_table,
             commands::delete_table,
+            commands::rename_table,
             commands::create_word,
             commands::save_word_entry,
             commands::delete_word,
