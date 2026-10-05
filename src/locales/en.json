@@ -121,7 +121,12 @@
     "dontShowAgain": "Don't show this warning again",
     "cancel": "Cancel",
     "noWords": "No words yet — add the first one.",
-    "firstWordPlaceholder": "first word"
+    "firstWordPlaceholder": "first word",
+    "results": "{count} results",
+    "sort": "Sort",
+    "sortColumn": "Sort by",
+    "ascending": "Ascending",
+    "descending": "Descending"
   },
   "inspector": {
     "title": "Inspector",

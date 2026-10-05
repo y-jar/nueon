@@ -6,10 +6,19 @@
     getFilteredRowModel,
     getSortedRowModel,
     type ColumnDef,
-    type ColumnFiltersState,
     type SortingState,
     type VisibilityState,
   } from "@tanstack/table-core";
+  import {
+    ArrowUpDown,
+    Search,
+    Plus,
+    Columns3,
+    Tags,
+    Undo2,
+    Redo2,
+    X,
+  } from "@lucide/svelte";
   import * as api from "../lib/api";
   import {
     boolValue,
@@ -19,11 +28,7 @@
     textValue,
   } from "../lib/dictionary";
   import { misspelledWords } from "../lib/spellcheck";
-  import {
-    ui,
-    selectTable,
-    type DocState,
-  } from "../lib/state.svelte";
+  import { ui, selectTable, type DocState } from "../lib/state.svelte";
 
   let {
     doc,
@@ -32,14 +37,16 @@
 
   let sorting = $state<SortingState>([{ id: "wordname", desc: false }]);
   let filter = $state("");
-  let columnFilters = $state<ColumnFiltersState>([]);
   let columnVisibility = $state<VisibilityState>({});
-  let newWord = $state("");
   let firstWord = $state("");
-  let newTable = $state("");
   let error = $state("");
   let loadedTable: string | null = null;
   let saveTimer: ReturnType<typeof setTimeout> | null = null;
+
+  let searchOpen = $state(false);
+  let addWordOpen = $state(false);
+  let addWordName = $state("");
+  let addWordError = $state("");
 
   let selectedIds = $state<string[]>([]);
   let newTagName = $state("");
@@ -51,22 +58,19 @@
   let warnDismissed = $state(false);
   let dontWarnAgain = $state(false);
 
-  const KINDS: api.FieldType[] = [
-    "text",
-    "boolean",
-    "tag_list",
-    "reference",
-    "references",
+  // Notion-style column types backed by the existing FieldTypes.
+  const COLUMN_TYPES: { id: api.FieldType; label: string }[] = [
+    { id: "text", label: "Text" },
+    { id: "tag_list", label: "List" },
+    { id: "references", label: "Relation" },
+    { id: "boolean", label: "Checkbox" },
   ];
-  const FORMATS: api.TagFormat[] = [
-    "default",
-    "multiline",
-    "date",
-    "measurement",
-  ];
+  const FORMATS: api.TagFormat[] = ["default", "multiline", "date", "measurement"];
 
-  // Dynamic columns are derived from the table's tag set. New tags appear
-  // without disturbing sorting/selection (TanStack keeps state by id).
+  function typeLabel(kind: api.FieldType): string {
+    return COLUMN_TYPES.find((type) => type.id === kind)?.label ?? kind;
+  }
+
   const tagColumns = $derived(
     (doc.table?.tags ?? []).filter(
       (tag) => tag.name !== "wordname" && tag.name !== "parent",
@@ -99,7 +103,7 @@
     createTable<api.WordEntry>({
       data: doc.table?.entries ?? [],
       columns,
-      state: { sorting, globalFilter: filter, columnFilters, columnVisibility },
+      state: { sorting, globalFilter: filter, columnVisibility },
       onStateChange: () => {},
       renderFallbackValue: null,
       onSortingChange: (updater) => {
@@ -108,15 +112,10 @@
       onGlobalFilterChange: (updater) => {
         filter = typeof updater === "function" ? updater(filter) : updater;
       },
-      onColumnFiltersChange: (updater) => {
-        columnFilters =
-          typeof updater === "function" ? updater(columnFilters) : updater;
-      },
       onColumnVisibilityChange: (updater) => {
         columnVisibility =
           typeof updater === "function" ? updater(columnVisibility) : updater;
       },
-      // Stable UUID row keys preserve selection/editing across refetches.
       getRowId: (row) => row.id,
       getCoreRowModel: getCoreRowModel(),
       getSortedRowModel: getSortedRowModel(),
@@ -146,9 +145,6 @@
           ? view.sorting.map((spec) => ({ id: spec.id, desc: spec.desc }))
           : [{ id: "wordname", desc: false }];
         filter = view.search;
-        columnFilters = Object.entries(view.column_filters).map(
-          ([id, value]) => ({ id, value }),
-        );
         columnVisibility = Object.fromEntries(
           view.hidden_columns.map((id) => [id, false]),
         );
@@ -166,16 +162,17 @@
     const snapshot: api.GridViewState = {
       sorting: sorting.map((spec) => ({ id: spec.id, desc: spec.desc })),
       search: filter,
-      column_filters: Object.fromEntries(
-        columnFilters.map((entry) => [entry.id, String(entry.value)]),
-      ),
+      column_filters: {},
       hidden_columns: Object.entries(columnVisibility)
         .filter(([, visible]) => !visible)
         .map(([id]) => id),
     };
     if (!name || name !== loadedTable) return;
     if (saveTimer) clearTimeout(saveTimer);
-    saveTimer = setTimeout(() => api.gridViewSet(name, snapshot).catch(() => {}), 400);
+    saveTimer = setTimeout(
+      () => api.gridViewSet(name, snapshot).catch(() => {}),
+      400,
+    );
   });
 
   $effect(() => {
@@ -190,10 +187,6 @@
     }
   });
 
-  function selectRow(id: string) {
-    doc.selectedEntry = doc.selectedEntry === id ? null : id;
-  }
-
   function parentNames(entry: api.WordEntry): string {
     const value = entry.values["parent"];
     if (!value) return "";
@@ -204,30 +197,36 @@
     return "";
   }
 
-  function columnFilter(id: string): string {
-    return String(
-      columnFilters.find((entry) => entry.id === id)?.value ?? "",
-    );
-  }
-
-  function setColumnFilter(id: string, value: string) {
-    const rest = columnFilters.filter((entry) => entry.id !== id);
-    columnFilters = value ? [...rest, { id, value }] : rest;
+  function selectRow(id: string) {
+    doc.selectedEntry = doc.selectedEntry === id ? null : id;
   }
 
   function toggleColumn(id: string, visible: boolean) {
     columnVisibility = { ...columnVisibility, [id]: visible };
   }
 
-  async function createNewWord() {
-    const name = newWord.trim();
+  const sortId = $derived(sorting[0]?.id ?? "wordname");
+  const sortDesc = $derived(Boolean(sorting[0]?.desc));
+
+  function setSortColumn(id: string) {
+    sorting = [{ id, desc: sortDesc }];
+  }
+
+  function toggleSortDir() {
+    sorting = [{ id: sortId, desc: !sortDesc }];
+  }
+
+  async function submitAddWord() {
+    const name = addWordName.trim();
     if (!name || !doc.currentTable) return;
     try {
       await api.createWord(doc.currentTable, name);
-      newWord = "";
-      error = "";
+      addWordName = "";
+      addWordOpen = false;
+      addWordError = "";
+      onRefresh();
     } catch (e) {
-      error = String(e);
+      addWordError = String(e);
     }
   }
 
@@ -238,18 +237,6 @@
       await api.createWord(doc.currentTable, name);
       firstWord = "";
       error = "";
-    } catch (e) {
-      error = String(e);
-    }
-  }
-
-  async function createNewTable() {
-    const name = newTable.trim();
-    if (!name) return;
-    try {
-      await api.createTable(name);
-      newTable = "";
-      await selectTable(name);
     } catch (e) {
       error = String(e);
     }
@@ -334,7 +321,7 @@
       }
       newTagName = "";
       tagError = "";
-      await onRefresh();
+      onRefresh();
     } catch (e) {
       tagError = String(e);
     }
@@ -345,7 +332,7 @@
     const affected = await api.removeTagPreview(doc.currentTable, name);
     if (warnDismissed) {
       await api.removeTag(doc.currentTable, name);
-      await onRefresh();
+      onRefresh();
       return;
     }
     dontWarnAgain = false;
@@ -360,53 +347,81 @@
     }
     await api.removeTag(doc.currentTable, pendingRemove.tag);
     pendingRemove = null;
-    await onRefresh();
+    onRefresh();
   }
 
   async function changeKind(name: string, kind: api.FieldType) {
     if (!doc.currentTable) return;
     await api.setTagKind(doc.currentTable, name, kind);
-    await onRefresh();
+    onRefresh();
   }
 
   async function changeFormat(name: string, format: api.TagFormat) {
     if (!doc.currentTable) return;
     await api.setTagFormat(doc.currentTable, name, format);
-    await onRefresh();
+    onRefresh();
   }
 
   async function doUndo() {
     await api.undo();
-    await onRefresh();
+    onRefresh();
   }
 
   async function doRedo() {
     await api.redo();
-    await onRefresh();
+    onRefresh();
   }
 </script>
 
 <div class="grid-view">
   <div class="grid-toolbar">
     <select
+      class="table-picker"
       value={doc.currentTable ?? ""}
       onchange={(e) => selectTable(e.currentTarget.value)}
     >
       {#each ui.tables as t (t.name)}
-        <option value={t.name}>{t.name} ({t.word_count})</option>
+        <option value={t.name}>{t.name}</option>
       {/each}
     </select>
-    <input placeholder={$t("grid.newTable")} bind:value={newTable} onkeydown={(e) =>
-      e.key === "Enter" && createNewTable()} />
-    <input class="filter" placeholder={$t("grid.search")} bind:value={filter} />
-    <input placeholder={$t("grid.newWord")} bind:value={newWord} onkeydown={(e) =>
-      e.key === "Enter" && createNewWord()} />
-    <button onclick={createNewWord}>{$t("grid.addWord")}</button>
-    <button title={$t("grid.undo")} onclick={doUndo}>↶</button>
-    <button title={$t("grid.redo")} onclick={doRedo}>↷</button>
 
-    <details class="col-picker">
-      <summary>{$t("grid.columns")}</summary>
+    <span class="results-count"
+      >{$t("grid.results", { values: { count: rows.length } })}</span
+    >
+
+    <details class="popover" id="sort-pop">
+      <summary><ArrowUpDown size={14} /> {$t("grid.sort")}</summary>
+      <div class="picker-body">
+        <label class="picker-row">
+          <span class="muted">{$t("grid.sortColumn")}</span>
+          <select value={sortId} onchange={(e) => setSortColumn(e.currentTarget.value)}>
+            {#each table.getAllLeafColumns() as column (column.id)}
+              <option value={column.id}>{column.id}</option>
+            {/each}
+          </select>
+        </label>
+        <button onclick={toggleSortDir}>
+          {sortDesc ? $t("grid.descending") : $t("grid.ascending")}
+        </button>
+      </div>
+    </details>
+
+    <button
+      class="tool-btn"
+      class:active={searchOpen}
+      title={$t("grid.search")}
+      onclick={() => (searchOpen = !searchOpen)}
+    >
+      <Search size={14} />
+    </button>
+
+    <span class="grow"></span>
+
+    <button title={$t("grid.undo")} onclick={doUndo}><Undo2 size={14} /></button>
+    <button title={$t("grid.redo")} onclick={doRedo}><Redo2 size={14} /></button>
+
+    <details class="popover">
+      <summary><Columns3 size={14} /> {$t("grid.columns")}</summary>
       <div class="picker-body">
         {#each table.getAllLeafColumns() as column (column.id)}
           <label class="picker-row">
@@ -423,22 +438,43 @@
       </div>
     </details>
 
-    <details class="col-picker">
-      <summary>{$t("grid.tags")}</summary>
+    <details class="popover">
+      <summary><Tags size={14} /> {$t("grid.tags")}</summary>
       <div class="picker-body">
+        <div class="tag-row">
+          <input
+            placeholder={$t("grid.newTag")}
+            bind:value={newTagName}
+            list="known-tags"
+            onkeydown={(e) => e.key === "Enter" && addTag()}
+          />
+          <datalist id="known-tags">
+            {#each knownTags as name (name)}
+              <option value={name}></option>
+            {/each}
+          </datalist>
+          <select bind:value={newTagKind}>
+            {#each COLUMN_TYPES as type (type.id)}
+              <option value={type.id}>{type.label}</option>
+            {/each}
+          </select>
+          <button onclick={addTag}><Plus size={13} /></button>
+        </div>
+        {#if tagError}<p class="error">{tagError}</p>{/if}
+
         {#each tagColumns as tag (tag.name)}
           <div class="tag-row">
-            <span>{tag.name}</span>
+            <span class="grow">{tag.name}</span>
             {#if tag.name === "definition"}
-              <span class="muted">{tag.kind}</span>
+              <span class="muted">{typeLabel(tag.kind)}</span>
             {:else}
               <select
                 value={tag.kind}
                 onchange={(e) =>
                   changeKind(tag.name, e.currentTarget.value as api.FieldType)}
               >
-                {#each KINDS as kind (kind)}
-                  <option value={kind}>{kind}</option>
+                {#each COLUMN_TYPES as type (type.id)}
+                  <option value={type.id}>{type.label}</option>
                 {/each}
               </select>
               <select
@@ -453,35 +489,18 @@
                   <option value={format}>{format}</option>
                 {/each}
               </select>
-              <button
-                title={$t("grid.removeTag")}
-                onclick={() => removeTag(tag.name)}>✕</button
-              >
+              <button title={$t("grid.removeTag")} onclick={() => removeTag(tag.name)}>
+                <X size={13} />
+              </button>
             {/if}
           </div>
         {/each}
-        <div class="tag-row">
-          <input
-            placeholder={$t("grid.newTag")}
-            bind:value={newTagName}
-            list="known-tags"
-            onkeydown={(e) => e.key === "Enter" && addTag()}
-          />
-          <datalist id="known-tags">
-            {#each knownTags as name (name)}
-              <option value={name}></option>
-            {/each}
-          </datalist>
-          <select bind:value={newTagKind}>
-            {#each KINDS as kind (kind)}
-              <option value={kind}>{kind}</option>
-            {/each}
-          </select>
-          <button onclick={addTag}>{$t("grid.add")}</button>
-        </div>
-        {#if tagError}<p class="error">{tagError}</p>{/if}
       </div>
     </details>
+
+    <button class="primary" onclick={() => (addWordOpen = true)}>
+      <Plus size={14} /> {$t("grid.addWord")}
+    </button>
 
     {#if selectedIds.length}
       <span class="muted"
@@ -491,8 +510,16 @@
     {/if}
   </div>
 
+  {#if searchOpen}
+    <div class="grid-search">
+      <Search size={14} />
+      <input placeholder={$t("grid.search")} bind:value={filter} />
+    </div>
+  {/if}
+
   {#if error}<p class="error">{error}</p>{/if}
-  {#if spellingIssue}    <p class="error">
+  {#if spellingIssue}
+    <p class="error">
       {$t("grid.spelling", {
         values: {
           word: spellingIssue.word,
@@ -542,8 +569,7 @@
             <th class="select-col">
               <input
                 type="checkbox"
-                checked={rows.length > 0 &&
-                  selectedIds.length === rows.length}
+                checked={rows.length > 0 && selectedIds.length === rows.length}
                 onchange={(e) => toggleAll(e.currentTarget.checked)}
               />
             </th>
@@ -564,21 +590,6 @@
             {/each}
             <th></th>
           </tr>
-          <tr>
-            <th class="select-col"></th>
-            {#each group.headers as header (header.id)}
-              <th>
-                <input
-                  class="col-filter"
-                  value={columnFilter(header.column.id)}
-                  oninput={(e) =>
-                    setColumnFilter(header.column.id, e.currentTarget.value)}
-                  onclick={(e) => e.stopPropagation()}
-                />
-              </th>
-            {/each}
-            <th></th>
-          </tr>
         {/each}
       </thead>
       <tbody>
@@ -595,7 +606,7 @@
                   toggleSelected(row.original.id, e.currentTarget.checked)}
               />
             </td>
-            <td>
+            <td class="wordname-col">
               <input
                 value={row.original.wordname}
                 onclick={(e) => e.stopPropagation()}
@@ -617,11 +628,7 @@
                       placeholder="—"
                       value={textValue(row.original.values[tag.name])}
                       onblur={(e) =>
-                        commitText(
-                          row.original,
-                          tag.name,
-                          e.currentTarget.value,
-                        )}
+                        commitText(row.original, tag.name, e.currentTarget.value)}
                     ></textarea>
                   {:else}
                     <input
@@ -633,11 +640,7 @@
                       placeholder="—"
                       value={textValue(row.original.values[tag.name])}
                       onblur={(e) =>
-                        commitText(
-                          row.original,
-                          tag.name,
-                          e.currentTarget.value,
-                        )}
+                        commitText(row.original, tag.name, e.currentTarget.value)}
                     />
                   {/if}
                 {:else if tag.kind === "boolean"}
@@ -673,3 +676,35 @@
     </table>
   </div>
 </div>
+
+{#if addWordOpen}
+  <!-- svelte-ignore a11y_click_events_have_key_events -->
+  <!-- svelte-ignore a11y_no_noninteractive_element_interactions -->
+  <div
+    class="modal-overlay"
+    role="presentation"
+    onclick={(e) => {
+      if (e.target === e.currentTarget) addWordOpen = false;
+    }}
+  >
+    <div class="modal add-word-modal" role="dialog" aria-modal="true" tabindex="-1">
+      <div class="modal-head">
+        <span class="pane-title">{$t("grid.addWord")}</span>
+        <button onclick={() => (addWordOpen = false)}><X size={16} /></button>
+      </div>
+      <div class="modal-body">
+        <div class="row">
+          <input
+            placeholder={$t("grid.newWord")}
+            bind:value={addWordName}
+            onkeydown={(e) => e.key === "Enter" && submitAddWord()}
+          />
+          <button class="primary" onclick={submitAddWord}>
+            {$t("grid.add")}
+          </button>
+        </div>
+        {#if addWordError}<p class="error">{addWordError}</p>{/if}
+      </div>
+    </div>
+  </div>
+{/if}
