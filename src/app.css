@@ -324,6 +324,50 @@ textarea:focus {
   font-weight: 600;
 }
 
+.explorer-filter {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 3px 6px;
+  background: var(--bg);
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  color: var(--muted);
+}
+
+.explorer-filter input {
+  flex: 1;
+  min-width: 0;
+  padding: 0;
+  background: transparent;
+  border: none;
+}
+
+.explorer-filter input:focus {
+  outline: none;
+}
+
+.explorer-filter:focus-within {
+  border-color: var(--accent);
+}
+
+.tree-icon {
+  flex: none;
+  color: var(--muted);
+}
+
+.tree-list .tree-list {
+  margin-left: 10px;
+  border-left: 1px solid var(--border);
+}
+
+.twisty,
+.dots {
+  display: grid;
+  place-items: center;
+  color: var(--muted);
+}
+
 .ctx {
   display: flex;
   gap: 4px;

@@ -35,7 +35,14 @@
     "newNote": "New note",
     "newFolder": "New folder",
     "rename": "Rename",
-    "delete": "Delete"
+    "delete": "Delete",
+    "refresh": "Refresh",
+    "collapseAll": "Collapse all",
+    "reveal": "Reveal in file manager"
+  },
+  "explorer": {
+    "filter": "Filter files…",
+    "noMatches": "No matching files."
   },
   "editor": {
     "selectNote": "Select a note, or create one from the sidebar."

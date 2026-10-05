@@ -1,5 +1,6 @@
 <script lang="ts">
   import { t } from "svelte-i18n";
+  import { Search } from "@lucide/svelte";
   import {
     ui,
     createNote,
@@ -9,12 +10,16 @@
     consumeNew,
     openContextMenu,
   } from "../lib/state.svelte";
-  import Tree from "./Tree.svelte";
+  import { filterTree } from "../lib/explorer";
+  import ExplorerTree from "./ExplorerTree.svelte";
 
   let newName = $state("");
   let newKind = $state<"note" | "folder" | null>(null);
   let newBase = $state("");
+  let filter = $state("");
   let error = $state("");
+
+  const visibleTree = $derived(filterTree(ui.tree, filter));
 
   // Context-menu "new note/folder here" requests.
   $effect(() => {
@@ -66,23 +71,15 @@
 <aside class="sidebar">
   <div class="pane-head">
     <span class="pane-title">{$t("sidebar.notes")}</span>
-    <span class="actions">
-      <button
-        title={$t("sidebar.newNoteTooltip")}
-        onclick={() => {
-          newKind = "note";
-          newName = "";
-        }}>{$t("sidebar.noteButton")}</button
-      >
-      <button
-        title={$t("sidebar.newFolderTooltip")}
-        onclick={() => {
-          newKind = "folder";
-          newName = "";
-        }}>{$t("sidebar.folderButton")}</button
-      >
-    </span>
   </div>
+
+  <label class="explorer-filter">
+    <Search size={13} />
+    <input
+      placeholder={$t("explorer.filter")}
+      bind:value={filter}
+    />
+  </label>
 
   {#if newKind}
     <input
@@ -107,11 +104,13 @@
     ondrop={onRootDrop}
     oncontextmenu={(e) => {
       e.preventDefault();
-      openContextMenu(e.clientX, e.clientY, "", true);
+      openContextMenu(e.clientX, e.clientY, "", true, "root");
     }}
   >
-    {#if ui.tree.length}
-      <Tree nodes={ui.tree} depth={0} />
+    {#if visibleTree.length}
+      <ExplorerTree nodes={visibleTree} depth={0} />
+    {:else if filter}
+      <p class="muted">{$t("explorer.noMatches")}</p>
     {:else}
       <p class="muted">{$t("sidebar.noNotes")}</p>
     {/if}

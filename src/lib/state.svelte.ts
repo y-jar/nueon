@@ -55,9 +55,11 @@ export const ui = $state({
     y: number;
     path: string;
     isDir: boolean;
+    kind: "node" | "root";
   } | null,
   renameTarget: null as string | null,
   newRequest: null as { kind: "note" | "folder"; base: string } | null,
+  collapseAllSignal: 0,
 });
 
 function baseName(path: string): string {
@@ -276,12 +278,17 @@ export function openContextMenu(
   y: number,
   path: string,
   isDir: boolean,
+  kind: "node" | "root" = "node",
 ): void {
-  ui.contextMenu = { x, y, path, isDir };
+  ui.contextMenu = { x, y, path, isDir, kind };
 }
 
 export function closeContextMenu(): void {
   ui.contextMenu = null;
+}
+
+export function collapseAll(): void {
+  ui.collapseAllSignal += 1;
 }
 
 export function requestRename(path: string): void {

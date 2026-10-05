@@ -1,4 +1,12 @@
 <script lang="ts">
+  import {
+    ChevronDown,
+    ChevronRight,
+    FileText,
+    Folder,
+    FolderOpen,
+    MoreHorizontal,
+  } from "@lucide/svelte";
   import type { NoteNode } from "../lib/api";
   import {
     ui,
@@ -7,7 +15,7 @@
     openContextMenu,
     consumeRename,
   } from "../lib/state.svelte";
-  import Tree from "./Tree.svelte";
+  import ExplorerTree from "./ExplorerTree.svelte";
 
   let { nodes, depth }: { nodes: NoteNode[]; depth: number } = $props();
 
@@ -15,6 +23,12 @@
   let editing = $state<string | null>(null);
   let editValue = $state("");
   let dragOver = $state<string | null>(null);
+
+  // "Collapse all" requests from the context menu.
+  $effect(() => {
+    void ui.collapseAllSignal;
+    collapsed = {};
+  });
 
   // Context-menu rename requests from the overlay.
   $effect(() => {
@@ -56,7 +70,6 @@
     const src = ui.dragPath;
     if (!src) return false;
     if (folderPath === null) return true;
-    // Cycle prevention: no dropping into self or a descendant.
     return folderPath !== src && !folderPath.startsWith(`${src}/`);
   }
 
@@ -99,14 +112,25 @@
         ondrop={(e) => onDrop(e, node)}
         oncontextmenu={(e) => {
           e.preventDefault();
-          openContextMenu(e.clientX, e.clientY, node.path, node.is_dir);
+          openContextMenu(e.clientX, e.clientY, node.path, node.is_dir, "node");
         }}
-        style="padding-left: {depth * 12}px"
+        style="padding-left: {depth * 12 + 4}px"
       >
         {#if node.is_dir}
-          <button class="twisty" onclick={() => toggle(node.path)}
-            >{collapsed[node.path] ? "▸" : "▾"}</button
-          >
+          <button class="twisty" onclick={() => toggle(node.path)}>
+            {#if collapsed[node.path]}
+              <ChevronRight size={13} />
+            {:else}
+              <ChevronDown size={13} />
+            {/if}
+          </button>
+          {#if collapsed[node.path]}
+            <Folder size={14} class="tree-icon" />
+          {:else}
+            <FolderOpen size={14} class="tree-icon" />
+          {/if}
+        {:else}
+          <FileText size={14} class="tree-icon" />
         {/if}
 
         {#if editing === node.path}
@@ -135,15 +159,23 @@
           </button>
           <button
             class="dots"
+            title="More"
             onclick={(e) =>
-              openContextMenu(e.clientX, e.clientY, node.path, node.is_dir)}
-            >⋯</button
+              openContextMenu(
+                e.clientX,
+                e.clientY,
+                node.path,
+                node.is_dir,
+                "node",
+              )}
           >
+            <MoreHorizontal size={14} />
+          </button>
         {/if}
       </div>
 
       {#if node.is_dir && !collapsed[node.path] && node.children.length}
-        <Tree nodes={node.children} depth={depth + 1} />
+        <ExplorerTree nodes={node.children} depth={depth + 1} />
       {/if}
     </li>
   {/each}

@@ -1,5 +1,6 @@
 <script lang="ts">
   import { t } from "svelte-i18n";
+  import { revealItemInDir } from "@tauri-apps/plugin-opener";
   import {
     ui,
     closeContextMenu,
@@ -7,6 +8,8 @@
     requestRename,
     deletePath,
     selectNote,
+    refreshTree,
+    collapseAll,
   } from "../lib/state.svelte";
 
   let menuEl: HTMLElement | undefined;
@@ -23,13 +26,24 @@
     };
   }
 
+  const menu = $derived(ui.contextMenu);
+
   const base = $derived(
-    ui.contextMenu
-      ? ui.contextMenu.isDir
-        ? ui.contextMenu.path
-        : ui.contextMenu.path.split("/").slice(0, -1).join("/")
+    menu
+      ? menu.isDir
+        ? menu.path
+        : menu.path.split("/").slice(0, -1).join("/")
       : "",
   );
+
+  function reveal() {
+    if (!menu || !ui.root) return;
+    const target = menu.path
+      ? `${ui.root}/notes/${menu.path}`
+      : `${ui.root}/notes`;
+    revealItemInDir(target).catch(() => {});
+    closeContextMenu();
+  }
 
   $effect(() => {
     if (!ui.contextMenu) return;
@@ -58,20 +72,40 @@
   });
 </script>
 
-{#if ui.contextMenu}
+{#if menu}
   <div
     class="ctx-menu"
     role="menu"
     tabindex="-1"
     use:portal
-    style="left: {ui.contextMenu.x}px; top: {ui.contextMenu.y}px"
+    style="left: {menu.x}px; top: {menu.y}px"
     oncontextmenu={(e) => e.preventDefault()}
   >
-    {#if ui.contextMenu.path !== ""}
-      {#if !ui.contextMenu.isDir}
+    {#if menu.kind === "root"}
+      <button onclick={() => requestNew("note", "")}
+        >{$t("contextMenu.newNote")}</button
+      >
+      <button onclick={() => requestNew("folder", "")}
+        >{$t("contextMenu.newFolder")}</button
+      >
+      <button
+        onclick={() => {
+          refreshTree();
+          closeContextMenu();
+        }}>{$t("contextMenu.refresh")}</button
+      >
+      <button
+        onclick={() => {
+          collapseAll();
+          closeContextMenu();
+        }}>{$t("contextMenu.collapseAll")}</button
+      >
+      <button onclick={reveal}>{$t("contextMenu.reveal")}</button>
+    {:else}
+      {#if !menu.isDir}
         <button
           onclick={() => {
-            selectNote(ui.contextMenu!.path);
+            selectNote(menu.path);
             closeContextMenu();
           }}>{$t("contextMenu.open")}</button
         >
@@ -82,22 +116,16 @@
       <button onclick={() => requestNew("folder", base)}
         >{$t("contextMenu.newFolder")}</button
       >
-      <button onclick={() => requestRename(ui.contextMenu!.path)}
+      <button onclick={() => requestRename(menu.path)}
         >{$t("contextMenu.rename")}</button
       >
       <button
         onclick={() => {
-          deletePath(ui.contextMenu!.path);
+          deletePath(menu.path);
           closeContextMenu();
         }}>{$t("contextMenu.delete")}</button
       >
-    {:else}
-      <button onclick={() => requestNew("note", "")}
-        >{$t("contextMenu.newNote")}</button
-      >
-      <button onclick={() => requestNew("folder", "")}
-        >{$t("contextMenu.newFolder")}</button
-      >
+      <button onclick={reveal}>{$t("contextMenu.reveal")}</button>
     {/if}
   </div>
 {/if}
