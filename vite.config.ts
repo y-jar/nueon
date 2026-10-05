@@ -1,3 +1,4 @@
+import { fileURLToPath, URL } from "node:url";
 import { defineConfig } from "vite";
 import { svelte } from "@sveltejs/vite-plugin-svelte";
 
@@ -6,6 +7,14 @@ const host = process.env.TAURI_DEV_HOST;
 // https://vitejs.dev/config/
 export default defineConfig({
   plugins: [svelte()],
+  resolve: {
+    alias: {
+      // svelte-splitpanes imports SvelteKit's `$app/environment`.
+      "$app/environment": fileURLToPath(
+        new URL("./src/lib/app-environment.ts", import.meta.url),
+      ),
+    },
+  },
   // Prevent Vite from obscuring Rust errors.
   clearScreen: false,
   build: {

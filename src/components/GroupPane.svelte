@@ -1,15 +1,12 @@
 <script lang="ts">
   import TabBar from "./TabBar.svelte";
-  import Editor from "./Editor.svelte";
-  import Grid from "./Grid.svelte";
-  import Translation from "./Translation.svelte";
-  import EmptyState from "./EmptyState.svelte";
+  import GroupBody from "./GroupBody.svelte";
   import {
     ui,
     setActiveGroup,
-    reloadGroupTable,
     splitGroup,
     moveTab,
+    type TabGroup,
   } from "../lib/state.svelte";
 
   let { groupId }: { groupId: string } = $props();
@@ -17,9 +14,12 @@
   type Edge = "left" | "right" | "top" | "bottom";
   const EDGES: Edge[] = ["left", "right", "top", "bottom"];
 
-  const group = $derived(
-    ui.groups.find((candidate) => candidate.id === groupId) ?? ui.groups[0],
-  );
+  function findGroup(): TabGroup {
+    return (
+      ui.groups.find((candidate) => candidate.id === groupId) ?? ui.groups[0]
+    );
+  }
+
   let edge = $state<Edge | null>(null);
 
   function onEdgeOver(event: DragEvent, side: Edge) {
@@ -57,21 +57,9 @@
   }}
   ondrop={onBodyDrop}
 >
-  <TabBar {group} />
+  <TabBar group={findGroup()} />
   <div class="center-body">
-    {#if group.tabs.length === 0}
-      <EmptyState />
-    {:else if group.doc.view === "notes"}
-      {#key group.id + (group.doc.selected ?? "")}
-        <Editor doc={group.doc} />
-      {/key}
-    {:else if group.doc.view === "dictionary"}
-      {#key group.id + (group.doc.currentTable ?? "")}
-        <Grid doc={group.doc} onRefresh={() => reloadGroupTable(group.id)} />
-      {/key}
-    {:else}
-      <Translation />
-    {/if}
+    <GroupBody group={findGroup()} {groupId} />
   </div>
 
   {#if ui.dragTab}
