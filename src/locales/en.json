@@ -360,6 +360,7 @@
     "back": "Back",
     "next": "Next",
     "apply": "Import",
-    "done": "Done"
+    "done": "Done",
+    "storeAsList": "Store as one list instead"
   }
 }

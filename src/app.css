@@ -2543,3 +2543,18 @@ button.danger:hover:not(:disabled) {
   border: 1px solid var(--border);
   border-radius: 6px;
 }
+
+.import-role-cell {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.import-quick {
+  display: grid;
+  place-items: center;
+  padding: 4px;
+  color: var(--accent);
+  border-color: var(--accent);
+  background: transparent;
+}
