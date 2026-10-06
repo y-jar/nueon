@@ -883,7 +883,7 @@
     </Popover>
 
     <Popover align="right">
-      {#snippet label()}<Download size={14} /> {$t("grid.export")}{/snippet}
+      {#snippet label()}<Upload size={14} /> {$t("grid.export")}{/snippet}
       <div class="picker-body">
         <button onclick={() => exportAs("csv")}>{$t("grid.exportCsv")}</button>
         <button onclick={() => exportAs("tsv")}>{$t("grid.exportTsv")}</button>
@@ -967,7 +967,7 @@
       aria-label={$t("import.title")}
       onclick={() => openImport()}
     >
-      <Upload size={14} />
+      <Download size={14} />
     </button>
 
     <button class="primary" onclick={() => (addWordOpen = true)}>

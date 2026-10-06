@@ -98,9 +98,9 @@
     <Braces size={15} />
   </button>
   <button title={$t("translation.exportPresets")} onclick={onExport}>
-    <Download size={15} />
+    <Upload size={15} />
   </button>
   <button title={$t("translation.importPresets")} onclick={onImport}>
-    <Upload size={15} />
+    <Download size={15} />
   </button>
 </div>

@@ -17,6 +17,7 @@
 {:else}
   <!-- "row" lays panes out side by side; splitpanes calls that non-horizontal. -->
   <Splitpanes
+    theme="nueon"
     horizontal={node.direction === "column"}
     on:resized={(event) => {
       node.sizes = event.detail.map((pane) => pane.size);

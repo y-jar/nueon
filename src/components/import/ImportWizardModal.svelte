@@ -1,6 +1,6 @@
 <script lang="ts">
   import { t } from "svelte-i18n";
-  import { ArrowLeft, ArrowRight, Check, Upload, X } from "@lucide/svelte";
+  import { ArrowLeft, ArrowRight, Check, Download, X } from "@lucide/svelte";
   import * as api from "../../lib/api";
   import { ui, closeImport } from "../../lib/state.svelte";
   import StepSelect from "./steps/StepSelect.svelte";
@@ -90,7 +90,7 @@
   >
     <div class="modal import-modal" role="dialog" aria-modal="true" aria-label={$t("import.title")}>
       <div class="modal-head">
-        <span class="pane-title"><Upload size={15} /> {$t("import.title")}</span>
+        <span class="pane-title"><Download size={15} /> {$t("import.title")}</span>
         <button onclick={close} disabled={busy} title={$t("grid.cancel")}>
           <X size={16} />
         </button>

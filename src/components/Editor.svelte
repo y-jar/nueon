@@ -16,7 +16,7 @@
   } from "../lib/editor/commands";
   import { codemirror } from "../lib/editor/action";
   import { open, save } from "@tauri-apps/plugin-dialog";
-  import { Download } from "@lucide/svelte";
+  import { Upload } from "@lucide/svelte";
   import Popover from "./Popover.svelte";
   import { assetLink, linkLabel } from "../lib/assets";
   import { stripMd } from "../lib/explorer";
@@ -109,7 +109,7 @@
     {/if}
     <EditorToolbar {view} {format} onImage={insertImage}>
       <Popover align="right">
-        {#snippet label()}<Download size={15} /> {$t("editor.export")}{/snippet}
+        {#snippet label()}<Upload size={15} /> {$t("editor.export")}{/snippet}
         {#snippet children(close)}
           <div class="picker-body">
             <button

@@ -2576,3 +2576,35 @@ button.danger:hover:not(:disabled) {
   background: var(--accent);
   border-color: var(--accent);
 }
+
+/* -- split panes (custom "nueon" theme) ------------------------------------ */
+/* svelte-splitpanes' `default-theme` draws a bright white splitter; this
+   theme replaces it with the app's dark border token. */
+
+.splitpanes.nueon > .splitpanes__splitter {
+  background: transparent;
+  border-color: var(--border);
+  transition: background-color 120ms ease;
+}
+
+.splitpanes.nueon.splitpanes--vertical > .splitpanes__splitter {
+  width: 7px;
+  border-left: 1px solid var(--border);
+  border-right: 1px solid rgba(255, 255, 255, 0.08);
+  cursor: col-resize;
+}
+
+.splitpanes.nueon.splitpanes--horizontal > .splitpanes__splitter {
+  height: 7px;
+  border-top: 1px solid var(--border);
+  border-bottom: 1px solid rgba(255, 255, 255, 0.08);
+  cursor: row-resize;
+}
+
+.splitpanes.nueon > .splitpanes__splitter:hover {
+  background: rgba(255, 255, 255, 0.08);
+}
+
+.splitpanes.nueon > .splitpanes__splitter.splitpanes__splitter--active {
+  background: rgba(196, 148, 92, 0.25);
+}
