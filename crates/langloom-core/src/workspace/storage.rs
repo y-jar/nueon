@@ -31,6 +31,32 @@ pub const TRANSLATION_FILE: &str = "translation";
 /// `config/` file holding workspace settings.
 pub const SETTINGS_FILE: &str = "settings";
 
+/// Extension given to notes created without one.
+pub const NOTE_EXT: &str = "md";
+
+/// Whether `ext` plausibly is a file extension (short, alphanumeric), as
+/// opposed to the tail of a name like `v1.2 notes`.
+fn looks_like_extension(ext: &str) -> bool {
+    !ext.is_empty() && ext.len() <= 5 && ext.chars().all(|c| c.is_ascii_alphanumeric())
+}
+
+/// Whether the final component of `path` carries a real extension.
+pub fn has_extension(path: &Path) -> bool {
+    path.extension()
+        .and_then(|ext| ext.to_str())
+        .is_some_and(looks_like_extension)
+}
+
+/// `relative` with `.md` appended when it has no extension.
+pub fn with_note_extension(relative: &Path) -> PathBuf {
+    if has_extension(relative) {
+        return relative.to_path_buf();
+    }
+    let mut name = relative.as_os_str().to_os_string();
+    name.push(format!(".{NOTE_EXT}"));
+    PathBuf::from(name)
+}
+
 /// Workspace `.gitignore` contents.
 pub const GITIGNORE_FILE: &str = ".gitignore";
 /// Files matched by the workspace `.gitignore`.
@@ -301,7 +327,13 @@ fn collect_notes(base: &Path, dir: &Path, out: &mut Vec<NoteFile>) -> Result<(),
         if path.is_dir() {
             collect_notes(base, &path, out)?;
         } else {
-            let raw_content = fs::read_to_string(&path).map_err(|e| io_err(&path, e))?;
+            // Non-text files (images dropped into `notes/` by hand, …) are not
+            // notes; skip them instead of failing the whole workspace load.
+            let raw_content = match fs::read_to_string(&path) {
+                Ok(text) => text,
+                Err(e) if e.kind() == io::ErrorKind::InvalidData => continue,
+                Err(e) => return Err(io_err(&path, e)),
+            };
             let relative = path.strip_prefix(base).unwrap_or(&path).to_path_buf();
             out.push(NoteFile::new(relative, raw_content));
         }
@@ -339,20 +371,92 @@ pub fn create_folder(notes_dir: &Path, relative: &Path) -> Result<(), StorageErr
     fs::create_dir_all(&path).map_err(|e| io_err(&path, e))
 }
 
-/// Rename a note or folder within the notes directory.
-pub fn rename_path(notes_dir: &Path, from: &Path, to: &Path) -> Result<(), StorageError> {
+/// Rename a note or folder within the notes directory. Renaming a file to a
+/// bare name keeps its extension (`a.md` → `b.md`). Returns the final
+/// relative path.
+pub fn rename_path(notes_dir: &Path, from: &Path, to: &Path) -> Result<PathBuf, StorageError> {
     let source = safe_join(notes_dir, from)?;
-    let target = safe_join(notes_dir, to)?;
     if !source.exists() {
         return Err(StorageError::NotFound(from.to_path_buf()));
     }
+    let to = match source.extension() {
+        Some(ext) if source.is_file() && !has_extension(to) => {
+            let mut name = to.as_os_str().to_os_string();
+            name.push(".");
+            name.push(ext);
+            PathBuf::from(name)
+        }
+        _ => to.to_path_buf(),
+    };
+    let target = safe_join(notes_dir, &to)?;
     if target.exists() {
-        return Err(StorageError::AlreadyExists(to.to_path_buf()));
+        return Err(StorageError::AlreadyExists(to));
     }
     if let Some(parent) = target.parent() {
         fs::create_dir_all(parent).map_err(|e| io_err(parent, e))?;
     }
-    fs::rename(&source, &target).map_err(|e| io_err(&source, e))
+    fs::rename(&source, &target).map_err(|e| io_err(&source, e))?;
+    Ok(to)
+}
+
+/// Rename extensionless and `.txt` notes to `.md`, returning `(from, to)`
+/// pairs relative to `notes_dir`. Name collisions get a numeric suffix, and
+/// files that are not valid UTF-8 text are left alone.
+pub fn migrate_to_markdown(notes_dir: &Path) -> Result<Vec<(PathBuf, PathBuf)>, StorageError> {
+    let mut renamed = Vec::new();
+    if notes_dir.exists() {
+        migrate_dir(notes_dir, notes_dir, &mut renamed)?;
+    }
+    Ok(renamed)
+}
+
+fn migrate_dir(
+    base: &Path,
+    dir: &Path,
+    renamed: &mut Vec<(PathBuf, PathBuf)>,
+) -> Result<(), StorageError> {
+    let mut entries = Vec::new();
+    for dirent in fs::read_dir(dir).map_err(|e| io_err(dir, e))? {
+        entries.push(dirent.map_err(|e| io_err(dir, e))?.path());
+    }
+    entries.sort();
+    for path in entries {
+        let hidden = path
+            .file_name()
+            .is_some_and(|name| name.to_string_lossy().starts_with('.'));
+        if hidden {
+            continue;
+        }
+        if path.is_dir() {
+            migrate_dir(base, &path, renamed)?;
+            continue;
+        }
+        let is_txt = path.extension().is_some_and(|ext| ext == "txt");
+        if !is_txt && has_extension(&path) {
+            continue;
+        }
+        let is_text = fs::read(&path).is_ok_and(|bytes| String::from_utf8(bytes).is_ok());
+        if !is_text {
+            continue;
+        }
+        let stem = if is_txt {
+            path.with_extension("")
+        } else {
+            path.clone()
+        };
+        let mut candidate = with_note_extension(&stem);
+        let mut n = 2;
+        while candidate.exists() {
+            let mut name = stem.as_os_str().to_os_string();
+            name.push(format!(" {n}.{NOTE_EXT}"));
+            candidate = PathBuf::from(name);
+            n += 1;
+        }
+        fs::rename(&path, &candidate).map_err(|e| io_err(&path, e))?;
+        let rel = |p: &Path| p.strip_prefix(base).unwrap_or(p).to_path_buf();
+        renamed.push((rel(&path), rel(&candidate)));
+    }
+    Ok(())
 }
 
 /// Delete a note file or a folder (recursively) within the notes directory.
@@ -429,6 +533,63 @@ mod tests {
         assert!(path.extension().is_none());
         let loaded: crate::config::WorkspaceSettings = load_json(&path).unwrap().unwrap();
         assert!(loaded.auto_checkin);
+    }
+
+    #[test]
+    fn note_extension_rules() {
+        assert_eq!(with_note_extension(Path::new("idea")), Path::new("idea.md"));
+        assert_eq!(with_note_extension(Path::new("a/b")), Path::new("a/b.md"));
+        assert_eq!(with_note_extension(Path::new("x.txt")), Path::new("x.txt"));
+        // The tail of a title is not an extension.
+        assert_eq!(
+            with_note_extension(Path::new("v1.2 notes")),
+            Path::new("v1.2 notes.md")
+        );
+    }
+
+    #[test]
+    fn migration_renames_once_and_avoids_collisions() {
+        let dir = tempfile::tempdir().unwrap();
+        let notes = dir.path().join(NOTES_DIR);
+        fs::create_dir_all(notes.join("sub")).unwrap();
+        fs::write(notes.join("plain"), "a").unwrap();
+        fs::write(notes.join("old.txt"), "b").unwrap();
+        fs::write(notes.join("keep.md"), "c").unwrap();
+        fs::write(notes.join("sub/deep"), "d").unwrap();
+        // Collision: `clash` and an existing `clash.md`.
+        fs::write(notes.join("clash"), "e").unwrap();
+        fs::write(notes.join("clash.md"), "f").unwrap();
+        // Binary data and hidden files are untouched.
+        fs::write(notes.join("blob"), [0xff, 0xfe, 0x00]).unwrap();
+        fs::write(notes.join(".hidden"), "h").unwrap();
+
+        let renamed = migrate_to_markdown(&notes).unwrap();
+        assert_eq!(renamed.len(), 4);
+        assert!(notes.join("plain.md").exists());
+        assert!(notes.join("old.md").exists());
+        assert!(!notes.join("old.txt").exists());
+        assert!(notes.join("sub/deep.md").exists());
+        assert!(notes.join("clash 2.md").exists());
+        assert_eq!(fs::read_to_string(notes.join("clash.md")).unwrap(), "f");
+        assert!(notes.join("blob").exists());
+        assert!(notes.join(".hidden").exists());
+
+        assert!(migrate_to_markdown(&notes).unwrap().is_empty());
+    }
+
+    #[test]
+    fn rename_keeps_file_extension_and_scan_skips_binaries() {
+        let dir = tempfile::tempdir().unwrap();
+        let notes = dir.path().join(NOTES_DIR);
+        fs::create_dir_all(&notes).unwrap();
+        write_note(&notes, &NoteFile::new("a.md", "x")).unwrap();
+        fs::write(notes.join("pic.bin"), [0xff, 0xfe, 0xfd]).unwrap();
+
+        rename_path(&notes, Path::new("a.md"), Path::new("b")).unwrap();
+        assert!(notes.join("b.md").exists());
+
+        let loaded = scan_notes(&notes).unwrap();
+        assert_eq!(loaded.len(), 1);
     }
 
     #[test]

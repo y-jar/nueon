@@ -3,6 +3,7 @@
   import * as api from "../lib/api";
   import { ui, type DocState } from "../lib/state.svelte";
   import { codemirror } from "../lib/editor/action";
+  import { stripMd } from "../lib/explorer";
 
   let { doc }: { doc: DocState } = $props();
 </script>
@@ -10,7 +11,7 @@
 {#if doc.selected}
   <div class="editor">
     <div class="editor-head">
-      <span class="muted">{doc.selected}{doc.dirty ? " •" : ""}</span>
+      <span class="muted">{stripMd(doc.selected)}{doc.dirty ? " •" : ""}</span>
     </div>
     <div
       class="cm-host"

@@ -9,9 +9,16 @@ export function flattenNotes(nodes: NoteNode[], out: NoteNode[] = []): NoteNode[
   return out;
 }
 
+/** Drop a trailing `.md` for display; other extensions stay visible. */
+export function stripMd(name: string): string {
+  return name.replace(/\.md$/i, "");
+}
+
 /** A note path ("untitled", "untitled 2", …) not present in the tree. */
 export function uniqueNotePath(nodes: NoteNode[], base = "untitled"): string {
-  const paths = new Set(flattenNotes(nodes).map((node) => node.path));
+  const paths = new Set(
+    flattenNotes(nodes).map((node) => stripMd(node.path)),
+  );
   let name = base;
   let n = 2;
   while (paths.has(name)) {
@@ -32,7 +39,8 @@ export function filterTree(nodes: NoteNode[], needle: string): NoteNode[] {
     list
       .map((node) => {
         const children = walk(node.children);
-        if (node.name.toLowerCase().includes(query) || children.length) {
+        const label = node.is_dir ? node.name : stripMd(node.name);
+        if (label.toLowerCase().includes(query) || children.length) {
           return { ...node, children };
         }
         return null;

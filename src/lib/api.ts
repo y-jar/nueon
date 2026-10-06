@@ -56,14 +56,16 @@ export const readNote = (relPath: string): Promise<string> =>
   invoke("read_note", { relPath });
 export const saveNote = (relPath: string, content: string): Promise<void> =>
   invoke("save_note", { relPath, content });
-export const createNote = (relPath: string): Promise<void> =>
+/** Create a note; resolves to its final path (`.md` is appended if missing). */
+export const createNote = (relPath: string): Promise<string> =>
   invoke("create_note", { relPath });
 export const createFolder = (relPath: string): Promise<void> =>
   invoke("create_folder", { relPath });
+/** Move/rename; resolves to the final path (files keep their extension). */
 export const moveOrRenameNote = (
   oldPath: string,
   newPath: string,
-): Promise<void> => invoke("move_or_rename_note", { oldPath, newPath });
+): Promise<string> => invoke("move_or_rename_note", { oldPath, newPath });
 export const deleteNote = (relPath: string): Promise<void> =>
   invoke("delete_note", { relPath });
 

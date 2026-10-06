@@ -152,7 +152,7 @@ impl Workspace {
         );
         let vcs = GitStatus::detect(&root_path);
 
-        Ok(Self {
+        let mut workspace = Self {
             root_path,
             dictionary,
             notes,
@@ -163,7 +163,28 @@ impl Workspace {
             vcs,
             auto,
             history: History::new(),
-        })
+        };
+        // Best effort: a failed migration retries on the next open.
+        let _ = workspace.migrate_notes_if_needed();
+        Ok(workspace)
+    }
+
+    /// One-time conversion of extensionless and `.txt` notes to `.md`.
+    fn migrate_notes_if_needed(&mut self) -> Result<(), StorageError> {
+        if self.settings.notes_migrated {
+            return Ok(());
+        }
+        let renamed = storage::migrate_to_markdown(&self.notes_dir())?;
+        self.refresh_notes()?;
+        self.settings.notes_migrated = true;
+        self.save_settings()?;
+        if !renamed.is_empty() {
+            self.mark_change(
+                Instant::now(),
+                format!("langloom: migrate {} notes to .md", renamed.len()),
+            );
+        }
+        Ok(())
     }
 
     /// The `dictionary/` directory.
@@ -597,16 +618,17 @@ impl Workspace {
         storage::read_note(&self.notes_dir(), relative.as_ref())
     }
 
-    /// Create an empty note and refresh the note list.
-    pub fn create_note(&mut self, relative: impl AsRef<Path>) -> Result<(), StorageError> {
-        let relative = relative.as_ref();
-        storage::create_note(&self.notes_dir(), relative)?;
+    /// Create an empty note and refresh the note list. A name without an
+    /// extension gets `.md`; the final relative path is returned.
+    pub fn create_note(&mut self, relative: impl AsRef<Path>) -> Result<PathBuf, StorageError> {
+        let relative = storage::with_note_extension(relative.as_ref());
+        storage::create_note(&self.notes_dir(), &relative)?;
         self.refresh_notes()?;
         self.mark_change(
             Instant::now(),
             format!("langloom: create note \"{}\"", relative.display()),
         );
-        Ok(())
+        Ok(relative)
     }
 
     /// Create a notes folder.
@@ -625,10 +647,9 @@ impl Workspace {
         &mut self,
         from: impl AsRef<Path>,
         to: impl AsRef<Path>,
-    ) -> Result<(), StorageError> {
+    ) -> Result<PathBuf, StorageError> {
         let from = from.as_ref();
-        let to = to.as_ref();
-        storage::rename_path(&self.notes_dir(), from, to)?;
+        let to = storage::rename_path(&self.notes_dir(), from, to.as_ref())?;
         self.refresh_notes()?;
         self.mark_change(
             Instant::now(),
@@ -638,7 +659,7 @@ impl Workspace {
                 to.display()
             ),
         );
-        Ok(())
+        Ok(to)
     }
 
     /// Delete a note or folder (recursively) and refresh the note list.
@@ -1206,18 +1227,40 @@ mod tests {
     }
 
     #[test]
+    fn legacy_notes_migrate_to_markdown_once_on_load() {
+        let dir = tempfile::tempdir().unwrap();
+        drop(Workspace::new(dir.path()).unwrap());
+        let notes = dir.path().join("notes");
+        std::fs::write(notes.join("lorum"), "hello").unwrap();
+        std::fs::write(notes.join("old.txt"), "world").unwrap();
+
+        let ws = Workspace::load(dir.path()).unwrap();
+        assert!(notes.join("lorum.md").exists());
+        assert!(notes.join("old.md").exists());
+        assert_eq!(ws.notes.len(), 2);
+        assert!(ws.settings.notes_migrated);
+
+        // A note the user later names without an extension is left alone.
+        std::fs::write(notes.join("later"), "x").unwrap();
+        let again = Workspace::load(dir.path()).unwrap();
+        assert!(notes.join("later").exists());
+        assert!(again.settings.notes_migrated);
+    }
+
+    #[test]
     fn note_crud_refreshes_the_list() {
         let dir = tempfile::tempdir().unwrap();
         let mut ws = Workspace::new(dir.path()).unwrap();
 
         ws.create_folder("Grammar").unwrap();
-        ws.create_note("Grammar/phonology").unwrap();
+        let created = ws.create_note("Grammar/phonology").unwrap();
+        assert_eq!(created, PathBuf::from("Grammar/phonology.md"));
         assert_eq!(ws.notes.len(), 1);
-        assert_eq!(ws.notes[0].path, PathBuf::from("Grammar/phonology"));
+        assert_eq!(ws.notes[0].path, PathBuf::from("Grammar/phonology.md"));
 
-        ws.rename_note("Grammar/phonology", "Grammar/sounds")
+        ws.rename_note("Grammar/phonology.md", "Grammar/sounds")
             .unwrap();
-        assert_eq!(ws.notes[0].path, PathBuf::from("Grammar/sounds"));
+        assert_eq!(ws.notes[0].path, PathBuf::from("Grammar/sounds.md"));
 
         ws.delete_note("Grammar").unwrap();
         assert!(ws.notes.is_empty());

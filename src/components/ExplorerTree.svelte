@@ -9,6 +9,7 @@
     MoreHorizontal,
   } from "@lucide/svelte";
   import type { NoteNode } from "../lib/api";
+  import { stripMd } from "../lib/explorer";
   import {
     ui,
     activeDoc,
@@ -22,6 +23,11 @@
   import ExplorerTree from "./ExplorerTree.svelte";
 
   let { nodes, depth }: { nodes: NoteNode[]; depth: number } = $props();
+
+  /** Label shown for a node: files hide their `.md` extension. */
+  function labelOf(node: NoteNode): string {
+    return node.is_dir ? node.name : stripMd(node.name);
+  }
 
   let collapsed = $state<Record<string, boolean>>({});
   let editing = $state<string | null>(null);
@@ -41,7 +47,7 @@
       const node: NoteNode | undefined = nodes.find((n) => n.path === target);
       if (node) {
         editing = node.path;
-        editValue = node.name;
+        editValue = labelOf(node);
         consumeRename();
       }
     }
@@ -58,13 +64,13 @@
   async function commitRename(node: NoteNode) {
     const name = editValue.trim();
     editing = null;
-    if (!name || name === node.name) return;
+    if (!name || name === labelOf(node)) return;
     const parent = parentOf(node);
     const target = parent ? `${parent}/${name}` : name;
     try {
       await renamePath(node.path, target);
     } catch (error) {
-      ui.status = `could not rename ${node.name}: ${String(error)}`;
+      ui.status = `could not rename ${labelOf(node)}: ${String(error)}`;
     }
   }
 
@@ -187,10 +193,10 @@
               node.is_dir ? toggle(node.path) : selectNote(node.path)}
             ondblclick={() => {
               editing = node.path;
-              editValue = node.name;
+              editValue = labelOf(node);
             }}
           >
-            {node.name}
+            {labelOf(node)}
           </button>
           <button
             class="dots"

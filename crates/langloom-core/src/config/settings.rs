@@ -89,6 +89,8 @@ pub struct WorkspaceSettings {
     pub dismissed_warnings: Vec<String>,
     /// Persisted shell layout.
     pub ui: UiLayout,
+    /// Whether legacy extensionless/`.txt` notes were converted to `.md`.
+    pub notes_migrated: bool,
     /// Persisted tab groups, splits and secondary windows.
     #[serde(skip_serializing_if = "LayoutState::is_empty")]
     pub layout: LayoutState,
@@ -104,6 +106,7 @@ impl Default for WorkspaceSettings {
             git_prompt_dismissed: false,
             dismissed_warnings: Vec::new(),
             ui: UiLayout::default(),
+            notes_migrated: false,
             layout: LayoutState::default(),
         }
     }

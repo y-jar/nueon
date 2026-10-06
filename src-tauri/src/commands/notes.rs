@@ -48,21 +48,22 @@ pub fn save_note(
         .map_err(|err| err.to_string())
 }
 
-/// Create an empty note and refresh the tree.
+/// Create an empty note (adding `.md` when the name has no extension),
+/// refresh the tree, and return the final workspace-relative path.
 #[tauri::command]
 pub fn create_note(
     app: AppHandle,
     state: State<'_, Shared>,
     rel_path: String,
-) -> Result<(), String> {
+) -> Result<String, String> {
     let mut state = state.lock().map_err(|_| "state poisoned".to_string())?;
-    state
+    let created = state
         .workspace_mut()?
         .create_note(&rel_path)
         .map_err(|err| err.to_string())?;
     drop(state);
     changed(&app, "notes");
-    Ok(())
+    Ok(created.to_string_lossy().replace('\\', "/"))
 }
 
 /// Create a notes folder and refresh the tree.
@@ -82,14 +83,15 @@ pub fn create_folder(
     Ok(())
 }
 
-/// Move or rename a note/folder and refresh the tree.
+/// Move or rename a note/folder and refresh the tree. Returns the final
+/// path (a file renamed to a bare name keeps its extension).
 #[tauri::command]
 pub fn move_or_rename_note(
     app: AppHandle,
     state: State<'_, Shared>,
     old_path: String,
     new_path: String,
-) -> Result<(), String> {
+) -> Result<String, String> {
     let old_path = old_path.trim_matches('/').to_string();
     let new_path = new_path.trim_matches('/').to_string();
     if new_path.is_empty() {
@@ -100,13 +102,13 @@ pub fn move_or_rename_note(
         return Err("cannot move a folder into itself or its own subfolder".to_string());
     }
     let mut state = state.lock().map_err(|_| "state poisoned".to_string())?;
-    state
+    let renamed = state
         .workspace_mut()?
         .rename_note(&old_path, &new_path)
         .map_err(|err| err.to_string())?;
     drop(state);
     changed(&app, "notes");
-    Ok(())
+    Ok(renamed.to_string_lossy().replace('\\', "/"))
 }
 
 /// Delete a note/folder (recursively) and refresh the tree.

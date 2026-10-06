@@ -1,6 +1,7 @@
 import { emit, listen } from "@tauri-apps/api/event";
 import * as api from "./api";
 import { windowLabel } from "./window";
+import { stripMd } from "./explorer";
 
 /** Left activity ribbon selection. */
 export type Activity = "notes" | "dictionary" | "translation" | "git";
@@ -146,7 +147,7 @@ function clearDoc(doc: DocState): void {
 }
 
 function baseName(path: string): string {
-  return path.split("/").filter(Boolean).pop() ?? path;
+  return stripMd(path.split("/").filter(Boolean).pop() ?? path);
 }
 
 // -- data loading --------------------------------------------------------
@@ -1053,9 +1054,10 @@ function resetDocuments(): void {
 }
 
 export async function createNote(relPath: string): Promise<void> {
-  await api.createNote(relPath);
-  await selectNote(relPath);
-  ui.status = `created ${relPath}`;
+  // The backend appends `.md` to a bare name and returns the real path.
+  const created = await api.createNote(relPath);
+  await selectNote(created);
+  ui.status = `created ${created}`;
 }
 
 export async function createFolder(relPath: string): Promise<void> {
@@ -1084,9 +1086,10 @@ export async function movePath(src: string, folder: string): Promise<void> {
 
 export async function renamePath(
   oldPath: string,
-  newPath: string,
+  requestedPath: string,
 ): Promise<void> {
-  await api.moveOrRenameNote(oldPath, newPath);
+  // A file renamed to a bare name keeps its extension; use the real result.
+  const newPath = await api.moveOrRenameNote(oldPath, requestedPath);
   const prefix = `${oldPath}/`;
   for (const group of ui.groups) {
     if (group.doc.selected === oldPath) group.doc.selected = newPath;
