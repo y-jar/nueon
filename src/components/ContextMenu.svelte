@@ -6,7 +6,7 @@
     closeContextMenu,
     requestNew,
     requestRename,
-    deletePath,
+    requestDeleteNote,
     selectNote,
     refreshTree,
     collapseAll,
@@ -122,6 +122,12 @@
         }}>{$t("contextMenu.collapseAll")}</button
       >
       <button onclick={reveal}>{$t("contextMenu.reveal")}</button>
+      <button
+        onclick={() => {
+          closeContextMenu();
+          ui.trashOpen = true;
+        }}>{$t("trash.open")}</button
+      >
     {:else if menu.kind === "editor"}
       <button onclick={() => editorAction(insertTable)}
         >{$t("editor.menu.table")}</button
@@ -179,10 +185,9 @@
         onclick={() => {
           // Snapshot the target: closing the menu clears it.
           const target = menu.path;
+          const isDir = menu.isDir;
           closeContextMenu();
-          deletePath(target).catch((error) => {
-            ui.status = `could not delete ${target}: ${String(error)}`;
-          });
+          void requestDeleteNote(target, isDir);
         }}>{$t("contextMenu.delete")}</button
       >
       <button onclick={reveal}>{$t("contextMenu.reveal")}</button>

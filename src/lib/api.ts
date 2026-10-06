@@ -85,8 +85,38 @@ export const moveOrRenameNote = (
   oldPath: string,
   newPath: string,
 ): Promise<string> => invoke("move_or_rename_note", { oldPath, newPath });
-export const deleteNote = (relPath: string): Promise<void> =>
+/** Move a note or folder to the trash. Resolves to the trash record. */
+export const deleteNote = (relPath: string): Promise<TrashRecord> =>
   invoke("delete_note", { relPath });
+/** Number of files a note path covers (for the delete confirmation). */
+export const noteCount = (relPath: string): Promise<number> =>
+  invoke("note_count", { relPath });
+
+// -- trash ---------------------------------------------------------------
+export type TrashKind = "note" | "folder" | "table";
+
+export interface TrashRecord {
+  /** Entry directory name; the handle for restore/purge. */
+  id: string;
+  kind: TrashKind;
+  original: string;
+  name: string;
+  deleted_at: number;
+  count: number;
+}
+
+export interface Restored {
+  kind: TrashKind;
+  /** Notes/folders: the restored path. Tables: the restored name. */
+  name: string;
+}
+
+export const trashList = (): Promise<TrashRecord[]> => invoke("trash_list");
+export const trashRestore = (id: string): Promise<Restored> =>
+  invoke("trash_restore", { id });
+export const trashPurge = (id: string): Promise<void> =>
+  invoke("trash_purge", { id });
+export const trashEmpty = (): Promise<number> => invoke("trash_empty");
 
 // -- export --------------------------------------------------------------
 export type ExportFormat = "pdf" | "odt";
@@ -285,7 +315,8 @@ export const getTable = (table: string): Promise<WordTable> =>
   invoke<WordTable>("get_table", { table }).then(normalizeTable);
 export const createTable = (name: string): Promise<boolean> =>
   invoke("create_table", { name });
-export const deleteTable = (name: string): Promise<boolean> =>
+/** Move a table to the trash. Resolves to the record, or null if absent. */
+export const deleteTable = (name: string): Promise<TrashRecord | null> =>
   invoke("delete_table", { name });
 export const renameTable = (from: string, to: string): Promise<boolean> =>
   invoke("rename_table", { from, to });
@@ -492,8 +523,14 @@ export interface WindowLayout {
 
 export const configGet = <T>(section: string): Promise<T> =>
   invoke("config_get", { section });
+/**
+ * Config sections the UI may replace. `settings` is deliberately absent: that
+ * file also holds grid views, layout and migration flags, and the backend
+ * refuses to overwrite it wholesale.
+ */
+export type WritableConfigSection = "language" | "grammar" | "translation";
 export const configSet = <T>(
-  section: string,
+  section: WritableConfigSection,
   value: T,
 ): Promise<void> => invoke("config_set", { section, value });
 export const languageGet = (): Promise<LanguageConfig> =>

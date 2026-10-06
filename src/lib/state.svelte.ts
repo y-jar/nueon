@@ -1,4 +1,6 @@
 import { emit, listen } from "@tauri-apps/api/event";
+import { get } from "svelte/store";
+import { t } from "./i18n";
 import type { EditorView } from "@codemirror/view";
 import * as api from "./api";
 import { windowLabel } from "./window";
@@ -80,6 +82,24 @@ function makeGroup(): TabGroup {
 
 const firstGroup = makeGroup();
 
+/** A pending yes/no question shown as a modal dialog. */
+export interface ConfirmRequest {
+  title: string;
+  message: string;
+  confirmLabel: string;
+  cancelLabel: string;
+  danger: boolean;
+  resolve: (confirmed: boolean) => void;
+}
+
+/** A transient message, optionally with one action (Undo). */
+export interface ToastState {
+  id: number;
+  message: string;
+  actionLabel?: string;
+  onAction?: () => void;
+}
+
 /** Global reactive UI state (Svelte 5 runes). */
 export const ui = $state({
   workspaces: [] as api.WorkspaceEntry[],
@@ -91,6 +111,9 @@ export const ui = $state({
   inspectorOpen: false,
   inspectorDock: "right" as "left" | "right",
   settingsOpen: false,
+  confirm: null as ConfirmRequest | null,
+  toast: null as ToastState | null,
+  trashOpen: false,
   /** Show the workspace picker/onboarding over an open workspace. */
   showWorkspacePicker: false,
 
@@ -401,9 +424,9 @@ export async function renameTable(from: string, to: string): Promise<void> {
 }
 
 /** Delete a table, closing any tab that referenced it. */
-export async function deleteTable(name: string): Promise<void> {
-  const ok = await api.deleteTable(name);
-  if (!ok) return;
+export async function deleteTable(name: string): Promise<api.TrashRecord | null> {
+  const record = await api.deleteTable(name);
+  if (!record) return null;
   for (const group of ui.groups) {
     const removed = group.tabs.filter(
       (tab) => tab.kind === "table" && tab.ref === name,
@@ -419,6 +442,7 @@ export async function deleteTable(name: string): Promise<void> {
   }
   await refreshTables();
   ui.status = `deleted table ${name}`;
+  return record;
 }
 
 // -- split layout --------------------------------------------------------
@@ -1206,12 +1230,13 @@ export async function renamePath(
   ui.status = `renamed to ${newPath}`;
 }
 
-export async function deletePath(relPath: string): Promise<void> {
+export async function deletePath(relPath: string): Promise<api.TrashRecord> {
   // Freeze the open editors first, and wait for saves in flight, so nothing
   // can write the note back after it is deleted.
   const resume = await quiesceNotes(relPath);
+  let record: api.TrashRecord;
   try {
-    await api.deleteNote(relPath);
+    record = await api.deleteNote(relPath);
   } catch (error) {
     resume();
     throw error;
@@ -1241,4 +1266,127 @@ export async function deletePath(relPath: string): Promise<void> {
     }
   }
   ui.status = `deleted ${relPath}`;
+  return record;
+}
+
+// -- confirmation, undo toast, trash ------------------------------------
+
+function tr(key: string, values?: Record<string, string | number>): string {
+  return get(t)(key, values ? { values } : undefined);
+}
+
+/** Ask a yes/no question in a modal dialog. */
+export function confirmDialog(options: {
+  title: string;
+  message: string;
+  confirmLabel: string;
+  danger?: boolean;
+}): Promise<boolean> {
+  // Only one question at a time: a new one answers the old one "no".
+  ui.confirm?.resolve(false);
+  return new Promise((resolve) => {
+    ui.confirm = {
+      title: options.title,
+      message: options.message,
+      confirmLabel: options.confirmLabel,
+      cancelLabel: tr("grid.cancel"),
+      danger: options.danger ?? false,
+      resolve: (confirmed) => {
+        ui.confirm = null;
+        resolve(confirmed);
+      },
+    };
+  });
+}
+
+let toastCounter = 0;
+
+/** Show a transient message (auto-dismissed after `ms`). */
+export function showToast(
+  message: string,
+  action?: { label: string; run: () => void },
+  ms = 10_000,
+): void {
+  toastCounter += 1;
+  const id = toastCounter;
+  ui.toast = {
+    id,
+    message,
+    actionLabel: action?.label,
+    onAction: action?.run,
+  };
+  setTimeout(() => {
+    if (ui.toast?.id === id) ui.toast = null;
+  }, ms);
+}
+
+export function dismissToast(): void {
+  ui.toast = null;
+}
+
+/** Restore a trashed item and report where it landed. */
+export async function restoreFromTrash(id: string): Promise<void> {
+  try {
+    const restored = await api.trashRestore(id);
+    ui.status = tr("trash.restored", { name: restored.name });
+    showToast(tr("trash.restored", { name: restored.name }));
+    if (restored.kind === "table") await refreshTables();
+  } catch (error) {
+    ui.status = tr("trash.restoreFailed", { error: String(error) });
+  }
+}
+
+function afterDelete(record: api.TrashRecord): void {
+  showToast(tr("trash.deleted", { name: record.name }), {
+    label: tr("trash.undo"),
+    run: () => void restoreFromTrash(record.id),
+  });
+}
+
+/** Confirm, then move a note or folder to the trash (with an Undo toast). */
+export async function requestDeleteNote(
+  path: string,
+  isDir: boolean,
+): Promise<void> {
+  const name = stripMd(path.split("/").pop() ?? path);
+  let message = tr("trash.confirmNote", { name });
+  if (isDir) {
+    let count = 0;
+    try {
+      count = await api.noteCount(path);
+    } catch {
+      // The delete itself will report a missing folder.
+    }
+    message = tr("trash.confirmFolder", { name, count });
+  }
+  const confirmed = await confirmDialog({
+    title: tr(isDir ? "trash.confirmFolderTitle" : "trash.confirmNoteTitle"),
+    message,
+    confirmLabel: tr("contextMenu.delete"),
+    danger: true,
+  });
+  if (!confirmed) return;
+  try {
+    afterDelete(await deletePath(path));
+  } catch (error) {
+    ui.status = `could not delete ${name}: ${String(error)}`;
+  }
+}
+
+/** Confirm, then move a table to the trash (with an Undo toast). */
+export async function requestDeleteTable(name: string): Promise<void> {
+  const words = ui.tables.find((table) => table.name === name)?.word_count ?? 0;
+  const confirmed = await confirmDialog({
+    title: tr("trash.confirmTableTitle"),
+    message: tr("trash.confirmTable", { name, count: words }),
+    confirmLabel: tr("tables.delete"),
+    danger: true,
+  });
+  if (!confirmed) return;
+  try {
+    const record = await deleteTable(name);
+    if (record) afterDelete(record);
+  } catch (error) {
+    ui.status = `could not delete ${name}: ${String(error)}`;
+  }
 }

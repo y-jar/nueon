@@ -22,6 +22,9 @@
   import Inspector from "./components/Inspector.svelte";
   import SettingsModal from "./components/SettingsModal.svelte";
   import ContextMenu from "./components/ContextMenu.svelte";
+  import ConfirmDialog from "./components/ConfirmDialog.svelte";
+  import Toast from "./components/Toast.svelte";
+  import TrashModal from "./components/TrashModal.svelte";
 
   const ACTIVITIES: Activity[] = ["notes", "dictionary", "translation", "git"];
   let layoutLoaded = $state(false);
@@ -158,3 +161,8 @@
 {/if}
 
 <ContextMenu />
+<ConfirmDialog />
+<Toast />
+{#if isMainWindow}
+  <TrashModal />
+{/if}

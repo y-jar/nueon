@@ -1,7 +1,7 @@
 <script lang="ts">
   import { autofocus } from "../lib/actions";
   import { t } from "svelte-i18n";
-  import { Search, FilePlus, FolderPlus } from "@lucide/svelte";
+  import { Search, FilePlus, FolderPlus, Trash2 } from "@lucide/svelte";
   import {
     ui,
     createNote,
@@ -113,6 +113,14 @@
       onclick={() => startNew("folder")}
     >
       <FolderPlus size={15} />
+    </button>
+    <span class="grow"></span>
+    <button
+      title={$t("trash.open")}
+      aria-label={$t("trash.open")}
+      onclick={() => (ui.trashOpen = true)}
+    >
+      <Trash2 size={15} />
     </button>
   </div>
 

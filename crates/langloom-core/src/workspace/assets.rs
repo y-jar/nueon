@@ -12,7 +12,7 @@ use std::path::{Path, PathBuf};
 use serde::Serialize;
 use sha2::{Digest, Sha256};
 
-use super::storage::{atomic_write, io_err, safe_join, StorageError};
+use super::storage::{io_err, rename_noreplace, safe_join, temp_path, StorageError};
 
 /// Directory (at the workspace root) holding imported files.
 pub const ASSETS_DIR: &str = "assets";
@@ -116,13 +116,26 @@ pub fn import_asset(root: &Path, source: &Path) -> Result<ImportedAsset, Storage
     let dir = root.join(ASSETS_DIR);
     fs::create_dir_all(&dir).map_err(|e| io_err(&dir, e))?;
     let destination = dir.join(&name);
-    let existed = destination.exists();
+    let mut existed = destination.exists();
     if !existed {
-        // Copy beside the target, then rename: a crash never leaves a
-        // half-written asset under its final name.
-        let temp = dir.join(format!(".{name}.tmp"));
+        // Copy to a unique temp file beside the target, then move it into
+        // place without replacing anything: a crash never leaves a
+        // half-written asset under its final name, and two imports of the
+        // same bytes at once cannot trample each other's temp file.
+        let temp = temp_path(&destination);
         fs::copy(source, &temp).map_err(|e| io_err(source, e))?;
-        fs::rename(&temp, &destination).map_err(|e| io_err(&destination, e))?;
+        match rename_noreplace(&temp, &destination) {
+            Ok(()) => {}
+            Err(err) if err.kind() == std::io::ErrorKind::AlreadyExists => {
+                // Same name means same content hash: the other import won.
+                let _ = fs::remove_file(&temp);
+                existed = true;
+            }
+            Err(err) => {
+                let _ = fs::remove_file(&temp);
+                return Err(io_err(&destination, err));
+            }
+        }
     }
 
     Ok(ImportedAsset {
@@ -166,15 +179,40 @@ pub fn import_note(
         stem.trim().to_string()
     };
 
+    // Write once to a unique temp file in the destination folder, then try
+    // each candidate name with a no-replace move. Two imports (or an import and
+    // a new note) racing for one name can never overwrite each other: the loser
+    // simply takes the next name.
+    let first = safe_join(notes_dir, &folder.join(format!("{stem}.md")))?;
+    let parent = first.parent().map(Path::to_path_buf).unwrap_or_default();
+    fs::create_dir_all(&parent).map_err(|e| io_err(&parent, e))?;
+    let temp = temp_path(&first);
+    {
+        let mut file = fs::OpenOptions::new()
+            .write(true)
+            .create_new(true)
+            .open(&temp)
+            .map_err(|e| io_err(&temp, e))?;
+        std::io::Write::write_all(&mut file, text.as_bytes()).map_err(|e| io_err(&temp, e))?;
+        file.sync_all().map_err(|e| io_err(&temp, e))?;
+    }
+
     let mut relative = folder.join(format!("{stem}.md"));
     let mut n = 2;
-    while safe_join(notes_dir, &relative)?.exists() {
-        relative = folder.join(format!("{stem} {n}.md"));
-        n += 1;
+    loop {
+        let target = safe_join(notes_dir, &relative)?;
+        match rename_noreplace(&temp, &target) {
+            Ok(()) => return Ok(relative),
+            Err(err) if err.kind() == std::io::ErrorKind::AlreadyExists && n < 10_000 => {
+                relative = folder.join(format!("{stem} {n}.md"));
+                n += 1;
+            }
+            Err(err) => {
+                let _ = fs::remove_file(&temp);
+                return Err(io_err(&target, err));
+            }
+        }
     }
-    let target = safe_join(notes_dir, &relative)?;
-    atomic_write(&target, text.as_bytes())?;
-    Ok(relative)
 }
 
 #[cfg(test)]
@@ -250,6 +288,83 @@ mod tests {
         assert!(is_note_source(Path::new("n.MD")));
         assert!(is_note_source(Path::new("n.txt")));
         assert!(!is_note_source(Path::new("n.png")));
+    }
+
+    #[test]
+    fn concurrent_note_imports_never_overwrite_each_other() {
+        use std::sync::{Arc, Barrier};
+        let dir = tempfile::tempdir().unwrap();
+        let notes = Arc::new(dir.path().join("notes"));
+        fs::create_dir_all(notes.join("lore")).unwrap();
+        let n = 12;
+        let mut sources = Vec::new();
+        for i in 0..n {
+            let dir_i = dir.path().join(format!("src{i}"));
+            fs::create_dir_all(&dir_i).unwrap();
+            let src = dir_i.join("story.txt");
+            fs::write(&src, format!("story {i}")).unwrap();
+            sources.push(src);
+        }
+        let barrier = Arc::new(Barrier::new(n));
+        let handles: Vec<_> = sources
+            .into_iter()
+            .map(|src| {
+                let (notes, barrier) = (Arc::clone(&notes), Arc::clone(&barrier));
+                std::thread::spawn(move || {
+                    barrier.wait();
+                    import_note(&notes, Path::new("lore"), &src).unwrap()
+                })
+            })
+            .collect();
+        let mut paths: Vec<_> = handles.into_iter().map(|h| h.join().unwrap()).collect();
+        paths.sort();
+        paths.dedup();
+        assert_eq!(paths.len(), n, "every import got its own note");
+
+        let mut contents: Vec<String> = paths
+            .iter()
+            .map(|p| fs::read_to_string(notes.join(p)).unwrap())
+            .collect();
+        contents.sort();
+        let mut expected: Vec<String> = (0..n).map(|i| format!("story {i}")).collect();
+        expected.sort();
+        assert_eq!(contents, expected, "no import lost or overwrote another");
+        // No temp files left behind.
+        let leftovers = fs::read_dir(notes.join("lore"))
+            .unwrap()
+            .filter(|e| {
+                e.as_ref()
+                    .unwrap()
+                    .file_name()
+                    .to_string_lossy()
+                    .ends_with(".tmp")
+            })
+            .count();
+        assert_eq!(leftovers, 0);
+    }
+
+    #[test]
+    fn concurrent_imports_of_the_same_asset_share_one_file() {
+        use std::sync::{Arc, Barrier};
+        let dir = tempfile::tempdir().unwrap();
+        let root = Arc::new(dir.path().join("ws"));
+        let src = dir.path().join("pic.png");
+        fs::write(&src, b"same-bytes").unwrap();
+        let barrier = Arc::new(Barrier::new(10));
+        let handles: Vec<_> = (0..10)
+            .map(|_| {
+                let (root, src, barrier) = (Arc::clone(&root), src.clone(), Arc::clone(&barrier));
+                std::thread::spawn(move || {
+                    barrier.wait();
+                    import_asset(&root, &src).unwrap().name
+                })
+            })
+            .collect();
+        let names: std::collections::BTreeSet<_> =
+            handles.into_iter().map(|h| h.join().unwrap()).collect();
+        assert_eq!(names.len(), 1);
+        let files: Vec<_> = fs::read_dir(root.join(ASSETS_DIR)).unwrap().collect();
+        assert_eq!(files.len(), 1, "one asset and no leftover temp files");
     }
 
     #[test]

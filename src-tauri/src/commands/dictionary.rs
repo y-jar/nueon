@@ -9,7 +9,8 @@ use uuid::Uuid;
 
 use langloom_core::model::{derivation, DerivationNode, RelatedWord};
 use langloom_core::{
-    FieldType, GridViewState, TagDef, TagFormat, TagKindChange, WordEntry, WordHit, WordTable,
+    FieldType, GridViewState, TagDef, TagFormat, TagKindChange, TrashRecord, WordEntry, WordHit,
+    WordTable,
 };
 
 use super::changed;
@@ -89,12 +90,14 @@ pub fn create_table(
     Ok(created)
 }
 
+/// Delete a table by moving it to the trash. Returns the trash record (for
+/// Undo), or `None` if there was no such table.
 #[tauri::command]
 pub fn delete_table(
     app: AppHandle,
     state: State<'_, Shared>,
     name: String,
-) -> Result<bool, String> {
+) -> Result<Option<TrashRecord>, String> {
     let mut state = state.lock().map_err(|_| "state poisoned".to_string())?;
     let deleted = state
         .workspace_mut()?

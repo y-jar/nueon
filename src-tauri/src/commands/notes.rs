@@ -9,7 +9,7 @@ use std::sync::Mutex;
 use serde::Serialize;
 use tauri::{AppHandle, State};
 
-use langloom_core::NoteFile;
+use langloom_core::{NoteFile, TrashRecord};
 
 use super::changed;
 use crate::state::AppState;
@@ -142,19 +142,30 @@ pub fn move_or_rename_note(
     Ok(renamed.to_string_lossy().replace('\\', "/"))
 }
 
-/// Delete a note/folder (recursively) and refresh the tree.
+/// Delete a note or folder by moving it to the trash. Returns the trash
+/// record so the UI can offer Undo.
 #[tauri::command]
 pub fn delete_note(
     app: AppHandle,
     state: State<'_, Shared>,
     rel_path: String,
-) -> Result<(), String> {
+) -> Result<TrashRecord, String> {
     let mut state = state.lock().map_err(|_| "state poisoned".to_string())?;
-    state
+    let record = state
         .workspace_mut()?
         .delete_note(&rel_path)
         .map_err(|err| err.to_string())?;
     drop(state);
     changed(&app, "notes");
-    Ok(())
+    Ok(record)
+}
+
+/// How many files a note path covers (for the delete confirmation).
+#[tauri::command]
+pub fn note_count(state: State<'_, Shared>, rel_path: String) -> Result<usize, String> {
+    let state = state.lock().map_err(|_| "state poisoned".to_string())?;
+    state
+        .workspace()?
+        .count_notes(&rel_path)
+        .map_err(|err| err.to_string())
 }

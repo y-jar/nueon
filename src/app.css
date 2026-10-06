@@ -2161,3 +2161,111 @@ body.col-resizing * {
   border-bottom: 1px solid #d6785a;
   color: var(--text);
 }
+
+/* -- confirm dialog, toast, trash ----------------------------------------- */
+
+.modal.confirm-dialog {
+  width: min(440px, 92vw);
+}
+
+.confirm-body {
+  padding: 12px 14px 4px;
+}
+
+.confirm-body p {
+  margin: 0;
+  line-height: 1.5;
+}
+
+button.danger,
+.confirm-ok.danger {
+  color: #fff;
+  background: #b94a35;
+  border-color: #b94a35;
+}
+
+button.danger:hover:not(:disabled) {
+  background: #cf5a43;
+}
+
+.toast {
+  position: fixed;
+  left: 50%;
+  bottom: 34px;
+  z-index: 4000;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  max-width: min(560px, 92vw);
+  padding: 8px 10px 8px 14px;
+  transform: translateX(-50%);
+  background: var(--panel);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  box-shadow: 0 8px 28px rgba(0, 0, 0, 0.5);
+  font-size: 13px;
+}
+
+.toast-action {
+  color: var(--accent);
+  border-color: var(--accent);
+  background: transparent;
+  font-weight: 600;
+}
+
+.toast-close {
+  display: grid;
+  place-items: center;
+  padding: 2px;
+  background: transparent;
+  border: none;
+  color: var(--muted);
+}
+
+.modal.trash-modal {
+  width: min(640px, 94vw);
+}
+
+.trash-list {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  padding: 8px 10px;
+}
+
+.trash-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 5px 4px;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.05);
+}
+
+.trash-icon {
+  color: var(--muted);
+}
+
+.trash-info {
+  display: flex;
+  flex: 1;
+  flex-direction: column;
+  min-width: 0;
+}
+
+.trash-name {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.trash-meta {
+  overflow: hidden;
+  font-size: 11px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.trash-empty {
+  padding: 18px 4px;
+  text-align: center;
+}

@@ -25,4 +25,7 @@ pub use model::{
 };
 pub use translation::{ClauseSlot, SyntaxGrid};
 pub use vcs::{AutoCheckin, Commit, GitRepo, GitStatus, StatusEntry, VcsError};
-pub use workspace::{AssetKind, ImportedAsset, NoteFile, StorageError, Workspace, ASSETS_DIR};
+pub use workspace::{
+    AssetKind, ImportedAsset, NoteFile, Restored, StorageError, TrashKind, TrashRecord, Workspace,
+    ASSETS_DIR,
+};

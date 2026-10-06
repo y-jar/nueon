@@ -3,10 +3,12 @@
 mod assets;
 mod note;
 mod storage;
+mod trash;
 
 pub use assets::{AssetKind, ImportedAsset, ASSETS_DIR};
 pub use note::NoteFile;
 pub use storage::{StorageError, CONFIG_DIR, DICTIONARY_DIR, NOTES_DIR};
+pub use trash::{Restored, TrashKind, TrashRecord, RETENTION_DAYS, TRASH_DIR};
 
 use std::path::{Path, PathBuf};
 use std::time::{Duration, Instant};
@@ -168,6 +170,8 @@ impl Workspace {
         };
         // Best effort: a failed migration retries on the next open.
         let _ = workspace.migrate_notes_if_needed();
+        // Expired trash is cleared on open; never a reason to fail opening.
+        trash::prune(&workspace.root_path, trash::now_secs(), RETENTION_DAYS);
         Ok(workspace)
     }
 
@@ -271,16 +275,23 @@ impl Workspace {
         Ok(true)
     }
 
-    /// Delete a table and its backing file.
-    pub fn delete_table(&mut self, name: &str) -> Result<bool, StorageError> {
-        if self.dictionary.table(name).is_none() {
-            return Ok(false);
-        }
+    /// Delete a table by moving its file to the trash. Returns the trash
+    /// record, or `None` if there is no such table.
+    ///
+    /// This is also an undoable dictionary step: Ctrl+Z brings the table back
+    /// and drops the now-redundant trash copy, while the trash's own Restore
+    /// is the route that survives a restart.
+    pub fn delete_table(&mut self, name: &str) -> Result<Option<TrashRecord>, StorageError> {
+        let Some(table) = self.dictionary.table(name).cloned() else {
+            return Ok(None);
+        };
+        // Trash first: if it fails, memory and disk are both unchanged.
+        let file = storage::table_path(&self.dictionary_dir(), name);
+        let record = trash::trash_table(&self.root_path, &table, &file)?;
         self.record();
         self.dictionary.remove_table(name);
-        storage::delete_table(&self.dictionary_dir(), name)?;
         self.mark_change(Instant::now(), format!("langloom: delete table \"{name}\""));
-        Ok(true)
+        Ok(Some(record))
     }
 
     /// Rename a table, moving its backing file to the new slug.
@@ -769,16 +780,111 @@ impl Workspace {
         Ok(to)
     }
 
-    /// Delete a note or folder (recursively) and refresh the note list.
-    pub fn delete_note(&mut self, relative: impl AsRef<Path>) -> Result<(), StorageError> {
+    /// Delete a note or folder by moving it to the trash (nothing is ever
+    /// removed outright). Returns the trash record for Undo/Restore.
+    pub fn delete_note(&mut self, relative: impl AsRef<Path>) -> Result<TrashRecord, StorageError> {
         let relative = relative.as_ref();
-        storage::remove_path(&self.notes_dir(), relative)?;
+        if relative.as_os_str().is_empty() {
+            return Err(StorageError::UnsafePath(relative.to_path_buf()));
+        }
+        let source = storage::safe_join(&self.notes_dir(), relative)?;
+        let meta = std::fs::symlink_metadata(&source)
+            .map_err(|_| StorageError::NotFound(relative.to_path_buf()))?;
+        let (kind, count) = if meta.is_dir() {
+            (TrashKind::Folder, trash::count_files(&source))
+        } else {
+            (TrashKind::Note, 1)
+        };
+        let original = relative
+            .to_string_lossy()
+            .replace('\\', "/")
+            .trim_matches('/')
+            .to_string();
+        let record = trash::trash_path(&self.root_path, &source, kind, original, count)?;
         self.refresh_notes()?;
         self.mark_change(
             Instant::now(),
             format!("langloom: delete \"{}\"", relative.display()),
         );
-        Ok(())
+        Ok(record)
+    }
+
+    /// How many files a note path covers (1 for a note, N for a folder); used
+    /// by the delete confirmation.
+    pub fn count_notes(&self, relative: impl AsRef<Path>) -> Result<usize, StorageError> {
+        let source = storage::safe_join(&self.notes_dir(), relative.as_ref())?;
+        Ok(trash::count_files(&source))
+    }
+
+    /// Everything currently in the trash, newest first.
+    pub fn list_trash(&self) -> Vec<TrashRecord> {
+        trash::list(&self.root_path)
+    }
+
+    /// Restore a trashed item. Notes and folders return to their original
+    /// path (or a unique name if it is taken); tables return under their name
+    /// (or a unique one) as an undoable step.
+    pub fn restore_trash(&mut self, id: &str) -> Result<Restored, StorageError> {
+        let record = self
+            .list_trash()
+            .into_iter()
+            .find(|r| r.id == id)
+            .ok_or_else(|| StorageError::NotFound(PathBuf::from(id)))?;
+        match record.kind {
+            TrashKind::Note | TrashKind::Folder => {
+                let path = trash::restore_notes(&self.root_path, &self.notes_dir(), id)?;
+                self.refresh_notes()?;
+                self.mark_change(
+                    Instant::now(),
+                    format!("langloom: restore \"{}\"", path.display()),
+                );
+                Ok(Restored {
+                    kind: record.kind,
+                    name: path.to_string_lossy().replace('\\', "/"),
+                })
+            }
+            TrashKind::Table => {
+                let mut table = trash::read_table(&self.root_path, id)?;
+                let base = table.name.clone();
+                let mut attempt = 0;
+                while self.dictionary.table(&table.name).is_some() {
+                    attempt += 1;
+                    table.name = if attempt == 1 {
+                        format!("{base} (restored)")
+                    } else {
+                        format!("{base} (restored {attempt})")
+                    };
+                }
+                let name = table.name.clone();
+                self.record();
+                self.dictionary.tables.insert(name.clone(), table);
+                if let Err(err) = self.save_table(&name) {
+                    // Roll back: the entry stays in the trash.
+                    self.dictionary.tables.remove(&name);
+                    self.history.undo.pop();
+                    return Err(err);
+                }
+                trash::purge(&self.root_path, id)?;
+                self.mark_change(
+                    Instant::now(),
+                    format!("langloom: restore table \"{name}\""),
+                );
+                Ok(Restored {
+                    kind: TrashKind::Table,
+                    name,
+                })
+            }
+        }
+    }
+
+    /// Delete one trash entry permanently.
+    pub fn purge_trash(&self, id: &str) -> Result<(), StorageError> {
+        trash::purge(&self.root_path, id)
+    }
+
+    /// Delete everything in the trash permanently.
+    pub fn empty_trash(&self) -> usize {
+        trash::empty(&self.root_path)
     }
 
     fn refresh_notes(&mut self) -> Result<(), StorageError> {
@@ -1000,9 +1106,14 @@ impl Workspace {
                 self.translation = serde_json::from_value(value).map_err(invalid)?;
                 storage::save_json(&dir.join(storage::TRANSLATION_FILE), &self.translation)?;
             }
+            // The settings file also holds grid views, layout and migration
+            // flags. Replacing it wholesale from the UI could wipe all of that,
+            // so it is only ever changed through the dedicated methods.
             "settings" => {
-                self.settings = serde_json::from_value(value).map_err(invalid)?;
-                storage::save_json(&dir.join(storage::SETTINGS_FILE), &self.settings)?;
+                return Err(StorageError::Config(
+                    "settings".to_string(),
+                    "the settings file cannot be replaced wholesale".to_string(),
+                ))
             }
             other => {
                 return Err(StorageError::Config(
@@ -1079,11 +1190,16 @@ impl Workspace {
         for table in after.tables() {
             if before.table(&table.name) != Some(table) {
                 storage::write_table(&dir, table)?;
+                // Brought back: a trash copy of this exact table is redundant.
+                trash::consume_table(&self.root_path, table);
             }
         }
         for table in before.tables() {
             if after.table(&table.name).is_none() {
-                storage::delete_table(&dir, &table.name)?;
+                // Even undo/redo never deletes a table file outright: it goes
+                // to the trash, where it can still be restored.
+                let file = storage::table_path(&dir, &table.name);
+                trash::trash_table(&self.root_path, table, &file)?;
             }
         }
         Ok(())
@@ -1388,6 +1504,292 @@ mod tests {
         assert!(ws.dictionary.table("nouns").is_some());
         assert_eq!(ws.read_note("n.md").unwrap(), "from disk");
         assert!(!ws.can_undo());
+    }
+
+    /// Entry directories under `.trash/`.
+    fn trash_entries(root: &std::path::Path) -> Vec<std::path::PathBuf> {
+        let Ok(read) = std::fs::read_dir(root.join(".trash")) else {
+            return Vec::new();
+        };
+        let mut entries: Vec<_> = read
+            .map(|e| e.unwrap().path())
+            .filter(|p| p.is_dir())
+            .collect();
+        entries.sort();
+        entries
+    }
+
+    #[test]
+    fn deleting_a_note_moves_it_to_trash_with_a_manifest() {
+        let dir = tempfile::tempdir().unwrap();
+        let mut ws = Workspace::new(dir.path()).unwrap();
+        ws.create_note("lore/intro").unwrap();
+        ws.save_note(&NoteFile::new("lore/intro.md", "precious"))
+            .unwrap();
+
+        ws.delete_note("lore/intro.md").unwrap();
+
+        assert!(!dir.path().join("notes/lore/intro.md").exists());
+        let entries = trash_entries(dir.path());
+        assert_eq!(entries.len(), 1, "exactly one trash entry");
+        let manifest = std::fs::read_to_string(entries[0].join("manifest.json")).unwrap();
+        let manifest: serde_json::Value = serde_json::from_str(&manifest).unwrap();
+        assert_eq!(manifest["kind"], "note");
+        assert_eq!(manifest["original"], "lore/intro.md");
+        // The content is preserved byte for byte.
+        assert_eq!(
+            std::fs::read_to_string(entries[0].join("item")).unwrap(),
+            "precious"
+        );
+    }
+
+    fn git_ok() -> bool {
+        std::process::Command::new("git")
+            .arg("--version")
+            .output()
+            .is_ok_and(|o| o.status.success())
+    }
+
+    fn git_out(root: &std::path::Path, args: &[&str]) -> String {
+        let out = std::process::Command::new("git")
+            .args(args)
+            .current_dir(root)
+            .output()
+            .unwrap();
+        String::from_utf8_lossy(&out.stdout).into_owned()
+    }
+
+    #[test]
+    fn auto_checkin_never_commits_trash_contents() {
+        if !git_ok() {
+            return;
+        }
+        let dir = tempfile::tempdir().unwrap();
+        let mut ws = Workspace::new(dir.path()).unwrap();
+        ws.init_git().unwrap();
+        ws.create_note("keep").unwrap();
+        ws.create_note("doomed").unwrap();
+        ws.create_table("verbs").unwrap();
+        ws.checkin("langloom: baseline");
+
+        ws.delete_note("doomed.md").unwrap();
+        ws.delete_table("verbs").unwrap();
+        assert!(!trash_entries(dir.path()).is_empty());
+        ws.checkin("langloom: after deletes");
+        // Trash again after a commit, then commit again.
+        ws.create_note("second").unwrap();
+        ws.delete_note("second.md").unwrap();
+        ws.checkin("langloom: after more deletes");
+
+        let tracked = git_out(dir.path(), &["ls-files"]);
+        assert!(!tracked.contains(".trash"), "tracked files: {tracked}");
+        let history = git_out(dir.path(), &["log", "--name-only", "--pretty=format:"]);
+        assert!(
+            !history.contains(".trash"),
+            "history touched .trash: {history}"
+        );
+        let status = git_out(dir.path(), &["status", "--porcelain"]);
+        assert!(!status.contains(".trash"), "status shows .trash: {status}");
+        // The deletions themselves are committed as deletions.
+        assert!(!tracked.contains("doomed.md"));
+        assert!(tracked.contains("keep.md"));
+    }
+
+    #[test]
+    fn deleting_a_table_trashes_it_and_dictionary_undo_restores_it_without_duplicates() {
+        let dir = tempfile::tempdir().unwrap();
+        let mut ws = Workspace::new(dir.path()).unwrap();
+        ws.create_table("verbs").unwrap();
+        let id = ws.create_entry("verbs", "kala").unwrap().unwrap();
+
+        let record = ws.delete_table("verbs").unwrap().expect("table existed");
+        assert_eq!(record.kind, TrashKind::Table);
+        assert!(!dir.path().join("dictionary/verbs").exists());
+        assert_eq!(trash_entries(dir.path()).len(), 1);
+        assert!(ws.delete_table("verbs").unwrap().is_none());
+
+        // Undo is an ordinary dictionary step and drops the redundant copy.
+        assert!(ws.undo().unwrap());
+        assert!(dir.path().join("dictionary/verbs").exists());
+        assert!(ws
+            .dictionary
+            .table("verbs")
+            .unwrap()
+            .entries
+            .iter()
+            .any(|e| e.id == id));
+        assert!(
+            trash_entries(dir.path()).is_empty(),
+            "no duplicate left in the trash"
+        );
+
+        // Redo deletes again, and even that goes to the trash, not nowhere.
+        assert!(ws.redo().unwrap());
+        assert!(!dir.path().join("dictionary/verbs").exists());
+        assert_eq!(trash_entries(dir.path()).len(), 1);
+        let restored = Workspace::load(dir.path()).unwrap();
+        assert!(restored.dictionary.table("verbs").is_none());
+        assert_eq!(restored.list_trash().len(), 1);
+    }
+
+    #[test]
+    fn restoring_a_trashed_table_is_undoable_and_never_overwrites() {
+        let dir = tempfile::tempdir().unwrap();
+        let mut ws = Workspace::new(dir.path()).unwrap();
+        ws.create_table("verbs").unwrap();
+        ws.create_entry("verbs", "kala").unwrap();
+        let record = ws.delete_table("verbs").unwrap().unwrap();
+
+        // A new table took the name in the meantime.
+        ws.create_table("verbs").unwrap();
+        ws.create_entry("verbs", "newer").unwrap();
+
+        let restored = ws.restore_trash(&record.id).unwrap();
+        assert_eq!(restored.name, "verbs (restored)");
+        assert_eq!(
+            ws.dictionary.table("verbs").unwrap().entries[0].wordname,
+            "newer"
+        );
+        assert_eq!(
+            ws.dictionary.table("verbs (restored)").unwrap().entries[0].wordname,
+            "kala"
+        );
+        assert!(ws.list_trash().is_empty());
+
+        assert!(ws.undo().unwrap(), "restoring is an undoable step");
+        assert!(ws.dictionary.table("verbs (restored)").is_none());
+    }
+
+    #[test]
+    fn deleting_and_restoring_notes_and_folders_through_the_workspace() {
+        let dir = tempfile::tempdir().unwrap();
+        let mut ws = Workspace::new(dir.path()).unwrap();
+        ws.create_folder("lore").unwrap();
+        ws.create_note_with_content("lore/a", "A").unwrap();
+        ws.create_note_with_content("lore/b", "B").unwrap();
+        assert_eq!(ws.count_notes("lore").unwrap(), 2);
+
+        let record = ws.delete_note("lore").unwrap();
+        assert_eq!((record.kind, record.count), (TrashKind::Folder, 2));
+        assert!(ws.notes.is_empty());
+        assert!(
+            ws.delete_note("").is_err(),
+            "the notes root cannot be deleted"
+        );
+        assert!(ws.delete_note("../x").is_err());
+
+        // Something now sits at the original path: restore beside it.
+        ws.create_folder("lore").unwrap();
+        let restored = ws.restore_trash(&record.id).unwrap();
+        assert_eq!(restored.name, "lore (restored)");
+        assert_eq!(ws.read_note("lore (restored)/b.md").unwrap(), "B");
+        assert!(ws.list_trash().is_empty());
+    }
+
+    #[test]
+    fn opening_a_workspace_prunes_expired_trash_only() {
+        let dir = tempfile::tempdir().unwrap();
+        drop(Workspace::new(dir.path()).unwrap());
+        let trash = dir.path().join(".trash");
+        let now = super::trash::now_secs();
+        let old = format!("{}-{}", now - 31 * 86_400, "e".repeat(32));
+        let fresh = format!("{}-{}", now - 86_400, "f".repeat(32));
+        super::trash::write_entry_for_test(dir.path(), &old, "note", "old.md", b"o");
+        super::trash::write_entry_for_test(dir.path(), &fresh, "note", "fresh.md", b"f");
+        std::fs::create_dir_all(trash.join("not-an-entry")).unwrap();
+        std::fs::write(trash.join("not-an-entry/keep"), "k").unwrap();
+
+        drop(Workspace::load(dir.path()).unwrap());
+
+        assert!(!trash.join(&old).exists());
+        assert!(trash.join(&fresh).exists());
+        assert!(trash.join("not-an-entry/keep").exists());
+    }
+
+    #[test]
+    fn gitignore_excludes_trash_and_never_clobbers_user_lines() {
+        let dir = tempfile::tempdir().unwrap();
+        // A new workspace ignores the trash from the start.
+        let ws = Workspace::new(dir.path().join("fresh")).unwrap();
+        let fresh = std::fs::read_to_string(ws.root_path.join(".gitignore")).unwrap();
+        assert!(fresh.lines().any(|l| l.trim() == ".trash/"));
+
+        // An existing workspace keeps its own lines and gains `.trash/`.
+        let existing = dir.path().join("existing");
+        std::fs::create_dir_all(&existing).unwrap();
+        std::fs::write(existing.join(".gitignore"), "# mine\nsecret/\n*.tmp").unwrap();
+        drop(Workspace::load(&existing).unwrap());
+        let text = std::fs::read_to_string(existing.join(".gitignore")).unwrap();
+        assert!(text.starts_with("# mine\nsecret/\n*.tmp\n"));
+        assert_eq!(text.lines().filter(|l| l.trim() == ".trash/").count(), 1);
+
+        // Opening again does not append it twice.
+        drop(Workspace::load(&existing).unwrap());
+        let again = std::fs::read_to_string(existing.join(".gitignore")).unwrap();
+        assert_eq!(again.lines().filter(|l| l.trim() == ".trash/").count(), 1);
+    }
+
+    #[test]
+    fn config_set_settings_is_rejected_and_changes_nothing() {
+        let dir = tempfile::tempdir().unwrap();
+        let mut ws = Workspace::new(dir.path()).unwrap();
+        ws.set_grid_view(
+            "verbs",
+            GridViewState {
+                search: "keep me".into(),
+                ..Default::default()
+            },
+        )
+        .unwrap_or(());
+        let before = std::fs::read(dir.path().join("config/settings")).ok();
+
+        let wipe = serde_json::json!({ "auto_checkin": false });
+        assert!(ws.set_config_json("settings", wipe).is_err());
+        assert_eq!(
+            std::fs::read(dir.path().join("config/settings")).ok(),
+            before
+        );
+        assert!(ws.settings.auto_checkin);
+    }
+
+    #[test]
+    #[ignore = "fixed in stage 4"]
+    fn renaming_a_table_to_a_case_or_punctuation_variant_keeps_its_file() {
+        for (from, to) in [("Roots", "roots"), ("a b", "a_b")] {
+            let dir = tempfile::tempdir().unwrap();
+            let mut ws = Workspace::new(dir.path()).unwrap();
+            ws.create_table(from).unwrap();
+            let id = ws.create_entry(from, "kala").unwrap().unwrap();
+
+            assert!(ws.rename_table(from, to).unwrap());
+
+            // The table's file must still exist and still hold its words.
+            let reloaded = Workspace::load(dir.path()).unwrap();
+            let table = reloaded.dictionary.table(to).unwrap_or_else(|| {
+                panic!("table {to:?} vanished from disk after renaming {from:?}")
+            });
+            assert!(table.entries.iter().any(|e| e.id == id));
+        }
+    }
+
+    #[test]
+    #[ignore = "fixed in stage 4"]
+    fn undoing_a_slug_variant_rename_keeps_the_tables_file() {
+        for (from, to) in [("Roots", "roots"), ("a b", "a_b")] {
+            let dir = tempfile::tempdir().unwrap();
+            let mut ws = Workspace::new(dir.path()).unwrap();
+            ws.create_table(from).unwrap();
+            let id = ws.create_entry(from, "kala").unwrap().unwrap();
+            ws.rename_table(from, to).unwrap();
+
+            assert!(ws.undo().unwrap()); // back to the original name
+
+            let reloaded = Workspace::load(dir.path()).unwrap();
+            let table = reloaded.dictionary.table(from).unwrap_or_else(|| {
+                panic!("table {from:?} vanished from disk after undoing the rename")
+            });
+            assert!(table.entries.iter().any(|e| e.id == id));
+        }
     }
 
     #[test]

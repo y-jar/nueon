@@ -9,7 +9,7 @@
     refreshTables,
     selectTable,
     renameTable,
-    deleteTable,
+    requestDeleteTable,
   } from "../lib/state.svelte";
 
   let newOpen = $state(false);
@@ -17,7 +17,6 @@
   let filter = $state("");
   let editing = $state<string | null>(null);
   let editName = $state("");
-  let pendingDelete = $state<string | null>(null);
   let error = $state("");
 
   const visible = $derived(
@@ -59,23 +58,19 @@
     }
   }
 
-  async function confirmDelete() {
-    if (!pendingDelete) return;
-    const name = pendingDelete;
-    pendingDelete = null;
-    try {
-      await deleteTable(name);
-      error = "";
-    } catch (e) {
-      error = String(e);
-    }
-  }
 </script>
 
 <aside class="sidebar">
   <div class="pane-head">
     <span class="pane-title">{$t("sidebar.tables")}</span>
     <span class="actions">
+      <button
+        title={$t("trash.open")}
+        aria-label={$t("trash.open")}
+        onclick={() => (ui.trashOpen = true)}
+      >
+        <Trash2 size={14} />
+      </button>
       <button
         title={$t("tables.newTable")}
         onclick={() => {
@@ -152,7 +147,7 @@
           <button
             class="row-action"
             title={$t("tables.delete")}
-            onclick={() => (pendingDelete = table.name)}
+            onclick={() => requestDeleteTable(table.name)}
           >
             <Trash2 size={13} />
           </button>
@@ -165,19 +160,7 @@
     {/each}
   </div>
 
-  {#if pendingDelete}
-    <div class="warn-panel">
-      <p class="error">
-        {$t("tables.deleteConfirm", { values: { name: pendingDelete } })}
-      </p>
-      <div class="row">
-        <button onclick={confirmDelete}>{$t("tables.delete")}</button>
-        <button onclick={() => (pendingDelete = null)}
-          >{$t("grid.cancel")}</button
-        >
-      </div>
-    </div>
-  {/if}
+
 
   <button class="wide" onclick={() => (newOpen = true)}>
     <Plus size={14} /> {$t("tables.newTable")}

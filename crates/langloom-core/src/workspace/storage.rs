@@ -60,7 +60,11 @@ pub fn with_note_extension(relative: &Path) -> PathBuf {
 /// Workspace `.gitignore` contents.
 pub const GITIGNORE_FILE: &str = ".gitignore";
 /// Files matched by the workspace `.gitignore`.
-pub const GITIGNORE_CONTENT: &str = "# langloom workspace\n*.tmp\n";
+pub const GITIGNORE_CONTENT: &str = "# langloom workspace\n*.tmp\n.trash/\n";
+
+/// Lines every workspace `.gitignore` must contain. The trash must never be
+/// committed by auto-check-in (it would fill history with moves in and out).
+const REQUIRED_IGNORES: &[&str] = &["*.tmp", ".trash/"];
 
 /// Errors raised by the storage layer.
 #[derive(Debug, thiserror::Error)]
@@ -135,13 +139,39 @@ pub fn ensure_dirs(root: &Path) -> Result<(), StorageError> {
     Ok(())
 }
 
-/// Create the workspace `.gitignore` if it does not already exist.
+/// Create the workspace `.gitignore`, or append any required line it lacks.
+///
+/// An existing file is never rewritten: user lines, comments and order stay
+/// exactly as they were, and missing entries are only appended.
 pub fn ensure_gitignore(root: &Path) -> Result<(), StorageError> {
     let path = root.join(GITIGNORE_FILE);
-    if path.exists() {
+    if !path.exists() {
+        return atomic_write(&path, GITIGNORE_CONTENT.as_bytes());
+    }
+    let existing = fs::read_to_string(&path).map_err(|e| io_err(&path, e))?;
+    let has = |wanted: &str| {
+        existing.lines().any(|line| {
+            let line = line.trim();
+            line == wanted || line == format!("/{wanted}") || line == wanted.trim_end_matches('/')
+        })
+    };
+    let missing: Vec<&str> = REQUIRED_IGNORES
+        .iter()
+        .copied()
+        .filter(|l| !has(l))
+        .collect();
+    if missing.is_empty() {
         return Ok(());
     }
-    atomic_write(&path, GITIGNORE_CONTENT.as_bytes())
+    let mut updated = existing;
+    if !updated.is_empty() && !updated.ends_with('\n') {
+        updated.push('\n');
+    }
+    for line in missing {
+        updated.push_str(line);
+        updated.push('\n');
+    }
+    atomic_write(&path, updated.as_bytes())
 }
 
 /// Default config files written when a workspace is created or opened empty.
@@ -175,13 +205,63 @@ pub fn atomic_write(path: &Path, bytes: &[u8]) -> Result<(), StorageError> {
     fs::rename(&tmp, path).map_err(|e| io_err(path, e))
 }
 
-fn temp_path(path: &Path) -> PathBuf {
-    let mut name = path
+/// A unique, hidden temp file beside `path`.
+///
+/// Unique so two writers (or two windows) never share a temp file, and hidden
+/// so a leftover from a crash is not mistaken for a note or table.
+pub(super) fn temp_path(path: &Path) -> PathBuf {
+    let name = path
         .file_name()
-        .map(|n| n.to_os_string())
+        .map(|n| n.to_string_lossy().into_owned())
         .unwrap_or_default();
-    name.push(".tmp");
-    path.with_file_name(name)
+    let unique = uuid::Uuid::new_v4().simple().to_string();
+    path.with_file_name(format!(".{name}.{}.tmp", &unique[..12]))
+}
+
+/// Move `from` to `to` **without ever replacing** an existing target, even if
+/// another writer creates `to` at the same moment.
+///
+/// - Files: `hard_link(from, to)` is a single atomic filesystem operation that
+///   fails with `AlreadyExists` if `to` exists, followed by removing `from`.
+///   If the filesystem has no hard links, `to` is first claimed with an
+///   exclusive `create_new`, then `from` is renamed over our own placeholder.
+/// - Directories: `rename(2)` cannot replace a non-empty directory (it fails
+///   with `ENOTEMPTY`) or a file, so the only target it could ever take over
+///   is an empty directory created in the same instant, which holds no data.
+pub fn rename_noreplace(from: &Path, to: &Path) -> io::Result<()> {
+    let meta = fs::symlink_metadata(from)?;
+    if meta.is_dir() {
+        if fs::symlink_metadata(to).is_ok() {
+            return Err(io::Error::new(
+                io::ErrorKind::AlreadyExists,
+                "target exists",
+            ));
+        }
+        return fs::rename(from, to);
+    }
+    match fs::hard_link(from, to) {
+        Ok(()) => {
+            if let Err(err) = fs::remove_file(from) {
+                // Could not finish the move: undo our link so nothing is duplicated.
+                let _ = fs::remove_file(to);
+                return Err(err);
+            }
+            Ok(())
+        }
+        Err(err) if err.kind() == io::ErrorKind::AlreadyExists => Err(err),
+        Err(_) => {
+            // No hard links here: claim the name exclusively, then take it over.
+            fs::OpenOptions::new()
+                .write(true)
+                .create_new(true)
+                .open(to)?;
+            if let Err(err) = fs::rename(from, to) {
+                let _ = fs::remove_file(to);
+                return Err(err);
+            }
+            Ok(())
+        }
+    }
 }
 
 /// Read a JSON value from `path`.
@@ -394,10 +474,21 @@ pub fn read_note(notes_dir: &Path, relative: &Path) -> Result<String, StorageErr
 /// Create an empty note at `notes/<relative>`.
 pub fn create_note(notes_dir: &Path, relative: &Path) -> Result<(), StorageError> {
     let path = safe_join(notes_dir, relative)?;
-    if path.exists() {
-        return Err(StorageError::AlreadyExists(relative.to_path_buf()));
+    if let Some(parent) = path.parent() {
+        fs::create_dir_all(parent).map_err(|e| io_err(parent, e))?;
     }
-    atomic_write(&path, b"")
+    // `create_new` is atomic: it fails if the note exists, even under a race.
+    match fs::OpenOptions::new()
+        .write(true)
+        .create_new(true)
+        .open(&path)
+    {
+        Ok(_) => Ok(()),
+        Err(err) if err.kind() == io::ErrorKind::AlreadyExists => {
+            Err(StorageError::AlreadyExists(relative.to_path_buf()))
+        }
+        Err(err) => Err(io_err(&path, err)),
+    }
 }
 
 /// Create a directory at `notes/<relative>`.
@@ -427,14 +518,17 @@ pub fn rename_path(notes_dir: &Path, from: &Path, to: &Path) -> Result<PathBuf, 
         _ => to.to_path_buf(),
     };
     let target = safe_join(notes_dir, &to)?;
-    if target.exists() {
-        return Err(StorageError::AlreadyExists(to));
-    }
     if let Some(parent) = target.parent() {
         fs::create_dir_all(parent).map_err(|e| io_err(parent, e))?;
     }
-    fs::rename(&source, &target).map_err(|e| io_err(&source, e))?;
-    Ok(to)
+    // Never replaces an existing target, even under a race.
+    match rename_noreplace(&source, &target) {
+        Ok(()) => Ok(to),
+        Err(err) if err.kind() == io::ErrorKind::AlreadyExists => {
+            Err(StorageError::AlreadyExists(to))
+        }
+        Err(err) => Err(io_err(&source, err)),
+    }
 }
 
 /// Rename extensionless and `.txt` notes to `.md`, returning `(from, to)`
@@ -495,19 +589,6 @@ fn migrate_dir(
         renamed.push((rel(&path), rel(&candidate)));
     }
     Ok(())
-}
-
-/// Delete a note file or a folder (recursively) within the notes directory.
-pub fn remove_path(notes_dir: &Path, relative: &Path) -> Result<(), StorageError> {
-    let path = safe_join(notes_dir, relative)?;
-    if !path.exists() {
-        return Err(StorageError::NotFound(relative.to_path_buf()));
-    }
-    if path.is_dir() {
-        fs::remove_dir_all(&path).map_err(|e| io_err(&path, e))
-    } else {
-        fs::remove_file(&path).map_err(|e| io_err(&path, e))
-    }
 }
 
 #[cfg(test)]
@@ -725,6 +806,7 @@ mod tests {
         ensure_gitignore(dir.path()).unwrap();
         let path = dir.path().join(GITIGNORE_FILE);
         assert_eq!(fs::read_to_string(&path).unwrap(), GITIGNORE_CONTENT);
+        assert!(GITIGNORE_CONTENT.contains(".trash/"));
     }
 
     #[test]
@@ -756,12 +838,109 @@ mod tests {
         assert!(!notes.join("Grammar/phonology").exists());
         assert!(notes.join("Grammar/sounds").exists());
 
-        remove_path(&notes, Path::new("Grammar")).unwrap();
-        assert!(!notes.join("Grammar").exists());
+        // Missing sources are reported, not silently ignored.
         assert!(matches!(
-            remove_path(&notes, Path::new("Grammar")),
+            rename_path(&notes, Path::new("Nope"), Path::new("Other")),
             Err(StorageError::NotFound(_))
         ));
+    }
+
+    #[test]
+    fn rename_never_replaces_an_existing_target() {
+        let dir = tempfile::tempdir().unwrap();
+        let root = dir.path();
+        fs::write(root.join("a"), "A").unwrap();
+        fs::write(root.join("b"), "B").unwrap();
+        let err = rename_noreplace(&root.join("a"), &root.join("b")).unwrap_err();
+        assert_eq!(err.kind(), io::ErrorKind::AlreadyExists);
+        assert_eq!(fs::read_to_string(root.join("a")).unwrap(), "A");
+        assert_eq!(fs::read_to_string(root.join("b")).unwrap(), "B");
+
+        // Directories too: a non-empty target is never taken over.
+        fs::create_dir_all(root.join("d1")).unwrap();
+        fs::create_dir_all(root.join("d2")).unwrap();
+        fs::write(root.join("d2/keep"), "x").unwrap();
+        assert!(rename_noreplace(&root.join("d1"), &root.join("d2")).is_err());
+        assert!(root.join("d1").is_dir());
+        assert!(root.join("d2/keep").exists());
+
+        // A free target works and removes the source.
+        rename_noreplace(&root.join("a"), &root.join("c")).unwrap();
+        assert!(!root.join("a").exists());
+        assert_eq!(fs::read_to_string(root.join("c")).unwrap(), "A");
+    }
+
+    #[test]
+    fn concurrent_renames_to_one_target_have_exactly_one_winner() {
+        use std::sync::{Arc, Barrier};
+        let dir = tempfile::tempdir().unwrap();
+        let root = Arc::new(dir.path().to_path_buf());
+        let n = 16;
+        for i in 0..n {
+            fs::write(root.join(format!("src{i}")), format!("content {i}")).unwrap();
+        }
+        let barrier = Arc::new(Barrier::new(n));
+        let handles: Vec<_> = (0..n)
+            .map(|i| {
+                let (root, barrier) = (Arc::clone(&root), Arc::clone(&barrier));
+                std::thread::spawn(move || {
+                    barrier.wait();
+                    rename_noreplace(&root.join(format!("src{i}")), &root.join("target"))
+                        .map(|()| i)
+                })
+            })
+            .collect();
+        let results: Vec<_> = handles.into_iter().map(|h| h.join().unwrap()).collect();
+        let winners: Vec<usize> = results
+            .iter()
+            .filter_map(|r| r.as_ref().ok().copied())
+            .collect();
+        assert_eq!(winners.len(), 1, "exactly one rename may win");
+        let won = winners[0];
+        assert_eq!(
+            fs::read_to_string(root.join("target")).unwrap(),
+            format!("content {won}")
+        );
+        // Every loser still has its source file, untouched.
+        for i in (0..n).filter(|i| *i != won) {
+            assert_eq!(
+                fs::read_to_string(root.join(format!("src{i}"))).unwrap(),
+                format!("content {i}")
+            );
+        }
+    }
+
+    #[test]
+    fn concurrent_note_creation_has_one_creator() {
+        use std::sync::{Arc, Barrier};
+        let dir = tempfile::tempdir().unwrap();
+        let notes = Arc::new(dir.path().join(NOTES_DIR));
+        fs::create_dir_all(&*notes).unwrap();
+        let barrier = Arc::new(Barrier::new(8));
+        let handles: Vec<_> = (0..8)
+            .map(|_| {
+                let (notes, barrier) = (Arc::clone(&notes), Arc::clone(&barrier));
+                std::thread::spawn(move || {
+                    barrier.wait();
+                    create_note(&notes, Path::new("same.md")).is_ok()
+                })
+            })
+            .collect();
+        let created = handles
+            .into_iter()
+            .map(|h| h.join().unwrap())
+            .filter(|ok| *ok)
+            .count();
+        assert_eq!(created, 1);
+    }
+
+    #[test]
+    fn temp_files_are_unique_and_hidden() {
+        let a = temp_path(Path::new("/x/notes/a.md"));
+        let b = temp_path(Path::new("/x/notes/a.md"));
+        assert_ne!(a, b);
+        let name = a.file_name().unwrap().to_string_lossy().into_owned();
+        assert!(name.starts_with('.') && name.ends_with(".tmp"));
     }
 
     #[test]
