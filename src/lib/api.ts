@@ -296,6 +296,14 @@ export interface TagKindChange {
 
 export const wordIndex = (): Promise<WordIndex> => invoke("word_index");
 export const listTables = (): Promise<TableSummary[]> => invoke("list_tables");
+
+/** A file under `dictionary/` that exists but could not be loaded as a table. */
+export interface QuarantineWarning {
+  file_name: string;
+  reason: string;
+}
+export const quarantineWarnings = (): Promise<QuarantineWarning[]> =>
+  invoke("quarantine_warnings");
 /**
  * The backend omits empty `values` maps when serializing entries, so every
  * consumer would otherwise have to guard `entry.values`. Normalize once here.

@@ -173,6 +173,7 @@ pub fn run() {
             commands::trash_empty,
             commands::word_index,
             commands::list_tables,
+            commands::quarantine_warnings,
             commands::get_table,
             commands::create_table,
             commands::delete_table,

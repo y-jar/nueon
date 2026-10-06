@@ -9,8 +9,8 @@ use uuid::Uuid;
 
 use langloom_core::model::{derivation, DerivationNode, RelatedWord};
 use langloom_core::{
-    FieldType, GridViewState, TagDef, TagFormat, TagKindChange, TrashRecord, WordEntry, WordHit,
-    WordTable,
+    FieldType, GridViewState, QuarantineWarning, TagDef, TagFormat, TagKindChange, TrashRecord,
+    WordEntry, WordHit, WordTable,
 };
 
 use super::changed;
@@ -60,6 +60,14 @@ pub fn list_tables(state: State<'_, Shared>) -> Result<Vec<TableSummary>, String
             tags: table.tags.clone(),
         })
         .collect())
+}
+
+/// Files under `dictionary/` that exist but could not be loaded as a table.
+/// They are left exactly where they are; this is purely informational.
+#[tauri::command]
+pub fn quarantine_warnings(state: State<'_, Shared>) -> Result<Vec<QuarantineWarning>, String> {
+    let state = state.lock().map_err(|_| "state poisoned".to_string())?;
+    Ok(state.workspace()?.quarantine.clone())
 }
 
 /// Load one table in full.

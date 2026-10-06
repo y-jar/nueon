@@ -97,6 +97,10 @@
     "emptyTitle": "Nothing open",
     "emptyHint": "Open a note or a table from the sidebar, or start something new."
   },
+  "quarantine": {
+    "heading": "{count} file(s) in dictionary/ could not be loaded",
+    "dismiss": "Dismiss"
+  },
   "trash": {
     "title": "Trash",
     "open": "Trash",

@@ -128,6 +128,9 @@ export const ui = $state({
   tree: [] as api.NoteNode[],
   status: "",
   tables: [] as api.TableSummary[],
+  quarantine: [] as api.QuarantineWarning[],
+  /** Quarantine file names dismissed for this session only. */
+  quarantineDismissed: [] as string[],
   wordIndex: {} as api.WordIndex,
   nameById: {} as Record<string, string>,
   vcsRevision: 0,
@@ -219,6 +222,7 @@ export async function loadWordIndex(): Promise<void> {
 
 export async function refreshTables(): Promise<void> {
   ui.tables = ui.root ? await api.listTables() : [];
+  ui.quarantine = ui.root ? await api.quarantineWarnings().catch(() => []) : [];
   if (!ui.root) {
     for (const group of ui.groups) {
       group.tabs = group.tabs.filter((tab) => tab.kind !== "table");
@@ -1059,6 +1063,11 @@ export function closeContextMenu(): void {
 
 export function collapseAll(): void {
   ui.collapseAllSignal += 1;
+}
+
+/** Hide a quarantine warning for this session; the file itself is untouched. */
+export function dismissQuarantine(fileName: string): void {
+  ui.quarantineDismissed = [...ui.quarantineDismissed, fileName];
 }
 
 export function requestRename(path: string): void {

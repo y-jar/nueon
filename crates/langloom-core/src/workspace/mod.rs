@@ -3,17 +3,21 @@
 mod assets;
 mod note;
 mod storage;
+mod table_files;
 mod trash;
 
 pub use assets::{AssetKind, ImportedAsset, ASSETS_DIR};
 pub use note::NoteFile;
 pub use storage::{StorageError, CONFIG_DIR, DICTIONARY_DIR, NOTES_DIR};
+pub use table_files::QuarantineWarning;
 pub use trash::{Restored, TrashKind, TrashRecord, RETENTION_DAYS, TRASH_DIR};
 
 use std::path::{Path, PathBuf};
 use std::time::{Duration, Instant};
 
 use uuid::Uuid;
+
+use self::table_files::TableFiles;
 
 use crate::config::{
     GrammarConfig, GridViewState, LanguageConfig, LayoutState, TilingLayout, TranslationConfig,
@@ -45,6 +49,10 @@ pub struct Workspace {
     pub settings: WorkspaceSettings,
     /// Detected version-control state.
     pub vcs: GitStatus,
+    /// Resolved, stable filenames for every table (see [`table_files`]).
+    table_files: TableFiles,
+    /// Files under `dictionary/` that exist but could not be loaded.
+    pub quarantine: Vec<QuarantineWarning>,
     auto: AutoCheckin,
     history: History,
 }
@@ -111,6 +119,8 @@ impl Workspace {
             translation: TranslationConfig::default(),
             settings,
             vcs,
+            table_files: TableFiles::default(),
+            quarantine: Vec::new(),
             auto,
             history: History::new(),
         })
@@ -133,8 +143,9 @@ impl Workspace {
         storage::ensure_gitignore(&root_path)?;
         storage::ensure_config_files(&root_path)?;
 
+        let scan = table_files::scan_tables_tolerant(&root_path.join(DICTIONARY_DIR))?;
         let mut dictionary = Dictionary::new();
-        for table in storage::scan_tables(&root_path.join(DICTIONARY_DIR))? {
+        for table in scan.tables {
             dictionary.tables.insert(table.name.clone(), table);
         }
 
@@ -165,6 +176,8 @@ impl Workspace {
             translation,
             settings,
             vcs,
+            table_files: scan.files,
+            quarantine: scan.warnings,
             auto,
             history: History::new(),
         };
@@ -183,8 +196,9 @@ impl Workspace {
     /// Everything is read into locals first and only assigned once all of it
     /// succeeded, so a failure partway leaves memory exactly as it was.
     pub fn reload_disk_state(&mut self) -> Result<(), StorageError> {
+        let scan = table_files::scan_tables_tolerant(&self.dictionary_dir())?;
         let mut dictionary = Dictionary::new();
-        for table in storage::scan_tables(&self.dictionary_dir())? {
+        for table in scan.tables {
             dictionary.tables.insert(table.name.clone(), table);
         }
         let notes = storage::scan_notes(&self.notes_dir())?;
@@ -204,6 +218,8 @@ impl Workspace {
         self.grammar = grammar;
         self.translation = translation;
         self.settings = settings;
+        self.table_files = scan.files;
+        self.quarantine = scan.warnings;
         self.history = History::new();
         Ok(())
     }
@@ -268,6 +284,7 @@ impl Workspace {
         if self.dictionary.table(name).is_some() {
             return Ok(false);
         }
+        self.table_files.resolve_new(name);
         self.record();
         self.dictionary.add_table(name);
         self.save_table(name)?;
@@ -285,16 +302,31 @@ impl Workspace {
         let Some(table) = self.dictionary.table(name).cloned() else {
             return Ok(None);
         };
+        // The map, never a fresh slug: this is the one and only file this
+        // table has ever been resolved to.
+        let filename = self
+            .table_files
+            .filename(name)
+            .map(str::to_string)
+            .unwrap_or_else(|| self.table_files.resolve_new(name));
+        let file = self.dictionary_dir().join(&filename);
         // Trash first: if it fails, memory and disk are both unchanged.
-        let file = storage::table_path(&self.dictionary_dir(), name);
         let record = trash::trash_table(&self.root_path, &table, &file)?;
         self.record();
         self.dictionary.remove_table(name);
+        self.table_files.remove(name);
         self.mark_change(Instant::now(), format!("langloom: delete table \"{name}\""));
         Ok(Some(record))
     }
 
-    /// Rename a table, moving its backing file to the new slug.
+    /// Rename a table.
+    ///
+    /// The table keeps the exact file it already had — renaming only ever
+    /// changes the `name` field inside that file. Earlier, a table's file was
+    /// recomputed from its name on every save, so renaming a table to a name
+    /// that slugifies the same way (`"Roots"` → `"roots"`, `"a b"` → `"a_b"`)
+    /// silently deleted its own just-written file. Never recomputing avoids
+    /// the whole class of bug.
     pub fn rename_table(&mut self, from: &str, to: &str) -> Result<bool, StorageError> {
         if from == to
             || to.trim().is_empty()
@@ -310,8 +342,8 @@ impl Workspace {
             .expect("existence checked above");
         table.name = to.to_string();
         self.dictionary.tables.insert(to.to_string(), table);
+        self.table_files.rename(from, to);
         self.save_table(to)?;
-        storage::delete_table(&self.dictionary_dir(), from)?;
         self.mark_change(
             Instant::now(),
             format!("langloom: rename table \"{from}\" to \"{to}\""),
@@ -319,13 +351,17 @@ impl Workspace {
         Ok(true)
     }
 
-    /// Write a table to disk.
-    pub fn save_table(&self, name: &str) -> Result<(), StorageError> {
+    /// Write a table to its already-resolved file.
+    pub fn save_table(&mut self, name: &str) -> Result<(), StorageError> {
         let table = self
             .dictionary
             .table(name)
             .ok_or_else(|| StorageError::TableMissing(name.to_string()))?;
-        storage::write_table(&self.dictionary_dir(), table)
+        let filename = match self.table_files.filename(name) {
+            Some(filename) => filename.to_string(),
+            None => self.table_files.resolve_new(name),
+        };
+        storage::write_table_file(&self.dictionary_dir().join(filename), table)
     }
 
     /// Persist in-place edits to the words of a table.
@@ -1150,7 +1186,8 @@ impl Workspace {
         };
         // Touch the disk first: if that fails the snapshot goes back on the
         // stack and memory is unchanged.
-        if let Err(err) = self.write_dictionary_diff(&self.dictionary, &previous) {
+        let before = self.dictionary.clone();
+        if let Err(err) = self.write_dictionary_diff(&before, &previous) {
             self.history.undo.push(previous);
             return Err(err);
         }
@@ -1165,7 +1202,8 @@ impl Workspace {
         let Some(next) = self.history.redo.pop() else {
             return Ok(false);
         };
-        if let Err(err) = self.write_dictionary_diff(&self.dictionary, &next) {
+        let before = self.dictionary.clone();
+        if let Err(err) = self.write_dictionary_diff(&before, &next) {
             self.history.redo.push(next);
             return Err(err);
         }
@@ -1181,24 +1219,42 @@ impl Workspace {
     /// Undo and redo own exactly the table files the app has written. They
     /// never list `dictionary/`, so a README, a `.tmp` leftover, a hand-edited
     /// table they did not change, or any other file is left strictly alone.
+    /// Filenames are never recomputed: an unchanged name reuses its existing
+    /// file, and a name reappearing after a delete resolves a fresh one only
+    /// because its old mapping was released when it was removed.
     fn write_dictionary_diff(
-        &self,
+        &mut self,
         before: &Dictionary,
         after: &Dictionary,
     ) -> Result<(), StorageError> {
         let dir = self.dictionary_dir();
         for table in after.tables() {
             if before.table(&table.name) != Some(table) {
-                storage::write_table(&dir, table)?;
+                let filename = match self.table_files.filename(&table.name) {
+                    Some(filename) => filename.to_string(),
+                    None => self.table_files.resolve_new(&table.name),
+                };
+                storage::write_table_file(&dir.join(filename), table)?;
                 // Brought back: a trash copy of this exact table is redundant.
                 trash::consume_table(&self.root_path, table);
             }
         }
         for table in before.tables() {
             if after.table(&table.name).is_none() {
+                let Some(filename) = self.table_files.remove(&table.name) else {
+                    continue;
+                };
+                // An empty table undone/redone away (typically straight after
+                // its own creation) is not worth a trash entry: there is
+                // nothing in it to lose, and it would otherwise clutter the
+                // trash on every "create table" + Ctrl+Z.
+                if table.entries.is_empty() {
+                    let _ = storage::remove_silently(&dir.join(&filename));
+                    continue;
+                }
                 // Even undo/redo never deletes a table file outright: it goes
                 // to the trash, where it can still be restored.
-                let file = storage::table_path(&dir, &table.name);
+                let file = dir.join(&filename);
                 trash::trash_table(&self.root_path, table, &file)?;
             }
         }
@@ -1753,7 +1809,6 @@ mod tests {
     }
 
     #[test]
-    #[ignore = "fixed in stage 4"]
     fn renaming_a_table_to_a_case_or_punctuation_variant_keeps_its_file() {
         for (from, to) in [("Roots", "roots"), ("a b", "a_b")] {
             let dir = tempfile::tempdir().unwrap();
@@ -1773,7 +1828,6 @@ mod tests {
     }
 
     #[test]
-    #[ignore = "fixed in stage 4"]
     fn undoing_a_slug_variant_rename_keeps_the_tables_file() {
         for (from, to) in [("Roots", "roots"), ("a b", "a_b")] {
             let dir = tempfile::tempdir().unwrap();
@@ -1867,7 +1921,10 @@ mod tests {
     }
 
     #[test]
-    fn unreadable_dictionary_file_fails_reload_atomically() {
+    fn unreadable_dictionary_file_is_quarantined_not_fatal_on_reload() {
+        // A stray unreadable file in dictionary/ must never stop a reload
+        // (e.g. after a git checkout): it is reported and left alone, and
+        // every good table still loads.
         let dir = tempfile::tempdir().unwrap();
         let mut ws = Workspace::new(dir.path()).unwrap();
         ws.create_table("verbs").unwrap();
@@ -1875,12 +1932,229 @@ mod tests {
 
         std::fs::write(dir.path().join("dictionary/broken"), "{ not json").unwrap();
         std::fs::write(dir.path().join("notes/n.md"), "from disk").unwrap();
+        let broken_before = std::fs::read(dir.path().join("dictionary/broken")).unwrap();
 
-        assert!(ws.reload_disk_state().is_err());
+        ws.reload_disk_state().unwrap();
         assert!(ws.dictionary.table("verbs").is_some());
         assert_eq!(ws.notes.len(), 1);
-        assert_eq!(ws.notes[0].raw_content, "");
-        assert!(ws.can_undo());
+        assert_eq!(ws.notes[0].raw_content, "from disk");
+        assert_eq!(ws.quarantine.len(), 1);
+        assert_eq!(ws.quarantine[0].file_name, "broken");
+        assert_eq!(
+            std::fs::read(dir.path().join("dictionary/broken")).unwrap(),
+            broken_before,
+            "the bad file is never touched"
+        );
+        // Reload clears undo history (its snapshots predate the disk change).
+        assert!(!ws.can_undo());
+    }
+
+    #[test]
+    fn workspace_load_quarantines_one_bad_file_and_loads_everything_else() {
+        let dir = tempfile::tempdir().unwrap();
+        let mut ws = Workspace::new(dir.path()).unwrap();
+        ws.create_table("verbs").unwrap();
+        ws.create_entry("verbs", "kala").unwrap();
+        let dict = dir.path().join("dictionary");
+        std::fs::write(dict.join("corrupt"), "{ not json").unwrap();
+        std::fs::write(dict.join("leftover.tmp"), "half-written").unwrap();
+        std::fs::write(dict.join("README.txt"), "notes for humans, not JSON").unwrap();
+        let (corrupt_before, tmp_before, readme_before) = (
+            std::fs::read(dict.join("corrupt")).unwrap(),
+            std::fs::read(dict.join("leftover.tmp")).unwrap(),
+            std::fs::read(dict.join("README.txt")).unwrap(),
+        );
+
+        let loaded = Workspace::load(dir.path()).unwrap();
+        assert_eq!(loaded.dictionary.table("verbs").unwrap().entries.len(), 1);
+        // Only the two genuinely-unparseable files are reported; the `.tmp`
+        // leftover is debris, skipped silently rather than quarantined.
+        let mut warned: Vec<&str> = loaded
+            .quarantine
+            .iter()
+            .map(|w| w.file_name.as_str())
+            .collect();
+        warned.sort_unstable();
+        assert_eq!(warned, ["README.txt", "corrupt"]);
+
+        assert_eq!(std::fs::read(dict.join("corrupt")).unwrap(), corrupt_before);
+        assert_eq!(
+            std::fs::read(dict.join("leftover.tmp")).unwrap(),
+            tmp_before
+        );
+        assert_eq!(
+            std::fs::read(dict.join("README.txt")).unwrap(),
+            readme_before
+        );
+    }
+
+    #[test]
+    fn colliding_table_names_never_overwrite_each_others_file() {
+        let dir = tempfile::tempdir().unwrap();
+        let mut ws = Workspace::new(dir.path()).unwrap();
+        ws.create_table("Roots").unwrap();
+        ws.create_entry("Roots", "one").unwrap();
+
+        // "roots" slugifies identically to "Roots"; it must not collide.
+        ws.create_table("roots").unwrap();
+        ws.create_entry("roots", "two").unwrap();
+
+        let dict = dir.path().join("dictionary");
+        let files: std::collections::BTreeSet<String> = std::fs::read_dir(&dict)
+            .unwrap()
+            .map(|e| e.unwrap().file_name().to_string_lossy().into_owned())
+            .collect();
+        assert_eq!(files.len(), 2, "two distinct files: {files:?}");
+
+        let reloaded = Workspace::load(dir.path()).unwrap();
+        assert_eq!(
+            reloaded.dictionary.table("Roots").unwrap().entries[0].wordname,
+            "one"
+        );
+        assert_eq!(
+            reloaded.dictionary.table("roots").unwrap().entries[0].wordname,
+            "two"
+        );
+
+        // Deleting one never touches the other's file.
+        ws.delete_table("Roots").unwrap();
+        assert!(ws.dictionary.table("roots").is_some());
+        let reloaded = Workspace::load(dir.path()).unwrap();
+        assert!(reloaded.dictionary.table("Roots").is_none());
+        assert_eq!(
+            reloaded.dictionary.table("roots").unwrap().entries[0].wordname,
+            "two"
+        );
+    }
+
+    #[test]
+    fn renaming_onto_a_colliding_slug_is_rejected_not_overwritten() {
+        let dir = tempfile::tempdir().unwrap();
+        let mut ws = Workspace::new(dir.path()).unwrap();
+        ws.create_table("a b").unwrap();
+        ws.create_entry("a b", "x").unwrap();
+        ws.create_table("a_b").unwrap();
+        ws.create_entry("a_b", "y").unwrap();
+
+        // Same display-name collision as above, but via rename instead of
+        // create: renaming "a b" to the literal name "a_b" must be rejected
+        // (that name is taken), never silently overwrite its file.
+        assert!(!ws.rename_table("a b", "a_b").unwrap());
+        assert_eq!(ws.dictionary.table("a b").unwrap().entries[0].wordname, "x");
+        assert_eq!(ws.dictionary.table("a_b").unwrap().entries[0].wordname, "y");
+    }
+
+    #[test]
+    fn undo_and_redo_of_a_rename_keep_the_tables_file_on_a_slug_collision() {
+        for (from, to) in [("Roots", "roots"), ("a b", "a_b")] {
+            let dir = tempfile::tempdir().unwrap();
+            let mut ws = Workspace::new(dir.path()).unwrap();
+            ws.create_table(from).unwrap();
+            let id = ws.create_entry(from, "kala").unwrap().unwrap();
+
+            assert!(ws.rename_table(from, to).unwrap());
+            assert!(ws.undo().unwrap());
+            assert!(ws.dictionary.table(from).is_some());
+            assert!(ws
+                .dictionary
+                .table(from)
+                .unwrap()
+                .entries
+                .iter()
+                .any(|e| e.id == id));
+            let reloaded = Workspace::load(dir.path()).unwrap();
+            assert!(reloaded
+                .dictionary
+                .table(from)
+                .unwrap()
+                .entries
+                .iter()
+                .any(|e| e.id == id));
+
+            assert!(ws.redo().unwrap());
+            assert_eq!(ws.dictionary.table(to).unwrap().entries[0].id, id);
+            let reloaded = Workspace::load(dir.path()).unwrap();
+            assert!(reloaded
+                .dictionary
+                .table(to)
+                .unwrap()
+                .entries
+                .iter()
+                .any(|e| e.id == id));
+        }
+    }
+
+    #[test]
+    fn undo_and_redo_of_a_delete_keep_using_the_same_file_across_a_collision() {
+        let dir = tempfile::tempdir().unwrap();
+        let mut ws = Workspace::new(dir.path()).unwrap();
+        ws.create_table("Roots").unwrap();
+        ws.create_entry("Roots", "one").unwrap();
+        ws.create_table("roots").unwrap();
+        ws.create_entry("roots", "two").unwrap();
+
+        ws.delete_table("roots").unwrap();
+        assert!(ws.undo().unwrap());
+        assert_eq!(
+            ws.dictionary.table("Roots").unwrap().entries[0].wordname,
+            "one"
+        );
+        assert_eq!(
+            ws.dictionary.table("roots").unwrap().entries[0].wordname,
+            "two"
+        );
+        let reloaded = Workspace::load(dir.path()).unwrap();
+        assert_eq!(
+            reloaded.dictionary.table("Roots").unwrap().entries[0].wordname,
+            "one"
+        );
+        assert_eq!(
+            reloaded.dictionary.table("roots").unwrap().entries[0].wordname,
+            "two"
+        );
+
+        assert!(ws.redo().unwrap());
+        assert!(ws.dictionary.table("roots").is_none());
+        assert_eq!(
+            ws.dictionary.table("Roots").unwrap().entries[0].wordname,
+            "one"
+        );
+    }
+
+    #[test]
+    fn undo_of_an_empty_tables_creation_skips_the_trash() {
+        let dir = tempfile::tempdir().unwrap();
+        let mut ws = Workspace::new(dir.path()).unwrap();
+        ws.create_table("fresh").unwrap();
+
+        assert!(ws.undo().unwrap());
+        assert!(ws.dictionary.table("fresh").is_none());
+        assert!(
+            ws.list_trash().is_empty(),
+            "an empty table is not worth a trash entry"
+        );
+
+        // A table that actually holds a word is still trashed on undo.
+        ws.create_table("has-words").unwrap();
+        ws.create_entry("has-words", "kala").unwrap();
+        assert!(ws.undo().unwrap()); // un-add "kala"
+        assert!(ws.undo().unwrap()); // un-create "has-words"
+        assert_eq!(
+            ws.list_trash().len(),
+            0,
+            "still empty when the word-add was also undone"
+        );
+
+        ws.create_table("stays").unwrap();
+        ws.create_entry("stays", "kala").unwrap();
+        let _ = ws.redo(); // no-op, nothing to redo
+        assert!(ws.delete_table("stays").unwrap().is_some());
+        assert!(ws.undo().unwrap()); // un-delete: brings it back
+        assert_eq!(
+            ws.list_trash().len(),
+            0,
+            "undo of a real delete consumes its own trash copy"
+        );
     }
 
     #[test]
@@ -2121,9 +2395,12 @@ mod tests {
         assert_eq!(table.name, "actions");
         assert_eq!(table.entries.len(), 1);
 
-        // Old backing file is gone; new one exists and reloads with words.
-        assert!(!dir.path().join("dictionary").join("verbs").exists());
-        assert!(dir.path().join("dictionary").join("actions").exists());
+        // The table keeps its one and only file (just rewritten with the new
+        // name) rather than deleting the old slug and writing a new one — the
+        // same slug would otherwise delete the file out from under a rename
+        // like "Roots" -> "roots" (see `renaming_a_table_to_a_case_or_...`).
+        assert!(dir.path().join("dictionary").join("verbs").exists());
+        assert!(!dir.path().join("dictionary").join("actions").exists());
         let reloaded = Workspace::load(dir.path()).unwrap();
         assert_eq!(
             reloaded.dictionary.table("actions").unwrap().entries.len(),

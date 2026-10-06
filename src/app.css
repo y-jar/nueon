@@ -2269,3 +2269,52 @@ button.danger:hover:not(:disabled) {
   padding: 18px 4px;
   text-align: center;
 }
+
+/* -- quarantine banner ----------------------------------------------------- */
+
+.quarantine-banner {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+  margin: 6px 0;
+  padding: 6px 8px;
+  background: rgba(214, 120, 90, 0.12);
+  border: 1px solid #d6785a;
+  border-radius: 5px;
+  font-size: 11px;
+}
+
+.quarantine-head {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-weight: 600;
+  color: #d6785a;
+}
+
+.quarantine-row {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding-left: 20px;
+}
+
+.quarantine-file {
+  font-family: ui-monospace, "JetBrains Mono", monospace;
+}
+
+.quarantine-reason {
+  flex: 1;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.quarantine-row button {
+  display: grid;
+  place-items: center;
+  padding: 1px;
+  background: transparent;
+  border: none;
+  color: var(--muted);
+}

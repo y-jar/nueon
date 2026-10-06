@@ -291,6 +291,10 @@ pub fn save_json<T: Serialize>(path: &Path, value: &T) -> Result<(), StorageErro
 }
 
 /// Turn a display name into a filesystem-safe slug.
+///
+/// Only used by tests now: production code resolves a table's filename once,
+/// through [`super::table_files`], and never recomputes it from the name.
+#[cfg(test)]
 pub fn slugify(name: &str) -> String {
     let slug: String = name
         .chars()
@@ -310,7 +314,8 @@ pub fn slugify(name: &str) -> String {
     }
 }
 
-/// Path of a table's backing file.
+/// Path of a table's backing file. Test-only (see [`slugify`]).
+#[cfg(test)]
 pub fn table_path(dictionary_dir: &Path, name: &str) -> PathBuf {
     dictionary_dir.join(slugify(name))
 }
@@ -332,22 +337,37 @@ pub fn safe_join(base: &Path, relative: &Path) -> Result<PathBuf, StorageError> 
     Ok(out)
 }
 
-/// Write one table to `dictionary/<slug>`.
+/// Write one table to `dictionary/<slug>` (a fresh slug — only correct for
+/// code paths that do not yet have a resolved filename, namely tests).
+#[cfg(test)]
 pub fn write_table(dictionary_dir: &Path, table: &WordTable) -> Result<(), StorageError> {
     write_json(&table_path(dictionary_dir, &table.name), table)
 }
 
-/// Delete a table's backing file. Missing files are not an error.
-pub fn delete_table(dictionary_dir: &Path, name: &str) -> Result<(), StorageError> {
-    let path = table_path(dictionary_dir, name);
-    match fs::remove_file(&path) {
+/// Delete one specific, already-resolved file. Missing files are not an
+/// error. Unlike the old blanket "delete anything not in the snapshot"
+/// behaviour this removed, the caller must name the exact file: nothing here
+/// ever infers what to delete from a directory listing.
+pub fn remove_silently(path: &Path) -> Result<(), StorageError> {
+    match fs::remove_file(path) {
         Ok(()) => Ok(()),
         Err(e) if e.kind() == io::ErrorKind::NotFound => Ok(()),
-        Err(e) => Err(io_err(&path, e)),
+        Err(e) => Err(io_err(path, e)),
     }
 }
 
-/// Load every table under `dictionary/`.
+/// Write one table to its already-resolved filename. Everything in
+/// [`Workspace`](crate::Workspace) goes through this: filenames are resolved
+/// once (see [`super::table_files`]) and never recomputed from the name.
+pub fn write_table_file(path: &Path, table: &WordTable) -> Result<(), StorageError> {
+    write_json(path, table)
+}
+
+/// Load every table under `dictionary/`, failing on the first unreadable
+/// file. Test-only: production code uses the tolerant
+/// [`super::table_files::scan_tables_tolerant`], which never lets one bad
+/// file stop the rest of the workspace from loading.
+#[cfg(test)]
 pub fn scan_tables(dictionary_dir: &Path) -> Result<Vec<WordTable>, StorageError> {
     let mut tables = Vec::new();
     if !dictionary_dir.exists() {

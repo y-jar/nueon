@@ -11,6 +11,7 @@
     renameTable,
     requestDeleteTable,
   } from "../lib/state.svelte";
+  import QuarantineBanner from "./QuarantineBanner.svelte";
 
   let newOpen = $state(false);
   let newName = $state("");
@@ -61,6 +62,7 @@
 </script>
 
 <aside class="sidebar">
+  <QuarantineBanner />
   <div class="pane-head">
     <span class="pane-title">{$t("sidebar.tables")}</span>
     <span class="actions">
