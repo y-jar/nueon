@@ -183,6 +183,8 @@ impl Workspace {
         };
         // Best effort: a failed migration retries on the next open.
         let _ = workspace.migrate_notes_if_needed();
+        // Best effort, same reasoning: a failed migration retries next open.
+        let _ = workspace.migrate_table_filenames_if_needed();
         // Expired trash is cleared on open; never a reason to fail opening.
         trash::prune(&workspace.root_path, trash::now_secs(), RETENTION_DAYS);
         Ok(workspace)
@@ -239,6 +241,57 @@ impl Workspace {
                 format!("langloom: migrate {} notes to .md", renamed.len()),
             );
         }
+        Ok(())
+    }
+
+    /// One-time repair of on-disk table-filename collisions, gated by
+    /// [`WorkspaceSettings::table_filenames_migrated`] so it only scans once.
+    fn migrate_table_filenames_if_needed(&mut self) -> Result<(), StorageError> {
+        if self.settings.table_filenames_migrated {
+            return Ok(());
+        }
+        self.migrate_table_filenames()?;
+        self.settings.table_filenames_migrated = true;
+        self.save_settings()?;
+        Ok(())
+    }
+
+    /// Detect and fix on-disk table-filename collisions (see
+    /// [`table_files::migrate_collisions`]): a case-insensitive filename
+    /// clash, or two files whose content shares one table name. Runs behind
+    /// a git checkpoint commit when git is ready, so it is always
+    /// revertible, and commits again afterwards with a `<CAN REVERT>`
+    /// message — only if it actually changed anything. Exposed directly (in
+    /// addition to the once-only [`Self::migrate_table_filenames_if_needed`])
+    /// so callers (and tests) can prove it idempotent on demand.
+    pub fn migrate_table_filenames(
+        &mut self,
+    ) -> Result<table_files::MigrationReport, StorageError> {
+        // A checkpoint is a no-op commit when nothing is pending, so it is
+        // always safe to take one before a risky, file-touching repair.
+        self.force_checkin("langloom: checkpoint before table filename migration");
+        let report = table_files::migrate_collisions(&self.dictionary_dir())?;
+        if !report.is_empty() {
+            self.refresh_dictionary_from_disk()?;
+            self.force_checkin(&format!(
+                "langloom: migrated {} table file(s) <CAN REVERT>",
+                report.renamed_tables.len()
+            ));
+        }
+        Ok(report)
+    }
+
+    /// Re-read `dictionary/` (tables, filenames and quarantine warnings)
+    /// without touching notes, config or undo history.
+    fn refresh_dictionary_from_disk(&mut self) -> Result<(), StorageError> {
+        let scan = table_files::scan_tables_tolerant(&self.dictionary_dir())?;
+        let mut dictionary = Dictionary::new();
+        for table in scan.tables {
+            dictionary.tables.insert(table.name.clone(), table);
+        }
+        self.dictionary = dictionary;
+        self.table_files = scan.files;
+        self.quarantine = scan.warnings;
         Ok(())
     }
 
@@ -1947,6 +2000,50 @@ mod tests {
         );
         // Reload clears undo history (its snapshots predate the disk change).
         assert!(!ws.can_undo());
+    }
+
+    #[test]
+    fn table_filename_migration_runs_once_behind_a_revertible_git_checkpoint() {
+        if !git_ok() {
+            return;
+        }
+        let dir = tempfile::tempdir().unwrap();
+        let mut ws = Workspace::new(dir.path()).unwrap();
+        ws.init_git().unwrap();
+
+        // A pre-existing on-disk collision, as if from before this fix: two
+        // files whose *content* both claim the name "roots" — the real,
+        // silent-data-loss case migration exists to fix. Written directly so
+        // `Workspace::load`'s own automatic (and here, already-consumed-by
+        // `new`) migration does not pre-empt the explicit call below.
+        std::fs::write(
+            dir.path().join("dictionary/file_a"),
+            r#"{"name":"roots","tags":[],"entries":[{"id":"00000000-0000-0000-0000-000000000001","wordname":"a"}]}"#,
+        )
+        .unwrap();
+        std::fs::write(
+            dir.path().join("dictionary/file_b"),
+            r#"{"name":"roots","tags":[],"entries":[{"id":"00000000-0000-0000-0000-000000000002","wordname":"b"}]}"#,
+        )
+        .unwrap();
+
+        let report = ws.migrate_table_filenames().unwrap();
+        assert_eq!(report.renamed_tables.len(), 1);
+
+        assert!(ws.dictionary.table("roots").is_some());
+        assert!(ws.dictionary.table("roots (duplicate)").is_some());
+
+        let log = git_out(dir.path(), &["log", "--oneline"]);
+        assert!(log.contains("CAN REVERT"));
+        assert!(git_out(dir.path(), &["status", "--porcelain"])
+            .trim()
+            .is_empty());
+
+        // Running it again is a true no-op: no new commit, nothing renamed.
+        let before_head = git_out(dir.path(), &["rev-parse", "HEAD"]);
+        let second = ws.migrate_table_filenames().unwrap();
+        assert!(second.is_empty());
+        assert_eq!(git_out(dir.path(), &["rev-parse", "HEAD"]), before_head);
     }
 
     #[test]

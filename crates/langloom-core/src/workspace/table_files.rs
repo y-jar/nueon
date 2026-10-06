@@ -13,7 +13,7 @@ use std::path::Path;
 use serde::Serialize;
 use sha2::{Digest, Sha256};
 
-use super::storage::{io_err, read_json, StorageError};
+use super::storage::{io_err, read_json, write_json, StorageError};
 use crate::model::WordTable;
 
 /// A file in `dictionary/` that exists but could not be loaded as a table.
@@ -142,6 +142,114 @@ impl TableFiles {
         }
         Some(filename)
     }
+}
+
+/// What [`migrate_collisions`] changed, if anything.
+#[derive(Debug, Clone, Default, PartialEq, Eq)]
+pub struct MigrationReport {
+    /// `(original table name, disambiguated name)` — two files whose table
+    /// *content* held the exact same name.
+    pub renamed_tables: Vec<(String, String)>,
+}
+
+impl MigrationReport {
+    pub fn is_empty(&self) -> bool {
+        self.renamed_tables.is_empty()
+    }
+}
+
+/// Fix the one on-disk collision that could cause **silent data loss** before
+/// filenames were resolved once and kept stable: two files whose table
+/// *content* claims the exact same name. The in-memory dictionary can only
+/// hold one table per name, so without this, loading would quietly drop
+/// whichever file the scan happened to read last — its data would stay on
+/// disk, untouched, but become invisible to the app.
+///
+/// A filename collision that is merely cosmetic (two files whose names
+/// differ only by case, such as `"Roots"` and `"roots"`) is deliberately
+/// **not** touched: both already load correctly as independent tables (see
+/// [`scan_tables_tolerant`]), so renaming either would be a style change,
+/// not a fix, and every file is kept exactly as it is unless it is actually
+/// needed.
+///
+/// Each fix is a single, independent, atomic rewrite of one file (never the
+/// filename), so stopping partway (a crash, or calling this again) never
+/// leaves a table unreadable: whatever was already fixed stays fixed, and a
+/// second call finds nothing left to do.
+pub fn migrate_collisions(dictionary_dir: &Path) -> Result<MigrationReport, StorageError> {
+    let mut report = MigrationReport::default();
+    if !dictionary_dir.exists() {
+        return Ok(report);
+    }
+
+    struct Entry {
+        file_name: String,
+        table: Option<WordTable>,
+    }
+
+    let mut raw: Vec<_> = fs::read_dir(dictionary_dir)
+        .map_err(|e| io_err(dictionary_dir, e))?
+        .collect::<Result<Vec<_>, _>>()
+        .map_err(|e| io_err(dictionary_dir, e))?;
+    raw.sort_by_key(|entry| entry.file_name());
+
+    let mut entries: Vec<Entry> = Vec::new();
+    for dirent in raw {
+        let path = dirent.path();
+        if !path.is_file() {
+            continue;
+        }
+        let file_name = dirent.file_name().to_string_lossy().into_owned();
+        if file_name.starts_with('.') || file_name.ends_with(".tmp") {
+            continue;
+        }
+        let table = read_json::<WordTable>(&path).ok();
+        entries.push(Entry { file_name, table });
+    }
+
+    // Files sharing one table name: the in-memory dictionary can hold only
+    // one, so every name after the first needs disambiguating.
+    let mut taken_names: BTreeSet<String> = entries
+        .iter()
+        .filter_map(|entry| entry.table.as_ref())
+        .map(|table| table.name.clone())
+        .collect();
+    let mut by_name: BTreeMap<String, Vec<usize>> = BTreeMap::new();
+    for (index, entry) in entries.iter().enumerate() {
+        if let Some(table) = &entry.table {
+            by_name.entry(table.name.clone()).or_default().push(index);
+        }
+    }
+    for (name, indices) in by_name {
+        if indices.len() <= 1 {
+            continue;
+        }
+        for &index in &indices[1..] {
+            let mut attempt = 1usize;
+            let disambiguated = loop {
+                let candidate = if attempt == 1 {
+                    format!("{name} (duplicate)")
+                } else {
+                    format!("{name} (duplicate {attempt})")
+                };
+                if !taken_names.contains(&candidate) {
+                    break candidate;
+                }
+                attempt += 1;
+            };
+            let mut table = entries[index]
+                .table
+                .clone()
+                .expect("indexed from by_name, which only holds parsed tables");
+            table.name = disambiguated.clone();
+            write_json(&dictionary_dir.join(&entries[index].file_name), &table)?;
+            taken_names.insert(disambiguated.clone());
+            entries[index].table = Some(table);
+            report.renamed_tables.push((name.clone(), disambiguated));
+        }
+    }
+
+    Ok(report)
 }
 
 /// The result of a tolerant scan of `dictionary/`.
@@ -282,6 +390,95 @@ mod tests {
         let mut files = scan.files;
         let resolved = files.resolve_new("broken");
         assert_ne!(resolved, "broken");
+    }
+
+    #[test]
+    fn migration_is_a_no_op_when_nothing_collides() {
+        let dir = tempfile::tempdir().unwrap();
+        write(dir.path(), "verbs", "verbs");
+        write(dir.path(), "nouns", "nouns");
+        let before: Vec<_> = fs::read_dir(dir.path())
+            .unwrap()
+            .map(|e| e.unwrap().file_name())
+            .collect();
+
+        let report = migrate_collisions(dir.path()).unwrap();
+        assert!(report.is_empty());
+        let after: Vec<_> = fs::read_dir(dir.path())
+            .unwrap()
+            .map(|e| e.unwrap().file_name())
+            .collect();
+        assert_eq!(before.len(), after.len());
+        for name in &before {
+            assert!(after.contains(name), "no file is renamed for style");
+        }
+    }
+
+    #[test]
+    fn migration_leaves_case_insensitive_filename_pairs_alone() {
+        // "Roots" and "roots" as two distinct files already load correctly
+        // as independent tables; renaming either would be a style change,
+        // not a fix, so migration must not touch them.
+        let dir = tempfile::tempdir().unwrap();
+        write(dir.path(), "Roots", "Roots");
+        write(dir.path(), "roots", "roots");
+
+        let report = migrate_collisions(dir.path()).unwrap();
+        assert!(report.is_empty());
+        assert!(dir.path().join("Roots").exists());
+        assert!(dir.path().join("roots").exists());
+    }
+
+    #[test]
+    fn migration_disambiguates_duplicate_table_names_without_losing_either() {
+        let dir = tempfile::tempdir().unwrap();
+        // Two distinctly-named FILES whose CONTENT both claim name "roots".
+        write(dir.path(), "file_a", "roots");
+        write(dir.path(), "file_b", "roots");
+
+        let report = migrate_collisions(dir.path()).unwrap();
+        assert_eq!(report.renamed_tables.len(), 1);
+        assert_eq!(report.renamed_tables[0].0, "roots");
+        assert_eq!(report.renamed_tables[0].1, "roots (duplicate)");
+
+        let scan = scan_tables_tolerant(dir.path()).unwrap();
+        let names: BTreeSet<_> = scan.tables.iter().map(|t| t.name.clone()).collect();
+        assert_eq!(
+            names,
+            BTreeSet::from(["roots".to_string(), "roots (duplicate)".to_string()])
+        );
+        // Both files are still present — only the content changed, never the
+        // filename, for the one that needed disambiguating.
+        assert!(dir.path().join("file_a").exists());
+        assert!(dir.path().join("file_b").exists());
+
+        assert!(migrate_collisions(dir.path()).unwrap().is_empty());
+    }
+
+    #[test]
+    fn migration_survives_being_interrupted_between_files() {
+        // Three files collide pairwise on content name; fixing only one pair
+        // (as if interrupted) must leave every file independently readable,
+        // and a second full run finishes the job.
+        let dir = tempfile::tempdir().unwrap();
+        write(dir.path(), "file_a", "dup");
+        write(dir.path(), "file_b", "dup");
+        write(dir.path(), "file_c", "dup");
+
+        let first = migrate_collisions(dir.path()).unwrap();
+        assert_eq!(
+            first.renamed_tables.len(),
+            2,
+            "two of the three needed disambiguating"
+        );
+        for entry in fs::read_dir(dir.path()).unwrap() {
+            let path = entry.unwrap().path();
+            assert!(
+                read_json::<WordTable>(&path).is_ok(),
+                "{path:?} must stay readable"
+            );
+        }
+        assert!(migrate_collisions(dir.path()).unwrap().is_empty());
     }
 
     #[test]

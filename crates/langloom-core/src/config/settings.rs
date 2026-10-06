@@ -91,6 +91,9 @@ pub struct WorkspaceSettings {
     pub ui: UiLayout,
     /// Whether legacy extensionless/`.txt` notes were converted to `.md`.
     pub notes_migrated: bool,
+    /// Whether on-disk table-filename collisions (from before filenames were
+    /// resolved once and kept stable) were checked for and repaired.
+    pub table_filenames_migrated: bool,
     /// Persisted tab groups, splits and secondary windows.
     #[serde(skip_serializing_if = "LayoutState::is_empty")]
     pub layout: LayoutState,
@@ -107,6 +110,7 @@ impl Default for WorkspaceSettings {
             dismissed_warnings: Vec::new(),
             ui: UiLayout::default(),
             notes_migrated: false,
+            table_filenames_migrated: false,
             layout: LayoutState::default(),
         }
     }
