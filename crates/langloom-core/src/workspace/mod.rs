@@ -1037,9 +1037,14 @@ impl Workspace {
         let Some(previous) = self.history.undo.pop() else {
             return Ok(false);
         };
+        // Touch the disk first: if that fails the snapshot goes back on the
+        // stack and memory is unchanged.
+        if let Err(err) = self.write_dictionary_diff(&self.dictionary, &previous) {
+            self.history.undo.push(previous);
+            return Err(err);
+        }
         let current = std::mem::replace(&mut self.dictionary, previous);
         self.history.redo.push(current);
-        self.persist_dictionary()?;
         self.mark_change(Instant::now(), "langloom: undo");
         Ok(true)
     }
@@ -1049,24 +1054,36 @@ impl Workspace {
         let Some(next) = self.history.redo.pop() else {
             return Ok(false);
         };
+        if let Err(err) = self.write_dictionary_diff(&self.dictionary, &next) {
+            self.history.redo.push(next);
+            return Err(err);
+        }
         let current = std::mem::replace(&mut self.dictionary, next);
         self.history.undo.push(current);
-        self.persist_dictionary()?;
         self.mark_change(Instant::now(), "langloom: redo");
         Ok(true)
     }
 
-    /// Write every table to disk and remove files for tables that vanished.
-    fn persist_dictionary(&self) -> Result<(), StorageError> {
+    /// Bring the table files in line with a restored snapshot by touching
+    /// **only the tables that differ** between `before` and `after`.
+    ///
+    /// Undo and redo own exactly the table files the app has written. They
+    /// never list `dictionary/`, so a README, a `.tmp` leftover, a hand-edited
+    /// table they did not change, or any other file is left strictly alone.
+    fn write_dictionary_diff(
+        &self,
+        before: &Dictionary,
+        after: &Dictionary,
+    ) -> Result<(), StorageError> {
         let dir = self.dictionary_dir();
-        let mut keep = std::collections::HashSet::new();
-        for table in self.dictionary.tables() {
-            storage::write_table(&dir, table)?;
-            keep.insert(storage::table_path(&dir, &table.name));
+        for table in after.tables() {
+            if before.table(&table.name) != Some(table) {
+                storage::write_table(&dir, table)?;
+            }
         }
-        for path in storage::list_files(&dir)? {
-            if !keep.contains(&path) {
-                storage::remove_file(&path)?;
+        for table in before.tables() {
+            if after.table(&table.name).is_none() {
+                storage::delete_table(&dir, &table.name)?;
             }
         }
         Ok(())
@@ -1371,6 +1388,57 @@ mod tests {
         assert!(ws.dictionary.table("nouns").is_some());
         assert_eq!(ws.read_note("n.md").unwrap(), "from disk");
         assert!(!ws.can_undo());
+    }
+
+    #[test]
+    fn undo_and_redo_only_touch_files_they_own() {
+        let dir = tempfile::tempdir().unwrap();
+        let mut ws = Workspace::new(dir.path()).unwrap();
+        ws.create_table("verbs").unwrap();
+        ws.create_table("nouns").unwrap();
+        ws.create_entry("verbs", "kala").unwrap();
+
+        // Files the app does not own live in dictionary/ too.
+        let unknown = dir.path().join("dictionary/README.txt");
+        let stray = dir.path().join("dictionary/verbs_old.tmp");
+        std::fs::write(&unknown, "notes about the dictionary").unwrap();
+        std::fs::write(&stray, "half-written").unwrap();
+
+        // A table the app is not undoing, edited by hand on disk.
+        let nouns_before = std::fs::read(dir.path().join("dictionary/nouns")).unwrap();
+
+        assert!(ws.undo().unwrap()); // un-add "kala"
+        assert!(ws.undo().unwrap()); // un-create "nouns" (deletes its file)
+        assert!(ws.redo().unwrap());
+        assert!(ws.redo().unwrap());
+
+        assert_eq!(
+            std::fs::read_to_string(&unknown).unwrap(),
+            "notes about the dictionary"
+        );
+        assert_eq!(std::fs::read_to_string(&stray).unwrap(), "half-written");
+        assert_eq!(
+            std::fs::read(dir.path().join("dictionary/nouns")).unwrap(),
+            nouns_before
+        );
+        assert_eq!(ws.dictionary.table("verbs").unwrap().entries.len(), 1);
+    }
+
+    #[test]
+    fn undo_does_not_rewrite_tables_it_did_not_change() {
+        let dir = tempfile::tempdir().unwrap();
+        let mut ws = Workspace::new(dir.path()).unwrap();
+        ws.create_table("verbs").unwrap();
+        ws.create_table("nouns").unwrap();
+        ws.create_entry("verbs", "kala").unwrap();
+
+        // Someone edits an unrelated table's file by hand.
+        let nouns = dir.path().join("dictionary/nouns");
+        std::fs::write(&nouns, r#"{"name":"nouns","tags":[],"entries":[]}  "#).unwrap();
+        let hand_edited = std::fs::read(&nouns).unwrap();
+
+        assert!(ws.undo().unwrap()); // only "verbs" changes
+        assert_eq!(std::fs::read(&nouns).unwrap(), hand_edited);
     }
 
     #[test]

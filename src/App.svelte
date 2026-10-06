@@ -88,16 +88,32 @@
     api.uiLayoutSet(snapshot).catch(() => {});
   });
 
+  /** Whether focus is in something with its own undo (editor, input, …). */
+  function inEditable(target: EventTarget | null): boolean {
+    const el = target as HTMLElement | null;
+    return !!el?.closest?.(
+      'input, textarea, select, [contenteditable=""], [contenteditable="true"], .cm-editor',
+    );
+  }
+
   $effect(() => {
     const handler = (event: KeyboardEvent) => {
       if (!(event.ctrlKey || event.metaKey) || !ui.root) return;
-      if (event.key === "z" && !event.shiftKey) {
+      const key = event.key.toLowerCase();
+      if (key === "z" || key === "y") {
+        // Dictionary undo/redo is only for the dictionary view, and never
+        // while typing: editors and inputs keep their own undo.
+        if (
+          activeGroup().doc.view !== "dictionary" ||
+          inEditable(event.target) ||
+          inEditable(document.activeElement)
+        ) {
+          return;
+        }
         event.preventDefault();
-        api.undo().catch(() => {});
-      } else if ((event.key === "z" && event.shiftKey) || event.key === "y") {
-        event.preventDefault();
-        api.redo().catch(() => {});
-      } else if (event.key === "w" && activeGroup().activeTabId) {
+        if (key === "z" && !event.shiftKey) api.undo().catch(() => {});
+        else api.redo().catch(() => {});
+      } else if (key === "w" && activeGroup().activeTabId) {
         event.preventDefault();
         closeTab(ui.activeGroupId, activeGroup().activeTabId!);
       }

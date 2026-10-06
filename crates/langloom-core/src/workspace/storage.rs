@@ -267,30 +267,6 @@ pub fn delete_table(dictionary_dir: &Path, name: &str) -> Result<(), StorageErro
     }
 }
 
-/// List regular files directly under `dir` (empty when it does not exist).
-pub fn list_files(dir: &Path) -> Result<Vec<PathBuf>, StorageError> {
-    let mut files = Vec::new();
-    if !dir.exists() {
-        return Ok(files);
-    }
-    for entry in fs::read_dir(dir).map_err(|e| io_err(dir, e))? {
-        let path = entry.map_err(|e| io_err(dir, e))?.path();
-        if path.is_file() {
-            files.push(path);
-        }
-    }
-    Ok(files)
-}
-
-/// Remove a file. Missing files are not an error.
-pub fn remove_file(path: &Path) -> Result<(), StorageError> {
-    match fs::remove_file(path) {
-        Ok(()) => Ok(()),
-        Err(e) if e.kind() == io::ErrorKind::NotFound => Ok(()),
-        Err(e) => Err(io_err(path, e)),
-    }
-}
-
 /// Load every table under `dictionary/`.
 pub fn scan_tables(dictionary_dir: &Path) -> Result<Vec<WordTable>, StorageError> {
     let mut tables = Vec::new();
