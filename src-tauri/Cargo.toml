@@ -29,3 +29,9 @@ langloom-core = { path = "../crates/langloom-core" }
 # Production builds embed the built frontend and skip the dev-server URL.
 # Enabled by the Nix package (see flake.nix); the Tauri CLI sets it for `tauri build`.
 custom-protocol = ["tauri/custom-protocol"]
+
+# Silent print-to-PDF (see commands/export.rs). Both crates are already pulled
+# in by wry; naming them lets us drive WebKitGTK's PrintOperation directly.
+[target.'cfg(target_os = "linux")'.dependencies]
+webkit2gtk = "2.0"
+gtk = "0.18"

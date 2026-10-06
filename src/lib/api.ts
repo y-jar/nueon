@@ -69,6 +69,18 @@ export const moveOrRenameNote = (
 export const deleteNote = (relPath: string): Promise<void> =>
   invoke("delete_note", { relPath });
 
+// -- export --------------------------------------------------------------
+export type ExportFormat = "pdf" | "odt";
+
+/** Export the note's current text; resolves to a status message. */
+export const exportDocument = (
+  format: ExportFormat,
+  notePath: string,
+  markdown: string,
+  destination: string,
+): Promise<string> =>
+  invoke("export_document", { format, notePath, markdown, destination });
+
 // -- assets --------------------------------------------------------------
 export type AssetKind = "image" | "text" | "other";
 

@@ -2,6 +2,7 @@
 
 mod assets;
 mod dictionary;
+mod export;
 mod notes;
 mod translation;
 mod vcs;
@@ -10,6 +11,7 @@ mod workspace;
 
 pub use assets::*;
 pub use dictionary::*;
+pub use export::*;
 pub use notes::*;
 pub use translation::*;
 pub use vcs::*;

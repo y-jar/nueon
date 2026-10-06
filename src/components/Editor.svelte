@@ -10,7 +10,9 @@
     type FormatState,
   } from "../lib/editor/commands";
   import { codemirror } from "../lib/editor/action";
-  import { open } from "@tauri-apps/plugin-dialog";
+  import { open, save } from "@tauri-apps/plugin-dialog";
+  import { Download } from "@lucide/svelte";
+  import Popover from "./Popover.svelte";
   import { assetLink, linkLabel } from "../lib/assets";
   import { stripMd } from "../lib/explorer";
 
@@ -18,6 +20,35 @@
 
   let view = $state<EditorView | null>(null);
   let format = $state<FormatState>({ ...EMPTY_FORMAT });
+
+  /** Ask for a destination, then export the note's current text. */
+  async function exportAs(format: api.ExportFormat) {
+    const target = view;
+    const note = doc.selected;
+    if (!target || !note) return;
+    const name = stripMd(note.split("/").pop() ?? "note");
+    try {
+      const destination = await save({
+        defaultPath: `${name}.${format}`,
+        filters: [
+          {
+            name: format === "pdf" ? "PDF document" : "OpenDocument text",
+            extensions: [format],
+          },
+        ],
+      });
+      if (!destination) return;
+      ui.status = `exporting ${name}…`;
+      ui.status = await api.exportDocument(
+        format,
+        note,
+        target.state.doc.toString(),
+        destination,
+      );
+    } catch (error) {
+      ui.status = `export failed: ${String(error)}`;
+    }
+  }
 
   /** Pick an image, import it to `assets/`, and reference it from the note. */
   async function insertImage() {
@@ -50,7 +81,27 @@
 
 {#if doc.selected}
   <div class="editor">
-    <EditorToolbar {view} {format} onImage={insertImage} />
+    <EditorToolbar {view} {format} onImage={insertImage}>
+      <Popover align="right">
+        {#snippet label()}<Download size={15} /> {$t("editor.export")}{/snippet}
+        {#snippet children(close)}
+          <div class="picker-body">
+            <button
+              onclick={() => {
+                close();
+                void exportAs("pdf");
+              }}>{$t("editor.exportPdf")}</button
+            >
+            <button
+              onclick={() => {
+                close();
+                void exportAs("odt");
+              }}>{$t("editor.exportOdt")}</button
+            >
+          </div>
+        {/snippet}
+      </Popover>
+    </EditorToolbar>
     <div class="editor-inner">
       <div class="editor-head">
         <span class="muted">{stripMd(doc.selected)}{doc.dirty ? " •" : ""}</span>

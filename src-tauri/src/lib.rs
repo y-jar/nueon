@@ -152,6 +152,7 @@ pub fn run() {
             commands::ui_layout_set,
             commands::layout_state_get,
             commands::tiling_save,
+            commands::export_document,
             commands::import_asset,
             commands::import_drop,
             commands::window_spawn,

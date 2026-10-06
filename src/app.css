@@ -2139,3 +2139,12 @@ body.col-resizing * {
   outline-offset: -2px;
   background: rgba(196, 148, 92, 0.1);
 }
+
+.editor-toolbar .popover-trigger {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  width: auto;
+  padding: 0 8px;
+  font-size: 12px;
+}

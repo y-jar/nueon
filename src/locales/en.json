@@ -62,6 +62,9 @@
     "numberedList": "Numbered list",
     "codeBlock": "Code block",
     "image": "Insert image",
+    "export": "Export",
+    "exportPdf": "PDF…",
+    "exportOdt": "OpenDocument (.odt)…",
     "menu": {
       "table": "Insert table",
       "blockquote": "Blockquote",

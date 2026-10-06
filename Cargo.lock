@@ -1940,6 +1940,7 @@ dependencies = [
 name = "langloom-tauri"
 version = "0.1.0"
 dependencies = [
+ "gtk",
  "langloom-core",
  "serde",
  "serde_json",
@@ -1948,6 +1949,7 @@ dependencies = [
  "tauri-plugin-dialog",
  "tauri-plugin-opener",
  "uuid",
+ "webkit2gtk",
 ]
 
 [[package]]

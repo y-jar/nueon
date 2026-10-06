@@ -6,7 +6,8 @@
     label: Snippet;
     /** Which trigger edge the panel aligns to. */
     align?: "left" | "right";
-    children: Snippet;
+    /** Content; receives a function that closes the popover. */
+    children: Snippet<[() => void]>;
   }
 
   let { label, align = "left", children }: Props = $props();
@@ -90,6 +91,6 @@
     style:top="{pos.top}px"
     style:left="{pos.left}px"
   >
-    {@render children()}
+    {@render children(() => (open = false))}
   </div>
 {/if}
