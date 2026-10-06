@@ -22,6 +22,7 @@
     Redo2,
     X,
     Check,
+    Upload,
   } from "@lucide/svelte";
   import * as api from "../lib/api";
   import {
@@ -30,7 +31,12 @@
     textValue,
   } from "../lib/dictionary";
   import { misspelledWords } from "../lib/spellcheck";
-  import { ui, selectTable, type DocState } from "../lib/state.svelte";
+  import {
+    ui,
+    openImport,
+    selectTable,
+    type DocState,
+  } from "../lib/state.svelte";
   import { createWordWithValues } from "../lib/words";
   import { normalizeView } from "../lib/gridView";
   import PillCell from "./PillCell.svelte";
@@ -881,6 +887,14 @@
         {/each}
       </div>
     </Popover>
+
+    <button
+      title={$t("import.title")}
+      aria-label={$t("import.title")}
+      onclick={() => openImport()}
+    >
+      <Upload size={14} />
+    </button>
 
     <button class="primary" onclick={() => (addWordOpen = true)}>
       {$t("grid.addWord")}

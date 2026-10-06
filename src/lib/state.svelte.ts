@@ -114,6 +114,7 @@ export const ui = $state({
   confirm: null as ConfirmRequest | null,
   toast: null as ToastState | null,
   trashOpen: false,
+  importOpen: false,
   /** Show the workspace picker/onboarding over an open workspace. */
   showWorkspacePicker: false,
 
@@ -302,6 +303,16 @@ export function toggleInspector(): void {
 
 export function setInspectorDock(side: "left" | "right"): void {
   ui.inspectorDock = side;
+}
+
+/** Open the import wizard. */
+export function openImport(): void {
+  ui.importOpen = true;
+}
+
+/** Close the import wizard. */
+export function closeImport(): void {
+  ui.importOpen = false;
 }
 
 export function openSettings(): void {

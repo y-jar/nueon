@@ -25,6 +25,7 @@
   import ConfirmDialog from "./components/ConfirmDialog.svelte";
   import Toast from "./components/Toast.svelte";
   import TrashModal from "./components/TrashModal.svelte";
+  import ImportWizardModal from "./components/import/ImportWizardModal.svelte";
 
   const ACTIVITIES: Activity[] = ["notes", "dictionary", "translation", "git"];
   let layoutLoaded = $state(false);
@@ -165,4 +166,5 @@
 <Toast />
 {#if isMainWindow}
   <TrashModal />
+  <ImportWizardModal />
 {/if}

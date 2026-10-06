@@ -2318,3 +2318,228 @@ button.danger:hover:not(:disabled) {
   border: none;
   color: var(--muted);
 }
+
+/* -- import wizard --------------------------------------------------------- */
+
+.modal.import-modal {
+  width: min(760px, 94vw);
+  max-height: 88vh;
+}
+
+.import-steps {
+  display: flex;
+  gap: 14px;
+  margin: 0;
+  padding: 8px 14px;
+  list-style: none;
+  border-bottom: 1px solid var(--border);
+}
+
+.import-steps li {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 12px;
+  color: var(--muted);
+}
+
+.import-steps li.active {
+  color: var(--text);
+}
+
+.import-steps li.done {
+  color: var(--accent);
+}
+
+.import-steps .dot {
+  display: grid;
+  place-items: center;
+  width: 18px;
+  height: 18px;
+  background: var(--faint);
+  border: 1px solid var(--border);
+  border-radius: 50%;
+  font-size: 10px;
+}
+
+.import-steps li.active .dot {
+  color: var(--bg);
+  background: var(--accent);
+  border-color: var(--accent);
+}
+
+.import-body {
+  padding: 12px 14px;
+}
+
+.import-step {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.import-dropzone {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 4px;
+  padding: 24px;
+  color: var(--muted);
+  background: var(--bg);
+  border: 1px dashed var(--border);
+  border-radius: 8px;
+}
+
+.import-dropzone:hover {
+  color: var(--text);
+  border-color: var(--accent);
+}
+
+.import-file {
+  color: var(--text);
+  font-weight: 600;
+}
+
+.import-path {
+  max-width: 100%;
+  overflow: hidden;
+  font-size: 11px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.import-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+  gap: 8px;
+}
+
+.import-field {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+  font-size: 12px;
+  color: var(--muted);
+}
+
+.import-checks {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 14px;
+  font-size: 13px;
+}
+
+.import-checks label {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.import-rescan {
+  align-self: flex-start;
+  display: flex;
+  align-items: center;
+  gap: 5px;
+}
+
+.import-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 13px;
+}
+
+.import-table th,
+.import-table td {
+  padding: 4px 6px;
+  text-align: left;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.05);
+}
+
+.import-table th {
+  color: var(--muted);
+  font-size: 11px;
+  font-weight: 600;
+}
+
+.import-col-header {
+  font-family: ui-monospace, "JetBrains Mono", monospace;
+}
+
+.import-reason {
+  margin-left: 4px;
+  color: var(--accent);
+  cursor: help;
+}
+
+.import-metrics {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(90px, 1fr));
+  gap: 8px;
+}
+
+.metric {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  padding: 8px;
+  background: var(--bg);
+  border: 1px solid var(--border);
+  border-radius: 6px;
+}
+
+.metric .num {
+  font-size: 18px;
+  font-weight: 700;
+  color: var(--accent);
+}
+
+.metric span:last-child {
+  font-size: 11px;
+  color: var(--muted);
+}
+
+.import-panels {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 12px;
+}
+
+.import-panels h3,
+.import-step section h3 {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  margin: 0 0 4px;
+  font-size: 12px;
+  color: var(--muted);
+}
+
+.import-pills {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+}
+
+.import-list {
+  margin: 0;
+  padding-left: 18px;
+  font-size: 12px;
+}
+
+.import-note {
+  font-size: 11px;
+}
+
+.import-warnings {
+  margin: 0;
+  padding-left: 18px;
+  color: #d6785a;
+  font-size: 12px;
+}
+
+.import-scroll {
+  max-height: 160px;
+  overflow: auto;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+}
