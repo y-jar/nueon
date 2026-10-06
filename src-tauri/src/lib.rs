@@ -161,6 +161,7 @@ pub fn run() {
             commands::list_workspace,
             commands::read_note,
             commands::save_note,
+            commands::create_note_with_content,
             commands::create_note,
             commands::create_folder,
             commands::move_or_rename_note,

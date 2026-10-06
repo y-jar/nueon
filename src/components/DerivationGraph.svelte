@@ -132,7 +132,7 @@
     const path = exportPath.trim();
     if (!path) return;
     try {
-      await api.saveNote(path, buildMarkdown());
+      await api.createNoteWithContent(path, buildMarkdown());
       await refreshTree();
       exportStatus = $t("derivation.exportDone", { values: { path } });
     } catch (e) {

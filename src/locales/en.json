@@ -55,6 +55,11 @@
   },
   "editor": {
     "toolbar": "Formatting",
+    "conflictChanged": "This note changed on disk while you were editing it.",
+    "conflictMissing": "This note no longer exists on disk.",
+    "useDisk": "Use the file on disk",
+    "keepMine": "Keep my version",
+    "recreate": "Recreate note",
     "bold": "Bold",
     "italic": "Italic",
     "underline": "Underline",

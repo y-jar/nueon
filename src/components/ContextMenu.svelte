@@ -177,8 +177,12 @@
       >
       <button
         onclick={() => {
-          deletePath(menu.path);
+          // Snapshot the target: closing the menu clears it.
+          const target = menu.path;
           closeContextMenu();
+          deletePath(target).catch((error) => {
+            ui.status = `could not delete ${target}: ${String(error)}`;
+          });
         }}>{$t("contextMenu.delete")}</button
       >
       <button onclick={reveal}>{$t("contextMenu.reveal")}</button>

@@ -32,12 +32,20 @@ import { highlight, theme } from "./theme";
 
 export interface EditorParams {
   path: string;
+  /** The note's text as last read from disk. */
   content: string;
+  /** Hash of `content`; saves are refused if the file no longer matches. */
+  hash: string | null;
   index: WordIndex;
   /** Absolute `notes/` directory for resolving local images. */
   assetBase: string;
   onDirty: (dirty: boolean) => void;
-  onSave: (path: string, text: string) => Promise<void>;
+  /** Persist an existing note; resolves to the new content hash. */
+  onSave: (path: string, text: string, baseHash: string | null) => Promise<string>;
+  /** A save succeeded: `text` is now on disk and `hash` is its hash. */
+  onSaved?: (hash: string, text: string) => void;
+  /** The file changed on disk, or vanished, while the buffer has edits. */
+  onConflict?: (kind: "changed" | "missing") => void;
   /** Called with the live view once created, and `null` on destroy. */
   onView?: (view: EditorView | null) => void;
   /** Called when the formats active at the cursor change. */
@@ -49,12 +57,75 @@ export interface EditorParams {
 const AUTOSAVE_MS = 400;
 
 /**
+ * One live editor for one note. Sessions let the rest of the app flush,
+ * freeze, or resolve an open note around file operations (delete, rename, a
+ * conflict) so an editor never writes to a path that no longer exists.
+ */
+interface Session {
+  path(): string;
+  /** Save pending edits now (serialized with any save in flight). */
+  flush(): Promise<void>;
+  /** Stop saving; returns a function that resumes. */
+  freeze(): () => void;
+  /** Throw away the buffer in favour of the file's text. */
+  reload(content: string, hash: string): void;
+  /** Keep the buffer and treat it as based on the file's current hash. */
+  adopt(hash: string): void;
+}
+
+const sessions = new Set<Session>();
+
+function covers(prefix: string, path: string): boolean {
+  return path === prefix || path.startsWith(`${prefix}/`);
+}
+
+/** Save pending edits of every open note at or under `prefix`. */
+export async function flushNotes(prefix: string): Promise<void> {
+  await Promise.all(
+    [...sessions].filter((s) => covers(prefix, s.path())).map((s) => s.flush()),
+  );
+}
+
+/**
+ * Freeze every open note at or under `prefix` and wait for saves in flight.
+ * Call before deleting or renaming; the returned function undoes the freeze
+ * if the operation fails.
+ */
+export async function quiesceNotes(prefix: string): Promise<() => void> {
+  const targets = [...sessions].filter((s) => covers(prefix, s.path()));
+  const resumes = targets.map((s) => s.freeze());
+  await Promise.all(targets.map((s) => s.flush()));
+  return () => resumes.forEach((resume) => resume());
+}
+
+/** Resolve a conflict for the open note at `path`. */
+export function resolveNoteConflict(
+  path: string,
+  choice: "reload" | "adopt",
+  snapshot: { content: string; hash: string },
+): void {
+  for (const session of sessions) {
+    if (session.path() !== path) continue;
+    if (choice === "reload") session.reload(snapshot.content, snapshot.hash);
+    else session.adopt(snapshot.hash);
+  }
+}
+
+/**
  * Svelte action that owns a CodeMirror `EditorView`. It flushes the debounced
  * autosave on blur, on note switch, and on destroy so edits are never dropped.
  */
 export const codemirror: Action<HTMLElement, EditorParams> = (node, params) => {
   let current: EditorParams = params;
   let timer: ReturnType<typeof setTimeout> | undefined;
+  /** The text last known to be on disk. */
+  let savedText = params.content;
+  /** Hash the next save is checked against. */
+  let baseHash: string | null = params.hash;
+  let frozen = 0;
+  let conflicted = false;
+  /** Saves run strictly one after another so each uses the previous hash. */
+  let queue: Promise<void> = Promise.resolve();
 
   const view = new EditorView({
     parent: node,
@@ -127,18 +198,41 @@ export const codemirror: Action<HTMLElement, EditorParams> = (node, params) => {
   params.onView?.(view);
   params.onFormat?.(formatAt(view.state) ?? EMPTY_FORMAT);
 
-  async function flush(): Promise<void> {
+  function flush(): Promise<void> {
     if (timer) {
       clearTimeout(timer);
       timer = undefined;
     }
-    const path = current.path;
+    queue = queue.then(save, save);
+    return queue;
+  }
+
+  async function save(): Promise<void> {
+    // Never save while frozen (the note is being deleted/renamed) or while a
+    // conflict is unresolved, and never write text that is already on disk.
+    if (frozen > 0 || conflicted) return;
     const text = view.state.doc.toString();
-    try {
-      await current.onSave(path, text);
+    if (text === savedText) {
       current.onDirty(false);
-    } catch {
-      // Keep the dirty flag set so the next flush retries.
+      return;
+    }
+    const path = current.path;
+    try {
+      const hash = await current.onSave(path, text, baseHash);
+      savedText = text;
+      baseHash = hash;
+      current.onSaved?.(hash, text);
+      if (view.state.doc.toString() === text) current.onDirty(false);
+    } catch (error) {
+      const message = String(error);
+      if (message.includes("conflict")) {
+        conflicted = true;
+        current.onConflict?.("changed");
+      } else if (message.includes("not found")) {
+        conflicted = true;
+        current.onConflict?.("missing");
+      }
+      // Anything else (transient I/O): stay dirty so the next flush retries.
     }
   }
 
@@ -149,44 +243,94 @@ export const codemirror: Action<HTMLElement, EditorParams> = (node, params) => {
     }, AUTOSAVE_MS);
   }
 
+  function replaceBuffer(content: string): void {
+    view.dispatch({
+      changes: { from: 0, to: view.state.doc.length, insert: content },
+      selection: { anchor: 0 },
+    });
+  }
+
+  const session: Session = {
+    path: () => current.path,
+    flush,
+    freeze() {
+      frozen += 1;
+      if (timer) {
+        clearTimeout(timer);
+        timer = undefined;
+      }
+      let resumed = false;
+      return () => {
+        if (resumed) return;
+        resumed = true;
+        frozen = Math.max(0, frozen - 1);
+      };
+    },
+    reload(content, hash) {
+      conflicted = false;
+      savedText = content;
+      baseHash = hash;
+      replaceBuffer(content);
+      current.onDirty(false);
+    },
+    adopt(hash) {
+      conflicted = false;
+      baseHash = hash;
+      schedule();
+    },
+  };
+  sessions.add(session);
+
   return {
     update(next: EditorParams) {
       if (next.path !== current.path) {
-        // Flush the outgoing note before replacing the document.
+        // The same editor now shows another note: save the old one first.
         const previous = current;
-        const outgoing = view.state.doc.toString();
         void (async () => {
-          if (timer) {
-            clearTimeout(timer);
-            timer = undefined;
-          }
-          try {
-            await previous.onSave(previous.path, outgoing);
-          } catch {
-            // ignore; the note remains on disk as last saved
-          }
+          await flush();
           current = next;
+          savedText = next.content;
+          baseHash = next.hash;
+          conflicted = false;
           setAssetBase(next.assetBase, next.path);
-          view.dispatch({
-            changes: { from: 0, to: view.state.doc.length, insert: next.content },
-            selection: { anchor: 0 },
-          });
+          replaceBuffer(next.content);
           view.dispatch({ effects: setWordIndex.of(next.index) });
+          previous.onDirty(false);
           next.onDirty(false);
         })();
-      } else {
-        if (next.index !== current.index) {
-          view.dispatch({ effects: setWordIndex.of(next.index) });
-        }
-        if (next.assetBase !== current.assetBase) {
-          setAssetBase(next.assetBase, next.path);
-          view.dispatch({});
-        }
-        current = next;
+        return;
+      }
+
+      if (next.index !== current.index) {
+        view.dispatch({ effects: setWordIndex.of(next.index) });
+      }
+      if (next.assetBase !== current.assetBase) {
+        setAssetBase(next.assetBase, next.path);
+        view.dispatch({});
+      }
+      current = next;
+
+      // The file changed on disk (another window, git, an external editor).
+      const clean = view.state.doc.toString() === savedText;
+      if (clean && next.hash !== null && next.content !== savedText) {
+        // Nothing unsaved: quietly follow the file.
+        savedText = next.content;
+        baseHash = next.hash;
+        replaceBuffer(next.content);
+        next.onDirty(false);
+      } else if (
+        !clean &&
+        next.hash !== null &&
+        next.hash !== baseHash &&
+        !conflicted
+      ) {
+        conflicted = true;
+        next.onConflict?.("changed");
       }
     },
     async destroy() {
       current.onView?.(null);
+      sessions.delete(session);
       await flush();
       view.destroy();
     },

@@ -6,6 +6,7 @@
 
 use std::sync::Mutex;
 
+use serde::Serialize;
 use tauri::{AppHandle, State};
 
 use langloom_core::NoteFile;
@@ -24,27 +25,38 @@ pub fn list_workspace(state: State<'_, Shared>) -> Result<Vec<NoteNode>, String>
     tree::scan(&workspace.notes_dir()).map_err(|err| err.to_string())
 }
 
-/// Read a note's raw text.
-#[tauri::command]
-pub fn read_note(state: State<'_, Shared>, rel_path: String) -> Result<String, String> {
-    let state = state.lock().map_err(|_| "state poisoned".to_string())?;
-    let workspace = state.workspace()?;
-    workspace
-        .read_note(&rel_path)
-        .map_err(|err| err.to_string())
+/// A note's text and the hash later saves are checked against.
+#[derive(Debug, Clone, Serialize)]
+pub struct NoteSnapshot {
+    pub content: String,
+    pub hash: String,
 }
 
-/// Save a note's raw text (atomic write).
+/// Read a note's raw text with its content hash.
+#[tauri::command]
+pub fn read_note(state: State<'_, Shared>, rel_path: String) -> Result<NoteSnapshot, String> {
+    let state = state.lock().map_err(|_| "state poisoned".to_string())?;
+    let workspace = state.workspace()?;
+    let (content, hash) = workspace
+        .read_note_snapshot(&rel_path)
+        .map_err(|err| err.to_string())?;
+    Ok(NoteSnapshot { content, hash })
+}
+
+/// Save an existing note (atomic write). Never creates a file, and fails with
+/// a `conflict:` error if the note changed on disk since `base_hash`. Returns
+/// the new content hash.
 #[tauri::command]
 pub fn save_note(
     state: State<'_, Shared>,
     rel_path: String,
     content: String,
-) -> Result<(), String> {
+    base_hash: Option<String>,
+) -> Result<String, String> {
     let mut state = state.lock().map_err(|_| "state poisoned".to_string())?;
     let workspace = state.workspace_mut()?;
     workspace
-        .save_note(&NoteFile::new(&rel_path, content))
+        .save_note_checked(&NoteFile::new(&rel_path, content), base_hash.as_deref())
         .map_err(|err| err.to_string())
 }
 
@@ -60,6 +72,25 @@ pub fn create_note(
     let created = state
         .workspace_mut()?
         .create_note(&rel_path)
+        .map_err(|err| err.to_string())?;
+    drop(state);
+    changed(&app, "notes");
+    Ok(created.to_string_lossy().replace('\\', "/"))
+}
+
+/// Create a new note with initial content (never overwrites) and return its
+/// final path.
+#[tauri::command]
+pub fn create_note_with_content(
+    app: AppHandle,
+    state: State<'_, Shared>,
+    rel_path: String,
+    content: String,
+) -> Result<String, String> {
+    let mut state = state.lock().map_err(|_| "state poisoned".to_string())?;
+    let created = state
+        .workspace_mut()?
+        .create_note_with_content(&rel_path, &content)
         .map_err(|err| err.to_string())?;
     drop(state);
     changed(&app, "notes");

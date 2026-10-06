@@ -3,6 +3,7 @@ import type { EditorView } from "@codemirror/view";
 import * as api from "./api";
 import { windowLabel } from "./window";
 import { stripMd } from "./explorer";
+import { flushNotes, quiesceNotes, resolveNoteConflict } from "./editor/action";
 
 /** Left activity ribbon selection. */
 export type Activity = "notes" | "dictionary" | "translation" | "git";
@@ -27,7 +28,11 @@ export interface DocState {
   view: View;
   selected: string | null;
   noteContent: string;
+  /** Hash of `noteContent` as read from disk; saves are checked against it. */
+  noteHash: string | null;
   dirty: boolean;
+  /** The open note changed on disk (or vanished) while it has unsaved edits. */
+  conflict: "changed" | "missing" | null;
   currentTable: string | null;
   table: api.WordTable | null;
   selectedEntry: string | null;
@@ -60,7 +65,9 @@ function emptyDoc(): DocState {
     view: "notes",
     selected: null,
     noteContent: "",
+    noteHash: null,
     dirty: false,
+    conflict: null,
     currentTable: null,
     table: null,
     selectedEntry: null,
@@ -141,7 +148,9 @@ function clearDoc(doc: DocState): void {
   doc.view = "notes";
   doc.selected = null;
   doc.noteContent = "";
+  doc.noteHash = null;
   doc.dirty = false;
+  doc.conflict = null;
   doc.currentTable = null;
   doc.table = null;
   doc.selectedEntry = null;
@@ -915,10 +924,59 @@ export async function restoreMainTiling(): Promise<void> {
 // -- active document loaders --------------------------------------------
 
 async function loadNote(doc: DocState, path: string): Promise<void> {
-  const content = await api.readNote(path);
+  const snapshot = await api.readNote(path);
   doc.selected = path;
-  doc.noteContent = content;
+  doc.noteContent = snapshot.content;
+  doc.noteHash = snapshot.hash;
   doc.dirty = false;
+  doc.conflict = null;
+}
+
+/**
+ * Follow files that changed on disk (another window, git, an external
+ * editor). Clean editors update in place; an editor with unsaved edits is
+ * flagged as conflicted by the editor itself.
+ */
+export async function reloadOpenNotes(): Promise<void> {
+  for (const group of ui.groups) {
+    const doc = group.doc;
+    if (doc.view !== "notes" || !doc.selected) continue;
+    const path = doc.selected;
+    try {
+      const snapshot = await api.readNote(path);
+      if (doc.selected !== path || snapshot.hash === doc.noteHash) continue;
+      doc.noteContent = snapshot.content;
+      doc.noteHash = snapshot.hash;
+    } catch {
+      // Vanished from disk: the editor reports it on its next save.
+    }
+  }
+}
+
+/** Resolve an open note's conflict in favour of the editor or the file. */
+export async function resolveConflict(
+  doc: DocState,
+  choice: "keep-mine" | "use-disk" | "recreate",
+): Promise<void> {
+  const path = doc.selected;
+  if (!path) return;
+  try {
+    if (choice === "recreate") {
+      await api.createNote(path);
+    }
+    const snapshot = await api.readNote(path);
+    if (choice === "use-disk") {
+      resolveNoteConflict(path, "reload", snapshot);
+      doc.noteContent = snapshot.content;
+    } else {
+      // Keep the buffer; the next save is based on the file as it is now.
+      resolveNoteConflict(path, "adopt", snapshot);
+    }
+    doc.noteHash = snapshot.hash;
+    doc.conflict = null;
+  } catch (error) {
+    ui.status = `could not resolve the conflict: ${String(error)}`;
+  }
 }
 
 // -- notes CRUD ----------------------------------------------------------
@@ -971,6 +1029,8 @@ export function openContextMenu(
 
 export function closeContextMenu(): void {
   ui.contextMenu = null;
+  // Drop the editor the menu acted on so it cannot be kept alive or reused.
+  contextEditor = null;
 }
 
 export function collapseAll(): void {
@@ -1010,11 +1070,13 @@ export async function init(): Promise<void> {
       await refreshTables();
     } else if (scope === "notes") {
       await refreshTree();
+      await reloadOpenNotes();
     } else if (scope === "dictionary") {
       await loadWordIndex();
       await refreshTables();
     } else if (scope === "vcs") {
       ui.vcsRevision += 1;
+      await reloadOpenNotes();
     }
   });
 }
@@ -1101,11 +1163,24 @@ export async function renamePath(
   oldPath: string,
   requestedPath: string,
 ): Promise<void> {
-  // A file renamed to a bare name keeps its extension; use the real result.
-  const newPath = await api.moveOrRenameNote(oldPath, requestedPath);
+  // Save edits, then freeze the open editors so none can write to the old
+  // path once it is gone. A failed rename lifts the freeze again.
+  await flushNotes(oldPath);
+  const resume = await quiesceNotes(oldPath);
+  let newPath: string;
+  try {
+    // A file renamed to a bare name keeps its extension; use the real result.
+    newPath = await api.moveOrRenameNote(oldPath, requestedPath);
+  } catch (error) {
+    resume();
+    throw error;
+  }
   const prefix = `${oldPath}/`;
   for (const group of ui.groups) {
     if (group.doc.selected === oldPath) group.doc.selected = newPath;
+    else if (group.doc.selected?.startsWith(prefix)) {
+      group.doc.selected = `${newPath}/${group.doc.selected.slice(prefix.length)}`;
+    }
     group.tabs = group.tabs.map((tab) => {
       if (tab.kind !== "note" || !tab.ref) return tab;
       if (tab.ref === oldPath) {
@@ -1117,12 +1192,30 @@ export async function renamePath(
       }
       return tab;
     });
+    // Reload from disk: the remounted editor must start from what was just
+    // saved, not from the text loaded before the edits.
+    const doc = group.doc;
+    if (doc.view === "notes" && doc.selected) {
+      try {
+        await loadNote(doc, doc.selected);
+      } catch (error) {
+        ui.status = `could not reopen ${doc.selected}: ${String(error)}`;
+      }
+    }
   }
   ui.status = `renamed to ${newPath}`;
 }
 
 export async function deletePath(relPath: string): Promise<void> {
-  await api.deleteNote(relPath);
+  // Freeze the open editors first, and wait for saves in flight, so nothing
+  // can write the note back after it is deleted.
+  const resume = await quiesceNotes(relPath);
+  try {
+    await api.deleteNote(relPath);
+  } catch (error) {
+    resume();
+    throw error;
+  }
   const prefix = `${relPath}/`;
   for (const group of ui.groups) {
     const removed = group.tabs.filter(

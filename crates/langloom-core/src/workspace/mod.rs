@@ -171,6 +171,30 @@ impl Workspace {
         Ok(workspace)
     }
 
+    /// Re-read tables, notes and config from disk after files changed behind
+    /// the app's back (a git checkout or revert). Without this the in-memory
+    /// copy would overwrite the restored files on the next save. Undo history
+    /// is dropped, since its snapshots predate the change.
+    pub fn reload_disk_state(&mut self) -> Result<(), StorageError> {
+        let mut dictionary = Dictionary::new();
+        for table in storage::scan_tables(&self.dictionary_dir())? {
+            dictionary.tables.insert(table.name.clone(), table);
+        }
+        let config_dir = self.config_dir();
+        self.language =
+            storage::load_json(&config_dir.join(storage::LANGUAGE_FILE))?.unwrap_or_default();
+        self.grammar =
+            storage::load_json(&config_dir.join(storage::GRAMMAR_FILE))?.unwrap_or_default();
+        self.translation =
+            storage::load_json(&config_dir.join(storage::TRANSLATION_FILE))?.unwrap_or_default();
+        self.settings =
+            storage::load_json(&config_dir.join(storage::SETTINGS_FILE))?.unwrap_or_default();
+        self.dictionary = dictionary;
+        self.refresh_notes()?;
+        self.history = History::new();
+        Ok(())
+    }
+
     /// One-time conversion of extensionless and `.txt` notes to `.md`.
     fn migrate_notes_if_needed(&mut self) -> Result<(), StorageError> {
         if self.settings.notes_migrated {
@@ -603,16 +627,41 @@ impl Workspace {
 
     /// Persist a note's raw content and refresh the in-memory copy.
     pub fn save_note(&mut self, note: &NoteFile) -> Result<(), StorageError> {
-        storage::write_note(&self.notes_dir(), note)?;
-        match self.notes.iter_mut().find(|n| n.path == note.path) {
-            Some(existing) => *existing = note.clone(),
-            None => self.notes.push(note.clone()),
+        self.save_note_checked(note, None).map(|_| ())
+    }
+
+    /// Overwrite an existing note, refusing if it changed on disk since
+    /// `base_hash` was taken. Returns the new content hash.
+    pub fn save_note_checked(
+        &mut self,
+        note: &NoteFile,
+        base_hash: Option<&str>,
+    ) -> Result<String, StorageError> {
+        let (hash, wrote) = storage::write_existing_note(
+            &self.notes_dir(),
+            &note.path,
+            &note.raw_content,
+            base_hash,
+        )?;
+        if wrote {
+            match self.notes.iter_mut().find(|n| n.path == note.path) {
+                Some(existing) => *existing = note.clone(),
+                None => self.notes.push(note.clone()),
+            }
+            self.mark_change(
+                Instant::now(),
+                format!("langloom: update note \"{}\"", note.path.display()),
+            );
         }
-        self.mark_change(
-            Instant::now(),
-            format!("langloom: update note \"{}\"", note.path.display()),
-        );
-        Ok(())
+        Ok(hash)
+    }
+
+    /// A note's content together with its hash (the base for later saves).
+    pub fn read_note_snapshot(
+        &self,
+        relative: impl AsRef<Path>,
+    ) -> Result<(String, String), StorageError> {
+        storage::read_note_snapshot(&self.notes_dir(), relative.as_ref())
     }
 
     /// Copy an external file into `assets/` under a short content hash.
@@ -666,6 +715,18 @@ impl Workspace {
             format!("langloom: create note \"{}\"", relative.display()),
         );
         Ok(relative)
+    }
+
+    /// Create a new note holding `content`. Like [`Workspace::create_note`] it
+    /// refuses to overwrite anything and returns the final path.
+    pub fn create_note_with_content(
+        &mut self,
+        relative: impl AsRef<Path>,
+        content: &str,
+    ) -> Result<PathBuf, StorageError> {
+        let created = self.create_note(relative)?;
+        self.save_note(&NoteFile::new(&created, content))?;
+        Ok(created)
     }
 
     /// Create a notes folder.
@@ -1282,6 +1343,45 @@ mod tests {
         let again = Workspace::load(dir.path()).unwrap();
         assert!(notes.join("later").exists());
         assert!(again.settings.notes_migrated);
+    }
+
+    #[test]
+    fn reload_picks_up_files_changed_on_disk() {
+        let dir = tempfile::tempdir().unwrap();
+        let mut ws = Workspace::new(dir.path()).unwrap();
+        ws.create_table("verbs").unwrap();
+        ws.create_note("n").unwrap();
+        assert!(ws.can_undo());
+
+        // A checkout replaces files behind the app's back.
+        let mut other = Workspace::load(dir.path()).unwrap();
+        other.create_table("nouns").unwrap();
+        std::fs::write(dir.path().join("notes/n.md"), "from disk").unwrap();
+
+        ws.reload_disk_state().unwrap();
+        assert!(ws.dictionary.table("nouns").is_some());
+        assert_eq!(ws.read_note("n.md").unwrap(), "from disk");
+        assert!(!ws.can_undo());
+    }
+
+    #[test]
+    fn saving_never_resurrects_a_deleted_or_renamed_note() {
+        let dir = tempfile::tempdir().unwrap();
+        let mut ws = Workspace::new(dir.path()).unwrap();
+        ws.create_note("a").unwrap();
+        ws.create_note("b").unwrap();
+
+        // A stale editor buffer saving to a deleted note must fail, not
+        // recreate the file.
+        ws.delete_note("a.md").unwrap();
+        assert!(ws.save_note(&NoteFile::new("a.md", "stale")).is_err());
+        assert!(!dir.path().join("notes/a.md").exists());
+
+        // Same for the old path after a rename.
+        ws.rename_note("b.md", "c").unwrap();
+        assert!(ws.save_note(&NoteFile::new("b.md", "stale")).is_err());
+        assert!(!dir.path().join("notes/b.md").exists());
+        assert!(dir.path().join("notes/c.md").exists());
     }
 
     #[test]

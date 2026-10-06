@@ -52,10 +52,29 @@ export const workspaceDeleteFromDisk = (path: string): Promise<void> =>
 // -- notes ---------------------------------------------------------------
 export const listWorkspace = (): Promise<NoteNode[]> =>
   invoke("list_workspace");
-export const readNote = (relPath: string): Promise<string> =>
+/** A note's text and the hash later saves are checked against. */
+export interface NoteSnapshot {
+  content: string;
+  hash: string;
+}
+
+export const readNote = (relPath: string): Promise<NoteSnapshot> =>
   invoke("read_note", { relPath });
-export const saveNote = (relPath: string, content: string): Promise<void> =>
-  invoke("save_note", { relPath, content });
+/**
+ * Save an existing note. Never creates a file, and rejects with a
+ * `conflict:` error when the note changed on disk since `baseHash`.
+ * Resolves to the new content hash.
+ */
+export const saveNote = (
+  relPath: string,
+  content: string,
+  baseHash: string | null,
+): Promise<string> => invoke("save_note", { relPath, content, baseHash });
+/** Create a new note with content; never overwrites. Resolves to its path. */
+export const createNoteWithContent = (
+  relPath: string,
+  content: string,
+): Promise<string> => invoke("create_note_with_content", { relPath, content });
 /** Create a note; resolves to its final path (`.md` is appended if missing). */
 export const createNote = (relPath: string): Promise<string> =>
   invoke("create_note", { relPath });

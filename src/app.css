@@ -2148,3 +2148,16 @@ body.col-resizing * {
   padding: 0 8px;
   font-size: 12px;
 }
+
+/* -- note conflict banner ------------------------------------------------- */
+
+.conflict-banner {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 6px 10px;
+  font-size: 12px;
+  background: rgba(214, 120, 90, 0.16);
+  border-bottom: 1px solid #d6785a;
+  color: var(--text);
+}

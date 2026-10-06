@@ -101,14 +101,25 @@ pub fn vcs_branches(state: State<'_, Shared>) -> Result<Vec<String>, String> {
 
 #[tauri::command]
 pub fn vcs_checkout(app: AppHandle, state: State<'_, Shared>, name: String) -> Result<(), String> {
-    let state = state.lock().map_err(|_| "state poisoned".to_string())?;
-    let workspace = state.workspace()?;
+    let mut state = state.lock().map_err(|_| "state poisoned".to_string())?;
+    let workspace = state.workspace_mut()?;
     if let Some(repo) = workspace.git() {
         repo.checkout(&name).map_err(|err| err.to_string())?;
     }
+    // Files changed on disk: refresh the in-memory copy before any save.
+    workspace
+        .reload_disk_state()
+        .map_err(|err| err.to_string())?;
     drop(state);
-    changed(&app, "vcs");
+    changed_after_disk_change(&app);
     Ok(())
+}
+
+/// Tell every window that files changed behind the app's back.
+fn changed_after_disk_change(app: &AppHandle) {
+    changed(app, "notes");
+    changed(app, "dictionary");
+    changed(app, "vcs");
 }
 
 #[tauri::command]
@@ -181,13 +192,16 @@ pub fn vcs_revert_file(
     state: State<'_, Shared>,
     path: String,
 ) -> Result<(), String> {
-    let state = state.lock().map_err(|_| "state poisoned".to_string())?;
-    let workspace = state.workspace()?;
+    let mut state = state.lock().map_err(|_| "state poisoned".to_string())?;
+    let workspace = state.workspace_mut()?;
     if let Some(repo) = workspace.git() {
         repo.revert_file(&path).map_err(|err| err.to_string())?;
     }
+    workspace
+        .reload_disk_state()
+        .map_err(|err| err.to_string())?;
     drop(state);
-    changed(&app, "vcs");
+    changed_after_disk_change(&app);
     Ok(())
 }
 

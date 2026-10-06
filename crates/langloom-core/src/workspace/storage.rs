@@ -91,6 +91,8 @@ pub enum StorageError {
     NotAFile(PathBuf),
     #[error("file is too large to import: {0}")]
     TooLarge(PathBuf),
+    #[error("conflict: {0} changed on disk since it was opened")]
+    Conflict(PathBuf),
     #[error("already exists: {0}")]
     AlreadyExists(PathBuf),
     #[error("not found: {0}")]
@@ -345,10 +347,63 @@ fn collect_notes(base: &Path, dir: &Path, out: &mut Vec<NoteFile>) -> Result<(),
     Ok(())
 }
 
-/// Write a note's raw content to `notes/<relative path>`.
+/// Create or overwrite a note (test fixtures only: the app never creates a
+/// note by saving, see [`write_existing_note`]).
+#[cfg(test)]
 pub fn write_note(notes_dir: &Path, note: &NoteFile) -> Result<(), StorageError> {
     let path = safe_join(notes_dir, &note.path)?;
     atomic_write(&path, note.raw_content.as_bytes())
+}
+
+/// A short content hash used to detect on-disk changes between load and save.
+pub fn content_hash(text: &str) -> String {
+    use sha2::{Digest, Sha256};
+    let digest = Sha256::digest(text.as_bytes());
+    digest
+        .iter()
+        .take(8)
+        .map(|byte| format!("{byte:02x}"))
+        .collect()
+}
+
+/// Overwrite an **existing** note.
+///
+/// Saving never creates a file: an editor holding a stale buffer for a note
+/// that was deleted or renamed must fail instead of resurrecting it. When
+/// `base_hash` is given, the write is refused with `Conflict` if the file no
+/// longer matches the content the caller loaded. Identical content is not
+/// rewritten. Returns the new hash and whether the file was written.
+pub fn write_existing_note(
+    notes_dir: &Path,
+    relative: &Path,
+    content: &str,
+    base_hash: Option<&str>,
+) -> Result<(String, bool), StorageError> {
+    let path = safe_join(notes_dir, relative)?;
+    if !path.is_file() {
+        return Err(StorageError::NotFound(relative.to_path_buf()));
+    }
+    let current = fs::read_to_string(&path).map_err(|e| io_err(&path, e))?;
+    if let Some(base) = base_hash {
+        if content_hash(&current) != base {
+            return Err(StorageError::Conflict(relative.to_path_buf()));
+        }
+    }
+    if current == content {
+        return Ok((content_hash(content), false));
+    }
+    atomic_write(&path, content.as_bytes())?;
+    Ok((content_hash(content), true))
+}
+
+/// Read a note and its content hash.
+pub fn read_note_snapshot(
+    notes_dir: &Path,
+    relative: &Path,
+) -> Result<(String, String), StorageError> {
+    let text = read_note(notes_dir, relative)?;
+    let hash = content_hash(&text);
+    Ok((text, hash))
 }
 
 /// Read a note's raw content from `notes/<relative path>`.
@@ -537,6 +592,43 @@ mod tests {
         assert!(path.extension().is_none());
         let loaded: crate::config::WorkspaceSettings = load_json(&path).unwrap().unwrap();
         assert!(loaded.auto_checkin);
+    }
+
+    #[test]
+    fn existing_note_writes_detect_conflicts_and_skip_no_ops() {
+        let dir = tempfile::tempdir().unwrap();
+        let notes = dir.path().join(NOTES_DIR);
+        fs::create_dir_all(&notes).unwrap();
+        write_note(&notes, &NoteFile::new("a.md", "one")).unwrap();
+        let (text, hash) = read_note_snapshot(&notes, Path::new("a.md")).unwrap();
+        assert_eq!(text, "one");
+
+        // Saving identical content writes nothing.
+        let (same, wrote) =
+            write_existing_note(&notes, Path::new("a.md"), "one", Some(&hash)).unwrap();
+        assert_eq!((same, wrote), (hash.clone(), false));
+
+        // A normal save returns the new hash, which becomes the next base.
+        let (next, wrote) =
+            write_existing_note(&notes, Path::new("a.md"), "two", Some(&hash)).unwrap();
+        assert!(wrote);
+        assert_ne!(next, hash);
+
+        // Someone else changes the file; the stale base is refused.
+        fs::write(notes.join("a.md"), "external").unwrap();
+        assert!(matches!(
+            write_existing_note(&notes, Path::new("a.md"), "mine", Some(&next)),
+            Err(StorageError::Conflict(_))
+        ));
+        assert_eq!(fs::read_to_string(notes.join("a.md")).unwrap(), "external");
+
+        // Missing notes and escapes are rejected.
+        assert!(matches!(
+            write_existing_note(&notes, Path::new("nope.md"), "x", None),
+            Err(StorageError::NotFound(_))
+        ));
+        assert!(write_existing_note(&notes, Path::new("../x"), "x", None).is_err());
+        assert!(!notes.join("nope.md").exists());
     }
 
     #[test]

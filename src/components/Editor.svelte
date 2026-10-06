@@ -1,7 +1,12 @@
 <script lang="ts">
   import { t } from "svelte-i18n";
   import * as api from "../lib/api";
-  import { ui, openEditorContextMenu, type DocState } from "../lib/state.svelte";
+  import {
+    ui,
+    openEditorContextMenu,
+    resolveConflict,
+    type DocState,
+  } from "../lib/state.svelte";
   import type { EditorView } from "@codemirror/view";
   import EditorToolbar from "./EditorToolbar.svelte";
   import {
@@ -81,6 +86,27 @@
 
 {#if doc.selected}
   <div class="editor">
+    {#if doc.conflict}
+      <div class="conflict-banner" role="alert">
+        <span class="grow">
+          {doc.conflict === "missing"
+            ? $t("editor.conflictMissing")
+            : $t("editor.conflictChanged")}
+        </span>
+        {#if doc.conflict === "missing"}
+          <button onclick={() => resolveConflict(doc, "recreate")}>
+            {$t("editor.recreate")}
+          </button>
+        {:else}
+          <button onclick={() => resolveConflict(doc, "use-disk")}>
+            {$t("editor.useDisk")}
+          </button>
+          <button onclick={() => resolveConflict(doc, "keep-mine")}>
+            {$t("editor.keepMine")}
+          </button>
+        {/if}
+      </div>
+    {/if}
     <EditorToolbar {view} {format} onImage={insertImage}>
       <Popover align="right">
         {#snippet label()}<Download size={15} /> {$t("editor.export")}{/snippet}
@@ -112,10 +138,18 @@
         use:codemirror={{
           path: doc.selected,
           content: doc.noteContent,
+          hash: doc.noteHash,
           index: ui.wordIndex,
           assetBase: ui.root ? `${ui.root}/notes` : "",
           onDirty: (dirty: boolean) => (doc.dirty = dirty),
           onSave: api.saveNote,
+          onSaved: (hash: string, text: string) => {
+            // Keep the loaded copy in step with disk so a remount (rename,
+            // tab switch) never starts from stale text.
+            doc.noteContent = text;
+            doc.noteHash = hash;
+          },
+          onConflict: (kind: "changed" | "missing") => (doc.conflict = kind),
           onView: (next: EditorView | null) => (view = next),
           onFormat: (next: FormatState) => (format = next),
           onContextMenu: openEditorContextMenu,
