@@ -9,8 +9,8 @@ use uuid::Uuid;
 
 use langloom_core::model::{derivation, DerivationNode, RelatedWord};
 use langloom_core::{
-    FieldType, GridViewState, QuarantineWarning, TagDef, TagFormat, TagKindChange, TrashRecord,
-    WordEntry, WordHit, WordTable,
+    FieldType, FieldValue, GridViewState, QuarantineWarning, TagDef, TagFormat, TagKindChange,
+    TrashRecord, WordEntry, WordHit, WordTable,
 };
 
 use super::changed;
@@ -165,6 +165,69 @@ pub fn save_word_entry(
     drop(state);
     changed(&app, "dictionary");
     Ok(saved)
+}
+
+/// Apply one field's value to a word, against whatever is currently stored
+/// — never a caller-held snapshot. `value: null` removes the tag. Rejects
+/// `tag == "wordname"` (use `rename_word`).
+#[tauri::command]
+pub fn set_word_value(
+    app: AppHandle,
+    state: State<'_, Shared>,
+    table: String,
+    id: String,
+    tag: String,
+    value: Option<FieldValue>,
+) -> Result<bool, String> {
+    let id = parse_id(&id)?;
+    let mut state = state.lock().map_err(|_| "state poisoned".to_string())?;
+    let applied = state
+        .workspace_mut()?
+        .set_value(&table, id, &tag, value)
+        .map_err(|err| err.to_string())?;
+    drop(state);
+    changed(&app, "dictionary");
+    Ok(applied)
+}
+
+/// Set (or, given an empty list, remove) a word's `definition` senses.
+#[tauri::command]
+pub fn set_word_definition(
+    app: AppHandle,
+    state: State<'_, Shared>,
+    table: String,
+    id: String,
+    senses: Vec<String>,
+) -> Result<bool, String> {
+    let id = parse_id(&id)?;
+    let mut state = state.lock().map_err(|_| "state poisoned".to_string())?;
+    let applied = state
+        .workspace_mut()?
+        .set_definition(&table, id, senses)
+        .map_err(|err| err.to_string())?;
+    drop(state);
+    changed(&app, "dictionary");
+    Ok(applied)
+}
+
+/// Rename a word without touching any other field.
+#[tauri::command]
+pub fn rename_word(
+    app: AppHandle,
+    state: State<'_, Shared>,
+    table: String,
+    id: String,
+    wordname: String,
+) -> Result<bool, String> {
+    let id = parse_id(&id)?;
+    let mut state = state.lock().map_err(|_| "state poisoned".to_string())?;
+    let applied = state
+        .workspace_mut()?
+        .rename_word(&table, id, wordname)
+        .map_err(|err| err.to_string())?;
+    drop(state);
+    changed(&app, "dictionary");
+    Ok(applied)
 }
 
 #[tauri::command]

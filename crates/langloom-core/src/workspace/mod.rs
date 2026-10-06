@@ -25,7 +25,7 @@ use crate::config::{
 };
 use crate::model::{
     Dictionary, FieldType, FieldValue, TagDef, TagFormat, TagKindChange, TagRemoval, WordEntry,
-    DEFINITION_TAG,
+    DEFINITION_TAG, WORDNAME_TAG,
 };
 use crate::translation::SyntaxGrid;
 use crate::vcs::{AutoCheckin, GitRepo, GitStatus, VcsError};
@@ -507,6 +507,18 @@ impl Workspace {
     }
 
     /// Replace an existing word's data and persist it.
+    ///
+    /// This overwrites every field at once from a caller-supplied snapshot.
+    /// Two editors (the grid and the inspector, say) each hold their own
+    /// snapshot of a word; if both call this, whichever save lands second
+    /// **silently discards** the first save's change to any field it did
+    /// not itself touch, because from its point of view that field was
+    /// never different from the stale snapshot it started from. Prefer
+    /// [`Self::set_value`], [`Self::set_definition`] and
+    /// [`Self::rename_word`], which patch one field against whatever is
+    /// *currently* stored and so can never clobber a concurrent edit to a
+    /// different field. This is kept for callers that genuinely do have a
+    /// fresh, complete entry to write (for example, creating one).
     pub fn replace_entry(&mut self, table: &str, entry: WordEntry) -> Result<bool, StorageError> {
         let id = entry.id;
         if self.dictionary.get_entry(table, id).is_none() {
@@ -515,6 +527,73 @@ impl Workspace {
         self.record();
         if let Some(existing) = self.dictionary.get_entry_mut(table, id) {
             *existing = entry;
+        }
+        self.save_entry(table, id)
+    }
+
+    /// Apply one field's value to a word, leaving every other field as it
+    /// currently is on the in-memory dictionary (the single source of
+    /// truth). `None` removes the tag. Rejects `tag == "wordname"` — use
+    /// [`Self::rename_word`] for that — and rejects an unknown table/word.
+    ///
+    /// Because this always reads and writes against *current* data rather
+    /// than a snapshot the caller might be holding stale, two patches to
+    /// different fields of the same word can never clobber each other no
+    /// matter which order they land in.
+    pub fn set_value(
+        &mut self,
+        table: &str,
+        id: Uuid,
+        tag: &str,
+        value: Option<FieldValue>,
+    ) -> Result<bool, StorageError> {
+        if tag == WORDNAME_TAG {
+            return Ok(false);
+        }
+        if self.dictionary.get_entry(table, id).is_none() {
+            return Ok(false);
+        }
+        self.record();
+        if let Some(entry) = self.dictionary.get_entry_mut(table, id) {
+            match value {
+                Some(value) => {
+                    entry.set(tag, value);
+                }
+                None => {
+                    entry.remove(tag);
+                }
+            }
+        }
+        self.save_entry(table, id)
+    }
+
+    /// Set (or, if empty, remove) a word's `definition` senses. Sugar over
+    /// [`Self::set_value`] for the one tag editors treat specially.
+    pub fn set_definition(
+        &mut self,
+        table: &str,
+        id: Uuid,
+        senses: Vec<String>,
+    ) -> Result<bool, StorageError> {
+        let value = (!senses.is_empty()).then_some(FieldValue::TagList(senses));
+        self.set_value(table, id, DEFINITION_TAG, value)
+    }
+
+    /// Rename a word (its `wordname` field) without touching any other
+    /// field, so it cannot clobber a concurrent edit the way sending a whole
+    /// stale entry through [`Self::replace_entry`] could.
+    pub fn rename_word(
+        &mut self,
+        table: &str,
+        id: Uuid,
+        wordname: impl Into<String>,
+    ) -> Result<bool, StorageError> {
+        if self.dictionary.get_entry(table, id).is_none() {
+            return Ok(false);
+        }
+        self.record();
+        if let Some(entry) = self.dictionary.get_entry_mut(table, id) {
+            entry.wordname = wordname.into();
         }
         self.save_entry(table, id)
     }
@@ -2000,6 +2079,132 @@ mod tests {
         );
         // Reload clears undo history (its snapshots predate the disk change).
         assert!(!ws.can_undo());
+    }
+
+    #[test]
+    fn whole_entry_replace_from_a_stale_view_clobbers_a_newer_field() {
+        // This documents *why* field-level patches exist: two editors (Grid
+        // and Inspector) each hold their own snapshot of a word. If "save"
+        // means "overwrite the whole entry", the second save to land always
+        // wins completely, discarding the first save's field even though it
+        // was never touched by the second editor.
+        let dir = tempfile::tempdir().unwrap();
+        let mut ws = Workspace::new(dir.path()).unwrap();
+        ws.create_table("verbs").unwrap();
+        let id = ws.create_entry("verbs", "kala").unwrap().unwrap();
+
+        // Both editors load the same starting snapshot.
+        let snapshot = ws.dictionary.get_entry("verbs", id).unwrap().clone();
+        let mut from_grid = snapshot.clone();
+        let mut from_inspector = snapshot;
+
+        // Grid edits field "pos"; Inspector (unaware) edits "usage".
+        from_grid.set("pos", FieldValue::Text("verb".into()));
+        from_inspector.set("usage", FieldValue::Text("formal".into()));
+
+        assert!(ws.replace_entry("verbs", from_grid).unwrap());
+        assert!(ws.replace_entry("verbs", from_inspector).unwrap());
+
+        let final_entry = ws.dictionary.get_entry("verbs", id).unwrap();
+        // Inspector's whole-entry save wins completely: Grid's edit to "pos"
+        // is gone, even though Inspector never touched that field.
+        assert!(
+            final_entry.get("pos").is_none(),
+            "whole-entry replace clobbers a field it never touched"
+        );
+        assert!(final_entry.get("usage").is_some());
+    }
+
+    #[test]
+    fn field_patches_from_stale_views_never_clobber_each_other() {
+        let dir = tempfile::tempdir().unwrap();
+        let mut ws = Workspace::new(dir.path()).unwrap();
+        ws.create_table("verbs").unwrap();
+        let id = ws.create_entry("verbs", "kala").unwrap().unwrap();
+
+        // Both "editors" start from the same stale snapshot, then patch
+        // different fields — the exact scenario that clobbers above.
+        ws.set_value("verbs", id, "pos", Some(FieldValue::Text("verb".into())))
+            .unwrap();
+        ws.set_value(
+            "verbs",
+            id,
+            "usage",
+            Some(FieldValue::Text("formal".into())),
+        )
+        .unwrap();
+        ws.rename_word("verbs", id, "kalai").unwrap();
+
+        let entry = ws.dictionary.get_entry("verbs", id).unwrap();
+        assert_eq!(entry.wordname, "kalai");
+        assert_eq!(entry.get("pos"), Some(&FieldValue::Text("verb".into())));
+        assert_eq!(entry.get("usage"), Some(&FieldValue::Text("formal".into())));
+
+        // Reload from disk: every field actually persisted.
+        let reloaded = Workspace::load(dir.path()).unwrap();
+        let entry = reloaded.dictionary.get_entry("verbs", id).unwrap();
+        assert_eq!(entry.wordname, "kalai");
+        assert_eq!(entry.get("pos"), Some(&FieldValue::Text("verb".into())));
+        assert_eq!(entry.get("usage"), Some(&FieldValue::Text("formal".into())));
+    }
+
+    #[test]
+    fn set_definition_is_sparse_and_removable() {
+        let dir = tempfile::tempdir().unwrap();
+        let mut ws = Workspace::new(dir.path()).unwrap();
+        ws.create_table("verbs").unwrap();
+        let id = ws.create_entry("verbs", "kala").unwrap().unwrap();
+
+        ws.set_definition("verbs", id, vec!["to speak".into(), "to say".into()])
+            .unwrap();
+        let entry = ws.dictionary.get_entry("verbs", id).unwrap();
+        assert_eq!(
+            entry.get(DEFINITION_TAG),
+            Some(&FieldValue::TagList(vec![
+                "to speak".into(),
+                "to say".into()
+            ]))
+        );
+
+        // Clearing it removes the tag entirely rather than storing `[]`.
+        ws.set_definition("verbs", id, vec![]).unwrap();
+        let entry = ws.dictionary.get_entry("verbs", id).unwrap();
+        assert!(entry.get(DEFINITION_TAG).is_none());
+        assert!(entry.values.is_empty());
+    }
+
+    #[test]
+    fn set_value_rejects_the_wordname_tag_and_unknown_words() {
+        let dir = tempfile::tempdir().unwrap();
+        let mut ws = Workspace::new(dir.path()).unwrap();
+        ws.create_table("verbs").unwrap();
+        let id = ws.create_entry("verbs", "kala").unwrap().unwrap();
+
+        assert!(!ws
+            .set_value(
+                "verbs",
+                id,
+                "wordname",
+                Some(FieldValue::Text("nope".into()))
+            )
+            .unwrap());
+        assert_eq!(
+            ws.dictionary.get_entry("verbs", id).unwrap().wordname,
+            "kala"
+        );
+
+        // Removing a tag the word never had is a harmless no-op — the word
+        // was still found, so this reports success.
+        assert!(ws.set_value("verbs", id, "pos", None).unwrap());
+
+        let missing = Uuid::new_v4();
+        assert!(!ws
+            .set_value("verbs", missing, "pos", Some(FieldValue::Text("x".into())))
+            .unwrap());
+        assert!(!ws.rename_word("verbs", missing, "x").unwrap());
+        assert!(!ws
+            .set_definition("verbs", missing, vec!["x".into()])
+            .unwrap());
     }
 
     #[test]

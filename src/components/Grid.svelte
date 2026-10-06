@@ -463,28 +463,35 @@
     await api.removeParent(doc.currentTable, entry.id, id);
   }
 
+  // Every commit* / set*Values function below patches one field against
+  // whatever is *currently* stored, rather than sending a whole entry built
+  // from a snapshot the Grid might be holding stale. That is what lets the
+  // Grid and the Inspector (or two Grid cells) edit different fields of the
+  // same word without one save silently erasing the other's.
+
   async function commitWordname(entry: api.WordEntry, value: string) {
     const next = value.trim();
     if (!next || next === entry.wordname || !doc.currentTable) return;
-    await api.saveWordEntry(doc.currentTable, { ...entry, wordname: next });
+    await api.renameWord(doc.currentTable, entry.id, next);
   }
 
   async function commitText(entry: api.WordEntry, tag: string, value: string) {
     if (!doc.currentTable) return;
     if (textValue(entry.values[tag]) === value) return;
-    const values = { ...entry.values };
-    if (value === "") delete values[tag];
-    else values[tag] = { type: "text", value };
-    await api.saveWordEntry(doc.currentTable, { ...entry, values });
+    await api.setWordValue(
+      doc.currentTable,
+      entry.id,
+      tag,
+      value === "" ? null : { type: "text", value },
+    );
   }
 
   async function commitBool(entry: api.WordEntry, tag: string, value: boolean) {
     if (!doc.currentTable) return;
-    const values = {
-      ...entry.values,
-      [tag]: { type: "boolean" as const, value },
-    };
-    await api.saveWordEntry(doc.currentTable, { ...entry, values });
+    await api.setWordValue(doc.currentTable, entry.id, tag, {
+      type: "boolean",
+      value,
+    });
   }
 
   function listValues(entry: api.WordEntry, tag: string): string[] {
@@ -506,10 +513,16 @@
     values: string[],
   ) {
     if (!doc.currentTable) return;
-    const next = { ...entry.values };
-    if (values.length) next[tag] = { type: "tag_list", value: values };
-    else delete next[tag];
-    await api.saveWordEntry(doc.currentTable, { ...entry, values: next });
+    if (tag === "definition") {
+      await api.setWordDefinition(doc.currentTable, entry.id, values);
+    } else {
+      await api.setWordValue(
+        doc.currentTable,
+        entry.id,
+        tag,
+        values.length ? { type: "tag_list", value: values } : null,
+      );
+    }
     if (tag === "definition") {
       const words = await misspelledWords(values.join(", "));
       spellingIssue = words.length
@@ -526,10 +539,12 @@
     values: string[],
   ) {
     if (!doc.currentTable) return;
-    const next = { ...entry.values };
-    if (values.length) next[tag] = { type: "references", value: values };
-    else delete next[tag];
-    await api.saveWordEntry(doc.currentTable, { ...entry, values: next });
+    await api.setWordValue(
+      doc.currentTable,
+      entry.id,
+      tag,
+      values.length ? { type: "references", value: values } : null,
+    );
   }
 
   async function addToList(entry: api.WordEntry, tag: string, text: string) {

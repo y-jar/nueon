@@ -30,7 +30,13 @@
       return;
     }
     if (entry.id !== activeId) {
-      draft = structuredClone(entry);
+      // `entry` is a live Svelte 5 `$state` proxy; some WebKit builds throw
+      // `DataCloneError` on `structuredClone(entry)` for such proxies
+      // (discovered via the stage-4 field-patch probe, not by inspection —
+      // it silently left `draft` null forever, so the inspector could never
+      // show a selected word at all). `$state.snapshot` is the supported way
+      // to take a plain-data copy of reactive state.
+      draft = $state.snapshot(entry);
       activeId = entry.id;
       definitionInput = listValue(entry.values["definition"]);
       misspelled = [];
@@ -70,34 +76,38 @@
     ),
   );
 
-  async function save() {
-    const table = activeDoc().currentTable;
-    if (!draft || !table) return;
-    await api.saveWordEntry(table, draft);
-  }
+  // Each of these patches one field against whatever is *currently* stored,
+  // rather than sending the whole `draft` entry. `draft` itself is only a
+  // local, optimistic mirror for the UI: since the Grid can be editing a
+  // different field of this exact word at the same moment, sending the whole
+  // draft would silently discard whatever the Grid just saved.
 
   async function setWordname(value: string) {
-    if (!draft) return;
+    const table = activeDoc().currentTable;
+    if (!draft || !table) return;
     draft = { ...draft, wordname: value };
-    await save();
+    await api.renameWord(table, draft.id, value);
   }
 
   async function setField(tag: string, value: api.FieldValue) {
-    if (!draft) return;
+    const table = activeDoc().currentTable;
+    if (!draft || !table) return;
     draft = { ...draft, values: { ...draft.values, [tag]: value } };
-    await save();
+    await api.setWordValue(table, draft.id, tag, value);
   }
 
   async function dropField(tag: string) {
-    if (!draft) return;
+    const table = activeDoc().currentTable;
+    if (!draft || !table) return;
     const values = { ...draft.values };
     delete values[tag];
     draft = { ...draft, values };
-    await save();
+    await api.setWordValue(table, draft.id, tag, null);
   }
 
   async function setDefinition(input: string) {
-    if (!draft) return;
+    const table = activeDoc().currentTable;
+    if (!draft || !table) return;
     const senses = parseList(input);
     const values = { ...draft.values };
     if (senses.length) {
@@ -106,7 +116,7 @@
       delete values["definition"];
     }
     draft = { ...draft, values };
-    await save();
+    await api.setWordDefinition(table, draft.id, senses);
   }
 
   async function commitDefinition() {

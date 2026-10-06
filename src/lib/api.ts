@@ -336,6 +336,30 @@ export const saveWordEntry = (
   table: string,
   entry: WordEntry,
 ): Promise<boolean> => invoke("save_word_entry", { table, entry });
+/**
+ * Apply one field's value to a word, against whatever is currently stored —
+ * never a snapshot the caller might be holding stale. `value: null` removes
+ * the tag. Prefer this (and `setWordDefinition`/`renameWord`) over
+ * `saveWordEntry` for editing a field of an *existing* word: sending the
+ * whole entry can silently clobber a concurrent edit to a different field.
+ */
+export const setWordValue = (
+  table: string,
+  id: string,
+  tag: string,
+  value: FieldValue | null,
+): Promise<boolean> => invoke("set_word_value", { table, id, tag, value });
+export const setWordDefinition = (
+  table: string,
+  id: string,
+  senses: string[],
+): Promise<boolean> =>
+  invoke("set_word_definition", { table, id, senses });
+export const renameWord = (
+  table: string,
+  id: string,
+  wordname: string,
+): Promise<boolean> => invoke("rename_word", { table, id, wordname });
 export const deleteWord = (table: string, id: string): Promise<boolean> =>
   invoke("delete_word", { table, id });
 export const moveWord = (
