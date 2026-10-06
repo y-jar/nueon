@@ -38,6 +38,9 @@ pub enum ColumnRole {
     /// Root/derivation links: the whole cell is kept verbatim as a text
     /// column, and every `[[…]]` reference inside it becomes a `parent` link.
     Parents,
+    /// A custom reference column: every `[[…]]` inside the cell is resolved
+    /// and stored as a `references` value under `name` (no raw text column).
+    References { name: String },
     /// A cell listing tags (`#noun, #verb`): split, strip the tag prefix, and
     /// set each named tag to `true` on the word.
     TagFlags,
@@ -400,6 +403,11 @@ fn propose_column(
     } else if lower.contains("parent") || lower.contains("root") || lower.contains("derive") {
         reasons.push("header looks like parent/derivation links".to_string());
         ColumnRole::Parents
+    } else if values.iter().any(|v| v.contains("[[")) {
+        reasons.push("values contain [[…]] reference links".to_string());
+        ColumnRole::References {
+            name: fallback_name(header, index),
+        }
     } else if lower.contains("tag") {
         let prefixed = values
             .iter()
@@ -682,6 +690,9 @@ fn build_preview(
                 ColumnRole::BooleanTag { name } if truthy(cell) => {
                     tag_set.insert(name.clone(), FieldType::Boolean);
                 }
+                ColumnRole::References { name } if !cell.trim().is_empty() => {
+                    tag_set.insert(name.clone(), FieldType::References);
+                }
                 ColumnRole::ListTag { name } if !cell.trim().is_empty() => {
                     tag_set.insert(name.clone(), FieldType::TagList);
                 }
@@ -694,7 +705,10 @@ fn build_preview(
 
         // Reference links.
         for (i, column) in columns.iter().enumerate() {
-            if !matches!(column.role, ColumnRole::Parents) {
+            if !matches!(
+                column.role,
+                ColumnRole::Parents | ColumnRole::References { .. }
+            ) {
                 continue;
             }
             let Some(cell) = row.get(i) else { continue };
@@ -896,6 +910,10 @@ pub struct ImportReport {
     pub tags_created: Vec<String>,
     pub parents_linked: usize,
     pub parents_skipped: usize,
+    #[serde(default)]
+    pub references_linked: usize,
+    #[serde(default)]
+    pub references_skipped: usize,
     pub suffix_entries: usize,
     pub warnings: Vec<String>,
 }
@@ -955,6 +973,8 @@ pub fn import_apply(
     };
     // Rows whose parent cells still need resolving in pass two.
     let mut pending_parents: Vec<(Uuid, String, usize)> = Vec::new();
+    // Rows whose custom reference cells need resolving in pass two.
+    let mut pending_refs: Vec<(Uuid, String, String)> = Vec::new();
 
     for (offset, row) in rows.iter().enumerate().skip(data_start) {
         let line = offset + 1;
@@ -1047,6 +1067,16 @@ pub fn import_apply(
                         Some(FieldValue::Text(cell.clone())),
                     )?;
                     pending_parents.push((id, cell.clone(), line));
+                }
+                ColumnRole::References { name } => {
+                    ensure_tag(
+                        workspace,
+                        &options.target_table,
+                        name,
+                        FieldType::References,
+                        &mut report,
+                    )?;
+                    pending_refs.push((id, name.clone(), cell.clone()));
                 }
                 ColumnRole::TagFlags => {
                     for part in cell.split(options.tag_list_delimiter) {
@@ -1163,6 +1193,48 @@ pub fn import_apply(
                     .warnings
                     .push(format!("link to \"{target}\" would create a cycle"));
             }
+        }
+    }
+
+    // Resolve custom reference tags to word ids.
+    for (child, name, cell) in &pending_refs {
+        let mut ids: Vec<Uuid> = Vec::new();
+        for raw in raw_links(cell, options.link_syntax) {
+            let target = normalize_link_target(&raw);
+            if target.is_empty() {
+                continue;
+            }
+            let resolved = match plan.link_choices.get(&target) {
+                Some(LinkChoice::UseExisting { table, id }) => Some((table.clone(), *id)),
+                Some(LinkChoice::CreateSuffix) => {
+                    create_suffix(workspace, &options.target_table, &target, &mut report)?
+                }
+                Some(LinkChoice::Leave) => None,
+                None => match resolve_default(workspace, options, &target) {
+                    Some(pair) => Some(pair),
+                    None if options.create_suffix_entries => {
+                        create_suffix(workspace, &options.target_table, &target, &mut report)?
+                    }
+                    None => None,
+                },
+            };
+            match resolved {
+                Some((_, id)) => {
+                    if !ids.contains(&id) {
+                        ids.push(id);
+                    }
+                    report.references_linked += 1;
+                }
+                None => report.references_skipped += 1,
+            }
+        }
+        if !ids.is_empty() {
+            workspace.set_value(
+                &options.target_table,
+                *child,
+                name,
+                Some(FieldValue::References(ids)),
+            )?;
         }
     }
 

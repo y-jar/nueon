@@ -657,6 +657,7 @@ export type ColumnRole =
   | { role: "wordname" }
   | { role: "definition" }
   | { role: "parents" }
+  | { role: "references"; name: string }
   | { role: "tag_flags" }
   | { role: "text_tag"; name: string }
   | { role: "list_tag"; name: string }
@@ -758,6 +759,8 @@ export interface ImportReport {
   tags_created: string[];
   parents_linked: number;
   parents_skipped: number;
+  references_linked: number;
+  references_skipped: number;
   suffix_entries: number;
   warnings: string[];
 }

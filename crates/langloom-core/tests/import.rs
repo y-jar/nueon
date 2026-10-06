@@ -487,6 +487,40 @@ fn unresolved_links_can_create_suffix_entries() {
 }
 
 #[test]
+fn generic_reference_columns_resolve_to_reference_values() {
+    let dir = tempfile::tempdir().unwrap();
+    let mut ws = Workspace::new(dir.path()).unwrap();
+    let path = dir.path().join("refs.tsv");
+    std::fs::write(&path, "word\tsynonym\nala\t[[bela]]\nbela\t\n").unwrap();
+    let options = ImportOptions {
+        delimiter: '\t',
+        roles: vec![
+            ColumnRole::Wordname,
+            ColumnRole::References {
+                name: "synonym".into(),
+            },
+        ],
+        target_table: "w".into(),
+        ..Default::default()
+    };
+    let report = import_apply(&mut ws, &ImportPlan::new(&path, options)).unwrap();
+    assert_eq!(report.words_created, 2);
+    assert_eq!(report.references_linked, 1);
+
+    let table = ws.dictionary.table("w").unwrap();
+    assert_eq!(
+        table.tag("synonym").unwrap().kind,
+        langloom_core::FieldType::References
+    );
+    let ala = table.entries.iter().find(|e| e.wordname == "ala").unwrap();
+    let bela = table.entries.iter().find(|e| e.wordname == "bela").unwrap();
+    assert_eq!(
+        ala.get("synonym"),
+        Some(&FieldValue::References(vec![bela.id]))
+    );
+}
+
+#[test]
 fn links_can_be_overridden_with_an_explicit_choice() {
     let dir = tempfile::tempdir().unwrap();
     let mut ws = Workspace::new(dir.path()).unwrap();

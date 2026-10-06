@@ -16,6 +16,7 @@
     | "wordname"
     | "definition"
     | "parents"
+    | "references"
     | "tag_flags"
     | "text_tag"
     | "list_tag"
@@ -25,6 +26,7 @@
     "wordname",
     "definition",
     "parents",
+    "references",
     "tag_flags",
     "text_tag",
     "list_tag",
@@ -32,7 +34,12 @@
     "ignore",
   ];
 
-  const NAMED = new Set<RoleKind>(["text_tag", "list_tag", "boolean_tag"]);
+  const NAMED = new Set<RoleKind>([
+    "text_tag",
+    "list_tag",
+    "boolean_tag",
+    "references",
+  ]);
 
   function kindOf(role: api.ColumnRole): RoleKind {
     return role.role;
@@ -51,6 +58,8 @@
         return { role: "list_tag", name };
       case "boolean_tag":
         return { role: "boolean_tag", name };
+      case "references":
+        return { role: "references", name };
       default:
         return { role: kind };
     }
@@ -75,6 +84,8 @@
     else if (kind === "list_tag") options.roles[index] = { role: "list_tag", name };
     else if (kind === "boolean_tag")
       options.roles[index] = { role: "boolean_tag", name };
+    else if (kind === "references")
+      options.roles[index] = { role: "references", name };
   }
 
   const hasWordname = $derived(
