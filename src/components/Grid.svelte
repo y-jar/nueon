@@ -23,6 +23,7 @@
     X,
     Check,
     Upload,
+    Eye,
   } from "@lucide/svelte";
   import * as api from "../lib/api";
   import {
@@ -34,6 +35,7 @@
   import {
     ui,
     openImport,
+    openColumnMenu,
     selectTable,
     type DocState,
   } from "../lib/state.svelte";
@@ -361,6 +363,30 @@
 
   function selectRow(id: string) {
     doc.selectedEntry = doc.selectedEntry === id ? null : id;
+  }
+
+  const hasHiddenColumns = $derived(
+    Object.values(columnVisibility).some((visible) => visible === false),
+  );
+
+  function openColumnContext(
+    event: MouseEvent,
+    column: { id: string; getCanHide: () => boolean },
+  ) {
+    const id = column.id;
+    const tag = tagOf(id);
+    openColumnMenu(event.clientX, event.clientY, {
+      id,
+      canHide: column.getCanHide(),
+      isTag: !!tag,
+      kind: tag ? tag.kind : null,
+      onHide: () => toggleColumn(id, false),
+      onSortAsc: () => (sorting = [{ id, desc: false }]),
+      onSortDesc: () => (sorting = [{ id, desc: true }]),
+      onClearSort: () => (sorting = [{ id: "wordname", desc: false }]),
+      onChangeKind: tag ? (kind) => changeKind(id, kind) : undefined,
+      onDelete: tag ? () => removeTag(id) : undefined,
+    });
   }
 
   function toggleColumn(id: string, visible: boolean) {
@@ -836,6 +862,16 @@
       </div>
     </Popover>
 
+    {#if hasHiddenColumns}
+      <button
+        title={$t("grid.unhideColumns")}
+        aria-label={$t("grid.unhideColumns")}
+        onclick={() => (columnVisibility = {})}
+      >
+        <Eye size={14} />
+      </button>
+    {/if}
+
     <Popover align="right">
       {#snippet label()}<Tags size={14} /> {$t("grid.tags")}{/snippet}
       <div class="picker-body">
@@ -985,6 +1021,10 @@
               ondragover={(e) => onColumnDragOver(e, column.id)}
               ondrop={onColumnDrop}
               ondragend={onColumnDragEnd}
+              oncontextmenu={(e) => {
+                e.preventDefault();
+                openColumnContext(e, column);
+              }}
             >
               <button
                 class="sort"

@@ -190,7 +190,14 @@
     "wordnameRequired": "A wordname is required.",
     "createFailed": "Could not create the word.",
     "addWordHint": "Ctrl+Enter to add",
-    "parentRejected": "That word can't be a parent here (it would create a cycle)."
+    "parentRejected": "That word can't be a parent here (it would create a cycle).",
+    "hideColumn": "Hide column",
+    "sortAsc": "Sort A \u2192 Z",
+    "sortDesc": "Sort Z \u2192 A",
+    "clearSort": "Clear sort",
+    "changeType": "Change type",
+    "deleteTag": "Delete tag",
+    "unhideColumns": "Show hidden columns"
   },
   "inspector": {
     "title": "Inspector",

@@ -1,6 +1,7 @@
 <script lang="ts">
   import { t } from "svelte-i18n";
   import { revealItemInDir } from "@tauri-apps/plugin-opener";
+  import * as api from "../lib/api";
   import {
     ui,
     closeContextMenu,
@@ -48,6 +49,13 @@
   }
 
   const menu = $derived(ui.contextMenu);
+
+  const TYPES: { id: api.FieldType; label: string }[] = [
+    { id: "text", label: "Text" },
+    { id: "tag_list", label: "List" },
+    { id: "references", label: "Relation" },
+    { id: "boolean", label: "Checkbox" },
+  ];
 
   const base = $derived(
     menu
@@ -128,6 +136,57 @@
           ui.trashOpen = true;
         }}>{$t("trash.open")}</button
       >
+    {:else if menu.kind === "column" && menu.column}
+      {@const col = menu.column}
+      {#if col.canHide}
+        <button
+          onclick={() => {
+            col.onHide();
+            closeContextMenu();
+          }}>{$t("grid.hideColumn")}</button
+        >
+      {/if}
+      <button
+        onclick={() => {
+          col.onSortAsc();
+          closeContextMenu();
+        }}>{$t("grid.sortAsc")}</button
+      >
+      <button
+        onclick={() => {
+          col.onSortDesc();
+          closeContextMenu();
+        }}>{$t("grid.sortDesc")}</button
+      >
+      <button
+        onclick={() => {
+          col.onClearSort();
+          closeContextMenu();
+        }}>{$t("grid.clearSort")}</button
+      >
+      {#if col.isTag && col.onChangeKind}
+        <div class="ctx-submenu">
+          <span class="muted">{$t("grid.changeType")}</span>
+          {#each TYPES as type (type.id)}
+            <button
+              class:active={col.kind === type.id}
+              onclick={() => {
+                col.onChangeKind?.(type.id);
+                closeContextMenu();
+              }}>{type.label}</button
+            >
+          {/each}
+        </div>
+      {/if}
+      {#if col.isTag && col.onDelete}
+        <button
+          class="danger"
+          onclick={() => {
+            col.onDelete?.();
+            closeContextMenu();
+          }}>{$t("grid.deleteTag")}</button
+        >
+      {/if}
     {:else if menu.kind === "editor"}
       <button onclick={() => editorAction(insertTable)}
         >{$t("editor.menu.table")}</button

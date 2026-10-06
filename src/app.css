@@ -2558,3 +2558,21 @@ button.danger:hover:not(:disabled) {
   border-color: var(--accent);
   background: transparent;
 }
+
+.ctx-submenu {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  padding: 4px 8px;
+  font-size: 11px;
+}
+
+.ctx-submenu button {
+  padding: 1px 6px;
+}
+
+.ctx-submenu button.active {
+  color: var(--bg);
+  background: var(--accent);
+  border-color: var(--accent);
+}

@@ -92,6 +92,21 @@ export interface ConfirmRequest {
   resolve: (confirmed: boolean) => void;
 }
 
+/** A column header right-click menu, with the actions Grid owns. */
+export interface ColumnMenuPayload {
+  id: string;
+  canHide: boolean;
+  /** A user tag column (not wordname/parent/definition): type/deletion allowed. */
+  isTag: boolean;
+  kind: api.FieldType | null;
+  onHide: () => void;
+  onSortAsc: () => void;
+  onSortDesc: () => void;
+  onClearSort: () => void;
+  onChangeKind?: (kind: api.FieldType) => void;
+  onDelete?: () => void;
+}
+
 /** A transient message, optionally with one action (Undo). */
 export interface ToastState {
   id: number;
@@ -143,8 +158,9 @@ export const ui = $state({
     y: number;
     path: string;
     isDir: boolean;
-    kind: "node" | "root" | "tab" | "editor";
+    kind: "node" | "root" | "tab" | "editor" | "column";
     tab?: { groupId: string; tabId: string };
+    column?: ColumnMenuPayload;
   } | null,
   renameTarget: null as string | null,
   newRequest: null as { kind: "note" | "folder"; base: string } | null,
@@ -1038,6 +1054,15 @@ export function openEditorContextMenu(x: number, y: number, view: EditorView): v
 
 export function getContextEditor(): EditorView | null {
   return contextEditor;
+}
+
+/** Open the right-click menu for a grid column header. */
+export function openColumnMenu(
+  x: number,
+  y: number,
+  column: ColumnMenuPayload,
+): void {
+  ui.contextMenu = { x, y, path: "", isDir: false, kind: "column", column };
 }
 
 export function openTabContextMenu(

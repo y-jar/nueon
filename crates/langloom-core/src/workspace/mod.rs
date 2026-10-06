@@ -749,10 +749,12 @@ impl Workspace {
             }
         };
         self.save_table(table)?;
-        self.mark_change(
-            Instant::now(),
-            format!("langloom: change type of tag \"{tag}\" in table \"{table}\""),
-        );
+        // Schema edits are committed immediately, like tag deletion, so a
+        // type change is always a single revertible step in history.
+        self.force_checkin(&format!(
+            "langloom: change type of tag \"{tag}\" in table \"{table}\" to {:?} <CAN REVERT>",
+            kind
+        ));
         Ok(Some(change))
     }
 
@@ -2608,6 +2610,31 @@ mod tests {
                 .get("flag"),
             Some(&FieldValue::Boolean(true))
         );
+    }
+
+    #[test]
+    fn set_tag_kind_commits_a_revertible_change() {
+        if !git_ok() {
+            return;
+        }
+        let dir = tempfile::tempdir().unwrap();
+        let mut ws = Workspace::new(dir.path()).unwrap();
+        ws.init_git().unwrap();
+        ws.create_table("verbs").unwrap();
+        ws.add_tag("verbs", TagDef::new("flag", FieldType::Text))
+            .unwrap();
+        ws.checkin("langloom: baseline");
+
+        assert!(ws
+            .set_tag_kind("verbs", "flag", FieldType::Boolean)
+            .unwrap()
+            .is_some());
+
+        let log = git_out(dir.path(), &["log", "--oneline"]);
+        assert!(log.contains("CAN REVERT"), "commit log: {log}");
+        assert!(git_out(dir.path(), &["status", "--porcelain"])
+            .trim()
+            .is_empty());
     }
 
     #[test]
