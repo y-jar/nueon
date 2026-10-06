@@ -50,7 +50,8 @@
       };
     in
     {
-      packages.${system}.default = pkgs.rustPlatform.buildRustPackage {
+      packages.${system} = {
+        default = pkgs.rustPlatform.buildRustPackage {
         pname = "nueon";
         version = "0.1.0";
         src = ./.;
@@ -106,6 +107,40 @@
             --set WEBKIT_DISABLE_COMPOSITING_MODE 1
           )
         '';
+      };
+
+        # Precompiled binary fetched from a GitHub release .deb and patched for
+        # Nix. Update `version` and refresh `hash` after publishing a release:
+        #   nix-prefetch-url --type sha256 <the deb url below>
+        nueon-bin = pkgs.stdenv.mkDerivation (finalAttrs: {
+        pname = "nueon-bin";
+        version = "0.1.0";
+        src = pkgs.fetchurl {
+          url = "https://github.com/y-jar/nueon/releases/download/v${finalAttrs.version}/nueon_${finalAttrs.version}_amd64.deb";
+          hash = pkgs.lib.fakeHash;
+        };
+        nativeBuildInputs = with pkgs; [
+          dpkg
+          autoPatchelfHook
+          makeWrapper
+        ];
+        buildInputs = runtimeLibs;
+        unpackPhase = ''
+          runHook preUnpack
+          dpkg-deb -x $src .
+          runHook postUnpack
+        '';
+        installPhase = ''
+          runHook preInstall
+          mkdir -p $out
+          cp -r usr/. $out/
+          # Same Wayland-safe WebKit flags as the source build.
+          wrapProgram $out/bin/nueon \
+            --set WEBKIT_DISABLE_DMABUF_RENDERER 1 \
+            --set WEBKIT_DISABLE_COMPOSITING_MODE 1
+          runHook postInstall
+        '';
+        });
       };
 
       # Single source of truth: shell.nix defines the dev environment, tools,
