@@ -204,6 +204,33 @@ fn import_roots_creates_words_sparsely_and_stores_valency() {
 }
 
 #[test]
+fn import_declares_the_definition_column_and_stores_its_senses() {
+    let dir = tempfile::tempdir().unwrap();
+    let mut ws = Workspace::new(dir.path()).unwrap();
+    import_apply(
+        &mut ws,
+        &ImportPlan::new(fixture("testlangRoots.csv"), roots_options()),
+    )
+    .unwrap();
+
+    // The reserved `definition` column must be declared, or the stored value
+    // has no column to appear in.
+    let table = ws.dictionary.table("roots").unwrap();
+    let definition = table.tag("definition").expect("definition tag declared");
+    assert_eq!(definition.kind, langloom_core::FieldType::TagList);
+
+    let il = table.entries.iter().find(|e| e.wordname == "il").unwrap();
+    assert_eq!(
+        il.get("definition"),
+        Some(&FieldValue::TagList(vec![
+            "tall".into(),
+            "tower".into(),
+            "holy".into()
+        ]))
+    );
+}
+
+#[test]
 fn derived_preview_reports_links_and_the_duplicate_word() {
     let dir = tempfile::tempdir().unwrap();
     let mut ws = Workspace::new(dir.path()).unwrap();

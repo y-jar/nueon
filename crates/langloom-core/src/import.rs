@@ -1027,6 +1027,15 @@ pub fn import_apply(
                         .filter(|s| !s.is_empty())
                         .collect();
                     if !senses.is_empty() {
+                        // Declare the reserved column so the grid shows it:
+                        // the value alone is invisible without a TagDef.
+                        ensure_tag(
+                            workspace,
+                            &options.target_table,
+                            DEFINITION_TAG,
+                            FieldType::TagList,
+                            &mut report,
+                        )?;
                         workspace.set_definition(&options.target_table, id, senses)?;
                     }
                 }
