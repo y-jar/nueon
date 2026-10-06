@@ -6,6 +6,7 @@
 pub mod config;
 pub mod export;
 pub mod global;
+pub mod import;
 pub mod model;
 pub mod translation;
 pub mod vcs;
@@ -18,6 +19,11 @@ pub use config::{
     WorkspaceSettings,
 };
 pub use global::{GlobalConfig, WindowLayout, WorkspaceEntry};
+pub use import::{
+    detect, import_apply, import_preview, ColumnProposal, ColumnRole, Detection, DuplicateConflict,
+    DuplicatePolicy, ImportError, ImportOptions, ImportPlan, ImportReport, LinkChoice, LinkReport,
+    LinkSyntax, Preview, SuspiciousRow, TagProposal,
+};
 pub use model::{
     Dictionary, FieldType, FieldValue, GlossMorpheme, InterlinearGloss, TagDef, TagFormat,
     TagKindChange, TagRemoval, WordEntry, WordHit, WordTable, DEFINITION_TAG, PARENT_TAG,
