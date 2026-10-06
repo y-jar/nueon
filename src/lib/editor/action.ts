@@ -123,7 +123,7 @@ export const codemirror: Action<HTMLElement, EditorParams> = (node, params) => {
   });
 
   view.dispatch({ effects: setWordIndex.of(params.index) });
-  setAssetBase(params.assetBase);
+  setAssetBase(params.assetBase, params.path);
   params.onView?.(view);
   params.onFormat?.(formatAt(view.state) ?? EMPTY_FORMAT);
 
@@ -166,7 +166,7 @@ export const codemirror: Action<HTMLElement, EditorParams> = (node, params) => {
             // ignore; the note remains on disk as last saved
           }
           current = next;
-          setAssetBase(next.assetBase);
+          setAssetBase(next.assetBase, next.path);
           view.dispatch({
             changes: { from: 0, to: view.state.doc.length, insert: next.content },
             selection: { anchor: 0 },
@@ -179,7 +179,7 @@ export const codemirror: Action<HTMLElement, EditorParams> = (node, params) => {
           view.dispatch({ effects: setWordIndex.of(next.index) });
         }
         if (next.assetBase !== current.assetBase) {
-          setAssetBase(next.assetBase);
+          setAssetBase(next.assetBase, next.path);
           view.dispatch({});
         }
         current = next;

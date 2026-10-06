@@ -14,6 +14,7 @@
     type Activity,
   } from "./lib/state.svelte";
   import { windowLabel, isMainWindow } from "./lib/window";
+  import { installFileDrop } from "./lib/fileDrop";
   import Onboarding from "./components/Onboarding.svelte";
   import ActivityBar from "./components/ActivityBar.svelte";
   import SidebarHost from "./components/SidebarHost.svelte";
@@ -28,6 +29,7 @@
   onMount(async () => {
     await init();
     await installDragBridge();
+    await installFileDrop();
     if (!isMainWindow) {
       // Torn-off windows show only tab groups; they restore their own tiling.
       await restoreSecondaryTiling(windowLabel);

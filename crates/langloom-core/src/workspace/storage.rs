@@ -87,6 +87,10 @@ pub enum StorageError {
     TableMissing(String),
     #[error("refusing to write outside the workspace: {0}")]
     UnsafePath(PathBuf),
+    #[error("not a regular file: {0}")]
+    NotAFile(PathBuf),
+    #[error("file is too large to import: {0}")]
+    TooLarge(PathBuf),
     #[error("already exists: {0}")]
     AlreadyExists(PathBuf),
     #[error("not found: {0}")]
@@ -95,7 +99,7 @@ pub enum StorageError {
     Config(String, String),
 }
 
-fn io_err(path: impl Into<PathBuf>, source: io::Error) -> StorageError {
+pub(super) fn io_err(path: impl Into<PathBuf>, source: io::Error) -> StorageError {
     StorageError::Io {
         path: path.into(),
         source,

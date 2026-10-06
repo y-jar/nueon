@@ -9,17 +9,23 @@ import {
 } from "@codemirror/view";
 import { convertFileSrc } from "@tauri-apps/api/core";
 import katex from "katex";
+import { normalizePath } from "../assets";
 import "katex/dist/katex.min.css";
 
-// Absolute `notes/` directory, used to resolve local image references.
+// Absolute `notes/` directory and the open note's folder inside it, used to
+// resolve relative image references (including `../assets/…`).
 let assetBase = "";
-export function setAssetBase(base: string) {
+let noteDir = "";
+export function setAssetBase(base: string, notePath = "") {
   assetBase = base;
+  noteDir = notePath.split("/").slice(0, -1).join("/");
 }
 
 function resolveImage(src: string): string {
   if (/^(https?:|data:|asset:)/.test(src)) return src;
-  const path = src.startsWith("/") ? src : `${assetBase}/${src}`;
+  const path = src.startsWith("/")
+    ? src
+    : normalizePath(`${assetBase}/${noteDir}/${src}`);
   try {
     return convertFileSrc(path);
   } catch {

@@ -152,6 +152,8 @@ pub fn run() {
             commands::ui_layout_set,
             commands::layout_state_get,
             commands::tiling_save,
+            commands::import_asset,
+            commands::import_drop,
             commands::window_spawn,
             commands::window_close_self,
             commands::windows_restore,

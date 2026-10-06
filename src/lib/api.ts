@@ -69,6 +69,27 @@ export const moveOrRenameNote = (
 export const deleteNote = (relPath: string): Promise<void> =>
   invoke("delete_note", { relPath });
 
+// -- assets --------------------------------------------------------------
+export type AssetKind = "image" | "text" | "other";
+
+export interface ImportedAsset {
+  name: string;
+  /** Path relative to the workspace root (`assets/ab12cd34ef.png`). */
+  relative: string;
+  kind: AssetKind;
+  original_name: string;
+  existed: boolean;
+}
+
+export type DropImport =
+  | { type: "note"; path: string }
+  | { type: "asset"; asset: ImportedAsset };
+
+export const importAsset = (path: string): Promise<ImportedAsset> =>
+  invoke("import_asset", { path });
+export const importDrop = (folder: string, path: string): Promise<DropImport> =>
+  invoke("import_drop", { folder, path });
+
 // -- dictionary ----------------------------------------------------------
 export type FieldType =
   | "text"

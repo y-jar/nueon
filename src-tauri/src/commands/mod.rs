@@ -1,5 +1,6 @@
 //! Tauri command handlers.
 
+mod assets;
 mod dictionary;
 mod notes;
 mod translation;
@@ -7,6 +8,7 @@ mod vcs;
 mod windows;
 mod workspace;
 
+pub use assets::*;
 pub use dictionary::*;
 pub use notes::*;
 pub use translation::*;

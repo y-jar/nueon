@@ -132,6 +132,8 @@
         class="tree-row"
         role="treeitem"
         tabindex="-1"
+        data-path={node.path}
+        data-dir={node.is_dir}
         aria-selected={activeDoc().selected === node.path}
         class:drop-target={dragOver === node.path && node.is_dir}
         class:drop-sibling={dragOver === node.path && !node.is_dir}

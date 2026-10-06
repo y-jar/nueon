@@ -1,8 +1,10 @@
 //! A user-designated workspace directory: tables, notes, and config.
 
+mod assets;
 mod note;
 mod storage;
 
+pub use assets::{AssetKind, ImportedAsset, ASSETS_DIR};
 pub use note::NoteFile;
 pub use storage::{StorageError, CONFIG_DIR, DICTIONARY_DIR, NOTES_DIR};
 
@@ -611,6 +613,41 @@ impl Workspace {
             format!("langloom: update note \"{}\"", note.path.display()),
         );
         Ok(())
+    }
+
+    /// Copy an external file into `assets/` under a short content hash.
+    pub fn import_asset(
+        &mut self,
+        source: impl AsRef<Path>,
+    ) -> Result<ImportedAsset, StorageError> {
+        let imported = assets::import_asset(&self.root_path, source.as_ref())?;
+        if !imported.existed {
+            self.mark_change(
+                Instant::now(),
+                format!("langloom: import asset \"{}\"", imported.name),
+            );
+        }
+        Ok(imported)
+    }
+
+    /// Import a text/Markdown file as a note inside `folder` of `notes/`.
+    pub fn import_note_file(
+        &mut self,
+        folder: impl AsRef<Path>,
+        source: impl AsRef<Path>,
+    ) -> Result<PathBuf, StorageError> {
+        let relative = assets::import_note(&self.notes_dir(), folder.as_ref(), source.as_ref())?;
+        self.refresh_notes()?;
+        self.mark_change(
+            Instant::now(),
+            format!("langloom: import note \"{}\"", relative.display()),
+        );
+        Ok(relative)
+    }
+
+    /// Whether a dropped file should be imported as a note.
+    pub fn is_note_source(source: impl AsRef<Path>) -> bool {
+        assets::is_note_source(source.as_ref())
     }
 
     /// Read a note's raw content from `notes/<relative>`.
