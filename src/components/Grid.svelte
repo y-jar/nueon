@@ -32,6 +32,7 @@
   import { misspelledWords } from "../lib/spellcheck";
   import { ui, selectTable, type DocState } from "../lib/state.svelte";
   import { createWordWithValues } from "../lib/words";
+  import { normalizeView } from "../lib/gridView";
   import PillCell from "./PillCell.svelte";
   import AddWordModal from "./AddWordModal.svelte";
   import Popover from "./Popover.svelte";
@@ -268,21 +269,18 @@
     // Ids that still exist, so a removed or renamed tag is never written
     // back. New columns are not in the stored order, so they land last;
     // `wordname` is always first and never stored in another position.
-    const allIds = table
-      .getAllLeafColumns()
-      .map((column) => column.id)
-      .filter((id) => id !== "wordname");
-    const ordered = columnOrder.filter((id) => allIds.includes(id));
-    const order = [
-      "wordname",
-      ...ordered,
-      ...allIds.filter((id) => !ordered.includes(id)),
-    ];
-    const widths = Object.fromEntries(
-      Object.entries(columnSizing)
-        .filter(([id]) => id === "wordname" || allIds.includes(id))
-        .map(([id, width]) => [id, Math.round(width)]),
-    );
+    // Crucially, nothing is pruned until the table's columns have actually
+    // loaded — a save that fires early must not discard the real ids and
+    // widths it has not yet had a chance to verify.
+    const { order, widths } = normalizeView({
+      columnOrder,
+      columnSizing,
+      knownIds: table
+        .getAllLeafColumns()
+        .map((column) => column.id)
+        .filter((id) => id !== "wordname"),
+      columnsLoaded: doc.table !== null,
+    });
     const snapshot: api.GridViewState = {
       sorting: sorting.map((spec) => ({ id: spec.id, desc: spec.desc })),
       search: filter,

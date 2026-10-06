@@ -8,7 +8,8 @@
     "build": "vite build",
     "preview": "vite preview",
     "check": "svelte-check --tsconfig ./tsconfig.json",
-    "tauri": "tauri"
+    "tauri": "tauri",
+    "test": "node --test --experimental-strip-types src/lib/gridView.test.ts"
   },
   "dependencies": {
     "@codemirror/commands": "^6",

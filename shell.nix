@@ -60,6 +60,7 @@ let
         && cargo clippy --workspace --all-targets -- -D warnings \
         && cargo test -p langloom-core \
         && npm run check \
+        && npm run test \
         && npm run build
     '';
     "loom-help" = ''
