@@ -1,4 +1,5 @@
 <script lang="ts">
+  import { onDestroy } from "svelte";
   import { autofocus } from "../lib/actions";
   import { t } from "svelte-i18n";
   import {
@@ -52,8 +53,10 @@
   let ghostParents = $state<string[]>([]);
   let ghostBusy = false;
   let error = $state("");
-  let loadedTable: string | null = null;
+  let loadedTable = $state<string | null>(null);
   let saveTimer: ReturnType<typeof setTimeout> | null = null;
+  /** The view state waiting to be persisted, tagged with its table. */
+  let pendingView: { name: string; snapshot: api.GridViewState } | null = null;
 
   let searchOpen = $state(false);
   let addWordOpen = $state(false);
@@ -197,34 +200,89 @@
     return [...seen.values()].sort((a, b) => a.label.localeCompare(b.label));
   });
 
-  // Load persisted view state when the active table changes.
+  /**
+   * Write the view state waiting in the debounce window right now, under the
+   * table it belongs to, and cancel the timer. Returns once the write is
+   * sent, so a caller can await it before switching tables.
+   */
+  async function flushViewState(): Promise<void> {
+    if (saveTimer) {
+      clearTimeout(saveTimer);
+      saveTimer = null;
+    }
+    const pending = pendingView;
+    pendingView = null;
+    if (pending) {
+      try {
+        await api.gridViewSet(pending.name, pending.snapshot);
+      } catch {
+        // Presentation state only: a failed write is not worth surfacing.
+      }
+    }
+  }
+
+  // Load persisted view state when the active table changes. Any edit still
+  // inside the debounce window is flushed **first**, under the table being
+  // left, so a resize or reorder made moments before the switch is not lost.
   $effect(() => {
     const name = doc.currentTable;
     if (!name || name === loadedTable) return;
-    api
-      .gridViewGet(name)
-      .then((view) => {
-        if (doc.currentTable !== name) return;
-        sorting = view.sorting.length
-          ? view.sorting.map((spec) => ({ id: spec.id, desc: spec.desc }))
-          : [{ id: "wordname", desc: false }];
-        filter = view.search;
-        columnVisibility = Object.fromEntries(
-          view.hidden_columns.map((id) => [id, false]),
-        );
-        columnOrder = view.column_order ?? [];
-        columnSizing = view.column_widths ?? {};
-        selectedIds = [];
-        loadedTable = name;
-      })
-      .catch(() => {
-        loadedTable = name;
-      });
+    void (async () => {
+      await flushViewState();
+      let view: api.GridViewState | null = null;
+      try {
+        view = await api.gridViewGet(name);
+      } catch {
+        view = null;
+      }
+      // A newer switch may have happened while we were talking to the backend.
+      if (doc.currentTable !== name) return;
+
+      // The backend omits empty fields, so every one is defaulted here. A
+      // view with nothing hidden or reordered genuinely arrives as `{}`, and
+      // must not throw on the way to a usable grid.
+      const savedSorting = view?.sorting ?? [];
+      sorting = savedSorting.length
+        ? savedSorting.map((spec) => ({ id: spec.id, desc: spec.desc }))
+        : [{ id: "wordname", desc: false }];
+      filter = view?.search ?? "";
+      columnVisibility = Object.fromEntries(
+        (view?.hidden_columns ?? []).map((id) => [id, false]),
+      );
+      // `wordname` is always pinned first and never loaded into the order.
+      columnOrder = (view?.column_order ?? []).filter((id) => id !== "wordname");
+      columnSizing = view?.column_widths ?? {};
+      selectedIds = [];
+      loadedTable = name;
+    })();
   });
 
   // Persist view state (debounced) whenever the grid presentation changes.
+  //
+  // Every reactive input is read here, before the guard, so the effect
+  // re-runs whenever any of them changes — including a resize that happens
+  // while `loadedTable` is still settling. Reading them only past the guard
+  // would register no dependencies and silently stop saving.
   $effect(() => {
     const name = doc.currentTable;
+    // Ids that still exist, so a removed or renamed tag is never written
+    // back. New columns are not in the stored order, so they land last;
+    // `wordname` is always first and never stored in another position.
+    const allIds = table
+      .getAllLeafColumns()
+      .map((column) => column.id)
+      .filter((id) => id !== "wordname");
+    const ordered = columnOrder.filter((id) => allIds.includes(id));
+    const order = [
+      "wordname",
+      ...ordered,
+      ...allIds.filter((id) => !ordered.includes(id)),
+    ];
+    const widths = Object.fromEntries(
+      Object.entries(columnSizing)
+        .filter(([id]) => id === "wordname" || allIds.includes(id))
+        .map(([id, width]) => [id, Math.round(width)]),
+    );
     const snapshot: api.GridViewState = {
       sorting: sorting.map((spec) => ({ id: spec.id, desc: spec.desc })),
       search: filter,
@@ -232,17 +290,38 @@
       hidden_columns: Object.entries(columnVisibility)
         .filter(([, visible]) => !visible)
         .map(([id]) => id),
-      column_order: [...columnOrder],
-      column_widths: Object.fromEntries(
-        Object.entries(columnSizing).map(([id, width]) => [id, Math.round(width)]),
-      ),
+      column_order: order,
+      column_widths: widths,
     };
+
     if (!name || name !== loadedTable) return;
+    pendingView = { name, snapshot };
     if (saveTimer) clearTimeout(saveTimer);
-    saveTimer = setTimeout(
-      () => api.gridViewSet(name, snapshot).catch(() => {}),
-      400,
-    );
+    saveTimer = setTimeout(() => {
+      void flushViewState();
+    }, 400);
+  });
+
+  // Best-effort flush when the window goes away. The async save is sent, but
+  // if the webview is torn down immediately the IPC may not complete — that
+  // is the one case not fully guaranteed. Switching tables and unmounting
+  // (closing the tab) are guaranteed, because those are awaited.
+  $effect(() => {
+    const onHide = () => {
+      void flushViewState();
+    };
+    window.addEventListener("pagehide", onHide);
+    window.addEventListener("beforeunload", onHide);
+    return () => {
+      window.removeEventListener("pagehide", onHide);
+      window.removeEventListener("beforeunload", onHide);
+    };
+  });
+
+  // Closing the editor tab (or leaving the dictionary view) unmounts the
+  // grid; flush first so a just-made change is not dropped.
+  onDestroy(() => {
+    void flushViewState();
   });
 
   $effect(() => {

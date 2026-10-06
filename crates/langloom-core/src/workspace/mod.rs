@@ -1458,6 +1458,7 @@ mod tests {
     use crate::model::{FieldType, FieldValue};
     use crate::vcs::git_available;
     use crate::WORDNAME_TAG;
+    use std::collections::BTreeMap;
 
     fn sample_workspace(dir: &std::path::Path) -> Workspace {
         let mut ws = Workspace::new(dir).unwrap();
@@ -2520,6 +2521,57 @@ mod tests {
         let reloaded = Workspace::load(dir.path()).unwrap();
         assert_eq!(reloaded.grid_view("verbs"), view);
         assert_eq!(reloaded.grid_view("missing"), GridViewState::default());
+    }
+
+    #[test]
+    fn grid_view_column_widths_persist_per_table_across_reload() {
+        let dir = tempfile::tempdir().unwrap();
+        let mut ws = Workspace::new(dir.path()).unwrap();
+        ws.create_table("roots").unwrap();
+        ws.create_table("verbs").unwrap();
+
+        // Every column, including an odd pixel width, for both tables.
+        let roots_widths = BTreeMap::from([
+            ("wordname".to_string(), 220u32),
+            ("def".to_string(), 317),
+            ("parent".to_string(), 61),
+        ]);
+        let verbs_widths = BTreeMap::from([("wordname".to_string(), 180u32)]);
+        ws.set_grid_view(
+            "roots",
+            GridViewState {
+                column_widths: roots_widths.clone(),
+                ..Default::default()
+            },
+        )
+        .unwrap();
+        ws.set_grid_view(
+            "verbs",
+            GridViewState {
+                column_widths: verbs_widths.clone(),
+                ..Default::default()
+            },
+        )
+        .unwrap();
+
+        let reloaded = Workspace::load(dir.path()).unwrap();
+        assert_eq!(reloaded.grid_view("roots").column_widths, roots_widths);
+        assert_eq!(reloaded.grid_view("verbs").column_widths, verbs_widths);
+
+        // Resizing one table's columns must not disturb another table's.
+        let mut widened = roots_widths.clone();
+        widened.insert("def".to_string(), 400);
+        ws.set_grid_view(
+            "roots",
+            GridViewState {
+                column_widths: widened.clone(),
+                ..Default::default()
+            },
+        )
+        .unwrap();
+        let reloaded = Workspace::load(dir.path()).unwrap();
+        assert_eq!(reloaded.grid_view("roots").column_widths, widened);
+        assert_eq!(reloaded.grid_view("verbs").column_widths, verbs_widths);
     }
 
     #[test]

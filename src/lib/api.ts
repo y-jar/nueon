@@ -216,15 +216,22 @@ export interface SortSpec {
   desc: boolean;
 }
 
+/**
+ * Presentation state for one table's grid.
+ *
+ * Every field is optional: the backend skips empty values when serializing,
+ * so a view with nothing hidden, searched, reordered or resized arrives as
+ * `{}`. Callers must default each field rather than assume it is present.
+ */
 export interface GridViewState {
-  sorting: SortSpec[];
-  search: string;
-  column_filters: Record<string, string>;
-  hidden_columns: string[];
+  sorting?: SortSpec[];
+  search?: string;
+  column_filters?: Record<string, string>;
+  hidden_columns?: string[];
   /** Column ids in display order; empty means the default order. */
-  column_order: string[];
+  column_order?: string[];
   /** User-adjusted column widths in pixels, keyed by column id. */
-  column_widths: Record<string, number>;
+  column_widths?: Record<string, number>;
 }
 
 // -- tiling layout -------------------------------------------------------
