@@ -156,6 +156,7 @@ pub fn run() {
             commands::import_detect,
             commands::import_preview,
             commands::import_apply,
+            commands::export_table,
             commands::import_asset,
             commands::import_drop,
             commands::window_spawn,

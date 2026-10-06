@@ -775,3 +775,13 @@ export const importPreview = (
 ): Promise<Preview> => invoke("import_preview", { path, options });
 export const importApply = (plan: ImportPlan): Promise<ImportReport> =>
   invoke("import_apply", { plan });
+
+// -- table export --------------------------------------------------------
+export type TableFormat = "csv" | "tsv" | "json";
+
+/** Export a table to `destination`; resolves to the written path. */
+export const exportTable = (
+  name: string,
+  format: TableFormat,
+  destination: string,
+): Promise<string> => invoke("export_table", { name, format, destination });

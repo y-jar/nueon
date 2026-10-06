@@ -197,7 +197,11 @@
     "clearSort": "Clear sort",
     "changeType": "Change type",
     "deleteTag": "Delete tag",
-    "unhideColumns": "Show hidden columns"
+    "unhideColumns": "Show hidden columns",
+    "export": "Export",
+    "exportCsv": "CSV (.csv)",
+    "exportTsv": "TSV (.tsv)",
+    "exportJson": "JSON backup (.json)"
   },
   "inspector": {
     "title": "Inspector",

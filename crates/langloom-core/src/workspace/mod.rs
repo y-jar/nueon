@@ -23,6 +23,7 @@ use crate::config::{
     GrammarConfig, GridViewState, LanguageConfig, LayoutState, TilingLayout, TranslationConfig,
     TranslationOptions, UiLayout, WindowGeometry, WorkspaceSettings,
 };
+use crate::export_table::TableFormat;
 use crate::model::{
     Dictionary, FieldType, FieldValue, TagDef, TagFormat, TagKindChange, TagRemoval, WordEntry,
     DEFINITION_TAG, WORDNAME_TAG,
@@ -402,6 +403,22 @@ impl Workspace {
             format!("langloom: rename table \"{from}\" to \"{to}\""),
         );
         Ok(true)
+    }
+
+    /// Export a table to `destination` in the requested format (atomic write).
+    pub fn export_table(
+        &self,
+        name: &str,
+        format: TableFormat,
+        destination: &Path,
+    ) -> Result<(), StorageError> {
+        let table = self
+            .dictionary
+            .table(name)
+            .ok_or_else(|| StorageError::TableMissing(name.to_string()))?;
+        let text = crate::export_table::export_table(table, format)
+            .map_err(|err| StorageError::Config("export".into(), err.to_string()))?;
+        storage::atomic_write(destination, text.as_bytes())
     }
 
     /// Write a table to its already-resolved file.

@@ -1,5 +1,6 @@
 <script lang="ts">
   import { onDestroy } from "svelte";
+  import { save } from "@tauri-apps/plugin-dialog";
   import { autofocus } from "../lib/actions";
   import { t } from "svelte-i18n";
   import {
@@ -24,6 +25,7 @@
     Check,
     Upload,
     Eye,
+    Download,
   } from "@lucide/svelte";
   import * as api from "../lib/api";
   import {
@@ -786,6 +788,24 @@
     onRefresh();
   }
 
+  /** Save the active table to a file (CSV/TSV, or a lossless JSON backup). */
+  async function exportAs(format: api.TableFormat) {
+    const name = doc.currentTable;
+    if (!name) return;
+    try {
+      const destination = await save({
+        defaultPath: `${name}.${format}`,
+        filters: [{ name: format.toUpperCase(), extensions: [format] }],
+      });
+      if (!destination) return;
+      ui.status = `exporting ${name}…`;
+      await api.exportTable(name, format, destination);
+      ui.status = `exported ${name} → ${destination}`;
+    } catch (e) {
+      ui.status = `export failed: ${String(e)}`;
+    }
+  }
+
   async function doUndo() {
     await api.undo();
     onRefresh();
@@ -859,6 +879,15 @@
             {column.id}
           </label>
         {/each}
+      </div>
+    </Popover>
+
+    <Popover align="right">
+      {#snippet label()}<Download size={14} /> {$t("grid.export")}{/snippet}
+      <div class="picker-body">
+        <button onclick={() => exportAs("csv")}>{$t("grid.exportCsv")}</button>
+        <button onclick={() => exportAs("tsv")}>{$t("grid.exportTsv")}</button>
+        <button onclick={() => exportAs("json")}>{$t("grid.exportJson")}</button>
       </div>
     </Popover>
 

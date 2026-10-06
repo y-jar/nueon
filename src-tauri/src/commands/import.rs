@@ -55,3 +55,19 @@ pub fn import_apply(
     changed(&app, "notes");
     Ok(report)
 }
+
+/// Export a table to a file (CSV, TSV, or a lossless JSON snapshot).
+#[tauri::command]
+pub fn export_table(
+    state: State<'_, Shared>,
+    name: String,
+    format: langloom_core::TableFormat,
+    destination: String,
+) -> Result<String, String> {
+    let state = state.lock().map_err(|_| "state poisoned".to_string())?;
+    state
+        .workspace()?
+        .export_table(&name, format, Path::new(&destination))
+        .map_err(|err| err.to_string())?;
+    Ok(destination)
+}
