@@ -1,6 +1,6 @@
 //! Importing words from delimited text: detection, preview and apply.
 //!
-//! The heavy lifting lives in `langloom-core`'s `import` module. These
+//! The heavy lifting lives in `nueon-core`'s `import` module. These
 //! commands are thin IPC wrappers: detection and preview only read, so they
 //! hold the state lock immutably and write nothing; apply takes the lock
 //! mutably and tells the frontend the dictionary and notes changed.
@@ -10,8 +10,8 @@ use std::sync::Mutex;
 
 use tauri::{AppHandle, State};
 
-use langloom_core::import as core;
-use langloom_core::{Detection, ImportOptions, ImportPlan, ImportReport, Preview};
+use nueon_core::import as core;
+use nueon_core::{Detection, ImportOptions, ImportPlan, ImportReport, Preview};
 
 use super::changed;
 use crate::state::AppState;
@@ -61,7 +61,7 @@ pub fn import_apply(
 pub fn export_table(
     state: State<'_, Shared>,
     name: String,
-    format: langloom_core::TableFormat,
+    format: nueon_core::TableFormat,
     destination: String,
 ) -> Result<String, String> {
     let state = state.lock().map_err(|_| "state poisoned".to_string())?;

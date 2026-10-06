@@ -1,5 +1,5 @@
 #![cfg_attr(not(debug_assertions), windows_subsystem = "windows")]
 
 fn main() {
-    langloom_tauri::run();
+    nueon_tauri::run();
 }

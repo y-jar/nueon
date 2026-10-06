@@ -60,7 +60,7 @@ pub fn with_note_extension(relative: &Path) -> PathBuf {
 /// Workspace `.gitignore` contents.
 pub const GITIGNORE_FILE: &str = ".gitignore";
 /// Files matched by the workspace `.gitignore`.
-pub const GITIGNORE_CONTENT: &str = "# langloom workspace\n*.tmp\n.trash/\n";
+pub const GITIGNORE_CONTENT: &str = "# nueon workspace\n*.tmp\n.trash/\n";
 
 /// Lines every workspace `.gitignore` must contain. The trash must never be
 /// committed by auto-check-in (it would fill history with moves in and out).

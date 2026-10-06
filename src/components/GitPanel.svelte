@@ -111,7 +111,7 @@
 
   async function commit() {
     try {
-      await api.vcsCommit(message.trim() || "langloom: check-in");
+      await api.vcsCommit(message.trim() || "nueon: check-in");
       message = "";
       await reload();
     } catch (e) {

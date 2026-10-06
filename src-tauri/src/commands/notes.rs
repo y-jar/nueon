@@ -1,6 +1,6 @@
 //! Notes tree and extensionless note IO commands.
 //!
-//! All paths are workspace-relative and validated by `langloom-core`'s path
+//! All paths are workspace-relative and validated by `nueon-core`'s path
 //! guard (`safe_join`), which rejects absolute paths and `..` escapes. Writes
 //! are atomic (temp file + rename) inside the core storage layer.
 
@@ -9,7 +9,7 @@ use std::sync::Mutex;
 use serde::Serialize;
 use tauri::{AppHandle, State};
 
-use langloom_core::{NoteFile, TrashRecord};
+use nueon_core::{NoteFile, TrashRecord};
 
 use super::changed;
 use crate::state::AppState;

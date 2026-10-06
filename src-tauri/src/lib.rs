@@ -1,6 +1,6 @@
-//! Tauri v2 shell for langloom.
+//! Tauri v2 shell for nueon.
 //!
-//! The reusable domain logic lives in `langloom-core`; this crate is the
+//! The reusable domain logic lives in `nueon-core`; this crate is the
 //! IPC/service boundary that the Svelte frontend talks to.
 
 mod commands;
@@ -235,5 +235,5 @@ pub fn run() {
             commands::autocheckin_pump,
         ])
         .run(tauri::generate_context!())
-        .expect("error while running langloom");
+        .expect("error while running nueon");
 }

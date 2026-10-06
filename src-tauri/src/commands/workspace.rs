@@ -6,7 +6,7 @@ use std::sync::Mutex;
 use serde::Serialize;
 use tauri::{AppHandle, Manager, State};
 
-use langloom_core::{
+use nueon_core::{
     LayoutState, StorageError, TilingLayout, UiLayout, WindowGeometry, WindowLayout, Workspace,
     WorkspaceEntry,
 };

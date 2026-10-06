@@ -102,7 +102,7 @@
 
   async function exportPresets() {
     const path = await save({
-      defaultPath: "langloom-presets.json",
+      defaultPath: "nueon-presets.json",
       filters: [{ name: "JSON", extensions: ["json"] }],
     });
     if (!path) return;

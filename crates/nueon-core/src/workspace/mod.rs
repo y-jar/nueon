@@ -239,7 +239,7 @@ impl Workspace {
         if !renamed.is_empty() {
             self.mark_change(
                 Instant::now(),
-                format!("langloom: migrate {} notes to .md", renamed.len()),
+                format!("nueon: migrate {} notes to .md", renamed.len()),
             );
         }
         Ok(())
@@ -270,12 +270,12 @@ impl Workspace {
     ) -> Result<table_files::MigrationReport, StorageError> {
         // A checkpoint is a no-op commit when nothing is pending, so it is
         // always safe to take one before a risky, file-touching repair.
-        self.force_checkin("langloom: checkpoint before table filename migration");
+        self.force_checkin("nueon: checkpoint before table filename migration");
         let report = table_files::migrate_collisions(&self.dictionary_dir())?;
         if !report.is_empty() {
             self.refresh_dictionary_from_disk()?;
             self.force_checkin(&format!(
-                "langloom: migrated {} table file(s) <CAN REVERT>",
+                "nueon: migrated {} table file(s) <CAN REVERT>",
                 report.renamed_tables.len()
             ));
         }
@@ -342,7 +342,7 @@ impl Workspace {
         self.record();
         self.dictionary.add_table(name);
         self.save_table(name)?;
-        self.mark_change(Instant::now(), format!("langloom: create table \"{name}\""));
+        self.mark_change(Instant::now(), format!("nueon: create table \"{name}\""));
         Ok(true)
     }
 
@@ -369,7 +369,7 @@ impl Workspace {
         self.record();
         self.dictionary.remove_table(name);
         self.table_files.remove(name);
-        self.mark_change(Instant::now(), format!("langloom: delete table \"{name}\""));
+        self.mark_change(Instant::now(), format!("nueon: delete table \"{name}\""));
         Ok(Some(record))
     }
 
@@ -400,7 +400,7 @@ impl Workspace {
         self.save_table(to)?;
         self.mark_change(
             Instant::now(),
-            format!("langloom: rename table \"{from}\" to \"{to}\""),
+            format!("nueon: rename table \"{from}\" to \"{to}\""),
         );
         Ok(true)
     }
@@ -437,7 +437,7 @@ impl Workspace {
     /// Persist in-place edits to the words of a table.
     pub fn save_table_edits(&mut self, table: &str) -> Result<(), StorageError> {
         self.save_table(table)?;
-        self.mark_change(Instant::now(), format!("langloom: edit table \"{table}\""));
+        self.mark_change(Instant::now(), format!("nueon: edit table \"{table}\""));
         Ok(())
     }
 
@@ -460,7 +460,7 @@ impl Workspace {
         self.save_table(table)?;
         self.mark_change(
             Instant::now(),
-            format!("langloom: add word \"{wordname}\" to table \"{table}\""),
+            format!("nueon: add word \"{wordname}\" to table \"{table}\""),
         );
         Ok(Some(id))
     }
@@ -504,7 +504,7 @@ impl Workspace {
         self.save_table(table)?;
         self.mark_change(
             Instant::now(),
-            format!("langloom: add word \"{wordname}\" (from translation) to table \"{table}\""),
+            format!("nueon: add word \"{wordname}\" (from translation) to table \"{table}\""),
         );
         Ok(Some(id))
     }
@@ -518,7 +518,7 @@ impl Workspace {
         self.save_table(table)?;
         self.mark_change(
             Instant::now(),
-            format!("langloom: update word \"{wordname}\" in table \"{table}\""),
+            format!("nueon: update word \"{wordname}\" in table \"{table}\""),
         );
         Ok(true)
     }
@@ -629,7 +629,7 @@ impl Workspace {
         self.save_table(to)?;
         self.mark_change(
             Instant::now(),
-            format!("langloom: move word between \"{from}\" and \"{to}\""),
+            format!("nueon: move word between \"{from}\" and \"{to}\""),
         );
         Ok(true)
     }
@@ -712,7 +712,7 @@ impl Workspace {
         self.mark_change(
             Instant::now(),
             format!(
-                "langloom: delete word \"{}\" from table \"{table}\"",
+                "nueon: delete word \"{}\" from table \"{table}\"",
                 removed.wordname
             ),
         );
@@ -736,7 +736,7 @@ impl Workspace {
         self.save_table(table)?;
         self.mark_change(
             Instant::now(),
-            format!("langloom: add tag \"{name}\" to table \"{table}\""),
+            format!("nueon: add tag \"{name}\" to table \"{table}\""),
         );
         Ok(true)
     }
@@ -769,7 +769,7 @@ impl Workspace {
         // Schema edits are committed immediately, like tag deletion, so a
         // type change is always a single revertible step in history.
         self.force_checkin(&format!(
-            "langloom: change type of tag \"{tag}\" in table \"{table}\" to {:?} <CAN REVERT>",
+            "nueon: change type of tag \"{tag}\" in table \"{table}\" to {:?} <CAN REVERT>",
             kind
         ));
         Ok(Some(change))
@@ -799,7 +799,7 @@ impl Workspace {
         self.save_table(table)?;
         self.mark_change(
             Instant::now(),
-            format!("langloom: change format of tag \"{tag}\" in table \"{table}\""),
+            format!("nueon: change format of tag \"{tag}\" in table \"{table}\""),
         );
         Ok(true)
     }
@@ -823,7 +823,7 @@ impl Workspace {
         };
         self.save_table(table)?;
         let message = format!(
-            "langloom: DELETED TAGS: {table}.{tag} ({} words) <CAN REVERT>",
+            "nueon: DELETED TAGS: {table}.{tag} ({} words) <CAN REVERT>",
             removal.affected
         );
         self.force_checkin(&message);
@@ -857,7 +857,7 @@ impl Workspace {
             }
             self.mark_change(
                 Instant::now(),
-                format!("langloom: update note \"{}\"", note.path.display()),
+                format!("nueon: update note \"{}\"", note.path.display()),
             );
         }
         Ok(hash)
@@ -880,7 +880,7 @@ impl Workspace {
         if !imported.existed {
             self.mark_change(
                 Instant::now(),
-                format!("langloom: import asset \"{}\"", imported.name),
+                format!("nueon: import asset \"{}\"", imported.name),
             );
         }
         Ok(imported)
@@ -896,7 +896,7 @@ impl Workspace {
         self.refresh_notes()?;
         self.mark_change(
             Instant::now(),
-            format!("langloom: import note \"{}\"", relative.display()),
+            format!("nueon: import note \"{}\"", relative.display()),
         );
         Ok(relative)
     }
@@ -919,7 +919,7 @@ impl Workspace {
         self.refresh_notes()?;
         self.mark_change(
             Instant::now(),
-            format!("langloom: create note \"{}\"", relative.display()),
+            format!("nueon: create note \"{}\"", relative.display()),
         );
         Ok(relative)
     }
@@ -942,7 +942,7 @@ impl Workspace {
         storage::create_folder(&self.notes_dir(), relative)?;
         self.mark_change(
             Instant::now(),
-            format!("langloom: create folder \"{}\"", relative.display()),
+            format!("nueon: create folder \"{}\"", relative.display()),
         );
         Ok(())
     }
@@ -959,7 +959,7 @@ impl Workspace {
         self.mark_change(
             Instant::now(),
             format!(
-                "langloom: rename \"{}\" to \"{}\"",
+                "nueon: rename \"{}\" to \"{}\"",
                 from.display(),
                 to.display()
             ),
@@ -991,7 +991,7 @@ impl Workspace {
         self.refresh_notes()?;
         self.mark_change(
             Instant::now(),
-            format!("langloom: delete \"{}\"", relative.display()),
+            format!("nueon: delete \"{}\"", relative.display()),
         );
         Ok(record)
     }
@@ -1023,7 +1023,7 @@ impl Workspace {
                 self.refresh_notes()?;
                 self.mark_change(
                     Instant::now(),
-                    format!("langloom: restore \"{}\"", path.display()),
+                    format!("nueon: restore \"{}\"", path.display()),
                 );
                 Ok(Restored {
                     kind: record.kind,
@@ -1052,10 +1052,7 @@ impl Workspace {
                     return Err(err);
                 }
                 trash::purge(&self.root_path, id)?;
-                self.mark_change(
-                    Instant::now(),
-                    format!("langloom: restore table \"{name}\""),
-                );
+                self.mark_change(Instant::now(), format!("nueon: restore table \"{name}\""));
                 Ok(Restored {
                     kind: TrashKind::Table,
                     name,
@@ -1086,7 +1083,7 @@ impl Workspace {
             &self.config_dir().join(storage::TRANSLATION_FILE),
             &self.translation,
         )?;
-        self.mark_change(Instant::now(), "langloom: update translation presets");
+        self.mark_change(Instant::now(), "nueon: update translation presets");
         Ok(())
     }
 
@@ -1096,7 +1093,7 @@ impl Workspace {
             &self.config_dir().join(storage::TRANSLATION_FILE),
             &self.translation,
         )?;
-        self.mark_change(Instant::now(), "langloom: update translation presets");
+        self.mark_change(Instant::now(), "nueon: update translation presets");
         Ok(())
     }
 
@@ -1163,7 +1160,7 @@ impl Workspace {
         storage::save_json(&dir.join(storage::GRAMMAR_FILE), &self.grammar)?;
         storage::save_json(&dir.join(storage::TRANSLATION_FILE), &self.translation)?;
         storage::save_json(&dir.join(storage::SETTINGS_FILE), &self.settings)?;
-        self.mark_change(Instant::now(), "langloom: update config");
+        self.mark_change(Instant::now(), "nueon: update config");
         Ok(())
     }
 
@@ -1309,7 +1306,7 @@ impl Workspace {
                 ))
             }
         }
-        self.mark_change(Instant::now(), format!("langloom: update {section} config"));
+        self.mark_change(Instant::now(), format!("nueon: update {section} config"));
         Ok(())
     }
 
@@ -1344,7 +1341,7 @@ impl Workspace {
         }
         let current = std::mem::replace(&mut self.dictionary, previous);
         self.history.redo.push(current);
-        self.mark_change(Instant::now(), "langloom: undo");
+        self.mark_change(Instant::now(), "nueon: undo");
         Ok(true)
     }
 
@@ -1360,7 +1357,7 @@ impl Workspace {
         }
         let current = std::mem::replace(&mut self.dictionary, next);
         self.history.undo.push(current);
-        self.mark_change(Instant::now(), "langloom: redo");
+        self.mark_change(Instant::now(), "nueon: redo");
         Ok(true)
     }
 
@@ -1423,7 +1420,7 @@ impl Workspace {
     /// Commit pending changes when the application is closing.
     pub fn close_checkin(&mut self) -> Option<String> {
         self.auto.cancel();
-        self.force_checkin("langloom: session check-in")
+        self.force_checkin("nueon: session check-in")
     }
 
     /// Persist the "don't show the git prompt again" preference.
@@ -1778,16 +1775,16 @@ mod tests {
         ws.create_note("keep").unwrap();
         ws.create_note("doomed").unwrap();
         ws.create_table("verbs").unwrap();
-        ws.checkin("langloom: baseline");
+        ws.checkin("nueon: baseline");
 
         ws.delete_note("doomed.md").unwrap();
         ws.delete_table("verbs").unwrap();
         assert!(!trash_entries(dir.path()).is_empty());
-        ws.checkin("langloom: after deletes");
+        ws.checkin("nueon: after deletes");
         // Trash again after a commit, then commit again.
         ws.create_note("second").unwrap();
         ws.delete_note("second.md").unwrap();
-        ws.checkin("langloom: after more deletes");
+        ws.checkin("nueon: after more deletes");
 
         let tracked = git_out(dir.path(), &["ls-files"]);
         assert!(!tracked.contains(".trash"), "tracked files: {tracked}");
@@ -2640,7 +2637,7 @@ mod tests {
         ws.create_table("verbs").unwrap();
         ws.add_tag("verbs", TagDef::new("flag", FieldType::Text))
             .unwrap();
-        ws.checkin("langloom: baseline");
+        ws.checkin("nueon: baseline");
 
         assert!(ws
             .set_tag_kind("verbs", "flag", FieldType::Boolean)

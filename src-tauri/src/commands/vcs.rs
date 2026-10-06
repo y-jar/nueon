@@ -6,8 +6,8 @@ use std::time::Instant;
 use serde::Serialize;
 use tauri::{AppHandle, State};
 
-use langloom_core::vcs::GitStatus;
-use langloom_core::{Commit, StatusEntry};
+use nueon_core::vcs::GitStatus;
+use nueon_core::{Commit, StatusEntry};
 
 use super::changed;
 use crate::state::AppState;

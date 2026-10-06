@@ -1,5 +1,5 @@
 {
-  description = "langloom — conlang editor and creation app";
+  description = "nueon — conlang editor and creation app";
 
   inputs.nixpkgs.url = "nixpkgs";
 
@@ -36,10 +36,10 @@
 
       # The Vite/Svelte frontend, built with a lockfile-pinned npm closure.
       frontend = pkgs.buildNpmPackage {
-        pname = "langloom-frontend";
+        pname = "nueon-frontend";
         version = "0.1.0";
         src = ./.;
-        npmDepsHash = "sha256-1D/TPuvXVDq7xOXbqe8izX3XPN74j9VUjTH/3vixsaM=";
+        npmDepsHash = "sha256-WL8pPVoCNKpEvTE1MztX75cOx31FkMzRImXPd46qI2E=";
         npmBuildScript = "build";
         installPhase = ''
           runHook preInstall
@@ -51,7 +51,7 @@
     in
     {
       packages.${system}.default = pkgs.rustPlatform.buildRustPackage {
-        pname = "langloom";
+        pname = "nueon";
         version = "0.1.0";
         src = ./.;
         cargoLock.lockFile = ./Cargo.lock;
@@ -61,7 +61,7 @@
         # the Vite dev server (http://localhost:1420).
         cargoBuildFlags = [
           "-p"
-          "langloom-tauri"
+          "nueon-tauri"
           "--features"
           "custom-protocol"
         ];
@@ -83,18 +83,18 @@
         installPhase = ''
           runHook preInstall
           install -Dm755 \
-            "$(find target -type f -name langloom -path '*/release/langloom' -print -quit)" \
-            $out/bin/langloom
+            "$(find target -type f -name nueon -path '*/release/nueon' -print -quit)" \
+            $out/bin/nueon
 
-          install -Dm644 ${./packaging/langloom.desktop} \
-            $out/share/applications/langloom.desktop
+          install -Dm644 ${./packaging/nueon.desktop} \
+            $out/share/applications/nueon.desktop
 
           install -Dm644 src-tauri/icons/32x32.png \
-            $out/share/icons/hicolor/32x32/apps/langloom.png
+            $out/share/icons/hicolor/32x32/apps/nueon.png
           install -Dm644 src-tauri/icons/128x128.png \
-            $out/share/icons/hicolor/128x128/apps/langloom.png
+            $out/share/icons/hicolor/128x128/apps/nueon.png
           install -Dm644 src-tauri/icons/icon.png \
-            $out/share/icons/hicolor/256x256/apps/langloom.png
+            $out/share/icons/hicolor/256x256/apps/nueon.png
 
           runHook postInstall
         '';

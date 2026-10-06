@@ -1,6 +1,6 @@
 //! Export the open note as ODT or PDF.
 //!
-//! ODT is built in `langloom-core`. PDF renders the note as styled HTML in a
+//! ODT is built in `nueon-core`. PDF renders the note as styled HTML in a
 //! hidden webview (so every script gets the system's font fallback and
 //! shaping) and prints it to a file: silently through WebKitGTK on Linux, and
 //! through the system print dialog elsewhere.
@@ -11,7 +11,7 @@ use std::sync::Mutex;
 use serde::Deserialize;
 use tauri::{AppHandle, State};
 
-use langloom_core::export::{self, resolve_local};
+use nueon_core::export::{self, resolve_local};
 
 use crate::state::AppState;
 
@@ -88,7 +88,7 @@ pub async fn export_document(
             let document = export::html_document(&title, &body);
 
             let page = std::env::temp_dir().join(format!(
-                "langloom-export-{}.html",
+                "nueon-export-{}.html",
                 uuid::Uuid::new_v4().simple()
             ));
             std::fs::write(&page, document).map_err(|err| err.to_string())?;
@@ -125,7 +125,7 @@ fn print_to_pdf(app: &AppHandle, page: &Path, destination: &Path) -> Result<(), 
     let label = format!("export-{}", uuid::Uuid::new_v4().simple());
     let (loaded_tx, loaded_rx) = mpsc::channel::<()>();
     let window = WebviewWindowBuilder::new(app, &label, WebviewUrl::External(url))
-        .title("langloom export")
+        .title("nueon export")
         .inner_size(900.0, 1200.0)
         .visible(false)
         .on_page_load(move |_, payload| {
@@ -195,7 +195,7 @@ fn print_to_pdf(app: &AppHandle, page: &Path, _destination: &Path) -> Result<(),
     let url = tauri::Url::from_file_path(page).map_err(|_| "bad export path".to_string())?;
     let label = format!("export-{}", uuid::Uuid::new_v4().simple());
     let window = WebviewWindowBuilder::new(app, &label, WebviewUrl::External(url))
-        .title("langloom export")
+        .title("nueon export")
         .build()
         .map_err(|err| err.to_string())?;
     window

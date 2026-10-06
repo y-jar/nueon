@@ -44,13 +44,13 @@ let
   commands = {
     "loom-deps" = "npm install";
     "loom-dev" = "npm run tauri dev";
-    "loom-run" = "nix build .# && ./result/bin/langloom";
-    "loom-app" = "./result/bin/langloom";
+    "loom-run" = "nix build .# && ./result/bin/nueon";
+    "loom-app" = "./result/bin/nueon";
     "loom-pkg" = "nix build .#";
     "loom-fmt" = "cargo fmt --all";
     "loom-fmtcheck" = "cargo fmt --all --check";
     "loom-clippy" = "cargo clippy --workspace --all-targets -- -D warnings";
-    "loom-ctest" = "cargo test -p langloom-core";
+    "loom-ctest" = "cargo test -p nueon-core";
     "loom-testall" = "cargo test --workspace";
     "loom-fecheck" = "npm run check";
     "loom-febuild" = "npm run build";
@@ -58,23 +58,23 @@ let
     "loom-gates" = ''
       cargo fmt --all --check \
         && cargo clippy --workspace --all-targets -- -D warnings \
-        && cargo test -p langloom-core \
+        && cargo test -p nueon-core \
         && npm run check \
         && npm run test \
         && npm run build
     '';
     "loom-help" = ''
       cat <<'EOF'
-langloom dev commands
+nueon dev commands
   deps      npm install
   dev       npm run tauri dev            (hot reload)
-  run       nix build .# && ./result/bin/langloom
-  app       ./result/bin/langloom        (launch existing build)
+  run       nix build .# && ./result/bin/nueon
+  app       ./result/bin/nueon        (launch existing build)
   pkg       nix build .#
   fmt       cargo fmt --all
   fmtcheck  cargo fmt --all --check
   clippy    cargo clippy --workspace --all-targets -- -D warnings
-  ctest     cargo test -p langloom-core
+  ctest     cargo test -p nueon-core
   testall   cargo test --workspace
   fecheck   npm run check                (svelte-check)
   febuild   npm run build
@@ -133,6 +133,6 @@ pkgs.mkShell {
     alias aliases=loom-help
     alias help=loom-help
 
-    echo "langloom dev shell — type 'help' for commands (deps dev run app pkg fmt fmtcheck clippy ctest testall fecheck febuild clean gates)"
+    echo "nueon dev shell — type 'help' for commands (deps dev run app pkg fmt fmtcheck clippy ctest testall fecheck febuild clean gates)"
   '';
 }

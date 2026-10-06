@@ -958,7 +958,7 @@ pub fn import_apply(
     let checkpoint = workspace.git().is_some();
     if checkpoint {
         workspace.checkin(&format!(
-            "langloom: checkpoint before importing {}",
+            "nueon: checkpoint before importing {}",
             plan.source.display()
         ));
     }
@@ -1240,7 +1240,7 @@ pub fn import_apply(
 
     if checkpoint {
         workspace.checkin(&format!(
-            "langloom: import {} word(s) into \"{}\" <CAN REVERT>",
+            "nueon: import {} word(s) into \"{}\" <CAN REVERT>",
             report.words_created + report.words_updated,
             options.target_table
         ));

@@ -7,8 +7,8 @@ use serde::Serialize;
 use tauri::{AppHandle, State};
 use uuid::Uuid;
 
-use langloom_core::model::{derivation, DerivationNode, RelatedWord};
-use langloom_core::{
+use nueon_core::model::{derivation, DerivationNode, RelatedWord};
+use nueon_core::{
     FieldType, FieldValue, GridViewState, QuarantineWarning, TagDef, TagFormat, TagKindChange,
     TrashRecord, WordEntry, WordHit, WordTable,
 };

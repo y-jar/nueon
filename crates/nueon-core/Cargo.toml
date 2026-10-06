@@ -1,9 +1,9 @@
 [package]
-name = "langloom-core"
+name = "nueon-core"
 version.workspace = true
 edition.workspace = true
 license.workspace = true
-description = "Core data model, storage, configuration, and version control for langloom."
+description = "Core data model, storage, configuration, and version control for nueon."
 
 [dependencies]
 serde = { version = "1", features = ["derive"] }

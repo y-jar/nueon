@@ -1,12 +1,12 @@
 import { invoke } from "@tauri-apps/api/core";
 
-/** A registered workspace (mirrors `langloom_core::WorkspaceEntry`). */
+/** A registered workspace (mirrors `nueon_core::WorkspaceEntry`). */
 export interface WorkspaceEntry {
   name: string;
   path: string;
 }
 
-/** A node in the notes tree (mirrors `langloom_tauri`'s `NoteNode`). */
+/** A node in the notes tree (mirrors `nueon_tauri`'s `NoteNode`). */
 export interface NoteNode {
   name: string;
   /** Path relative to `notes/`, using `/` separators. */
@@ -15,7 +15,7 @@ export interface NoteNode {
   children: NoteNode[];
 }
 
-/** A dictionary entry matching a spelling (mirrors `langloom_core::WordHit`). */
+/** A dictionary entry matching a spelling (mirrors `nueon_core::WordHit`). */
 export interface WordHit {
   id: string;
   table: string;

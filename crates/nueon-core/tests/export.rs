@@ -1,7 +1,7 @@
 //! Delimited export round-trip: export a table, import it back, and confirm
 //! nothing is lost.
 
-use langloom_core::{
+use nueon_core::{
     export_columns, export_delimited, export_table, import_apply, ColumnRole, ExportColumn,
     FieldType, FieldValue, ImportOptions, ImportPlan, TableFormat, TagDef, WordTable, Workspace,
 };

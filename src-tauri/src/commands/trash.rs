@@ -4,7 +4,7 @@ use std::sync::Mutex;
 
 use tauri::{AppHandle, State};
 
-use langloom_core::{Restored, TrashKind, TrashRecord};
+use nueon_core::{Restored, TrashKind, TrashRecord};
 
 use super::changed;
 use crate::state::AppState;

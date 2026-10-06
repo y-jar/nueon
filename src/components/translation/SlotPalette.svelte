@@ -10,7 +10,7 @@
 
   let { tags, onAddTag, onAddPrimitive }: Props = $props();
 
-  const DRAG_TYPE = "application/x-langloom-slot";
+  const DRAG_TYPE = "application/x-nueon-slot";
 
   function dragStart(event: DragEvent, slot: ClauseSlot) {
     const payload = JSON.stringify(slot);

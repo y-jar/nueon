@@ -1,16 +1,16 @@
 [package]
-name = "langloom-tauri"
+name = "nueon-tauri"
 version.workspace = true
 edition.workspace = true
 license.workspace = true
-description = "Tauri v2 desktop shell for langloom."
+description = "Tauri v2 desktop shell for nueon."
 
 [lib]
-name = "langloom_tauri"
+name = "nueon_tauri"
 crate-type = ["staticlib", "cdylib", "rlib"]
 
 [[bin]]
-name = "langloom"
+name = "nueon"
 path = "src/main.rs"
 
 [build-dependencies]
@@ -23,7 +23,7 @@ tauri-plugin-opener = "2"
 serde = { version = "1", features = ["derive"] }
 serde_json = "1"
 uuid = { version = "1", features = ["serde"] }
-langloom-core = { path = "../crates/langloom-core" }
+nueon-core = { path = "../crates/nueon-core" }
 
 [features]
 # Production builds embed the built frontend and skip the dev-server URL.

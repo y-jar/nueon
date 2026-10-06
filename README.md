@@ -1,4 +1,4 @@
-# langloom
+# nueon
 
 A super awesome conlang editor and creation app.
 
@@ -38,7 +38,7 @@ A workspace is a plain local directory the user picks:
 ## Workspaces
 
 The app keeps an app-global registry of workspaces at
-`$XDG_CONFIG_HOME/langloom/config.toml` (fallback `~/.config/langloom/`),
+`$XDG_CONFIG_HOME/nueon/config.toml` (fallback `~/.config/nueon/`),
 listing each workspace's display name and path plus the last-opened one. The
 bottom of the left sidebar has a workspace switcher; its last entry opens the
 **Manage workspaces** wizard, where you can create a new workspace (name +
@@ -130,7 +130,7 @@ translation re-runs immediately.
 ## Development
 
 > **Stack:** Tauri v2 shell (`src-tauri/`) + Svelte 5 / CodeMirror 6 frontend
-> (`src/`) over a UI-agnostic Rust core (`crates/langloom-core`). The legacy
+> (`src/`) over a UI-agnostic Rust core (`crates/nueon-core`). The legacy
 > egui UI was removed at R8.
 
 Everything is provided by the Nix shell (Rust + Node 22 + Tauri's WebKit/GTK
@@ -142,7 +142,7 @@ nix-shell
 npm install
 npm run tauri dev        # launch the Tauri + Svelte app
 
-cargo test -p langloom-core          # core logic (UI-agnostic)
+cargo test -p nueon-core          # core logic (UI-agnostic)
 cargo clippy --workspace --all-targets -- -D warnings
 cargo fmt --all --check
 ```
@@ -154,14 +154,14 @@ nix-shell                # dev shell (Rust + Node + WebKit/GTK)
 npm install
 npm run tauri dev        # launch the Tauri + Svelte app
 
-nix build                # build ./result/bin/langloom (Wayland-safe wrapper)
+nix build                # build ./result/bin/nueon (Wayland-safe wrapper)
 nix develop              # equivalent to nix-shell via the flake
 ```
 
 Core logic is UI-agnostic and tested independently:
 
 ```sh
-cargo test -p langloom-core
+cargo test -p nueon-core
 cargo clippy --workspace --all-targets -- -D warnings
 cargo fmt --all --check
 ```
@@ -185,7 +185,7 @@ hot-reload dev server. The `loom-*` names also work non-interactively, e.g.
 
 Tauri v2 + Svelte 5 + CodeMirror 6 — migration complete:
 
-- [x] R0 — Cargo workspace split (`langloom-core` + temporary egui reference)
+- [x] R0 — Cargo workspace split (`nueon-core` + temporary egui reference)
 - [x] R1 — Toolchain + Tauri scaffold + blank three-pane shell
 - [x] R2 — Registry + notes tree
 - [x] R3 — CodeMirror Live Preview editor

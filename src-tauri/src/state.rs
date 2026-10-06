@@ -3,8 +3,8 @@
 use std::collections::HashSet;
 use std::path::{Path, PathBuf};
 
-use langloom_core::global::GlobalConfig;
-use langloom_core::{StorageError, Workspace};
+use nueon_core::global::GlobalConfig;
+use nueon_core::{StorageError, Workspace};
 
 /// State shared across commands.
 #[derive(Default)]

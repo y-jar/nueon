@@ -1,11 +1,11 @@
 [Desktop Entry]
 Type=Application
-Name=langloom
+Name=nueon
 GenericName=Conlang Editor
 Comment=Conlang editor and creation app
-Exec=langloom
-Icon=langloom
+Exec=nueon
+Icon=nueon
 Terminal=false
 Categories=Utility;Education;Office;
 Keywords=conlang;language;dictionary;linguistics;
-StartupWMClass=langloom
+StartupWMClass=nueon

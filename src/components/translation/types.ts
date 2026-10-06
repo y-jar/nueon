@@ -7,4 +7,4 @@ export interface SlotItem {
 }
 
 /** `dataTransfer` MIME type used when dragging palette chips onto the canvas. */
-export const SLOT_DRAG_TYPE = "application/x-langloom-slot";
+export const SLOT_DRAG_TYPE = "application/x-nueon-slot";

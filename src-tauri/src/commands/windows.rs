@@ -9,7 +9,7 @@ use std::sync::Mutex;
 use tauri::{AppHandle, Manager, State, WebviewUrl, WebviewWindow, WebviewWindowBuilder};
 use uuid::Uuid;
 
-use langloom_core::{GroupLayout, SplitLayout, TabLayout, TilingLayout, WindowGeometry};
+use nueon_core::{GroupLayout, SplitLayout, TabLayout, TilingLayout, WindowGeometry};
 
 use crate::state::AppState;
 
@@ -48,7 +48,7 @@ pub(crate) fn build_window(
     geometry: Option<WindowGeometry>,
 ) -> Result<WebviewWindow, String> {
     let window = WebviewWindowBuilder::new(app, label, WebviewUrl::App("index.html".into()))
-        .title(format!("langloom — {title}"))
+        .title(format!("nueon — {title}"))
         .inner_size(DEFAULT_SIZE.0, DEFAULT_SIZE.1)
         .build()
         .map_err(|err| err.to_string())?;

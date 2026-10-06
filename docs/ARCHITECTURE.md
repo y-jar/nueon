@@ -1,24 +1,24 @@
 # Architecture
 
-langloom is a **Tauri v2** desktop app: a Rust backend (the reusable
-`langloom-core` domain crate) and a **Svelte 5 + CodeMirror 6** frontend.
+nueon is a **Tauri v2** desktop app: a Rust backend (the reusable
+`nueon-core` domain crate) and a **Svelte 5 + CodeMirror 6** frontend.
 
 ## Repository layout
 
 ```
 Cargo.toml                     # Cargo workspace
-crates/langloom-core/          # UI-agnostic domain logic (model, config, global, translation, vcs, workspace)
+crates/nueon-core/          # UI-agnostic domain logic (model, config, global, translation, vcs, workspace)
 src-tauri/                     # Tauri v2 shell: state, commands, capabilities
 src/                           # Svelte frontend
   lib/api.ts                   # typed invoke() wrappers + DTOs
   lib/editor/                  # CodeMirror extensions (live preview, dictionary, theme)
   App.svelte                   # three-pane shell
 flake.nix                      # dev shell + packaged app
-packaging/langloom.desktop     # launcher entry
+packaging/nueon.desktop     # launcher entry
 docs/                          # this spec, PSD.md, code ideas
 ```
 
-## Domain model (authoritative, in `langloom-core`)
+## Domain model (authoritative, in `nueon-core`)
 
 - A **workspace** is a plain directory with three subdirectories:
   - `notes/` — **extensionless raw plain-text/Markdown** files (folders allowed).
@@ -41,7 +41,7 @@ docs/                          # this spec, PSD.md, code ideas
   managed by Tauri; every command locks it.
 - **Errors**: domain errors (`StorageError`, `VcsError`, global-config errors)
   are mapped to a serialized `{ code, message }`.
-- **DTOs** are the `langloom-core` serde types; the frontend mirrors them in
+- **DTOs** are the `nueon-core` serde types; the frontend mirrors them in
   `src/lib/api.ts`.
 
 ### Commands

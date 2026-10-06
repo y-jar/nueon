@@ -6,7 +6,7 @@
 use std::collections::BTreeSet;
 use std::path::{Path, PathBuf};
 
-use langloom_core::{
+use nueon_core::{
     import_apply, import_preview, ColumnRole, DuplicatePolicy, FieldValue, ImportOptions,
     ImportPlan, LinkChoice, LinkSyntax, Workspace,
 };
@@ -93,7 +93,7 @@ fn fixtures_are_tab_separated_with_the_expected_shape() {
 #[test]
 fn detect_proposes_delimiter_header_and_roles() {
     let roots = read("testlangRoots.csv");
-    let detection = langloom_core::detect(&roots, &roots_options());
+    let detection = nueon_core::detect(&roots, &roots_options());
     assert_eq!(detection.delimiter, '\t');
     assert!(detection.has_header);
     assert_eq!(detection.columns.len(), 6);
@@ -109,7 +109,7 @@ fn detect_proposes_delimiter_header_and_roles() {
     );
 
     let derived = read("testlangDerived.csv");
-    let detection = langloom_core::detect(&derived, &derived_options());
+    let detection = nueon_core::detect(&derived, &derived_options());
     assert_eq!(detection.delimiter, '\t');
     assert_eq!(detection.columns.len(), 5);
     assert_eq!(detection.columns[4].role, ColumnRole::TagFlags);
@@ -181,10 +181,7 @@ fn import_roots_creates_words_sparsely_and_stores_valency() {
         "suffix",
         "pronoun",
     ] {
-        assert_eq!(
-            table.tag(tag).unwrap().kind,
-            langloom_core::FieldType::Boolean
-        );
+        assert_eq!(table.tag(tag).unwrap().kind, nueon_core::FieldType::Boolean);
     }
     // Sparse: a word with no usage/valency has no such tags at all.
     let adei = table.entries.iter().find(|e| e.wordname == "adei").unwrap();
@@ -217,7 +214,7 @@ fn import_declares_the_definition_column_and_stores_its_senses() {
     // has no column to appear in.
     let table = ws.dictionary.table("roots").unwrap();
     let definition = table.tag("definition").expect("definition tag declared");
-    assert_eq!(definition.kind, langloom_core::FieldType::TagList);
+    assert_eq!(definition.kind, nueon_core::FieldType::TagList);
 
     let il = table.entries.iter().find(|e| e.wordname == "il").unwrap();
     assert_eq!(
@@ -510,7 +507,7 @@ fn generic_reference_columns_resolve_to_reference_values() {
     let table = ws.dictionary.table("w").unwrap();
     assert_eq!(
         table.tag("synonym").unwrap().kind,
-        langloom_core::FieldType::References
+        nueon_core::FieldType::References
     );
     let ala = table.entries.iter().find(|e| e.wordname == "ala").unwrap();
     let bela = table.entries.iter().find(|e| e.wordname == "bela").unwrap();
@@ -635,19 +632,16 @@ fn non_nfc_text_is_warned_and_left_unchanged() {
 
 #[test]
 fn parse_handles_quotes_and_ragged_rows() {
-    let rows = langloom_core::import::parse_records("a,b\n\"x,y\",z\nshort\n", ',', '"');
+    let rows = nueon_core::import::parse_records("a,b\n\"x,y\",z\nshort\n", ',', '"');
     assert_eq!(rows.len(), 3);
     assert_eq!(rows[0], vec!["a", "b"]);
     assert_eq!(rows[1], vec!["x,y", "z"]);
     assert_eq!(rows[2], vec!["short"]);
     assert_eq!(
-        langloom_core::import::normalize_link_target("a/b/c|alias"),
+        nueon_core::import::normalize_link_target("a/b/c|alias"),
         "c"
     );
-    assert_eq!(
-        langloom_core::import::normalize_link_target("plain"),
-        "plain"
-    );
+    assert_eq!(nueon_core::import::normalize_link_target("plain"), "plain");
 }
 
 #[test]

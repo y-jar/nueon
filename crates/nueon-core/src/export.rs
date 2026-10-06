@@ -568,7 +568,7 @@ pub fn markdown_to_odt(
         "<?xml version=\"1.0\" encoding=\"UTF-8\"?>\n<office:document-styles {NS} office:version=\"1.2\"><office:styles><style:default-style style:family=\"paragraph\"><style:text-properties fo:font-size=\"11pt\"/></style:default-style></office:styles></office:document-styles>"
     );
     let meta = format!(
-        "<?xml version=\"1.0\" encoding=\"UTF-8\"?>\n<office:document-meta {NS} office:version=\"1.2\"><office:meta><dc:title>{}</dc:title><meta:generator>langloom</meta:generator></office:meta></office:document-meta>",
+        "<?xml version=\"1.0\" encoding=\"UTF-8\"?>\n<office:document-meta {NS} office:version=\"1.2\"><office:meta><dc:title>{}</dc:title><meta:generator>nueon</meta:generator></office:meta></office:document-meta>",
         escape_xml(title)
     );
     let mut manifest = String::from(

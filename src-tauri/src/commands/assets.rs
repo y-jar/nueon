@@ -6,7 +6,7 @@ use std::sync::Mutex;
 use serde::Serialize;
 use tauri::{AppHandle, State};
 
-use langloom_core::{ImportedAsset, Workspace};
+use nueon_core::{ImportedAsset, Workspace};
 
 use super::changed;
 use crate::state::AppState;

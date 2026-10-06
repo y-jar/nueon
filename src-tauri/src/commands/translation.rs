@@ -6,8 +6,8 @@ use std::sync::Mutex;
 use tauri::{AppHandle, State};
 use uuid::Uuid;
 
-use langloom_core::model::TranslationReport;
-use langloom_core::{SyntaxGrid, TranslationOptions};
+use nueon_core::model::TranslationReport;
+use nueon_core::{SyntaxGrid, TranslationOptions};
 
 use super::changed;
 use crate::state::AppState;
@@ -85,7 +85,7 @@ pub fn execute_translation(
         .map(String::as_str)
         .unwrap_or(" ");
 
-    Ok(langloom_core::model::translate::translate(
+    Ok(nueon_core::model::translate::translate(
         &workspace.dictionary,
         &grid,
         separator,

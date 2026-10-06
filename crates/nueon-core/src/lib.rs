@@ -1,4 +1,4 @@
-//! Core data model, storage, configuration, and version control for langloom.
+//! Core data model, storage, configuration, and version control for nueon.
 //!
 //! UI-agnostic: both the Tauri backend and the legacy egui UI build on this
 //! crate.

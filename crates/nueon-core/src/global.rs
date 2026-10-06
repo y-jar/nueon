@@ -52,12 +52,12 @@ pub struct GlobalConfig {
 pub type GlobalResult<T> = Result<T, Box<dyn std::error::Error + Send + Sync>>;
 
 impl GlobalConfig {
-    /// The default config path: `$XDG_CONFIG_HOME/langloom/config.toml`.
+    /// The default config path: `$XDG_CONFIG_HOME/nueon/config.toml`.
     pub fn config_path() -> Option<PathBuf> {
         let base = std::env::var_os("XDG_CONFIG_HOME")
             .map(PathBuf::from)
             .or_else(|| std::env::var_os("HOME").map(|home| PathBuf::from(home).join(".config")))?;
-        Some(base.join("langloom").join("config.toml"))
+        Some(base.join("nueon").join("config.toml"))
     }
 
     /// Load the default config, falling back to defaults on any error.
