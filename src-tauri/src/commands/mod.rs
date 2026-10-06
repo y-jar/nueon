@@ -3,6 +3,7 @@
 mod assets;
 mod dictionary;
 mod export;
+mod import;
 mod notes;
 mod translation;
 mod trash;
@@ -13,6 +14,7 @@ mod workspace;
 pub use assets::*;
 pub use dictionary::*;
 pub use export::*;
+pub use import::*;
 pub use notes::*;
 pub use translation::*;
 pub use trash::*;

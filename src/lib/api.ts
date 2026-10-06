@@ -649,3 +649,126 @@ export const autocheckinSet = (
 export const autocheckinPump = (): Promise<string | null> =>
   invoke("autocheckin_pump");
 
+
+// -- import --------------------------------------------------------------
+/** What a column in an imported file means (mirrors `ColumnRole`). */
+export type ColumnRole =
+  | { role: "ignore" }
+  | { role: "wordname" }
+  | { role: "definition" }
+  | { role: "parents" }
+  | { role: "tag_flags" }
+  | { role: "text_tag"; name: string }
+  | { role: "list_tag"; name: string }
+  | { role: "boolean_tag"; name: string };
+
+export type DuplicatePolicy = "skip" | "update" | "add";
+export type LinkSyntax = "wiki" | "none";
+
+/** Mirrors `ImportOptions`. Char fields are single-character strings. */
+export interface ImportOptions {
+  delimiter: string;
+  quote: string;
+  has_header: boolean;
+  tag_list_delimiter: string;
+  tag_prefix: string;
+  parent_delimiter: string;
+  link_syntax: LinkSyntax;
+  roles: ColumnRole[];
+  target_table: string;
+  duplicate_policy: DuplicatePolicy;
+  skip_placeholders: boolean;
+  create_suffix_entries: boolean;
+}
+
+export interface ColumnProposal {
+  index: number;
+  header: string;
+  role: ColumnRole;
+  distinct_values: number;
+  boolean_split: string[];
+  reasons: string[];
+}
+
+export interface Detection {
+  delimiter: string;
+  has_header: boolean;
+  columns: ColumnProposal[];
+}
+
+export interface TagProposal {
+  name: string;
+  kind: FieldType;
+}
+
+export interface LinkReport {
+  occurrences: number;
+  unique_targets: number;
+  exact: string[];
+  case_only: [string, string][];
+  unresolved: string[];
+  ambiguous: string[];
+}
+
+export interface DuplicateConflict {
+  wordname: string;
+  incoming_table: string;
+  existing_tables: string[];
+}
+
+export interface SuspiciousRow {
+  row: number;
+  wordname: string;
+  reason: string;
+}
+
+export interface Preview {
+  table: string;
+  rows_total: number;
+  rows_blank: number;
+  short_rows: number[];
+  placeholders: number[];
+  rows_skipped: number;
+  words: number;
+  tags: TagProposal[];
+  links: LinkReport;
+  duplicates: DuplicateConflict[];
+  suspicious: SuspiciousRow[];
+  non_nfc_rows: number[];
+  warnings: string[];
+}
+
+export type LinkChoice =
+  | { choice: "use_existing"; table: string; id: string }
+  | { choice: "create_suffix" }
+  | { choice: "leave" };
+
+export interface ImportPlan {
+  source: string;
+  options: ImportOptions;
+  link_choices: Record<string, LinkChoice>;
+  duplicate_choices: Record<string, DuplicatePolicy>;
+}
+
+export interface ImportReport {
+  table: string;
+  words_created: number;
+  words_updated: number;
+  words_skipped: number;
+  tags_created: string[];
+  parents_linked: number;
+  parents_skipped: number;
+  suffix_entries: number;
+  warnings: string[];
+}
+
+export const importDetect = (
+  path: string,
+  options: ImportOptions,
+): Promise<Detection> => invoke("import_detect", { path, options });
+export const importPreview = (
+  path: string,
+  options: ImportOptions,
+): Promise<Preview> => invoke("import_preview", { path, options });
+export const importApply = (plan: ImportPlan): Promise<ImportReport> =>
+  invoke("import_apply", { plan });
