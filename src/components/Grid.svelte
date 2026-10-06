@@ -93,7 +93,10 @@
 
   const tagColumns = $derived(
     (doc.table?.tags ?? []).filter(
-      (tag) => tag.name !== "wordname" && tag.name !== "parent",
+      (tag) =>
+        tag.name !== "wordname" &&
+        tag.name !== "parent" &&
+        tag.name !== "definition",
     ),
   );
 
@@ -115,6 +118,12 @@
       accessorFn: (row) => parentNames(row),
       header: "parent",
       filterFn: "includesString",
+    },
+    {
+      id: "definition",
+      accessorFn: (row: api.WordEntry) => displayValue(row.values["definition"]),
+      header: "definition",
+      filterFn: "includesString" as const,
     },
     ...tagColumns.map((tag) => ({
       id: tag.name,
@@ -1040,6 +1049,19 @@
                     onRemove={(id) => removeParentOf(row.original, id)}
                   />
                 </td>
+              {:else if column.id === "definition"}
+                <td class="editable" onclick={(e) => e.stopPropagation()}>
+                  <PillCell
+                    pills={listValues(row.original, "definition").map(
+                      (value) => ({ id: value, label: value }),
+                    )}
+                    placeholder={$t("grid.addPill")}
+                    onAdd={(text) =>
+                      addToList(row.original, "definition", text)}
+                    onRemove={(id) =>
+                      removeFromList(row.original, "definition", id)}
+                  />
+                </td>
               {:else}
                 {@const tag = tagOf(column.id)}
                 <td class="editable" onclick={(e) => e.stopPropagation()}>
@@ -1084,6 +1106,26 @@
                   }}
                   onRemove={(id) =>
                     (ghostParents = ghostParents.filter((p) => p !== id))}
+                />
+              </td>
+            {:else if column.id === "definition"}
+              <td class="editable">
+                <PillCell
+                  pills={ghostList("definition").map((value) => ({
+                    id: value,
+                    label: value,
+                  }))}
+                  placeholder={$t("grid.addPill")}
+                  onAdd={(text) => {
+                    const items = ghostList("definition");
+                    if (!items.includes(text))
+                      ghostSetList("definition", [...items, text]);
+                  }}
+                  onRemove={(id) =>
+                    ghostSetList(
+                      "definition",
+                      ghostList("definition").filter((item) => item !== id),
+                    )}
                 />
               </td>
             {:else}
