@@ -14,6 +14,8 @@
     activeDoc,
     selectNote,
     renamePath,
+    movePath,
+    canMoveInto,
     openContextMenu,
     consumeRename,
   } from "../lib/state.svelte";
@@ -59,7 +61,11 @@
     if (!name || name === node.name) return;
     const parent = parentOf(node);
     const target = parent ? `${parent}/${name}` : name;
-    await renamePath(node.path, target);
+    try {
+      await renamePath(node.path, target);
+    } catch (error) {
+      ui.status = `could not rename ${node.name}: ${String(error)}`;
+    }
   }
 
   function onDragStart(event: DragEvent, node: NoteNode) {
@@ -68,32 +74,48 @@
     if (event.dataTransfer) event.dataTransfer.effectAllowed = "move";
   }
 
-  function validDrop(folderPath: string | null): boolean {
-    const src = ui.dragPath;
-    if (!src) return false;
-    if (folderPath === null) return true;
-    return folderPath !== src && !folderPath.startsWith(`${src}/`);
+  /** Dropping on a folder moves into it; on a file, into that file's folder. */
+  function dropFolderFor(node: NoteNode): string {
+    return node.is_dir ? node.path : parentOf(node);
+  }
+
+  let expandTimer: ReturnType<typeof setTimeout> | null = null;
+  let expandTarget: string | null = null;
+
+  function clearExpand() {
+    if (expandTimer) clearTimeout(expandTimer);
+    expandTimer = null;
+    expandTarget = null;
   }
 
   function onDragOver(event: DragEvent, node: NoteNode) {
-    if (!node.is_dir || !validDrop(node.path)) return;
+    const src = ui.dragPath;
+    if (!src || !canMoveInto(src, dropFolderFor(node))) return;
     event.preventDefault();
     event.stopPropagation();
+    if (event.dataTransfer) event.dataTransfer.dropEffect = "move";
     dragOver = node.path;
+
+    // Hovering a collapsed folder opens it so nested targets are reachable.
+    if (node.is_dir && collapsed[node.path] && expandTarget !== node.path) {
+      clearExpand();
+      expandTarget = node.path;
+      expandTimer = setTimeout(() => {
+        collapsed[node.path] = false;
+        clearExpand();
+      }, 600);
+    }
   }
 
   async function onDrop(event: DragEvent, node: NoteNode) {
-    if (!node.is_dir) return;
+    const src = ui.dragPath;
+    if (!src || !canMoveInto(src, dropFolderFor(node))) return;
     event.preventDefault();
     event.stopPropagation();
-    const src = ui.dragPath;
     dragOver = null;
     ui.dragPath = null;
-    if (!src || !validDrop(node.path)) return;
-    const name = src.split("/").pop() ?? src;
-    const target = `${node.path}/${name}`;
-    if (target === src) return;
-    await renamePath(src, target);
+    clearExpand();
+    await movePath(src, dropFolderFor(node));
   }
 </script>
 
@@ -106,14 +128,24 @@
         tabindex="-1"
         aria-selected={activeDoc().selected === node.path}
         class:drop-target={dragOver === node.path && node.is_dir}
+        class:drop-sibling={dragOver === node.path && !node.is_dir}
         draggable={editing !== node.path}
         ondragstart={(e) => onDragStart(e, node)}
-        ondragend={() => (ui.dragPath = null)}
+        ondragend={() => {
+          ui.dragPath = null;
+          dragOver = null;
+          clearExpand();
+        }}
         ondragover={(e) => onDragOver(e, node)}
-        ondragleave={() => (dragOver = null)}
+        ondragleave={() => {
+          dragOver = null;
+          clearExpand();
+        }}
         ondrop={(e) => onDrop(e, node)}
         oncontextmenu={(e) => {
           e.preventDefault();
+          // Keep the root handler (empty space) from replacing this menu.
+          e.stopPropagation();
           openContextMenu(e.clientX, e.clientY, node.path, node.is_dir, "node");
         }}
         style="padding-left: {depth * 12 + 4}px"

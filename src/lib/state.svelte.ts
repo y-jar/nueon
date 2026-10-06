@@ -1063,6 +1063,25 @@ export async function createFolder(relPath: string): Promise<void> {
   ui.status = `created ${relPath}/`;
 }
 
+/** Whether `src` may be moved into `folder` ("" is the notes root). */
+export function canMoveInto(src: string, folder: string): boolean {
+  const parent = src.split("/").slice(0, -1).join("/");
+  if (folder === parent) return false; // already there
+  return folder !== src && !folder.startsWith(`${src}/`);
+}
+
+/** Move a note/folder into `folder`, reporting failures in the status bar. */
+export async function movePath(src: string, folder: string): Promise<void> {
+  if (!canMoveInto(src, folder)) return;
+  const name = src.split("/").pop() ?? src;
+  const target = folder ? `${folder}/${name}` : name;
+  try {
+    await renamePath(src, target);
+  } catch (error) {
+    ui.status = `could not move ${name}: ${String(error)}`;
+  }
+}
+
 export async function renamePath(
   oldPath: string,
   newPath: string,

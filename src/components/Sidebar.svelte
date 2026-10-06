@@ -1,12 +1,13 @@
 <script lang="ts">
   import { autofocus } from "../lib/actions";
   import { t } from "svelte-i18n";
-  import { Search } from "@lucide/svelte";
+  import { Search, FilePlus, FolderPlus } from "@lucide/svelte";
   import {
     ui,
     createNote,
     createFolder,
-    renamePath,
+    movePath,
+    activeDoc,
     consumeNew,
     openContextMenu,
   } from "../lib/state.svelte";
@@ -51,9 +52,22 @@
     }
   }
 
+  /** Folder the toolbar buttons create in: the open note's folder. */
+  function currentFolder(): string {
+    const selected = activeDoc().selected;
+    return selected ? selected.split("/").slice(0, -1).join("/") : "";
+  }
+
+  function startNew(kind: "note" | "folder") {
+    newKind = kind;
+    newBase = currentFolder();
+    newName = "";
+  }
+
   function onRootDragOver(event: DragEvent) {
     if (ui.dragPath) {
       event.preventDefault();
+      if (event.dataTransfer) event.dataTransfer.dropEffect = "move";
     }
   }
 
@@ -61,14 +75,18 @@
     event.preventDefault();
     const src = ui.dragPath;
     ui.dragPath = null;
-    if (!src) return;
-    const name = src.split("/").pop() ?? src;
-    if (name === src) return;
-    await renamePath(src, name);
+    if (src) await movePath(src, "");
+  }
+
+  /** Right-clicking empty sidebar space opens the root menu. */
+  function onSidebarContext(event: MouseEvent) {
+    if ((event.target as HTMLElement).closest("input, textarea")) return;
+    event.preventDefault();
+    openContextMenu(event.clientX, event.clientY, "", true, "root");
   }
 </script>
 
-<aside class="sidebar">
+<aside class="sidebar" oncontextmenu={onSidebarContext}>
   <div class="pane-head">
     <span class="pane-title">{$t("sidebar.notes")}</span>
   </div>
@@ -80,6 +98,23 @@
       bind:value={filter}
     />
   </label>
+
+  <div class="explorer-actions">
+    <button
+      title={$t("sidebar.newNoteTooltip")}
+      aria-label={$t("sidebar.newNoteTooltip")}
+      onclick={() => startNew("note")}
+    >
+      <FilePlus size={15} />
+    </button>
+    <button
+      title={$t("sidebar.newFolderTooltip")}
+      aria-label={$t("sidebar.newFolderTooltip")}
+      onclick={() => startNew("folder")}
+    >
+      <FolderPlus size={15} />
+    </button>
+  </div>
 
   {#if newKind}
     <input
@@ -103,10 +138,6 @@
     tabindex="-1"
     ondragover={onRootDragOver}
     ondrop={onRootDrop}
-    oncontextmenu={(e) => {
-      e.preventDefault();
-      openContextMenu(e.clientX, e.clientY, "", true, "root");
-    }}
   >
     {#if visibleTree.length}
       <ExplorerTree nodes={visibleTree} depth={0} />
