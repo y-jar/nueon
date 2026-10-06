@@ -12,6 +12,7 @@
     refreshTree,
     collapseAll,
     closeTab,
+    closePane,
     moveTabToNewWindow,
     getContextEditor,
   } from "../lib/state.svelte";
@@ -221,6 +222,13 @@
           closeContextMenu();
           closeTab(groupId, tabId);
         }}>{$t("tabs.close")}</button
+      >
+      <button
+        onclick={() => {
+          const { groupId } = menu.tab!;
+          closeContextMenu();
+          closePane(groupId);
+        }}>{$t("tabs.closePane")}</button
       >
     {:else}
       {#if !menu.isDir}

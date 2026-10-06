@@ -95,7 +95,8 @@
     "close": "Close tab",
     "newNote": "New note",
     "emptyTitle": "Nothing open",
-    "emptyHint": "Open a note or a table from the sidebar, or start something new."
+    "emptyHint": "Open a note or a table from the sidebar, or start something new.",
+    "closePane": "Close pane"
   },
   "quarantine": {
     "heading": "{count} file(s) in dictionary/ could not be loaded",

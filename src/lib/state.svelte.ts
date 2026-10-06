@@ -5,6 +5,7 @@ import type { EditorView } from "@codemirror/view";
 import * as api from "./api";
 import { windowLabel } from "./window";
 import { stripMd } from "./explorer";
+import { shouldPruneGroup } from "./tabs";
 import { flushNotes, quiesceNotes, resolveNoteConflict } from "./editor/action";
 
 /** Left activity ribbon selection. */
@@ -419,7 +420,31 @@ export function closeTab(groupId: string, id: string): void {
   if (index === -1) return;
   const wasActive = group.activeTabId === id;
   group.tabs = group.tabs.filter((tab) => tab.id !== id);
+  // Closing a split pane's last tab removes the pane itself.
+  if (pruneGroupIfEmpty(group)) return;
   if (wasActive) activateNeighbor(group, index);
+}
+
+/**
+ * Close every tab in a pane. The pane is removed when other panes remain
+ * (or left empty when it is the last one).
+ */
+export function closePane(groupId: string): void {
+  const group = ui.groups.find((candidate) => candidate.id === groupId);
+  if (!group) return;
+  group.tabs = [];
+  group.activeTabId = null;
+  clearDoc(group.doc);
+  pruneGroupIfEmpty(group);
+}
+
+/** Remove `group` when it is empty and not the only remaining pane. */
+function pruneGroupIfEmpty(group: TabGroup): boolean {
+  if (shouldPruneGroup(group.tabs.length, ui.groups.length)) {
+    removeGroup(group.id);
+    return true;
+  }
+  return false;
 }
 
 export function reorderTabs(groupId: string, items: Tab[]): void {
@@ -458,7 +483,7 @@ export async function renameTable(from: string, to: string): Promise<void> {
 export async function deleteTable(name: string): Promise<api.TrashRecord | null> {
   const record = await api.deleteTable(name);
   if (!record) return null;
-  for (const group of ui.groups) {
+  for (const group of [...ui.groups]) {
     const removed = group.tabs.filter(
       (tab) => tab.kind === "table" && tab.ref === name,
     );
@@ -469,6 +494,7 @@ export async function deleteTable(name: string): Promise<api.TrashRecord | null>
       group.doc.currentTable = null;
       group.doc.table = null;
     }
+    if (pruneGroupIfEmpty(group)) continue;
     if (removedIndex !== -1) activateNeighbor(group, removedIndex);
   }
   await refreshTables();
@@ -1287,7 +1313,7 @@ export async function deletePath(relPath: string): Promise<api.TrashRecord> {
     throw error;
   }
   const prefix = `${relPath}/`;
-  for (const group of ui.groups) {
+  for (const group of [...ui.groups]) {
     const removed = group.tabs.filter(
       (tab) =>
         tab.kind === "note" &&
@@ -1300,6 +1326,7 @@ export async function deletePath(relPath: string): Promise<api.TrashRecord> {
         ? group.tabs.indexOf(activeRemoved)
         : -1;
       group.tabs = group.tabs.filter((tab) => !removed.includes(tab));
+      if (pruneGroupIfEmpty(group)) continue;
       if (removedIndex !== -1) activateNeighbor(group, removedIndex);
     }
     if (
