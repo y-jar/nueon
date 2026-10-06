@@ -1,198 +1,102 @@
 # nueon
 
-A super awesome conlang editor and creation app.
+A conlang editor and creation app for Linux: a Markdown notebook, a
+dictionary/word-table editor, an etymology graph, and a translation builder,
+backed by a UI-agnostic Rust core and an optional git history.
 
-Data model, storage layer, version-control integration, and workspace
-scaffolding live here. See [`docs/PSD.md`](docs/PSD.md) for the full
-specification.
+Repository: <https://github.com/y-jar/nueon>
 
-## Concepts
+## Features
 
-- **Table** — a user-created, independent bin of words (like a folder). Stored
-  as one extensionless JSON file. A word lives in exactly one table.
-- **Tag** — a column of a table. Tags are scoped per table (not shared), but
-  the app suggests previously-used names when adding one. `wordname` is the
-  builtin starting tag; `definition` and `parent` are reserved optional tags.
-- **Sparse words** — a word only stores a tag once a value is applied. Absent
-  tags are null, and no empty tags are ever written.
+- **Workspaces** — a plain folder holding notes, dictionary tables, assets and
+  config; create, open, switch, rename or remove them, with an onboarding
+  wizard when none is open. Rediscovery-safe: if a workspace folder is gone,
+  it is pruned and the wizard reopens rather than being silently recreated.
+- **Markdown notes** — a CodeMirror 6 editor with live preview, KaTeX, task
+  lists, tables, images and a formatting toolbar; `.md` by default; notes
+  autosave with dirty tracking and on-disk conflict detection.
+- **Dictionary grid** — one table per bin of words, per-table tags (Text,
+  List, Relation, Checkbox), a pinned `wordname` and `definition` column,
+  pills for lists/relations, a ghost row for quick entry, sorting, search,
+  column resize/reorder/hide, and a right-click column menu (sort, change
+  type, delete tag) where schema edits commit as revertible steps.
+- **Inspector & etymology** — edit a word's fields, attach tags, and manage
+  multi-parent etymology links (a cycle-safe DAG).
+- **Import wizard** — bring in CSV/TSV with auto-detection of delimiter,
+  header and column roles, a read-only preview (row/link/duplicate/NFC
+  warnings), `[[wiki link]]` parent resolution, and a revertible commit.
+- **Export** — the active table to CSV/TSV (round-trip safe) or a lossless
+  JSON backup; notes to PDF or ODT.
+- **Assets** — drop an image or text file from the OS into the editor or
+  explorer; it is copied into `assets/` under a content hash and linked.
+- **Version control** — opt-in git with idle auto check-in, status/diff/log, and
+  revertible schema edits.
+- **Tabs, splits & windows** — tab groups, drag-to-split, persisted layout, and
+  torn-off secondary windows; autofocus on creation prompts; search everywhere.
 
-## Workspace layout
+See [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md) for the three-tier design.
 
-A workspace is a plain local directory the user picks:
+## Installation
 
+### Nix (recommended)
+
+```sh
+# Build the app from source (Rust + Svelte + WebKit/GTK, fully pinned):
+nix build .#
+./result/bin/nueon
+
+# Or run it directly:
+nix run .#
 ```
-<workspace>/
-├── notes/            # raw Markdown, extensionless, folders allowed
-├── dictionary/       # one extensionless JSON file per table
-│   ├── all_words     # { "name": "all words", "tags": [...], "entries": [...] }
-│   └── verbs
-├── config/
-│   ├── language      # metadata (name, author, script, direction)
-│   ├── grammar       # named GrammarRule patterns over tag names
-│   ├── translation   # settings + saved SyntaxGrids
-│   └── settings      # auto-checkin toggle + interval
-├── .gitignore        # *.tmp, internal state
-└── .git/             # optional, opt-in
+
+A precompiled variant (`nueon-bin`) fetches a published release `.deb`, patches
+it for Nix, and wraps it with the same Wayland-safe WebKit flags:
+
+```sh
+nix build .#nueon-bin
+./result/bin/nueon
 ```
 
-## Workspaces
+`nueon-bin` has a placeholder hash until a release exists; after publishing,
+refresh it with
+`nix-prefetch-url --type sha256 https://github.com/y-jar/nueon/releases/download/v<version>/nueon_<version>_amd64.deb`.
 
-The app keeps an app-global registry of workspaces at
-`$XDG_CONFIG_HOME/nueon/config.toml` (fallback `~/.config/nueon/`),
-listing each workspace's display name and path plus the last-opened one. The
-bottom of the left sidebar has a workspace switcher; its last entry opens the
-**Manage workspaces** wizard, where you can create a new workspace (name +
-destination), open an existing folder (empty folders are scaffolded with
-`notes/`, `dictionary/`, `config/`, and `.gitignore`), or edit/remove registered
-ones. With no workspace open, an onboarding screen links to the same wizard.
+### Linux packages
 
-## Version control
+`.deb`, `.rpm` and `.AppImage` bundles are published on the
+[Releases](https://github.com/y-jar/nueon/releases) page for each `v*` tag.
+Install the `.deb`/`.rpm` with your package manager, or mark the AppImage
+executable and run it.
 
-Git is opt-in. On open the app detects `Ready`, `NotARepo`, or
-`GitNotInstalled` and prompts accordingly. When enabled, changes are written to
-disk immediately and **auto-checked-in after 60s of idle** (configurable), plus
-manual check-ins from the git side panel. Removing a tag strips its values and
-commits `DELETED TAGS: ... <CAN REVERT>` so the change is revertible.
+### From source
 
-## Interface
-
-An egui/eframe desktop app with a fixed three-pane layout around a dockable
-tab area:
-
-- **Top command bar** — omni-search (`tag:` / `def:` prefixes) and the
-  Source Control toggle.
-- **Left sidebar** — a notes folder tree (create/rename/delete notes and
-  folders), dictionary tables, and translation presets; create tables.
-- **Center dock** — Welcome, a live-preview Markdown note editor, and an
-  editable Dictionary grid (add words/tags, inline text/boolean edits, delete,
-  inspect).
-- **Right inspector** — details for the selected word or note, including its
-  etymology: multiple root/parent words (add/remove with a cycle-safe picker),
-  ancestors, direct derivatives, and dependent counts.
-- **Source Control panel** — status, commit box, and history; git prompts on
-  first open, plus an auto check-in toggle.
-
-### Dictionary grid
-
-A builtin `parent` column follows `wordname`, then the table's tags. Left-click
-a column header to sort (repeat toggles ascending/descending, a third time
-clears); right-click for a menu to filter (has/no value, true/false, hide
-column, remove tag); the search icon opens a per-column "contains" search.
-A "Columns" menu unhides columns, "Clear filters" resets the view, and the
-header shows `showing N of M`.
-
-### Etymology
-
-A word may list multiple `parent` words (a DAG). Renaming or deleting a word
-with dependents raises a warning with four options: Cancel, Auto-Convert
-(rename: substring replace across descendants; delete: unlink the deleted word
-from its children), Manual (bulk editor), or Continue Anyway (keep the link,
-shown as "(missing)" if dangling).
-
-### Notes editor
-
-Notes render as rich Markdown (headings, lists, quotes, code, bold/italic/
-inline code/links). Click a rendered block to reveal and edit its raw syntax;
-the rest stays rendered. `Ctrl+E` toggles whole-note raw mode. Edits are
-autosaved immediately; version-control check-ins remain gated on git being
-opted in and the auto check-in toggle.
-
-Words that exist in the dictionary are tinted; hovering shows a tooltip with
-their senses and table, and **Ctrl+click** selects the word in the Inspector.
-Homographs display a superscript (`word¹`). Markdown links are clickable and
-open in the browser. Each note remembers its scroll position.
-
-Keyboard: `Ctrl+K` search, `Ctrl+S` save note, `Ctrl+E` raw/rendered toggle,
-`Ctrl+T` translation, `Ctrl+Shift+G` toggle Source Control.
-
-### Translation builder
-
-The Translation tab builds a clause structure by dragging tags from the palette
-into ordered slots (drag to reorder, or use the up/down buttons). Slots can be a
-required tag (`#Subject`), a literal particle, a wildcard, or a spacer for
-between-word rules. Presets are named, saved, and loaded from
-`config/translation`.
-
-### Translation execution
-
-Below the builder, enter an English sentence and press **Translate**. Words are
-matched to entries by their `definition` (exact, then substring), assigned to
-slots by tag, and emitted as conlang text. Adjacent words are auto-spaced by
-the configurable separator; literals attach directly. Ambiguous words
-(homographs) require choosing a meaning; missing words and unfilled required
-slots are reported.
-
-Missing words can be created inline: type a conlang spelling, pick the target
-table (global default with per-word override), tick tags (undeclared tags are
-added as Boolean columns), and **Create**. The word is saved and the
-translation re-runs immediately.
-
-## Development
-
-> **Stack:** Tauri v2 shell (`src-tauri/`) + Svelte 5 / CodeMirror 6 frontend
-> (`src/`) over a UI-agnostic Rust core (`crates/nueon-core`). The legacy
-> egui UI was removed at R8.
-
-Everything is provided by the Nix shell (Rust + Node 22 + Tauri's WebKit/GTK
-libraries). The Tauri shell is at `src-tauri/` with the Svelte frontend in
-`src/`; see [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md).
+Everything needed (Rust, Node 22, Tauri's WebKit/GTK libraries) is provided by
+the Nix dev shell:
 
 ```sh
 nix-shell
 npm install
-npm run tauri dev        # launch the Tauri + Svelte app
+npm run tauri dev      # hot-reloading dev app
+npm run tauri build    # produces bundles under src-tauri/target/release/bundle
+```
 
-cargo test -p nueon-core          # core logic (UI-agnostic)
-cargo clippy --workspace --all-targets -- -D warnings
+## Verification
+
+Run the full gate suite from the Nix shell (`gates` runs these for you):
+
+```sh
 cargo fmt --all --check
-```
-
-Run the app or build a package with Nix:
-
-```sh
-nix-shell                # dev shell (Rust + Node + WebKit/GTK)
-npm install
-npm run tauri dev        # launch the Tauri + Svelte app
-
-nix build                # build ./result/bin/nueon (Wayland-safe wrapper)
-nix develop              # equivalent to nix-shell via the flake
-```
-
-Core logic is UI-agnostic and tested independently:
-
-```sh
-cargo test -p nueon-core
 cargo clippy --workspace --all-targets -- -D warnings
-cargo fmt --all --check
+cargo test --workspace
+npm run check          # svelte-check
+npm run test           # node:test unit tests
+npm run build          # vite production build
+nix build .#           # packaged app builds
 ```
 
-### Dev shell commands
+## Development
 
-The Nix shell provides short aliases and matching `loom-*` commands:
-
-```sh
-deps dev run app pkg            # npm install / tauri dev / build+launch / launch / nix build
-fmt fmtcheck clippy ctest testall   # formatting, lints, core/workspace tests
-fecheck febuild clean gates     # frontend check/build, clean, full gate suite
-aliases                         # list every command
-```
-
-`run` builds the Nix package (`nix build .#`) and launches it; `dev` starts the
-hot-reload dev server. The `loom-*` names also work non-interactively, e.g.
-`nix develop --command loom-ctest`.
-
-## Roadmap
-
-Tauri v2 + Svelte 5 + CodeMirror 6 — migration complete:
-
-- [x] R0 — Cargo workspace split (`nueon-core` + temporary egui reference)
-- [x] R1 — Toolchain + Tauri scaffold + blank three-pane shell
-- [x] R2 — Registry + notes tree
-- [x] R3 — CodeMirror Live Preview editor
-- [x] R4 — Dictionary grid + inspector
-- [x] R5 — Translation builder + runner
-- [x] R6 — Git panel + auto-check-in
-- [x] R7 — Tree DnD + constructs (images/tables/task lists/footnotes)
-- [x] R8 — Nix flake packaging + purge legacy egui
-
-See [`deferred.md`](deferred.md) for the full register of remaining work.
+The dev shell provides short aliases and matching `loom-*` commands
+(`deps dev run app pkg fmt fmtcheck clippy ctest testall fecheck febuild
+clean gates`); run `aliases` in the shell to list them. `run` builds the Nix
+package and launches it; `dev` starts the hot-reload server.

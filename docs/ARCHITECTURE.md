@@ -1,123 +1,135 @@
 # Architecture
 
-nueon is a **Tauri v2** desktop app: a Rust backend (the reusable
-`nueon-core` domain crate) and a **Svelte 5 + CodeMirror 6** frontend.
+nueon is a Linux desktop app built as three layers, so the domain logic is
+testable and reusable independently of any UI:
+
+1. **`nueon-core`** — a UI-agnostic Rust crate: the data model, on-disk
+   storage, configuration, translation engine, and git integration.
+2. **Tauri IPC** (`nueon-tauri`, in `src-tauri/`) — a thin command/service
+   boundary over the core, plus window/bundle concerns.
+3. **Svelte 5 frontend** (`src/`) — the UI: a Svelte 5 runes store, CodeMirror 6
+   editor, and the grid/translation/import/export components, talking to the
+   core only through `invoke()` wrappers.
 
 ## Repository layout
 
 ```
 Cargo.toml                     # Cargo workspace
-crates/nueon-core/          # UI-agnostic domain logic (model, config, global, translation, vcs, workspace)
-src-tauri/                     # Tauri v2 shell: state, commands, capabilities
-src/                           # Svelte frontend
+crates/nueon-core/             # tier 1: domain logic
+  src/model/                   # tables, tags, entries, fields, derivation
+  src/workspace/               # loading, storage, assets, trash, filenames
+  src/config/                  # language, grammar, translation, settings, layout
+  src/import.rs                # delimited import (detect/preview/apply)
+  src/export_table.rs          # table export (CSV/TSV/JSON)
+  src/export.rs                # Markdown → HTML/ODT
+  src/translation/             # builder/runner
+  src/vcs/                     # git CLI integration + auto-check-in
+src-tauri/                     # tier 2: Tauri v2 shell
+  src/commands/                # one module per command group
+  src/state.rs                 # Mutex<AppState>
+  tauri.conf.json              # window, bundle (appimage/deb/rpm)
+src/                           # tier 3: Svelte 5 frontend
   lib/api.ts                   # typed invoke() wrappers + DTOs
-  lib/editor/                  # CodeMirror extensions (live preview, dictionary, theme)
-  App.svelte                   # three-pane shell
-flake.nix                      # dev shell + packaged app
-packaging/nueon.desktop     # launcher entry
-docs/                          # this spec, PSD.md, code ideas
+  lib/state.svelte.ts          # runes store (tabs, groups, ui, data)
+  lib/editor/                  # CodeMirror extensions (live preview, theme)
+  components/                  # shell, grid, editor, import wizard, export…
+flake.nix                      # packages.default (source) + nueon-bin (prebuilt)
+.github/workflows/release.yml  # tag-driven Linux release builds
+packaging/nueon.desktop        # launcher entry
 ```
 
-## Domain model (authoritative, in `nueon-core`)
+## Tier 1 — `nueon-core`
 
-- A **workspace** is a plain directory with three subdirectories:
-  - `notes/` — **extensionless raw plain-text/Markdown** files (folders allowed).
-  - `dictionary/` — one **extensionless JSON** file per word table.
-  - `config/` — per-conlang **extensionless JSON** (`language`, `grammar`,
-    `translation`, `settings`).
-- A **table** is a logical bin of words; a word lives in exactly one table.
-- A **tag** is a column of a table (per-table scope). `wordname` is the builtin
-  tag; `definition` (English senses) and `parent` (etymology links) are reserved.
-- **Sparse words**: a word only stores a tag once a value is applied.
-- **Homographs** are distinguished by hidden UUIDs.
-- **Etymology is multi-parent**: `parent` is a `References` list
-  (`FieldValue::References(Vec<Uuid>)`), forming a DAG. Traversals are
-  cycle-safe; deleting a word can unlink it from its direct children.
-- **Git is opt-in**; auto-check-in is an idle-debounced commit (default 60 s).
+The authoritative domain model:
 
-## Backend (Tauri)
+- A **workspace** is a plain directory:
+  - `notes/` — Markdown files (`.md`; folders allowed).
+  - `dictionary/` — one JSON file per word table.
+  - `config/` — `language`, `grammar`, `translation`, `settings` (JSON).
+  - `assets/` — imported images/files, named by content hash.
+  - `.trash/` — recoverable deletions, git-ignored.
+  - `.git/` — optional; git is opt-in.
+- A **table** is a bin of words; a word lives in exactly one table.
+- A **tag** is a column of a table (`wordname` builtin; `definition` and
+  `parent` reserved; others are user tags with a `FieldType`).
+- **Sparse words**: a tag is stored only once it has a value.
+- **Etymology** is multi-parent (`parent` is a `References` list, a DAG);
+  traversals are cycle-safe.
 
-- **State**: `Mutex<AppState { global: GlobalConfig, workspace: Option<Workspace>, auto: AutoCheckin }>`
-  managed by Tauri; every command locks it.
-- **Errors**: domain errors (`StorageError`, `VcsError`, global-config errors)
-  are mapped to a serialized `{ code, message }`.
-- **DTOs** are the `nueon-core` serde types; the frontend mirrors them in
+### Storage rules
+
+- Every write is **atomic** (temp file + rename).
+- Workspace paths are never escaped: `safe_join` rejects `..`/absolute paths;
+  trash restore and import go through the same guard.
+- Renames/moves and asset/note imports are **no-clobber** (a hard link, or an
+  exclusive create, followed by a rename).
+- Table filenames are resolved **once** and kept stable, so names that slugify
+  alike (`Roots`/`roots`, `a b`/`a_b`) never collide; a tolerant scan skips
+  `.tmp` files, quarantines unreadable files in place, and never fails the load.
+- Deletions go to `.trash/<timestamp>-<uuid>/` with a manifest; undo/redo only
+  ever writes or trashes files the app owns.
+
+### Import and export
+
+- `import.rs` — `detect` (guesses delimiter/header/roles), `import_preview`
+  (read-only report: rows, links, duplicates, warnings), and `import_apply`
+  (two passes: create words, then resolve `[[…]]` links into `parent` or any
+  reference tag). Empty cells write no tag; cycles are rejected.
+- `export_table.rs` — `export_table(table, Csv|Tsv|Json)`: delimited output is
+  the inverse of the importer (round-trip tested), JSON is a lossless snapshot.
+- `export.rs` — Markdown → HTML (for PDF printing) and a hand-built ODT writer.
+
+## Tier 2 — Tauri IPC (`nueon-tauri`)
+
+- **State**: `Mutex<AppState { global: GlobalConfig, workspace: Option<Workspace>, … }>`,
+  managed by Tauri; every command locks it (read-only commands lock immutably).
+- **Errors** are mapped to strings across the IPC boundary.
+- **DTOs** are the core's serde types; the frontend mirrors them in
   `src/lib/api.ts`.
 
-### Commands
+Command groups (see `src-tauri/src/commands/`):
 
-Notes & filesystem (extensionless plain text):
-`read_note`, `save_note`, `list_workspace` (tree), `create_note`,
-`create_folder`, `move_or_rename_note`, `delete_note`.
+- workspace registry & lifecycle (`workspace_*`, `layout_*`, `ui_layout_*`,
+  `tiling_save`, `layout_state_get`)
+- notes (`list_workspace`, `read_note`, `save_note`, `create_note`,
+  `create_note_with_content`, `create_folder`, `move_or_rename_note`,
+  `delete_note`, `note_count`)
+- trash (`trash_list`, `trash_restore`, `trash_purge`, `trash_empty`)
+- dictionary (`list_tables`, `get_table`, `create_table`, `delete_table`,
+  `rename_table`, `get_table`, `word_index`, `quarantine_warnings`, word CRUD
+  and field patches `set_word_value`/`set_word_definition`/`rename_word`,
+  tag management `add_tag`/`remove_tag`/`set_tag_kind`/`set_tag_format`,
+  parents `set_parent`/`remove_parent`/`parent_candidates`, derivation)
+- grid view state (`grid_view_get`, `grid_view_set`)
+- import/export (`import_detect`, `import_preview`, `import_apply`,
+  `export_table`, `export_document`, `import_asset`, `import_drop`)
+- translation (`list_presets`, `save_preset`, `execute_translation`,
+  `create_translation_word`, `translation_options`)
+- version control (`vcs_*`, `autocheckin_*`)
+- windows (`window_spawn`, `window_close_self`, `windows_restore`)
 
-Dictionary (extensionless JSON):
-`list_tables`, `get_table`, `create_table`, `delete_table`, `save_word_entry`,
-`delete_word_entry`, `add_tag`, `remove_tag_preview`, `remove_tag`,
-`set_parent`, `remove_parent`, `parent_candidates`, `list_tags`, `search`.
+**Events**: the backend emits `data-changed` with a `scope`
+(`workspace`/`notes`/`dictionary`/`config`/`vcs`); the frontend reacts by
+refetching the affected slice.
 
-Etymology:
-`get_derivation_tree` (`{ ancestors, children, descendants }`),
-`resolve_derivation_update` (`Cancel | AutoConvert | Manual | ContinueAnyway`).
+## Tier 3 — Svelte 5 frontend
 
-Editor aid (low-latency, non-blocking):
-`get_word_hover_card` (homograph-aware, returns all matches),
-`get_conlang_autocomplete_tokens`.
+- `src/lib/state.svelte.ts` is the single runes store: workspace/registry data,
+  notes tree, tables, the tab-group/split layout, the editor document state,
+  and shell UI flags. Components read/mutate it directly.
+- `src/lib/api.ts` holds typed `invoke()` wrappers and the DTO interfaces
+  mirroring the Rust serde types.
+- The shell (`App.svelte`) composes an activity ribbon, a sidebar host
+  (notes/tables/git), a recursive split view of tab groups, the inspector, the
+  import wizard modal, trash/settings modals, and the export/definition grid.
+- The editor is CodeMirror 6 with a Markdown live preview, KaTeX, dictionary
+  highlighting, and a formatting toolbar; notes autosave with dirty tracking
+  and disk-conflict detection.
 
-Translation:
-`list_presets`, `save_preset`, `delete_preset`, `execute_translation`,
-`create_translation_word`.
+## Packaging & release
 
-Config & settings: `get_config`, `set_config`.
-
-Version control: `vcs_status`, `vcs_log`, `vcs_diff`, `vcs_show`, `vcs_commit`,
-`vcs_init`, `vcs_revert_file`, `autocheckin_set`, `autocheckin_pump`.
-
-Workspace registry: `workspace_list`, `workspace_current`, `workspace_open`,
-`workspace_create`, `workspace_remove`, `workspace_rename`,
-`workspace_set_path`, `workspace_delete_from_disk`.
-
-### Events (backend → frontend)
-
-- `data-changed` with a `scope` (`notes | dictionary | vcs | config |
-  workspace | translation`) — the frontend refetches the affected view.
-- `workspace://file_changed` — emitted by a future file watcher when an external
-  process modifies files on disk.
-
-## Frontend (Svelte 5)
-
-- Three panes: **sidebar** (bottom-pinned workspace switcher; notes tree; tables;
-  presets), **center tabs** (CodeMirror editor / dictionary grid / translation),
-  **inspector**.
-- **Live Preview** is implemented in CodeMirror 6 with range decorations: markdown
-  syntax is concealed/replaced on every line **except the line under the
-  cursor**, which shows raw text. Native selection, no layout shift.
-- **Dictionary grid** uses TanStack Table (headless) with client-side
-  sort/filter/search over dynamic, user-defined columns.
-- **Translation builder** is web drag-and-drop over the `SyntaxGrid`/`ClauseSlot`
-  model.
-
-## Environment
-
-`shell.nix` provides Rust, Node 22, and the WebKitGTK/GTK3 native libraries Tauri
-needs, exports `LD_LIBRARY_PATH`, and sets
-`WEBKIT_DISABLE_DMABUF_RENDERER=1` / `WEBKIT_DISABLE_COMPOSITING_MODE=1` for
-reliable Wayland rendering. A reproducible Nix flake for packaging lands at R8.
-
-## Packaging (`flake.nix`)
-
-- `devShells.default` provides Rust, Node 22, and the WebKitGTK/GTK runtime
-  libraries, with `LD_LIBRARY_PATH` and the Wayland-safe WebKit env vars.
-- `packages.default` is a `rustPlatform.buildRustPackage` derivation:
-  - the frontend is built first with `buildNpmPackage` (lockfile-pinned
-    `npmDepsHash`) and copied to `dist/`, which Tauri embeds at compile time;
-  - `wrapGAppsHook3` + `autoPatchelfHook` wire the GTK/WebKit runtime, and the
-    wrapper bakes in `WEBKIT_DISABLE_DMABUF_RENDERER=1` and
-    `WEBKIT_DISABLE_COMPOSITING_MODE=1` via `gappsWrapperArgs`;
-  - the `.desktop` file and 32/128/256 px icons are installed under
-    `$out/share/{applications,icons/hicolor/...}`.
-
-## Migration stages
-
-R0 workspace split · R1 toolchain + Tauri scaffold + shell · R2 registry + notes
-tree · R3 CodeMirror Live Preview · R4 grid + inspector · R5 translation · R6 git
-panel · R7 tree DnD + constructs · R8 packaging + legacy purge. **Complete.**
+- `flake.nix` exposes `packages.default` (built from source) and
+  `packages.nueon-bin` (fetches a published `.deb` and patches it for Nix).
+- `tauri.conf.json` enables the AppImage, deb and rpm bundler targets.
+- `.github/workflows/release.yml` builds those bundles on Ubuntu 22.04 and
+  24.04 for any `v*` tag and publishes a GitHub Release.
