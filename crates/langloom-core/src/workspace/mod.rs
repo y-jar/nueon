@@ -175,22 +175,31 @@ impl Workspace {
     /// the app's back (a git checkout or revert). Without this the in-memory
     /// copy would overwrite the restored files on the next save. Undo history
     /// is dropped, since its snapshots predate the change.
+    ///
+    /// Everything is read into locals first and only assigned once all of it
+    /// succeeded, so a failure partway leaves memory exactly as it was.
     pub fn reload_disk_state(&mut self) -> Result<(), StorageError> {
         let mut dictionary = Dictionary::new();
         for table in storage::scan_tables(&self.dictionary_dir())? {
             dictionary.tables.insert(table.name.clone(), table);
         }
+        let notes = storage::scan_notes(&self.notes_dir())?;
         let config_dir = self.config_dir();
-        self.language =
+        let language =
             storage::load_json(&config_dir.join(storage::LANGUAGE_FILE))?.unwrap_or_default();
-        self.grammar =
+        let grammar =
             storage::load_json(&config_dir.join(storage::GRAMMAR_FILE))?.unwrap_or_default();
-        self.translation =
+        let translation =
             storage::load_json(&config_dir.join(storage::TRANSLATION_FILE))?.unwrap_or_default();
-        self.settings =
+        let settings =
             storage::load_json(&config_dir.join(storage::SETTINGS_FILE))?.unwrap_or_default();
+
         self.dictionary = dictionary;
-        self.refresh_notes()?;
+        self.notes = notes;
+        self.language = language;
+        self.grammar = grammar;
+        self.translation = translation;
+        self.settings = settings;
         self.history = History::new();
         Ok(())
     }
@@ -1362,6 +1371,46 @@ mod tests {
         assert!(ws.dictionary.table("nouns").is_some());
         assert_eq!(ws.read_note("n.md").unwrap(), "from disk");
         assert!(!ws.can_undo());
+    }
+
+    #[test]
+    fn failed_reload_leaves_memory_untouched() {
+        let dir = tempfile::tempdir().unwrap();
+        let mut ws = Workspace::new(dir.path()).unwrap();
+        ws.create_table("verbs").unwrap();
+        ws.create_note("n").unwrap();
+        ws.language.name = "In Memory".into();
+
+        // Disk now disagrees with memory everywhere, and one config file is
+        // unreadable, so the reload must fail without applying any of it.
+        let config = dir.path().join("config");
+        std::fs::write(config.join("language"), r#"{"name":"On Disk"}"#).unwrap();
+        std::fs::write(config.join("grammar"), "{ not json").unwrap();
+        std::fs::write(dir.path().join("notes/n.md"), "from disk").unwrap();
+        std::fs::write(dir.path().join("dictionary/extra"), r#"{"name":"extra"}"#).unwrap();
+
+        assert!(ws.reload_disk_state().is_err());
+        assert_eq!(ws.language.name, "In Memory");
+        assert!(ws.dictionary.table("extra").is_none());
+        assert!(ws.dictionary.table("verbs").is_some());
+        assert!(ws.can_undo(), "history survives a failed reload");
+    }
+
+    #[test]
+    fn unreadable_dictionary_file_fails_reload_atomically() {
+        let dir = tempfile::tempdir().unwrap();
+        let mut ws = Workspace::new(dir.path()).unwrap();
+        ws.create_table("verbs").unwrap();
+        ws.create_note("n").unwrap();
+
+        std::fs::write(dir.path().join("dictionary/broken"), "{ not json").unwrap();
+        std::fs::write(dir.path().join("notes/n.md"), "from disk").unwrap();
+
+        assert!(ws.reload_disk_state().is_err());
+        assert!(ws.dictionary.table("verbs").is_some());
+        assert_eq!(ws.notes.len(), 1);
+        assert_eq!(ws.notes[0].raw_content, "");
+        assert!(ws.can_undo());
     }
 
     #[test]

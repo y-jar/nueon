@@ -371,8 +371,9 @@ pub fn content_hash(text: &str) -> String {
 /// Saving never creates a file: an editor holding a stale buffer for a note
 /// that was deleted or renamed must fail instead of resurrecting it. When
 /// `base_hash` is given, the write is refused with `Conflict` if the file no
-/// longer matches the content the caller loaded. Identical content is not
-/// rewritten. Returns the new hash and whether the file was written.
+/// longer matches the content the caller loaded, unless it already equals
+/// the new content (then it succeeds without writing). Returns the new hash
+/// and whether the file was written.
 pub fn write_existing_note(
     notes_dir: &Path,
     relative: &Path,
@@ -384,13 +385,15 @@ pub fn write_existing_note(
         return Err(StorageError::NotFound(relative.to_path_buf()));
     }
     let current = fs::read_to_string(&path).map_err(|e| io_err(&path, e))?;
+    // The file already holds exactly what is being saved: nothing to write
+    // and nothing to conflict with, whatever base the caller started from.
+    if current == content {
+        return Ok((content_hash(content), false));
+    }
     if let Some(base) = base_hash {
         if content_hash(&current) != base {
             return Err(StorageError::Conflict(relative.to_path_buf()));
         }
-    }
-    if current == content {
-        return Ok((content_hash(content), false));
     }
     atomic_write(&path, content.as_bytes())?;
     Ok((content_hash(content), true))
@@ -629,6 +632,27 @@ mod tests {
         ));
         assert!(write_existing_note(&notes, Path::new("../x"), "x", None).is_err());
         assert!(!notes.join("nope.md").exists());
+    }
+
+    #[test]
+    fn saving_content_already_on_disk_is_not_a_conflict() {
+        let dir = tempfile::tempdir().unwrap();
+        let notes = dir.path().join(NOTES_DIR);
+        fs::create_dir_all(&notes).unwrap();
+        write_note(&notes, &NoteFile::new("a.md", "one")).unwrap();
+        let stale = content_hash("something older");
+
+        // The file already holds what is being saved (another window got
+        // there first): succeed, write nothing, and report the real hash.
+        let (hash, wrote) =
+            write_existing_note(&notes, Path::new("a.md"), "one", Some(&stale)).unwrap();
+        assert_eq!((hash, wrote), (content_hash("one"), false));
+
+        // Different content with a stale base is still a conflict.
+        assert!(matches!(
+            write_existing_note(&notes, Path::new("a.md"), "two", Some(&stale)),
+            Err(StorageError::Conflict(_))
+        ));
     }
 
     #[test]
