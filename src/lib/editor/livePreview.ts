@@ -286,6 +286,14 @@ function decorateLine(
     conceal(ranges, start + 2 + match[1].length, start + match[0].length);
   }
 
+  const underline = /<u>([^<\n]+)<\/u>/g;
+  while ((match = underline.exec(text))) {
+    const start = from + match.index;
+    conceal(ranges, start, start + 3);
+    mark(ranges, start + 3, start + 3 + match[1].length, "cm-underline");
+    conceal(ranges, start + 3 + match[1].length, start + match[0].length);
+  }
+
   const emphasis = /(^|[^*\w])\*([^*\n]+)\*(?!\*)/g;
   while ((match = emphasis.exec(text))) {
     const base = from + match.index + match[1].length;

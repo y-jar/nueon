@@ -12,7 +12,26 @@
     collapseAll,
     closeTab,
     moveTabToNewWindow,
+    getContextEditor,
   } from "../lib/state.svelte";
+  import type { EditorView } from "@codemirror/view";
+  import {
+    insertTable,
+    insertHorizontalRule,
+    insertLink,
+    toggleBlockquote,
+    toggleTaskList,
+    toggleCodeBlock,
+  } from "../lib/editor/commands";
+
+  /** Close the menu, then apply an editing command to the editor it opened on. */
+  function editorAction(command: (view: EditorView) => boolean) {
+    const view = getContextEditor();
+    closeContextMenu();
+    if (!view) return;
+    command(view);
+    view.focus();
+  }
 
   let menuEl: HTMLElement | undefined;
 
@@ -103,6 +122,25 @@
         }}>{$t("contextMenu.collapseAll")}</button
       >
       <button onclick={reveal}>{$t("contextMenu.reveal")}</button>
+    {:else if menu.kind === "editor"}
+      <button onclick={() => editorAction(insertTable)}
+        >{$t("editor.menu.table")}</button
+      >
+      <button onclick={() => editorAction(toggleBlockquote)}
+        >{$t("editor.menu.blockquote")}</button
+      >
+      <button onclick={() => editorAction(toggleTaskList)}
+        >{$t("editor.menu.taskList")}</button
+      >
+      <button onclick={() => editorAction(toggleCodeBlock)}
+        >{$t("editor.codeBlock")}</button
+      >
+      <button onclick={() => editorAction(insertHorizontalRule)}
+        >{$t("editor.menu.rule")}</button
+      >
+      <button onclick={() => editorAction(insertLink)}
+        >{$t("editor.menu.link")}</button
+      >
     {:else if menu.kind === "tab" && menu.tab}
       <!-- Read the target before closing: closing nulls `menu`. -->
       <button

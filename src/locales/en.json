@@ -54,6 +54,21 @@
     "pickTableHint": "Choose a table from the sidebar to start editing words."
   },
   "editor": {
+    "toolbar": "Formatting",
+    "bold": "Bold",
+    "italic": "Italic",
+    "underline": "Underline",
+    "bulletList": "Bullet list",
+    "numberedList": "Numbered list",
+    "codeBlock": "Code block",
+    "image": "Insert image",
+    "menu": {
+      "table": "Insert table",
+      "blockquote": "Blockquote",
+      "taskList": "Task list",
+      "rule": "Horizontal rule",
+      "link": "Link"
+    },
     "selectNote": "Select a note, or create one from the sidebar."
   },
   "activity": {

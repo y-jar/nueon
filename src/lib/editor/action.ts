@@ -1,7 +1,7 @@
 import { defaultKeymap, history, historyKeymap, indentWithTab } from "@codemirror/commands";
 import { markdown } from "@codemirror/lang-markdown";
 import { highlightSelectionMatches, search, searchKeymap } from "@codemirror/search";
-import { EditorState } from "@codemirror/state";
+import { EditorState, Prec } from "@codemirror/state";
 import {
   EditorView,
   crosshairCursor,
@@ -21,6 +21,12 @@ import {
   setWordIndex,
   wordIndexField,
 } from "./dictionary";
+import {
+  EMPTY_FORMAT,
+  formatAt,
+  markdownKeymap,
+  type FormatState,
+} from "./commands";
 import { livePreview, setAssetBase } from "./livePreview";
 import { highlight, theme } from "./theme";
 
@@ -32,6 +38,12 @@ export interface EditorParams {
   assetBase: string;
   onDirty: (dirty: boolean) => void;
   onSave: (path: string, text: string) => Promise<void>;
+  /** Called with the live view once created, and `null` on destroy. */
+  onView?: (view: EditorView | null) => void;
+  /** Called when the formats active at the cursor change. */
+  onFormat?: (format: FormatState) => void;
+  /** Right-click inside the editor. */
+  onContextMenu?: (x: number, y: number, view: EditorView) => void;
 }
 
 const AUTOSAVE_MS = 400;
@@ -65,6 +77,8 @@ export const codemirror: Action<HTMLElement, EditorParams> = (node, params) => {
         dictionaryHover(),
         search({ top: true }),
         highlightSelectionMatches(),
+        // Ahead of the default keymap, which binds Mod-i to "select parent".
+        Prec.high(keymap.of(markdownKeymap)),
         keymap.of([
           ...defaultKeymap,
           ...historyKeymap,
@@ -83,10 +97,25 @@ export const codemirror: Action<HTMLElement, EditorParams> = (node, params) => {
             current.onDirty(true);
             schedule();
           }
+          if (update.docChanged || update.selectionSet) {
+            current.onFormat?.(formatAt(update.state));
+          }
         }),
         EditorView.domEventHandlers({
           blur: () => {
             void flush();
+          },
+          contextmenu: (event, view) => {
+            if (!current.onContextMenu) return false;
+            event.preventDefault();
+            // Right-click places the cursor unless it lands in a selection.
+            const pos = view.posAtCoords({ x: event.clientX, y: event.clientY });
+            const sel = view.state.selection.main;
+            if (pos !== null && (sel.empty || pos < sel.from || pos > sel.to)) {
+              view.dispatch({ selection: { anchor: pos } });
+            }
+            current.onContextMenu(event.clientX, event.clientY, view);
+            return true;
           },
         }),
       ],
@@ -95,6 +124,8 @@ export const codemirror: Action<HTMLElement, EditorParams> = (node, params) => {
 
   view.dispatch({ effects: setWordIndex.of(params.index) });
   setAssetBase(params.assetBase);
+  params.onView?.(view);
+  params.onFormat?.(formatAt(view.state) ?? EMPTY_FORMAT);
 
   async function flush(): Promise<void> {
     if (timer) {
@@ -155,6 +186,7 @@ export const codemirror: Action<HTMLElement, EditorParams> = (node, params) => {
       }
     },
     async destroy() {
+      current.onView?.(null);
       await flush();
       view.destroy();
     },

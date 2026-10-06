@@ -1,4 +1,5 @@
 import { emit, listen } from "@tauri-apps/api/event";
+import type { EditorView } from "@codemirror/view";
 import * as api from "./api";
 import { windowLabel } from "./window";
 import { stripMd } from "./explorer";
@@ -108,7 +109,7 @@ export const ui = $state({
     y: number;
     path: string;
     isDir: boolean;
-    kind: "node" | "root" | "tab";
+    kind: "node" | "root" | "tab" | "editor";
     tab?: { groupId: string; tabId: string };
   } | null,
   renameTarget: null as string | null,
@@ -928,6 +929,18 @@ export async function selectNote(path: string): Promise<void> {
 
 export async function selectTable(name: string): Promise<void> {
   await openTable(name);
+}
+
+/** The editor the open editor context menu acts on. */
+let contextEditor: EditorView | null = null;
+
+export function openEditorContextMenu(x: number, y: number, view: EditorView): void {
+  contextEditor = view;
+  ui.contextMenu = { x, y, path: "", isDir: false, kind: "editor" };
+}
+
+export function getContextEditor(): EditorView | null {
+  return contextEditor;
 }
 
 export function openTabContextMenu(
