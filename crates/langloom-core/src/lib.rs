@@ -5,6 +5,7 @@
 
 pub mod config;
 pub mod export;
+pub mod export_table;
 pub mod global;
 pub mod import;
 pub mod model;
@@ -18,6 +19,7 @@ pub use config::{
     TextDirection, TilingLayout, TranslationConfig, TranslationOptions, UiLayout, WindowGeometry,
     WorkspaceSettings,
 };
+pub use export_table::{export_columns, export_delimited, ExportColumn};
 pub use global::{GlobalConfig, WindowLayout, WorkspaceEntry};
 pub use import::{
     detect, import_apply, import_preview, ColumnProposal, ColumnRole, Detection, DuplicateConflict,
