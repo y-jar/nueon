@@ -19,7 +19,7 @@ pub use config::{
     TextDirection, TilingLayout, TranslationConfig, TranslationOptions, UiLayout, WindowGeometry,
     WorkspaceSettings,
 };
-pub use export_table::{export_columns, export_delimited, ExportColumn};
+pub use export_table::{export_columns, export_delimited, export_table, ExportColumn, TableFormat};
 pub use global::{GlobalConfig, WindowLayout, WorkspaceEntry};
 pub use import::{
     detect, import_apply, import_preview, ColumnProposal, ColumnRole, Detection, DuplicateConflict,

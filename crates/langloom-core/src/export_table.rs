@@ -12,9 +12,20 @@
 
 use std::collections::HashMap;
 
+use serde::{Deserialize, Serialize};
 use uuid::Uuid;
 
 use crate::model::{FieldType, FieldValue, WordTable, DEFINITION_TAG, PARENT_TAG, WORDNAME_TAG};
+
+/// A table export format.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum TableFormat {
+    Csv,
+    Tsv,
+    /// A lossless `WordTable` snapshot (exact ids, schema and values).
+    Json,
+}
 
 /// One column in an exported table.
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -178,4 +189,13 @@ pub fn export_delimited(table: &WordTable, delimiter: char, quote: char) -> Stri
         out.push('\n');
     }
     out
+}
+
+/// Export a table in the requested format as text.
+pub fn export_table(table: &WordTable, format: TableFormat) -> Result<String, serde_json::Error> {
+    Ok(match format {
+        TableFormat::Csv => export_delimited(table, ',', '"'),
+        TableFormat::Tsv => export_delimited(table, '\t', '"'),
+        TableFormat::Json => serde_json::to_string_pretty(table)?,
+    })
 }

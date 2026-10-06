@@ -2,8 +2,8 @@
 //! nothing is lost.
 
 use langloom_core::{
-    export_columns, export_delimited, import_apply, ColumnRole, ExportColumn, FieldType,
-    FieldValue, ImportOptions, ImportPlan, TagDef, WordTable, Workspace,
+    export_columns, export_delimited, export_table, import_apply, ColumnRole, ExportColumn,
+    FieldType, FieldValue, ImportOptions, ImportPlan, TableFormat, TagDef, WordTable, Workspace,
 };
 
 /// Import roles that exactly mirror an exported table's column layout.
@@ -166,4 +166,17 @@ fn export_columns_follow_the_documented_order() {
             "synonym"
         ]
     );
+}
+
+#[test]
+fn json_export_is_an_exact_lossless_snapshot() {
+    let dir = tempfile::tempdir().unwrap();
+    let mut ws = Workspace::new(dir.path()).unwrap();
+    sample_table(&mut ws);
+    let table = ws.dictionary.table("src").unwrap().clone();
+
+    let json = export_table(&table, TableFormat::Json).unwrap();
+    let restored: WordTable = serde_json::from_str(&json).unwrap();
+    // Exact equality: ids, schema, values and relations all survive.
+    assert_eq!(restored, table);
 }
