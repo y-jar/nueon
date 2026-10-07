@@ -28,7 +28,7 @@ import {
   type FormatState,
 } from "./commands";
 import { diffSplice } from "./diff";
-import { livePreview, setAssetBase, tableBlocks } from "./livePreview";
+import { blockBlocks, livePreview, setAssetBase } from "./livePreview";
 import { initialPosition, restoreScroll, savePosition } from "./positions";
 import { tableKeymap } from "./tableEditing";
 import { highlight, theme } from "./theme";
@@ -155,7 +155,7 @@ export const codemirror: Action<HTMLElement, EditorParams> = (node, params) => {
         theme,
         wordIndexField,
         livePreview(),
-        tableBlocks(),
+        blockBlocks(),
         dictionaryHighlight(),
         dictionaryHover(),
         search({ top: true }),

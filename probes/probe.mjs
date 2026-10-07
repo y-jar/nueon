@@ -26,6 +26,13 @@ const DISPLAY = `:${99 + (process.pid % 40)}`;
 const WORKSPACE = path.join(ROOT, "ws", "probe");
 // A non-table line, then a table, then another line — for probe 7.
 const TABLES = "before line\n\n| h1 | h2 |\n| --- | --- |\n| c1 | c2 |\n\nafter line\n";
+// Multi-line blocks for probe 8: a line above, a blank line, then the block.
+const MATH = "above line\n\n$$\nx^2 + y^2\n$$\n";
+const HTML = "above line\n\n<div>\nhello\n</div>\n";
+// Same shape as MATH/HTML: line above, a blank line at offset 11, then a table.
+const BLOCKTABLE = "above line\n\n| h1 | h2 |\n| --- | --- |\n| c1 | c2 |\n";
+// Inline constructs inside a fence, for the report in probe 8c.
+const CODE = "before\n\n```\necho $HOME and $PATH\n**bold**\n[[link]]\n```\nafter\n";
 
 const DRIVER_CANDIDATES = [
   "/tmp/opencode/tauri-driver-root/bin/tauri-driver",
@@ -149,6 +156,7 @@ async function typeInto(selector, text) {
 const TAB = "\uE004";
 const ENTER = "\uE007";
 const CTRL = "\uE009";
+const ARROW_DOWN = "\uE015";
 
 /** Press a key, optionally held with modifiers (e.g. `pressKey("z", [CTRL])`). */
 async function pressKey(value, modifiers = []) {
@@ -325,6 +333,10 @@ function seedWorkspace() {
   fs.writeFileSync(path.join(WORKSPACE, "notes", "alpha.md"), `${lines.join("\n")}\n`);
   fs.writeFileSync(path.join(WORKSPACE, "notes", "beta.md"), "beta note\n");
   fs.writeFileSync(path.join(WORKSPACE, "notes", "tables.md"), TABLES);
+  fs.writeFileSync(path.join(WORKSPACE, "notes", "math.md"), MATH);
+  fs.writeFileSync(path.join(WORKSPACE, "notes", "html.md"), HTML);
+  fs.writeFileSync(path.join(WORKSPACE, "notes", "blocktable.md"), BLOCKTABLE);
+  fs.writeFileSync(path.join(WORKSPACE, "notes", "code.md"), CODE);
   const configDir = path.join(ROOT, "home", ".config", "nueon");
   fs.mkdirSync(configDir, { recursive: true });
   fs.writeFileSync(
@@ -665,6 +677,72 @@ async function main() {
     if (!text.startsWith("  before line")) {
       throw new Error(`not indented: ${JSON.stringify(text.slice(0, 24))}`);
     }
+  });
+
+  // -- probe 8: multi-line math and HTML render as block widgets -----------
+  // Let the previous note's autosave land before switching (see deferred.md).
+  await new Promise((resolve) => setTimeout(resolve, 1200));
+  for (const [file, content, widget] of [
+    ["math.md", MATH, ".cm-math-display"],
+    ["html.md", HTML, ".cm-html-block"],
+  ]) {
+    await probe(`8-${file}-block-widget-renders`, async () => {
+      await openNote(file);
+      // The tab switch replaces the buffer asynchronously; wait for the text.
+      await waitEditorText(file, content, 12000);
+      // Place the cursor on the line above the block, so it is not active.
+      await focusEditor(file);
+      await placeCursor(file, 1);
+      await waitJs(
+        `!!document.querySelector('.cm-host[data-note=${JSON.stringify(file)}] ${widget}')`,
+        { timeout: 8000, label: `${widget} in ${file}` },
+      );
+    });
+  }
+
+  // -- probe 8c: report whether inline marks apply inside a fence ----------
+  await probe("8c-inline-marks-inside-a-fence", async () => {
+    await openNote("code.md");
+    const info = await js(
+      `const host = document.querySelector('.cm-host[data-note="code.md"]');
+       const content = host.querySelector('.cm-content');
+       return {
+         strong: content.querySelectorAll('.cm-strong').length,
+         inlineMath: content.querySelectorAll('.cm-math').length,
+         displayMath: content.querySelectorAll('.cm-math-display').length,
+         text: content.textContent.slice(0, 120),
+       };`,
+    );
+    console.log("INLINE-IN-FENCE", JSON.stringify(info));
+  });
+
+  // -- probe 9: ArrowDown from above reveals each block's raw text ---------
+  await probe("9-arrowdown-into-blocks", async () => {
+    const cases = [
+      ["blocktable.md", 11, ".cm-table", "| h1 | h2 |"],
+      ["math.md", 11, ".cm-math-display", "$$"],
+      ["html.md", 11, ".cm-html-block", "<div>"],
+    ];
+    const report = [];
+    for (const [file, blank, widget, marker] of cases) {
+      await openNote(file);
+      await focusEditor(file);
+      await placeCursor(file, blank);
+      await pressKey(ARROW_DOWN);
+      await new Promise((resolve) => setTimeout(resolve, 200));
+      const state = await readEditorState(file);
+      const dom = await js(
+        `const host = document.querySelector('.cm-host[data-note=${JSON.stringify(file)}]');
+         return {
+           widget: !!host.querySelector(${JSON.stringify(widget)}),
+           raw: host.querySelector('.cm-content').textContent.includes(${JSON.stringify(marker)}),
+         };`,
+      );
+      report.push({ file, anchor: state.anchor, stuck: state.anchor === blank, ...dom });
+    }
+    console.log("ARROWDOWN-BLOCKS", JSON.stringify(report));
+    const stuck = report.filter((entry) => entry.stuck);
+    if (stuck.length) throw new Error(`cursor stuck: ${JSON.stringify(stuck)}`);
   });
 }
 

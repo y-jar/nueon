@@ -32,6 +32,19 @@ const TAB = 9;
 /** GFM delimiter row (as `@lezer/markdown` accepts it). */
 const DELIMITER = /^[>\s]*\|?(\s*:?-+:?\s*\|)+(\s*:?-+:?\s*)?$/;
 
+/**
+ * The loose delimiter-row test the live preview and block scan use to find a
+ * table's second line (a dashed row with at least one pipe).
+ */
+export function isDelimiterRow(text: string): boolean {
+  const trimmed = text.trim();
+  return (
+    trimmed.includes("-") &&
+    trimmed.includes("|") &&
+    /^\|?[\s:|-]+\|?$/.test(trimmed)
+  );
+}
+
 /** Whether the line contains a `|` that is not escaped. */
 function hasUnescapedPipe(line: string): boolean {
   for (let i = 0; i < line.length; i++) {

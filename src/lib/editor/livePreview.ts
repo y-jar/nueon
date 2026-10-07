@@ -1,4 +1,4 @@
-import { StateField, type EditorState, type Range } from "@codemirror/state";
+import { type Range } from "@codemirror/state";
 import {
   Decoration,
   type DecorationSet,
@@ -10,7 +10,8 @@ import {
 import { convertFileSrc } from "@tauri-apps/api/core";
 import katex from "katex";
 import { normalizePath } from "../assets";
-import { parseTable, rawCellOffset } from "./table";
+import { makeBlockField } from "./blocks";
+import { isDelimiterRow, parseTable, rawCellOffset } from "./table";
 import "katex/dist/katex.min.css";
 
 // Absolute `notes/` directory and the open note's folder inside it, used to
@@ -109,15 +110,6 @@ function splitRow(text: string): string[] {
     .map((cell) => cell.trim());
 }
 
-function isDelimiter(text: string): boolean {
-  const trimmed = text.trim();
-  return (
-    trimmed.includes("-") &&
-    trimmed.includes("|") &&
-    /^\|?[\s:|-]+\|?$/.test(trimmed)
-  );
-}
-
 class TableWidget extends WidgetType {
   constructor(
     readonly block: string,
@@ -165,7 +157,7 @@ class TableWidget extends WidgetType {
     // Not a valid table (ragged/mismatched): render as before, no bridge.
     let headerDone = false;
     for (const rowText of this.block.split("\n")) {
-      if (rowText.trim() === "" || isDelimiter(rowText)) continue;
+      if (rowText.trim() === "" || isDelimiterRow(rowText)) continue;
       const tr = document.createElement("tr");
       const cells = splitRow(rowText);
       for (const cell of cells) {
@@ -410,7 +402,7 @@ function build(view: EditorView): DecorationSet {
       // GFM table block → single widget.
       const next =
         line.number < state.doc.lines ? state.doc.line(line.number + 1) : null;
-      if (line.text.includes("|") && next && isDelimiter(next.text)) {
+      if (line.text.includes("|") && next && isDelimiterRow(next.text)) {
         let last = next.number;
         while (
           last < state.doc.lines &&
@@ -435,7 +427,8 @@ function build(view: EditorView): DecorationSet {
         }
       }
 
-      // Display math block: $$ ... $$ (single- or multi-line).
+      // Display math: single-line stays a plugin decoration (it replaces no
+      // line break); multi-line is rendered by the block field.
       if (line.text.trimStart().startsWith("$$")) {
         let last = line.number;
         let raw = line.text;
@@ -450,29 +443,22 @@ function build(view: EditorView): DecorationSet {
         const innerStart = raw.indexOf("$$") + 2;
         const innerEnd = raw.indexOf("$$", innerStart);
         if (innerEnd !== -1) {
-          let blockActive = false;
-          for (let n = line.number; n <= last; n += 1) {
-            if (active.has(n)) {
-              blockActive = true;
-              break;
-            }
-          }
-          if (!blockActive) {
-            const blockFrom = line.from;
-            const blockTo = state.doc.line(last).to;
+          const blockTo = state.doc.line(last).to;
+          if (last === line.number) {
             ranges.push(
               Decoration.replace({
                 widget: new MathWidget(raw.slice(innerStart, innerEnd), true),
-              }).range(blockFrom, blockTo),
+              }).range(line.from, blockTo),
             );
-            if (blockTo >= visible.to) break;
-            pos = blockTo + 1;
-            continue;
           }
+          if (blockTo >= visible.to) break;
+          pos = blockTo + 1;
+          continue;
         }
       }
 
-      // Raw HTML block: consecutive non-blank lines starting with a tag.
+      // Raw HTML block: single-line is a plugin decoration, multi-line comes
+      // from the block field.
       if (/^\s*<(?!https?:)[a-zA-Z!/]/.test(line.text)) {
         let last = line.number;
         while (
@@ -481,27 +467,17 @@ function build(view: EditorView): DecorationSet {
         ) {
           last += 1;
         }
-        let blockActive = false;
-        for (let n = line.number; n <= last; n += 1) {
-          if (active.has(n)) {
-            blockActive = true;
-            break;
-          }
-        }
-        if (!blockActive) {
-          const blockFrom = line.from;
-          const blockTo = state.doc.line(last).to;
+        const blockTo = state.doc.line(last).to;
+        if (last === line.number) {
           ranges.push(
             Decoration.replace({
-              widget: new HtmlWidget(
-                state.doc.sliceString(blockFrom, blockTo),
-              ),
-            }).range(blockFrom, blockTo),
+              widget: new HtmlWidget(state.doc.sliceString(line.from, blockTo)),
+            }).range(line.from, blockTo),
           );
-          if (blockTo >= visible.to) break;
-          pos = blockTo + 1;
-          continue;
         }
+        if (blockTo >= visible.to) break;
+        pos = blockTo + 1;
+        continue;
       }
 
       decorateLine(line, ranges);
@@ -514,60 +490,21 @@ function build(view: EditorView): DecorationSet {
 }
 
 /**
- * GFM tables as block widgets. A `ViewPlugin` may not replace line breaks, so
- * tables must be provided from a state field; the field sees the selection and
- * leaves a table raw while the cursor is inside it.
+ * Multi-line tables, display math and HTML rendered as block widgets. A
+ * `ViewPlugin` may not replace line breaks, so these come from a state field;
+ * the field sees the selection and leaves a block raw while the cursor is
+ * inside it. The scanning lives in `blocks.ts`.
  */
-function tableDecorations(state: EditorState): DecorationSet {
-  const active = activeLines(state);
-  const ranges: Range<Decoration>[] = [];
-  for (let number = 1; number < state.doc.lines; number += 1) {
-    const line = state.doc.line(number);
-    const next = state.doc.line(number + 1);
-    if (!line.text.includes("|") || !isDelimiter(next.text)) continue;
-    let last = number + 1;
-    while (
-      last < state.doc.lines &&
-      state.doc.line(last + 1).text.includes("|") &&
-      state.doc.line(last + 1).text.trim() !== ""
-    ) {
-      last += 1;
-    }
-    let blockActive = false;
-    for (let n = number; n <= last; n += 1) {
-      if (active.has(n)) {
-        blockActive = true;
-        break;
-      }
-    }
-    if (!blockActive) {
-      const from = line.from;
-      const to = state.doc.line(last).to;
-      ranges.push(
-        Decoration.replace({
-          widget: new TableWidget(state.doc.sliceString(from, to), from),
-          block: true,
-        }).range(from, to),
-      );
-    }
-    number = last;
-  }
-  return Decoration.set(ranges, true);
-}
-
-const tableField = StateField.define<DecorationSet>({
-  create: (state) => tableDecorations(state),
-  update: (decorations, tr) =>
-    tr.docChanged ||
-    (tr.selection != null && !tr.selection.eq(tr.startState.selection))
-      ? tableDecorations(tr.state)
-      : decorations,
-  provide: (field) => EditorView.decorations.from(field),
+const blockField = makeBlockField((kind, text, from) => {
+  if (kind === "table") return new TableWidget(text, from);
+  if (kind === "html") return new HtmlWidget(text);
+  const start = text.indexOf("$$") + 2;
+  return new MathWidget(text.slice(start, text.indexOf("$$", start)), true);
 });
 
-/** Tables rendered as block widgets (see `tableDecorations`). */
-export function tableBlocks() {
-  return tableField;
+/** Block widgets for tables, multi-line math and multi-line HTML. */
+export function blockBlocks() {
+  return blockField;
 }
 
 /**
