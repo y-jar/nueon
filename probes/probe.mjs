@@ -33,6 +33,10 @@ const HTML = "above line\n\n<div>\nhello\n</div>\n";
 const BLOCKTABLE = "above line\n\n| h1 | h2 |\n| --- | --- |\n| c1 | c2 |\n";
 // Inline constructs inside a fence, for the report in probe 8c.
 const CODE = "before\n\n```\necho $HOME and $PATH\n**bold**\n[[link]]\n```\nafter\n";
+// Two notes for the stale-save race (probe 10).
+const RACE_A = "race A original\n";
+const RACE_B = "race B original\n";
+const RACE_MARKER = "TYPED_IN_A ";
 
 const DRIVER_CANDIDATES = [
   "/tmp/opencode/tauri-driver-root/bin/tauri-driver",
@@ -337,6 +341,8 @@ function seedWorkspace() {
   fs.writeFileSync(path.join(WORKSPACE, "notes", "html.md"), HTML);
   fs.writeFileSync(path.join(WORKSPACE, "notes", "blocktable.md"), BLOCKTABLE);
   fs.writeFileSync(path.join(WORKSPACE, "notes", "code.md"), CODE);
+  fs.writeFileSync(path.join(WORKSPACE, "notes", "raceA.md"), RACE_A);
+  fs.writeFileSync(path.join(WORKSPACE, "notes", "raceB.md"), RACE_B);
   const configDir = path.join(ROOT, "home", ".config", "nueon");
   fs.mkdirSync(configDir, { recursive: true });
   fs.writeFileSync(
@@ -680,8 +686,6 @@ async function main() {
   });
 
   // -- probe 8: multi-line math and HTML render as block widgets -----------
-  // Let the previous note's autosave land before switching (see deferred.md).
-  await new Promise((resolve) => setTimeout(resolve, 1200));
   for (const [file, content, widget] of [
     ["math.md", MATH, ".cm-math-display"],
     ["html.md", HTML, ".cm-html-block"],
@@ -743,6 +747,35 @@ async function main() {
     console.log("ARROWDOWN-BLOCKS", JSON.stringify(report));
     const stuck = report.filter((entry) => entry.stuck);
     if (stuck.length) throw new Error(`cursor stuck: ${JSON.stringify(stuck)}`);
+  });
+
+  // -- probe 10: a stale save must not touch the newly shown note ----------
+  // Type in A and switch to B with no settle delay: A's autosave is still in
+  // flight, so its completion must not overwrite B's content or hash.
+  await probe("10-stale-save-does-not-touch-another-note", async () => {
+    await openNote("raceA.md");
+    await waitEditorText("raceA.md", RACE_A);
+    await focusEditor("raceA.md");
+    await js(`${viewScript("raceA.md")}
+      v.dispatch({ changes: { from: 0, insert: ${JSON.stringify(RACE_MARKER)} } });
+      return true;`);
+    await openNote("raceB.md");
+    await new Promise((resolve) => setTimeout(resolve, 2500));
+
+    assertEqual(await editorText("raceB.md"), RACE_B, "B editor text");
+    assertEqual(
+      fs.readFileSync(path.join(WORKSPACE, "notes", "raceB.md"), "utf8"),
+      RACE_B,
+      "B file on disk",
+    );
+    const aDisk = fs.readFileSync(path.join(WORKSPACE, "notes", "raceA.md"), "utf8");
+    if (!aDisk.includes(RACE_MARKER)) {
+      throw new Error(`A file missing the typed text: ${JSON.stringify(aDisk)}`);
+    }
+    const banner = await js(
+      `return !!document.querySelector('.cm-host[data-note="raceB.md"] .conflict-banner');`,
+    );
+    if (banner) throw new Error("conflict banner shown on B");
   });
 }
 

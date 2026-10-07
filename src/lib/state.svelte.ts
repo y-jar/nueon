@@ -1052,6 +1052,9 @@ export async function resolveConflict(
       await api.createNote(path);
     }
     const snapshot = await api.readNote(path);
+    // The doc may be showing another note by now (a tab switch landed while
+    // the read was in flight); never apply this to the wrong note.
+    if (doc.selected !== path) return;
     if (choice === "use-disk") {
       resolveNoteConflict(path, "reload", snapshot);
       doc.noteContent = snapshot.content;

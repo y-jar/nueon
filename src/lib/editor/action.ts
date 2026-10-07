@@ -42,13 +42,14 @@ export interface EditorParams {
   index: WordIndex;
   /** Absolute `notes/` directory for resolving local images. */
   assetBase: string;
-  onDirty: (dirty: boolean) => void;
+  /** Dirty state changed for `path` (which may no longer be the shown note). */
+  onDirty: (path: string, dirty: boolean) => void;
   /** Persist an existing note; resolves to the new content hash. */
   onSave: (path: string, text: string, baseHash: string | null) => Promise<string>;
-  /** A save succeeded: `text` is now on disk and `hash` is its hash. */
-  onSaved?: (hash: string, text: string) => void;
-  /** The file changed on disk, or vanished, while the buffer has edits. */
-  onConflict?: (kind: "changed" | "missing") => void;
+  /** A save for `path` succeeded: `text` is on disk and `hash` is its hash. */
+  onSaved?: (path: string, hash: string, text: string) => void;
+  /** `path` changed on disk, or vanished, while the buffer has edits. */
+  onConflict?: (path: string, kind: "changed" | "missing") => void;
   /** Called with the live view once created, and `null` on destroy. */
   onView?: (view: EditorView | null) => void;
   /** Called when the formats active at the cursor change. */
@@ -180,7 +181,7 @@ export const codemirror: Action<HTMLElement, EditorParams> = (node, params) => {
         ]),
         EditorView.updateListener.of((update) => {
           if (update.docChanged) {
-            current.onDirty(true);
+            current.onDirty(current.path, true);
             schedule();
           }
           if (update.selectionSet) {
@@ -232,26 +233,30 @@ export const codemirror: Action<HTMLElement, EditorParams> = (node, params) => {
     // Never save while frozen (the note is being deleted/renamed) or while a
     // conflict is unresolved, and never write text that is already on disk.
     if (frozen > 0 || conflicted) return;
+    // Capture the session this save belongs to: the doc may be showing another
+    // note by the time the callbacks run, and each carries its path so the
+    // app can ignore a stale one.
+    const target = current;
+    const path = target.path;
     const text = view.state.doc.toString();
     if (text === savedText) {
-      current.onDirty(false);
+      target.onDirty(path, false);
       return;
     }
-    const path = current.path;
     try {
-      const hash = await current.onSave(path, text, baseHash);
+      const hash = await target.onSave(path, text, baseHash);
       savedText = text;
       baseHash = hash;
-      current.onSaved?.(hash, text);
-      if (view.state.doc.toString() === text) current.onDirty(false);
+      target.onSaved?.(path, hash, text);
+      if (view.state.doc.toString() === text) target.onDirty(path, false);
     } catch (error) {
       const message = String(error);
       if (message.includes("conflict")) {
         conflicted = true;
-        current.onConflict?.("changed");
+        target.onConflict?.(path, "changed");
       } else if (message.includes("not found")) {
         conflicted = true;
-        current.onConflict?.("missing");
+        target.onConflict?.(path, "missing");
       }
       // Anything else (transient I/O): stay dirty so the next flush retries.
     }
@@ -303,7 +308,7 @@ export const codemirror: Action<HTMLElement, EditorParams> = (node, params) => {
       savedText = content;
       baseHash = hash;
       replaceBuffer(content);
-      current.onDirty(false);
+      current.onDirty(current.path, false);
     },
     adopt(hash) {
       conflicted = false;
@@ -327,8 +332,8 @@ export const codemirror: Action<HTMLElement, EditorParams> = (node, params) => {
           setAssetBase(next.assetBase, next.path);
           replaceBuffer(next.content);
           view.dispatch({ effects: setWordIndex.of(next.index) });
-          previous.onDirty(false);
-          next.onDirty(false);
+          previous.onDirty(previous.path, false);
+          next.onDirty(next.path, false);
         })();
         return;
       }
@@ -349,7 +354,7 @@ export const codemirror: Action<HTMLElement, EditorParams> = (node, params) => {
         savedText = next.content;
         baseHash = next.hash;
         replaceBuffer(next.content);
-        next.onDirty(false);
+        next.onDirty(next.path, false);
       } else if (
         !clean &&
         next.hash !== null &&
@@ -357,7 +362,7 @@ export const codemirror: Action<HTMLElement, EditorParams> = (node, params) => {
         !conflicted
       ) {
         conflicted = true;
-        next.onConflict?.("changed");
+        next.onConflict?.(next.path, "changed");
       }
     },
     async destroy() {

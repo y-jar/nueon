@@ -16,6 +16,7 @@
   } from "../lib/editor/commands";
   import { codemirror } from "../lib/editor/action";
   import { invalidateReads } from "../lib/editor/freshness";
+  import { shouldApplySave } from "../lib/editor/session";
   import { open, save } from "@tauri-apps/plugin-dialog";
   import { Upload } from "@lucide/svelte";
   import Popover from "./Popover.svelte";
@@ -142,17 +143,24 @@
           hash: doc.noteHash,
           index: ui.wordIndex,
           assetBase: ui.root ? `${ui.root}/notes` : "",
-          onDirty: (dirty: boolean) => (doc.dirty = dirty),
+          onDirty: (path: string, dirty: boolean) => {
+            if (shouldApplySave(doc.selected, path)) doc.dirty = dirty;
+          },
           onSave: api.saveNote,
-          onSaved: (hash: string, text: string) => {
+          onSaved: (path: string, hash: string, text: string) => {
+            // A save for a note no longer shown (a tab switch landed while it
+            // was in flight) must not overwrite the shown note's copy.
+            if (!shouldApplySave(doc.selected, path)) return;
             // Keep the loaded copy in step with disk so a remount (rename,
             // tab switch) never starts from stale text. Any disk read that
             // was in flight while we saved is now stale.
-            if (doc.selected) invalidateReads(doc.selected);
+            invalidateReads(path);
             doc.noteContent = text;
             doc.noteHash = hash;
           },
-          onConflict: (kind: "changed" | "missing") => (doc.conflict = kind),
+          onConflict: (path: string, kind: "changed" | "missing") => {
+            if (shouldApplySave(doc.selected, path)) doc.conflict = kind;
+          },
           onView: (next: EditorView | null) => (view = next),
           onFormat: (next: FormatState) => (format = next),
           onContextMenu: openEditorContextMenu,
