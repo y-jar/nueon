@@ -16,21 +16,25 @@ testable and reusable independently of any UI:
 ```
 Cargo.toml                     # Cargo workspace
 crates/nueon-core/             # tier 1: domain logic
-  src/model/                   # tables, tags, entries, fields, derivation
+  src/model/                   # tables, tags, entries, fields, derivation, translate
   src/workspace/               # loading, storage, assets, trash, filenames
   src/config/                  # language, grammar, translation, settings, layout
   src/import.rs                # delimited import (detect/preview/apply)
   src/export_table.rs          # table export (CSV/TSV/JSON)
   src/export.rs                # Markdown → HTML/ODT
-  src/translation/             # builder/runner
+  src/translation/mod.rs       # syntax-grid/clause-slot model (runner is model/translate.rs)
   src/vcs/                     # git CLI integration + auto-check-in
+  src/global.rs                # global (cross-workspace) config
 src-tauri/                     # tier 2: Tauri v2 shell
   src/commands/                # one module per command group
   src/state.rs                 # Mutex<AppState>
+  src/tree.rs                  # notes-tree scan
   tauri.conf.json              # window, bundle (appimage/deb/rpm)
 src/                           # tier 3: Svelte 5 frontend
   lib/api.ts                   # typed invoke() wrappers + DTOs
   lib/state.svelte.ts          # runes store (tabs, groups, ui, data)
+  lib/i18n.ts                  # translation helper
+  locales/en.json              # UI strings
   lib/editor/                  # CodeMirror extensions (live preview, theme)
   components/                  # shell, grid, editor, import wizard, export…
 flake.nix                      # packages.default (source) + nueon-bin (prebuilt)
@@ -89,28 +93,40 @@ The authoritative domain model:
 
 Command groups (see `src-tauri/src/commands/`):
 
-- workspace registry & lifecycle (`workspace_*`, `layout_*`, `ui_layout_*`,
-  `tiling_save`, `layout_state_get`)
+- app (`ping`)
+- workspace registry & lifecycle (`workspace_list`, `workspace_current`,
+  `workspace_open`, `workspace_create`, `workspace_remove`, `workspace_rename`,
+  `workspace_set_path`, `workspace_delete_from_disk`)
+- config (`config_get`, `config_set`)
+- layout (`layout_get`, `layout_set_git_panel`, `ui_layout_get`,
+  `ui_layout_set`, `layout_state_get`, `tiling_save`)
 - notes (`list_workspace`, `read_note`, `save_note`, `create_note`,
   `create_note_with_content`, `create_folder`, `move_or_rename_note`,
   `delete_note`, `note_count`)
 - trash (`trash_list`, `trash_restore`, `trash_purge`, `trash_empty`)
 - dictionary (`list_tables`, `get_table`, `create_table`, `delete_table`,
-  `rename_table`, `get_table`, `word_index`, `quarantine_warnings`, word CRUD
-  and field patches `set_word_value`/`set_word_definition`/`rename_word`,
-  tag management `add_tag`/`remove_tag`/`set_tag_kind`/`set_tag_format`,
-  parents `set_parent`/`remove_parent`/`parent_candidates`, derivation)
+  `rename_table`, `word_index`, `quarantine_warnings`, word CRUD
+  (`create_word`/`save_word_entry`/`set_word_value`/`set_word_definition`/
+  `rename_word`/`delete_word`/`move_word`), tag management
+  (`add_tag`/`remove_tag_preview`/`remove_tag`/`set_tag_kind`/`set_tag_format`/
+  `known_tag_names`))
+- history (`history_status`, `undo`, `redo`, `warning_dismissed`,
+  `dismiss_warning`)
+- etymology (`set_parent`, `remove_parent`, `reparent_word`,
+  `parent_candidates`, `derivation_tree`, `derivation_graph`)
 - grid view state (`grid_view_get`, `grid_view_set`)
 - import/export (`import_detect`, `import_preview`, `import_apply`,
   `export_table`, `export_document`, `import_asset`, `import_drop`)
-- translation (`list_presets`, `save_preset`, `execute_translation`,
-  `create_translation_word`, `translation_options`)
-- version control (`vcs_*`, `autocheckin_*`)
+- translation (`list_presets`, `save_preset`, `delete_preset`,
+  `execute_translation`, `create_translation_word`, `translation_options`,
+  `set_translation_options`, `export_presets`, `import_presets`)
+- version control (`vcs_*` and `git_prompt_dismissed`/
+  `git_prompt_dismissed_set`, `autocheckin_*`)
 - windows (`window_spawn`, `window_close_self`, `windows_restore`)
 
 **Events**: the backend emits `data-changed` with a `scope`
-(`workspace`/`notes`/`dictionary`/`config`/`vcs`); the frontend reacts by
-refetching the affected slice.
+(`workspace`/`notes`/`dictionary`/`config`/`translation`/`vcs`); the frontend
+reacts by refetching the affected slice.
 
 ## Tier 3 — Svelte 5 frontend
 

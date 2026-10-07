@@ -1,4 +1,4 @@
-//! Notes tree and extensionless note IO commands.
+//! Notes tree and Markdown note IO commands.
 //!
 //! All paths are workspace-relative and validated by `nueon-core`'s path
 //! guard (`safe_join`), which rejects absolute paths and `..` escapes. Writes

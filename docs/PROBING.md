@@ -153,9 +153,10 @@ read the compositor's window geometry. Those need §4.
 - **Don't poll with `sleep`.** Use `waitJs`; it fails fast with the last value.
 - **Read the actual failure** before changing anything. The probe already
   printed the message and took a screenshot — look at them.
-- **Seeded environment**: `seedWorkspace()` writes `notes/alpha.md` (120 lines)
-  and `beta.md` into the throwaway workspace and registers it in the throwaway
-  config, so the app boots straight into the shell.
+- **Seeded environment**: `seedWorkspace()` writes a fixed set of notes
+  (`alpha.md` with 120 lines, `beta.md` and several editor/fixture notes) into
+  the throwaway workspace and registers it in the throwaway config, so the app
+  boots straight into the shell.
 
 ---
 
@@ -263,7 +264,7 @@ Also check the output path's timestamp changed (`stat -c '%y' /tmp/probe-x`).
   **unique output path** instead, or match a distinctive string, or use
   `pkill -x nueon`:
   - Good: `until [ -e /tmp/probe-x ]; do sleep 5; done` (or check the symlink
-    timestamp), `pkill -x nueon`, `pkill -f '[.]langloom-wrapp'`.
+    timestamp), `pkill -x nueon`, `pkill -f '[a]pp-wrapper.sh'`.
 - Don't background a long build **and** foreground-wait in the same shell call;
   it can trip the command timeout and abort mid-run. Start detached
   (`setsid … &`) and poll in a separate call.
@@ -326,17 +327,21 @@ Every stage must: start with a **failing** test/probe that reproduces the
 problem, then make it pass, and leave the gates green:
 
 ```sh
+npm run build
 cargo fmt --all --check
 cargo clippy --workspace --all-targets -- -D warnings
 cargo test --workspace
 npm run check
 npm run test
-npm run build
+sh scripts/check-icons.sh
+sh scripts/test-version.sh
+sh scripts/check-version.sh
 # after packaging changes / final verification:
 nix build .#
 ```
 
-`gates` in the dev shell runs the first six. Rules:
+`gates` in the dev shell runs exactly the nine checks above except `nix build`
+(and CI mirrors it after `npm ci`). Rules:
 
 - **Never touch the user's real workspace or `~/.config/nueon`.** Use temp dirs
   and copies; the WebDriver harness already does this for you.

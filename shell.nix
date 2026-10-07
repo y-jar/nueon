@@ -96,8 +96,8 @@ nueon dev commands
   bump      set the app version (defaults to today's YY.M.D)
   versioncheck verify the app version is consistent and sane
   clean     cargo clean && rm -rf dist
-  gates     febuild + fmtcheck + clippy + testall + fecheck + iconcheck
-            + version tests + version check (mirrors .github/workflows/ci.yml)
+  gates     febuild + fmtcheck + clippy + testall + fecheck + npm test
+            + iconcheck + version tests + version check (mirrors ci.yml)
 EOF
     '';
   };

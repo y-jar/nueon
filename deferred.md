@@ -3,17 +3,17 @@
 Concrete features explicitly **not** implemented yet, kept here so they are not
 forgotten. Add to this list instead of dropping ideas. Group items by area.
 
-Items are tagged with the stage that will address them (D1–D7); struck items
-were completed during the Tauri migration (R0–R8).
+Items are tagged with the stage that addresses them. Struck items show the
+stage that completed them: `R0`–`R8` were done during the Tauri migration,
+`D0`–`D7` after it.
 
 ## Notes editor
 
 - ~~Inline images and image files stored in the workspace.~~ (R7)
 - ~~GFM tables, task lists (`- [ ]`), footnotes.~~ (R7)
-- Cross-block keyboard navigation (Up/Down across region boundaries, Home/End).
-  Concretely: arrow-key navigation steps **over** rendered tables, math and
-  HTML blocks instead of revealing them — a click is required to edit a block.
-  Verified by probe 9 (`deferred.md` known limitation).
+- ~~Cross-block keyboard navigation (Up/Down across region boundaries,
+  Home/End): arrow navigation enters a rendered table, math or HTML block and
+  reveals its raw text rather than stepping over it.~~ (probe 9)
 - ~~Find/replace within a note.~~ (R7)
 - ~~Optional debounced disk writes (currently every keystroke).~~ (R7)
 - ~~Cache the dictionary word index (currently rebuilt on each rendered frame).~~ (R7)
@@ -79,7 +79,7 @@ were completed during the Tauri migration (R0–R8).
 - ~~One-time warnings with a "don't show again" checkbox (tag removal,
   dependency warnings).~~ (D6)
 
-## Quality-of-life add-ons (from `tmp notes/QOL`)
+## Quality-of-life add-ons
 
 - ~~Quick-add "Draft Word" stubs from the translation builder.~~
 - Rule-Based Affix & Declension Engine (full morphemic structure engine; the

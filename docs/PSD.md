@@ -7,7 +7,7 @@ Instead of forcing a rigid linguistic structure, the application will use a high
 
 * **Dynamic Data Model:** The only universally required field for any entry is the `wordname` (the base value). All other fields, tags, and categories (e.g., transitivity, gender, locational rules, formality) are entirely user-defined. Users create their own classification systems, and the application dynamically adapts its UI to these custom fields.
 * **Homograph Handling (Identical Words):** To support multiple words with the exact same spelling or script, the underlying database will assign a hidden Unique Identifier (UUID) to every entry upon creation. To the user, the words appear identical in the list, but internally, the database treats them as distinct entities. Optionally, the UI can append a subtle index number (e.g., *word¹*, *word²*) in editor views to help the user distinguish them during bulk edits.
-* **Extensionless File Storage:** Data and notes will be saved locally as plain, extensionless files (e.g., `phonology` rather than `phonology.md`) within the user-designated workspace directory, keeping the file tree visually clean while remaining fully readable by the underlying Rust engine.
+* **Extensionless File Storage:** Dictionary tables and config are saved locally as plain, extensionless files (e.g., `Roots` rather than `Roots.json`) within the user-designated workspace directory, keeping the file tree visually clean while remaining fully readable by the underlying Rust engine. Notes are Markdown files (`.md`).
 
 ### 2. Core Application Modules
 
@@ -67,7 +67,7 @@ The interface utilizes a modular, three-pane layout (Sidebar, Main Workspace, In
 
 ### 2. The Left Navigation Sidebar (Collapsible)
 
-* **Workspace Tree:** Displays the user's extensionless note files organized by folders (e.g., `Grammar/`, `Culture/`).
+* **Workspace Tree:** Displays the user's Markdown note files organized by folders (e.g., `Grammar/`, `Culture/`).
 * **Dictionary Categories:** A dynamic list populated by the user's custom categories (Nouns, Verbs, Particles). Clicking one opens that specific database grid in the Main Workspace.
 * **Translation Presets:** Saved drag-and-drop syntax grids (e.g., "Standard SVO", "Question Form") for quick access.
 
@@ -93,98 +93,6 @@ This pane dynamically changes based on what is selected in the Main Workspace.
 
 ## Navigation & Aesthetic Flow
 
-Here is a layout and navigation flow designed for efficiency, prioritizing a clean, native Linux feel with support for keyboard-centric navigation and tiling window environments.
-
-## UI Layout & Architecture
-
-The interface utilizes a modular, three-pane layout (Sidebar, Main Workspace, Inspector), allowing users to view their notes, database, and word relationships simultaneously without overlapping windows.
-
-### 1. The Global Command & Search Bar (Top)
-
-* **Omni-Search:** A unified search bar anchored at the top. Typing here triggers the dual-layer search:
-* Typing normally executes a global text search across all notes and dictionary entries.
-* Using a prefix (e.g., `tag:verb` or `def:run`) isolates the search to specific user-defined fields.
-
-
-* **Quick Actions:** Keyboard shortcuts (e.g., `Ctrl+K`) focus this bar to quickly jump between files, add a new word, or launch the translation engine.
-
-### 2. The Left Navigation Sidebar (Collapsible)
-
-* **Workspace Tree:** Displays the user's extensionless note files organized by folders (e.g., `Grammar/`, `Culture/`).
-* **Dictionary Categories:** A dynamic list populated by the user's custom categories (Nouns, Verbs, Particles). Clicking one opens that specific database grid in the Main Workspace.
-* **Translation Presets:** Saved drag-and-drop syntax grids (e.g., "Standard SVO", "Question Form") for quick access.
-
-### 3. The Main Workspace (Tabbed Center Pane)
-
-This is the core working area. It supports a tabbed interface so users can quickly switch between editing a note and checking the dictionary.
-
-* **When viewing Notes:** The pane becomes the Obsidian-style unified editor. It is clean and distraction-free, with the markdown syntax revealing itself only under the active cursor.
-* **When viewing the Dictionary:** The pane transforms into a data grid (similar to a spreadsheet). Columns represent user-defined tags. Users can right-click column headers to sort, hide, or filter.
-* **When viewing the Translation Engine:** The pane splits horizontally.
-* *Top Half (The Builder):* The empty grid where users drag and drop their custom grammatical tags to form clause structures.
-* *Bottom Half (The Execution):* A text input box for English, a dedicated output box for the conlang, and a conflict-resolution space if a word has multiple meanings.
-
-
-
-### 4. The Context Inspector (Right Sidebar)
-
-This pane dynamically changes based on what is selected in the Main Workspace.
-
-* **Dictionary Context:** When a word is clicked in the database grid, this panel displays its full entry, allowing rapid editing without opening a separate window.
-* **Etymology Visualizer:** If a word has a "Root/Parent" tag, this panel draws a visual tree showing the parent word and all other generated child words derived from it. This is where the user manages the "Dependency Warning" bulk-edits.
-* **Notes Context:** When typing in the Notes editor, selecting a conlang word opens its definition and tags in this panel for quick reference.
-
-## Navigation & Aesthetic Flow
-
-UI Layout & Architecture
-
-The interface utilizes a modular, three-pane layout (Sidebar, Main Workspace, Inspector), allowing users to view their notes, database, and word relationships simultaneously without overlapping windows.
-1. The Global Command & Search Bar (Top)
-
-    Omni-Search: A unified search bar anchored at the top. Typing here triggers the dual-layer search:
-
-        Typing normally executes a global text search across all notes and dictionary entries.
-
-        Using a prefix (e.g., tag:verb or def:run) isolates the search to specific user-defined fields.
-
-    Quick Actions: Keyboard shortcuts (e.g., Ctrl+K) focus this bar to quickly jump between files, add a new word, or launch the translation engine.
-
-2. The Left Navigation Sidebar (Collapsible)
-
-    Workspace Tree: Displays the user's extensionless note files organized by folders (e.g., Grammar/, Culture/).
-
-    Dictionary Categories: A dynamic list populated by the user's custom categories (Nouns, Verbs, Particles). Clicking one opens that specific database grid in the Main Workspace.
-
-    Translation Presets: Saved drag-and-drop syntax grids (e.g., "Standard SVO", "Question Form") for quick access.
-
-3. The Main Workspace (Tabbed Center Pane)
-
-This is the core working area. It supports a tabbed interface so users can quickly switch between editing a note and checking the dictionary.
-
-    When viewing Notes: The pane becomes the Obsidian-style unified editor. It is clean and distraction-free, with the markdown syntax revealing itself only under the active cursor.
-
-    When viewing the Dictionary: The pane transforms into a data grid (similar to a spreadsheet). Columns represent user-defined tags. Users can right-click column headers to sort, hide, or filter.
-
-    When viewing the Translation Engine: The pane splits horizontally.
-
-        Top Half (The Builder): The empty grid where users drag and drop their custom grammatical tags to form clause structures.
-
-        Bottom Half (The Execution): A text input box for English, a dedicated output box for the conlang, and a conflict-resolution space if a word has multiple meanings.
-
-4. The Context Inspector (Right Sidebar)
-
-This pane dynamically changes based on what is selected in the Main Workspace.
-
-    Dictionary Context: When a word is clicked in the database grid, this panel displays its full entry, allowing rapid editing without opening a separate window.
-
-    Etymology Visualizer: If a word has a "Root/Parent" tag, this panel draws a visual tree showing the parent word and all other generated child words derived from it. This is where the user manages the "Dependency Warning" bulk-edits.
-
-    Notes Context: When typing in the Notes editor, selecting a conlang word opens its definition and tags in this panel for quick reference.
-
-Navigation & Aesthetic Flow
-
-    Keyboard Navigation: Built with Linux power-users in mind, every major pane and action is accessible via keyboard shortcuts, minimizing the need to drag the mouse back and forth.
-
-    Visual Theme: To reduce eye strain during long documentation sessions, the default color palette can utilize warm, low-saturation earthy tones rather than harsh, high-contrast dark modes or blinding light modes.
-
-    Seamless Switching: Clicking an unknown word in the Translation Engine instantly slides out the Right Inspector, pre-filled with the English word, allowing the user to assign it a conlang spelling, tag it, and save it directly into the database without leaving the translation screen.
+* **Keyboard Navigation:** Built with Linux power-users in mind, every major pane and action is accessible via keyboard shortcuts, minimizing the need to drag the mouse back and forth.
+* **Visual Theme:** To reduce eye strain during long documentation sessions, the default color palette can utilize warm, low-saturation earthy tones rather than harsh, high-contrast dark modes or blinding light modes.
+* **Seamless Switching:** Clicking an unknown word in the Translation Engine instantly slides out the Right Inspector, pre-filled with the English word, allowing the user to assign it a conlang spelling, tag it, and save it directly into the database without leaving the translation screen.

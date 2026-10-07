@@ -1,4 +1,5 @@
-//! Extensionless, plain-file persistence for a workspace.
+//! Plain-file persistence for a workspace (extensionless tables/config, `.md`
+//! notes).
 //!
 //! Each word table is stored as one JSON file under `dictionary/<slug>`, the
 //! user's Markdown notes live under `notes/<relative path>` verbatim, and

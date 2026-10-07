@@ -1,6 +1,6 @@
 //! Core data model, storage, configuration, and version control for nueon.
 //!
-//! UI-agnostic: both the Tauri backend and the legacy egui UI build on this
+//! UI-agnostic: both the Tauri backend and its Svelte frontend build on this
 //! crate.
 
 pub mod config;

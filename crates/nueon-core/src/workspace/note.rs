@@ -1,13 +1,13 @@
-//! Extensionless Markdown note files.
+//! Markdown note files.
 
 use std::path::PathBuf;
 
 use serde::{Deserialize, Serialize};
 
-/// A single extensionless note file.
+/// A single Markdown note file.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct NoteFile {
-    /// Path relative to the workspace `notes/` directory, e.g. `Grammar/phonology`.
+    /// Path relative to the workspace `notes/` directory, e.g. `Grammar/phonology.md`.
     pub path: PathBuf,
     /// Raw Markdown fed into the live-preview renderer.
     #[serde(default)]

@@ -107,17 +107,23 @@ npm run tauri build    # produces bundles under src-tauri/target/release/bundle
 See [`docs/PROBING.md`](docs/PROBING.md) for the full testing/probing
 methodology (unit tests, the WebDriver probe harness, and the traps to avoid).
 
-Run the full gate suite from the Nix shell (`gates` runs these for you):
+Run the full gate suite from the Nix shell (`gates` runs exactly these; CI
+mirrors them after `npm ci`):
 
 ```sh
+npm run build
 cargo fmt --all --check
 cargo clippy --workspace --all-targets -- -D warnings
 cargo test --workspace
 npm run check          # svelte-check
 npm run test           # node:test unit tests
-npm run build          # vite production build
-nix build .#           # packaged app builds
+sh scripts/check-icons.sh
+sh scripts/test-version.sh
+sh scripts/check-version.sh
 ```
+
+After packaging changes, also verify the app bundles with `nix build .#` (CI
+and `gates` do not run it).
 
 ## Development
 
@@ -140,9 +146,9 @@ Release flow:
 ```sh
 scripts/bump-version.sh     # today's date; or pass YY.M.D explicitly
 gates                       # all checks, including scripts/check-version.sh
-git commit -am "release: 26.10.6"
+git commit -am "RELEASE: 26.10.6"
 git tag v26.10.6
-git push && git push --tags
+# publishing (git push, pushing the tag) is a manual, explicit step
 ```
 
 `scripts/bump-version.sh` writes one version to `Cargo.toml`
