@@ -10,7 +10,7 @@ import {
 import { convertFileSrc } from "@tauri-apps/api/core";
 import katex from "katex";
 import { normalizePath } from "../assets";
-import { makeBlockField } from "./blocks";
+import { codeLines, makeBlockField } from "./blocks";
 import { isDelimiterRow, parseTable, rawCellOffset } from "./table";
 import "katex/dist/katex.min.css";
 
@@ -386,6 +386,9 @@ function decorateLine(
 function build(view: EditorView): DecorationSet {
   const { state } = view;
   const active = activeLines(state);
+  // Fenced and indented code stay plain: no inline marks, math, inline HTML,
+  // display math or tables. One whole-document scan per build, not per line.
+  const code = codeLines(state);
   const ranges: Range<Decoration>[] = [];
 
   for (const visible of view.visibleRanges) {
@@ -394,6 +397,12 @@ function build(view: EditorView): DecorationSet {
       const line = state.doc.lineAt(pos);
 
       if (active.has(line.number)) {
+        if (line.to >= visible.to) break;
+        pos = line.to + 1;
+        continue;
+      }
+
+      if (code.has(line.number)) {
         if (line.to >= visible.to) break;
         pos = line.to + 1;
         continue;

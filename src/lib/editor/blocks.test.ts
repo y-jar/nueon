@@ -82,6 +82,20 @@ test("blocks re-render right after a closed fence", () => {
   assert.deepEqual(kinds(scanBlocks(EditorState.create({ doc }))), ["table"]);
 });
 
+test("the mask covers inline-mark content inside a fence, not outside", () => {
+  const inside = EditorState.create({
+    doc: md("```", "echo $HOME and $PATH", "**bold**", "[[link]]", "```"),
+  });
+  // Every fence line (1–5) is code, so the plugin must not decorate it.
+  assert.deepEqual([...codeLines(inside)], [1, 2, 3, 4, 5]);
+  assert.deepEqual(scanBlocks(inside), []);
+
+  const outside = EditorState.create({
+    doc: md("echo $HOME and $PATH", "**bold**", "[[link]]"),
+  });
+  assert.deepEqual([...codeLines(outside)], []);
+});
+
 test("an unclosed fence hides everything after it", () => {
   const doc = md("```", "| a | b |", "| --- | --- |");
   const state = EditorState.create({ doc });

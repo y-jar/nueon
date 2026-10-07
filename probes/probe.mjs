@@ -37,6 +37,8 @@ const CODE = "before\n\n```\necho $HOME and $PATH\n**bold**\n[[link]]\n```\nafte
 const RACE_A = "race A original\n";
 const RACE_B = "race B original\n";
 const RACE_MARKER = "TYPED_IN_A ";
+// Inline marks outside a fence, for the regression probe 11.
+const INLINE = "above\nplain **bold** and $x+y$ here\n";
 
 const DRIVER_CANDIDATES = [
   "/tmp/opencode/tauri-driver-root/bin/tauri-driver",
@@ -343,6 +345,7 @@ function seedWorkspace() {
   fs.writeFileSync(path.join(WORKSPACE, "notes", "code.md"), CODE);
   fs.writeFileSync(path.join(WORKSPACE, "notes", "raceA.md"), RACE_A);
   fs.writeFileSync(path.join(WORKSPACE, "notes", "raceB.md"), RACE_B);
+  fs.writeFileSync(path.join(WORKSPACE, "notes", "inline.md"), INLINE);
   const configDir = path.join(ROOT, "home", ".config", "nueon");
   fs.mkdirSync(configDir, { recursive: true });
   fs.writeFileSync(
@@ -704,9 +707,12 @@ async function main() {
     });
   }
 
-  // -- probe 8c: report whether inline marks apply inside a fence ----------
-  await probe("8c-inline-marks-inside-a-fence", async () => {
+  // -- probe 8c: inline marks must NOT apply inside a fence ----------------
+  await probe("8c-inline-marks-stay-raw-inside-a-fence", async () => {
     await openNote("code.md");
+    await waitEditorText("code.md", CODE);
+    await focusEditor("code.md");
+    await placeCursor("code.md", 1); // cursor off the fence
     const info = await js(
       `const host = document.querySelector('.cm-host[data-note="code.md"]');
        const content = host.querySelector('.cm-content');
@@ -714,10 +720,33 @@ async function main() {
          strong: content.querySelectorAll('.cm-strong').length,
          inlineMath: content.querySelectorAll('.cm-math').length,
          displayMath: content.querySelectorAll('.cm-math-display').length,
-         text: content.textContent.slice(0, 120),
+         text: content.textContent,
        };`,
     );
     console.log("INLINE-IN-FENCE", JSON.stringify(info));
+    if (info.strong !== 0) throw new Error(`bold concealed in a fence: ${info.strong}`);
+    if (info.inlineMath !== 0) throw new Error(`math rendered in a fence: ${info.inlineMath}`);
+    if (!info.text.includes("**bold**")) throw new Error("bold text not raw");
+    if (!info.text.includes("$HOME")) throw new Error("math text not raw");
+  });
+
+  // -- probe 11: the same inline marks OUTSIDE a fence still render --------
+  await probe("11-inline-marks-still-render-outside-a-fence", async () => {
+    await openNote("inline.md");
+    await waitEditorText("inline.md", INLINE);
+    await focusEditor("inline.md");
+    await placeCursor("inline.md", 1); // cursor on the line above
+    const info = await js(
+      `const host = document.querySelector('.cm-host[data-note="inline.md"]');
+       const content = host.querySelector('.cm-content');
+       return {
+         strong: content.querySelectorAll('.cm-strong').length,
+         inlineMath: content.querySelectorAll('.cm-math').length,
+       };`,
+    );
+    console.log("INLINE-OUTSIDE", JSON.stringify(info));
+    if (info.strong < 1) throw new Error("bold not concealed outside a fence");
+    if (info.inlineMath < 1) throw new Error("math not rendered outside a fence");
   });
 
   // -- probe 9: ArrowDown from above reveals each block's raw text ---------

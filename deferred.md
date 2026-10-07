@@ -18,16 +18,6 @@ were completed during the Tauri migration (R0–R8).
 - ~~HTML block rendering.~~ (D7)
 - Tables inside blockquotes and list items aren't editable with the table
   commands (raw editing only); handle the line prefix later if needed.
-- Inline marks, single-line display math and single-line HTML inside
-  fenced/indented code are still handled by the plugin, not the shared code
-  mask. Observed inside a fence: `**bold**` is concealed (`.cm-strong`) and
-  `echo $HOME and $PATH` is rendered as inline math (`.cm-math`).
-- Switching notes while the previous note's autosave is still in flight can
-  leave the new tab showing the old note's text: the save's `onSaved` callback
-  (Editor.svelte) writes `doc.noteContent` without checking that the note is
-  still selected, stomping the content `loadNote` just loaded. Surfaced by
-  probe 8; the probe waits for the autosave to land. Fix: ignore `onSaved`
-  when `doc.selected` is no longer the saved path.
 
 ## Dictionary grid
 

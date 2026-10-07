@@ -10,6 +10,7 @@ import {
 } from "@codemirror/view";
 
 import type { WordHit, WordIndex } from "../api";
+import { codeLines } from "./blocks";
 
 export const setWordIndex = StateEffect.define<WordIndex>();
 
@@ -35,6 +36,9 @@ function build(view: EditorView): DecorationSet {
   if (Object.keys(index).length === 0) {
     return Decoration.set(ranges, true);
   }
+  // One whole-document mask per build: dictionary words inside code are not
+  // tinted.
+  const code = codeLines(view.state);
 
   // Only scan the visible ranges so large notes stay smooth while typing.
   for (const visible of view.visibleRanges) {
@@ -45,6 +49,7 @@ function build(view: EditorView): DecorationSet {
       const hits = index[match[0].toLowerCase()];
       if (hits && hits.length) {
         const from = visible.from + match.index;
+        if (code.has(view.state.doc.lineAt(from).number)) continue;
         ranges.push(
           Decoration.mark({ class: "cm-dict" }).range(from, from + match[0].length),
         );
