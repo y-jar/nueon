@@ -39,6 +39,8 @@ const RACE_B = "race B original\n";
 const RACE_MARKER = "TYPED_IN_A ";
 // Inline marks outside a fence, for the regression probe 11.
 const INLINE = "above\nplain **bold** and $x+y$ here\n";
+// A note to type brackets into (probe 12).
+const TYPE = "start\n";
 
 const DRIVER_CANDIDATES = [
   "/tmp/opencode/tauri-driver-root/bin/tauri-driver",
@@ -161,6 +163,7 @@ async function typeInto(selector, text) {
 // WebDriver key values: Tab, Enter, Control.
 const TAB = "\uE004";
 const ENTER = "\uE007";
+const BACKSPACE = "\uE003";
 const CTRL = "\uE009";
 const ARROW_DOWN = "\uE015";
 
@@ -346,6 +349,7 @@ function seedWorkspace() {
   fs.writeFileSync(path.join(WORKSPACE, "notes", "raceA.md"), RACE_A);
   fs.writeFileSync(path.join(WORKSPACE, "notes", "raceB.md"), RACE_B);
   fs.writeFileSync(path.join(WORKSPACE, "notes", "inline.md"), INLINE);
+  fs.writeFileSync(path.join(WORKSPACE, "notes", "type.md"), TYPE);
   const configDir = path.join(ROOT, "home", ".config", "nueon");
   fs.mkdirSync(configDir, { recursive: true });
   fs.writeFileSync(
@@ -747,6 +751,30 @@ async function main() {
     console.log("INLINE-OUTSIDE", JSON.stringify(info));
     if (info.strong < 1) throw new Error("bold not concealed outside a fence");
     if (info.inlineMath < 1) throw new Error("math not rendered outside a fence");
+  });
+
+  // -- probe 12: brackets auto-close; quotes do not; Backspace pairs ---------
+  await probe("12-bracket-auto-close", async () => {
+    await openNote("type.md");
+    await waitEditorText("type.md", TYPE);
+    await focusEditor("type.md");
+    await placeCursor("type.md", 5);
+
+    await pressKey("(");
+    assertEqual(await editorText("type.md"), "start()\n", "after (");
+    assertEqual((await readEditorState("type.md")).anchor, 6, "caret between ()");
+
+    await placeCursor("type.md", 7);
+    await pressKey("[");
+    await pressKey("[");
+    assertEqual(await editorText("type.md"), "start()[[]]\n", "after [[");
+    await pressKey(BACKSPACE);
+    assertEqual(await editorText("type.md"), "start()[]\n", "Backspace removes the pair");
+
+    // At the empty end of the line (next char is a line break), { closes.
+    await placeCursor("type.md", 9);
+    await pressKey("{");
+    assertEqual(await editorText("type.md"), "start()[]{}\n", "after {");
   });
 
   // -- probe 9: ArrowDown from above reveals each block's raw text ---------

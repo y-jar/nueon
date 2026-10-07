@@ -1,5 +1,7 @@
+import { closeBracketsKeymap } from "@codemirror/autocomplete";
 import { defaultKeymap, history, historyKeymap, indentWithTab } from "@codemirror/commands";
 import { markdown } from "@codemirror/lang-markdown";
+import { bracketMatching } from "@codemirror/language";
 import { highlightSelectionMatches, search, searchKeymap } from "@codemirror/search";
 import { EditorState, Prec, Transaction } from "@codemirror/state";
 import {
@@ -27,6 +29,7 @@ import {
   markdownKeymap,
   type FormatState,
 } from "./commands";
+import { bracketAutoClose } from "./brackets";
 import { diffSplice } from "./diff";
 import { blockBlocks, livePreview, setAssetBase } from "./livePreview";
 import { initialPosition, restoreScroll, savePosition } from "./positions";
@@ -152,6 +155,8 @@ export const codemirror: Action<HTMLElement, EditorParams> = (node, params) => {
         crosshairCursor(),
         EditorView.lineWrapping,
         markdown({ extensions: [GFM] }),
+        bracketAutoClose(),
+        bracketMatching(),
         highlight,
         theme,
         wordIndexField,
@@ -164,6 +169,8 @@ export const codemirror: Action<HTMLElement, EditorParams> = (node, params) => {
         // Ahead of the default keymap, which binds Mod-i to "select parent".
         Prec.high(keymap.of(markdownKeymap)),
         keymap.of([
+          // Backspace deletes a bracket pair before plain char deletion.
+          ...closeBracketsKeymap,
           // Table keys first: Enter must beat `defaultKeymap`, and Tab must
           // beat `indentWithTab`. Outside a table they return false.
           ...tableKeymap,
