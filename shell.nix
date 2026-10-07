@@ -41,6 +41,8 @@ let
     # Regenerate/verify the app icons, and validate the desktop entry.
     imagemagick
     desktop-file-utils
+    # Lint the GitHub Actions workflows.
+    actionlint
   ];
 
   # Canonical dev commands. Short shell aliases are defined in `shellHook`.
@@ -59,15 +61,20 @@ let
     "loom-febuild" = "npm run build";
     "loom-icons" = "sh scripts/make-icons.sh";
     "loom-iconcheck" = "sh scripts/check-icons.sh";
+    "loom-bump" = "sh scripts/bump-version.sh";
+    "loom-versioncheck" = "sh scripts/check-version.sh";
     "loom-clean" = "cargo clean && rm -rf dist";
+    # Keep in sync with .github/workflows/ci.yml (canonical list in AGENTS.md).
     "loom-gates" = ''
-      cargo fmt --all --check \
+      npm run build \
+        && cargo fmt --all --check \
         && cargo clippy --workspace --all-targets -- -D warnings \
-        && cargo test -p nueon-core \
-        && sh scripts/check-icons.sh \
+        && cargo test --workspace \
         && npm run check \
         && npm run test \
-        && npm run build
+        && sh scripts/check-icons.sh \
+        && sh scripts/test-version.sh \
+        && sh scripts/check-version.sh
     '';
     "loom-help" = ''
       cat <<'EOF'
@@ -86,8 +93,11 @@ nueon dev commands
   febuild   npm run build
   icons     regenerate the app icon set from assets/branding/nueon-logo.png
   iconcheck verify the generated icons (size + alpha)
+  bump      set the app version (defaults to today's YY.M.D)
+  versioncheck verify the app version is consistent and sane
   clean     cargo clean && rm -rf dist
-  gates     fmtcheck + clippy + ctest + iconcheck + fecheck + febuild
+  gates     febuild + fmtcheck + clippy + testall + fecheck + iconcheck
+            + version tests + version check (mirrors .github/workflows/ci.yml)
 EOF
     '';
   };
@@ -117,6 +127,8 @@ pkgs.mkShell {
     # Regenerate/verify the app icons, and validate the desktop entry.
     imagemagick
     desktop-file-utils
+    # Lint the GitHub Actions workflows.
+    actionlint
     # Packaged-build probes (probes/): virtual display for the webview.
     xorg-server
   ] ++ commandPackages;
@@ -143,11 +155,13 @@ pkgs.mkShell {
     alias febuild=loom-febuild
     alias icons=loom-icons
     alias iconcheck=loom-iconcheck
+    alias bump=loom-bump
+    alias versioncheck=loom-versioncheck
     alias clean=loom-clean
     alias gates=loom-gates
     alias aliases=loom-help
     alias help=loom-help
 
-    echo "nueon dev shell — type 'help' for commands (deps dev run app pkg fmt fmtcheck clippy ctest testall fecheck febuild icons iconcheck clean gates)"
+    echo "nueon dev shell — type 'help' for commands (deps dev run app pkg fmt fmtcheck clippy ctest testall fecheck febuild icons iconcheck bump versioncheck clean gates)"
   '';
 }

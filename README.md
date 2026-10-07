@@ -123,5 +123,42 @@ nix build .#           # packaged app builds
 
 The dev shell provides short aliases and matching `loom-*` commands
 (`deps dev run app pkg fmt fmtcheck clippy ctest testall fecheck febuild
-clean gates`); run `aliases` in the shell to list them. `run` builds the Nix
-package and launches it; `dev` starts the hot-reload server.
+icons iconcheck bump versioncheck clean gates`); run `aliases` in the shell to
+list them. `run` builds the Nix package and launches it; `dev` starts the
+hot-reload server.
+
+## Versioning
+
+Versions are date-based: `YY.M.D` with no zero padding, for example `26.10.6`.
+The version is the release date and it always increases. Cargo, npm and Tauri
+require three numeric parts, so a “major update” name like `26.8` is written
+`26.8.0` wherever a tool needs three parts; the major label is only a name in
+the release notes, never a different version.
+
+Release flow:
+
+```sh
+scripts/bump-version.sh     # today's date; or pass YY.M.D explicitly
+gates                       # all checks, including scripts/check-version.sh
+git commit -am "release: 26.10.6"
+git tag v26.10.6
+git push && git push --tags
+```
+
+`scripts/bump-version.sh` writes one version to `Cargo.toml`
+(`[workspace.package]`), `Cargo.lock`, `package.json`, `package-lock.json`,
+`src-tauri/tauri.conf.json` and every `version = "…"` in `flake.nix`.
+`scripts/check-version.sh` fails on any mismatch, a zero-padded or malformed
+date, a tag that is not `v` + the version, or a version that goes backwards
+(compared numerically per part, so `26.10.6 > 26.8.19`). It runs in CI and in
+`gates` (no tag), and in `release.yml` with the pushed tag.
+
+Until the first release the version is the `0.1.0` placeholder. It is accepted
+only when no tag argument is given and no `v*` tag exists yet, and it must
+still be identical in every file above; cutting the first date release retires
+it (a later `v*` tag also makes `0.1.0` invalid).
+
+**File and workspace formats are versioned separately from the app version.**
+The date version tracks the application; the on-disk layout of notes, tables,
+assets and the workspace config is not tied to it and changes only when a
+migration says so (see `docs/ARCHITECTURE.md` and `deferred.md`).

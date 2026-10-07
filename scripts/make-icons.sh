@@ -14,13 +14,24 @@ if [ ! -f "$master" ]; then
   echo "make-icons: missing master $master" >&2
   exit 1
 fi
-if ! command -v magick >/dev/null 2>&1; then
-  echo "make-icons: ImageMagick (magick) not found on PATH" >&2
+
+# Work with ImageMagick 7 (`magick`) or 6 (`convert`/`identify`).
+if magick -version >/dev/null 2>&1; then
+  image_magick="ImageMagick 7 (magick)"
+  im_identify() { magick identify "$@"; }
+  im_convert() { magick "$@"; }
+elif convert -version >/dev/null 2>&1; then
+  image_magick="ImageMagick 6 (convert)"
+  im_identify() { identify "$@"; }
+  im_convert() { convert "$@"; }
+else
+  echo "make-icons: need ImageMagick (magick or convert) on PATH" >&2
   exit 1
 fi
+echo "make-icons: using $image_magick"
 
-src_w=$(magick identify -format '%w' "$master")
-src_h=$(magick identify -format '%h' "$master")
+src_w=$(im_identify -format '%w' "$master")
+src_h=$(im_identify -format '%h' "$master")
 
 resize() {
   size=$1
@@ -31,7 +42,7 @@ resize() {
   fi
   mkdir -p "$(dirname -- "$out")"
   # PNG32 forces 8-bit RGBA so small sizes are not palettised (keeps alpha).
-  magick "$master" -filter Lanczos -resize "${size}x${size}" "PNG32:$out"
+  im_convert "$master" -filter Lanczos -resize "${size}x${size}" "PNG32:$out"
   echo "wrote $out (${size}x${size})"
 }
 

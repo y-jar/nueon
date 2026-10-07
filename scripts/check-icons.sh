@@ -6,10 +6,20 @@ set -eu
 
 root=$(CDPATH= cd -- "$(dirname -- "$0")/.." && pwd)
 
-if ! command -v magick >/dev/null 2>&1; then
-  echo "check-icons: ImageMagick (magick) not found on PATH" >&2
+# Work with ImageMagick 7 (`magick`) or 6 (`convert`/`identify`).
+if magick -version >/dev/null 2>&1; then
+  image_magick="ImageMagick 7 (magick)"
+  im_identify() { magick identify "$@"; }
+  im_convert() { magick "$@"; }
+elif convert -version >/dev/null 2>&1; then
+  image_magick="ImageMagick 6 (convert)"
+  im_identify() { identify "$@"; }
+  im_convert() { convert "$@"; }
+else
+  echo "check-icons: need ImageMagick (magick or convert) on PATH" >&2
   exit 1
 fi
+echo "check-icons: using $image_magick"
 
 failed=0
 for entry in \
@@ -27,15 +37,15 @@ for entry in \
     failed=1
     continue
   fi
-  got=$(magick identify -format '%wx%h' "$file")
+  got=$(im_identify -format '%wx%h' "$file")
   if [ "$got" != "${size}x${size}" ]; then
     echo "FAIL $rel: size $got, want ${size}x${size}"
     failed=1
     continue
   fi
   half=$((size / 2))
-  corner=$(magick "$file" -format '%[fx:p{0,0}.a]' info:)
-  centre=$(magick "$file" -format "%[fx:p{$half,$half}.a]" info:)
+  corner=$(im_convert "$file" -format '%[fx:p{0,0}.a]' info:)
+  centre=$(im_convert "$file" -format "%[fx:p{$half,$half}.a]" info:)
   ok_corner=$(awk "BEGIN { print ($corner <= 0.01) ? 1 : 0 }")
   ok_centre=$(awk "BEGIN { print ($centre >= 0.99) ? 1 : 0 }")
   if [ "$ok_corner" != "1" ] || [ "$ok_centre" != "1" ]; then

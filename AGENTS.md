@@ -28,17 +28,24 @@ short on purpose and links to the detail.
 
 ## Gates (run before every commit)
 
+`gates` (`loom-gates`) in the dev shell runs exactly this list, and
+`.github/workflows/ci.yml` mirrors it — **keep all three in sync**. Run inside
+`nix-shell` (cargo/node are not on the host `PATH`). After packaging changes,
+also `nix build .#`.
+
 ```sh
+npm run build
 cargo fmt --all --check
 cargo clippy --workspace --all-targets -- -D warnings
 cargo test --workspace
 npm run check
 npm run test
-npm run build
+sh scripts/check-icons.sh
+sh scripts/test-version.sh
+sh scripts/check-version.sh
 ```
 
-`gates` in the dev shell runs all six. Run inside `nix-shell` (cargo/node are
-not on the host `PATH`). After packaging changes, also `nix build .#`.
+CI adds `npm ci` first; it never runs the WebDriver probes or `nix build`.
 
 ## Before you debug a failing check
 

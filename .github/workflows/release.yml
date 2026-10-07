@@ -22,6 +22,9 @@ jobs:
     runs-on: ${{ matrix.os }}
     steps:
       - uses: actions/checkout@v4
+        with:
+          # check-version.sh compares against v* tags, so it needs the history.
+          fetch-depth: 0
 
       - uses: actions/setup-node@v4
         with:
@@ -48,6 +51,9 @@ jobs:
             build-essential \
             curl wget file \
             patchelf rpm
+
+      - name: Check version
+        run: sh scripts/check-version.sh "${{ github.ref_name }}"
 
       - run: npm ci
 
