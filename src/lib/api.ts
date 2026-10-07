@@ -440,9 +440,12 @@ export interface AffixRule {
   conlang: string;
 }
 
+export type TranslationMode = "grid" | "direct";
+
 export interface TranslationOptions {
   separator: string;
   affixes: AffixRule[];
+  mode: TranslationMode;
 }
 
 export interface SlotOutcome {
@@ -485,6 +488,12 @@ export const executeTranslation = (
   choices: Record<string, string>,
 ): Promise<TranslationReport> =>
   invoke("execute_translation", { inputText, grid, choices });
+/** Word-for-word mode: no syntax grid. */
+export const executeTranslationDirect = (
+  inputText: string,
+  choices: Record<string, string>,
+): Promise<TranslationReport> =>
+  invoke("execute_translation_direct", { inputText, choices });
 export const createTranslationWord = (
   table: string,
   wordname: string,

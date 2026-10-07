@@ -28,6 +28,17 @@ pub struct AffixRule {
     pub conlang: String,
 }
 
+/// How the translator assembles output.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum TranslationMode {
+    /// Use the drag-and-drop syntax grid.
+    #[default]
+    Grid,
+    /// Word for word, in the order the input words appear.
+    Direct,
+}
+
 /// Runtime options the frontend edits (separator + morphology rules).
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct TranslationOptions {
@@ -36,6 +47,9 @@ pub struct TranslationOptions {
     /// Rule-based morphology applied to inflected English tokens.
     #[serde(default)]
     pub affixes: Vec<AffixRule>,
+    /// Grid or word-for-word.
+    #[serde(default)]
+    pub mode: TranslationMode,
 }
 
 impl Default for TranslationOptions {
@@ -43,6 +57,7 @@ impl Default for TranslationOptions {
         Self {
             separator: " ".to_string(),
             affixes: Vec::new(),
+            mode: TranslationMode::Grid,
         }
     }
 }

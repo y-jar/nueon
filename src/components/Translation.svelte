@@ -18,6 +18,7 @@
   let slots = $state<SlotItem[]>([]);
   let separator = $state(" ");
   let affixes = $state<api.AffixRule[]>([]);
+  let mode = $state<api.TranslationMode>("grid");
   let showMorphology = $state(false);
   let inputText = $state("");
   let choices = $state<Record<string, string>>({});
@@ -67,6 +68,7 @@
       const options = await api.translationOptions();
       separator = options.separator;
       affixes = options.affixes;
+      mode = options.mode;
     } catch (e) {
       error = String(e);
     }
@@ -74,11 +76,18 @@
 
   async function persistOptions() {
     try {
-      await api.setTranslationOptions({ separator, affixes });
+      await api.setTranslationOptions({ separator, affixes, mode });
       error = "";
     } catch (e) {
       error = String(e);
     }
+  }
+
+  function setMode(next: api.TranslationMode) {
+    if (mode === next) return;
+    mode = next;
+    report = null;
+    persistOptions();
   }
 
   function addAffix(rule: api.AffixRule) {
@@ -180,7 +189,10 @@
 
   async function run() {
     try {
-      report = await api.executeTranslation(inputText, grid(), choices);
+      report =
+        mode === "direct"
+          ? await api.executeTranslationDirect(inputText, choices)
+          : await api.executeTranslation(inputText, grid(), choices);
       error = "";
     } catch (e) {
       error = String(e);
@@ -261,12 +273,14 @@
     bind:draftName
     {hasPreset}
     {showMorphology}
+    {mode}
     onLoad={loadPreset}
     onSave={savePreset}
     onDelete={() => deletePreset(draftName)}
     onExport={exportPresets}
     onImport={importPresets}
     onToggleMorphology={toggleMorphology}
+    onSetMode={setMode}
   />
 
   <MorphologyDrawer
@@ -276,21 +290,23 @@
     onRemove={removeAffix}
   />
 
-  <SlotPalette
-    tags={palette}
-    onAddTag={(name) => addSlot({ kind: "required_tag", tag: name })}
-    onAddPrimitive={(slot) => addSlot(slot)}
-  />
+  {#if mode === "grid"}
+    <SlotPalette
+      tags={palette}
+      onAddTag={(name) => addSlot({ kind: "required_tag", tag: name })}
+      onAddPrimitive={(slot) => addSlot(slot)}
+    />
 
-  <ClauseCanvas
-    items={slots}
-    tags={palette}
-    {separator}
-    onReorder={(items) => (slots = [...items])}
-    onUpdate={updateSlot}
-    onRemove={removeSlot}
-    onDropSlot={(slot) => addSlot(slot)}
-  />
+    <ClauseCanvas
+      items={slots}
+      tags={palette}
+      {separator}
+      onReorder={(items) => (slots = [...items])}
+      onUpdate={updateSlot}
+      onRemove={removeSlot}
+      onDropSlot={(slot) => addSlot(slot)}
+    />
+  {/if}
 
   <TranslationRunner
     bind:inputText
@@ -298,6 +314,7 @@
     {report}
     {choices}
     {drafts}
+    {mode}
     tables={ui.tables}
     {error}
     onRun={run}

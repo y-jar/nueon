@@ -21,7 +21,7 @@ use self::table_files::TableFiles;
 
 use crate::config::{
     GrammarConfig, GridViewState, LanguageConfig, LayoutState, TilingLayout, TranslationConfig,
-    TranslationOptions, UiLayout, WindowGeometry, WorkspaceSettings,
+    TranslationMode, TranslationOptions, UiLayout, WindowGeometry, WorkspaceSettings,
 };
 use crate::export_table::TableFormat;
 use crate::model::{
@@ -1109,6 +1109,10 @@ impl Workspace {
                 .cloned()
                 .unwrap_or_else(|| " ".to_string()),
             affixes: self.translation.affixes.clone(),
+            mode: match self.translation.settings.get("mode").map(String::as_str) {
+                Some("direct") => TranslationMode::Direct,
+                _ => TranslationMode::Grid,
+            },
         }
     }
 
@@ -1125,6 +1129,13 @@ impl Workspace {
                 .insert("word_separator".to_string(), options.separator);
         }
         self.translation.affixes = options.affixes;
+        let mode = match options.mode {
+            TranslationMode::Direct => "direct",
+            TranslationMode::Grid => "grid",
+        };
+        self.translation
+            .settings
+            .insert("mode".to_string(), mode.to_string());
         self.save_translation()
     }
 
@@ -2683,10 +2694,11 @@ mod tests {
 
     #[test]
     fn translation_options_persist() {
-        use crate::config::{AffixKind, AffixRule};
+        use crate::config::{AffixKind, AffixRule, TranslationMode};
 
         let dir = tempfile::tempdir().unwrap();
         let mut ws = Workspace::new(dir.path()).unwrap();
+        assert_eq!(ws.translation_options().mode, TranslationMode::Grid);
         ws.set_translation_options(TranslationOptions {
             separator: "".into(),
             affixes: vec![AffixRule {
@@ -2694,6 +2706,7 @@ mod tests {
                 english: "s".into(),
                 conlang: "i".into(),
             }],
+            mode: TranslationMode::Direct,
         })
         .unwrap();
 
@@ -2702,6 +2715,7 @@ mod tests {
         assert_eq!(options.separator, " ", "empty separator resets to default");
         assert_eq!(options.affixes.len(), 1);
         assert_eq!(options.affixes[0].conlang, "i");
+        assert_eq!(options.mode, TranslationMode::Direct);
     }
 
     #[test]

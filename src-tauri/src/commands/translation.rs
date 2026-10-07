@@ -95,6 +95,45 @@ pub fn execute_translation(
     ))
 }
 
+/// Execute the word-for-word translator: each input word maps to its conlang
+/// word in order, with no syntax grid. A token that already matches a
+/// `wordname` passes through unchanged.
+#[tauri::command]
+pub fn execute_translation_direct(
+    state: State<'_, Shared>,
+    input_text: String,
+    choices: Option<HashMap<String, String>>,
+) -> Result<TranslationReport, String> {
+    let state = state.lock().map_err(|_| "state poisoned".to_string())?;
+    let workspace = state.workspace()?;
+
+    let mut resolved: HashMap<usize, Uuid> = HashMap::new();
+    if let Some(choices) = choices {
+        for (key, value) in choices {
+            let index = key
+                .parse::<usize>()
+                .map_err(|err| format!("bad token index: {err}"))?;
+            let id = Uuid::parse_str(&value).map_err(|err| format!("bad uuid: {err}"))?;
+            resolved.insert(index, id);
+        }
+    }
+
+    let separator = workspace
+        .translation
+        .settings
+        .get("word_separator")
+        .map(String::as_str)
+        .unwrap_or(" ");
+
+    Ok(nueon_core::model::translate::translate_direct(
+        &workspace.dictionary,
+        separator,
+        &input_text,
+        &resolved,
+        &workspace.translation.affixes,
+    ))
+}
+
 /// The separator and morphology rules the translation view edits.
 #[tauri::command]
 pub fn translation_options(state: State<'_, Shared>) -> Result<TranslationOptions, String> {

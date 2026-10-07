@@ -377,7 +377,39 @@ function ensureTauriDriver() {
 function seedWorkspace() {
   fs.rmSync(ROOT, { recursive: true, force: true });
   fs.mkdirSync(path.join(WORKSPACE, "notes"), { recursive: true });
+  fs.mkdirSync(path.join(WORKSPACE, "dictionary"), { recursive: true });
   spawnSync("git", ["init", "-q"], { cwd: WORKSPACE });
+  // A tiny lexicon so the Translator has words to map (probe 19).
+  fs.writeFileSync(
+    path.join(WORKSPACE, "dictionary", "lex"),
+    JSON.stringify(
+      {
+        name: "lex",
+        tags: [
+          {
+            name: "wordname",
+            description: "The base conlang spelling.",
+            kind: "text",
+            builtin: true,
+          },
+        ],
+        entries: [
+          {
+            id: "11111111-1111-4111-8111-111111111111",
+            wordname: "kala",
+            values: { definition: { type: "tag_list", value: ["dog"] } },
+          },
+          {
+            id: "22222222-2222-4222-8222-222222222222",
+            wordname: "velo",
+            values: { definition: { type: "tag_list", value: ["to run"] } },
+          },
+        ],
+      },
+      null,
+      2,
+    ),
+  );
   const lines = Array.from(
     { length: 120 },
     (_, i) => `line ${String(i + 1).padStart(3, "0")}`,
@@ -1135,6 +1167,65 @@ async function main() {
       `return !!document.querySelector('.cm-host[data-note="raceB.md"] .conflict-banner');`,
     );
     if (banner) throw new Error("conflict banner shown on B");
+  });
+
+  // -- probe 19: word-for-word translation mode ----------------------------
+  await probe("19-word-for-word-mode", async () => {
+    // Open the Translator (activity index 2 opens a translation tab).
+    await js(
+      `document.querySelectorAll('.activitybar .activity')[2].click(); return true;`,
+    );
+    await waitJs(`!!document.querySelector('.translation')`, {
+      label: "translation view",
+    });
+
+    // Switch to word-for-word.
+    const switched = await js(
+      `const b = [...document.querySelectorAll('.translation-toolbar .mode-switch button')]
+         .find((x) => x.textContent.trim() === 'Word for word');
+       if (b) b.click();
+       return !!b;`,
+    );
+    if (!switched) throw new Error("no word-for-word mode button");
+    await new Promise((resolve) => setTimeout(resolve, 150));
+    const tree = await js(
+      `return {
+         canvas: !!document.querySelector('.clause-canvas'),
+         palette: !!document.querySelector('.palette-row'),
+       };`,
+    );
+    if (tree.canvas || tree.palette) {
+      throw new Error(`rule-tree controls shown in direct mode: ${JSON.stringify(tree)}`);
+    }
+
+    // "kala" is a conlang wordname (pass-through); "run" matches velo.
+    await js(`const t = document.querySelector('.runner textarea');
+      t.value = 'kala run';
+      t.dispatchEvent(new Event('input', { bubbles: true }));
+      return true;`);
+    await js(`document.querySelector('.runner .translate').click(); return true;`);
+    await waitJs(
+      `(document.querySelector('.runner .output')?.textContent ?? '').includes('kala velo')`,
+      { label: "word-for-word output" },
+    );
+    const output = await js(
+      `return document.querySelector('.runner .output').textContent.trim();`,
+    );
+    assertEqual(output, "kala velo", "word-for-word output");
+
+    // A missing word surfaces in the lazy "missing words" panel.
+    await js(`const t = document.querySelector('.runner textarea');
+      t.value = 'dog fly';
+      t.dispatchEvent(new Event('input', { bubbles: true }));
+      return true;`);
+    await js(`document.querySelector('.runner .translate').click(); return true;`);
+    await waitJs(
+      `(() => {
+         const r = document.querySelector('.runner');
+         return !!r && r.textContent.includes('Missing words') && r.textContent.includes('fly');
+       })()`,
+      { label: "missing word listed" },
+    );
   });
 }
 

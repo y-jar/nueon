@@ -425,6 +425,114 @@ pub fn translate(
     }
 }
 
+/// Translate `input` word for word, in the order the words appear, without a
+/// syntax grid. Each token maps to its conlang word (with the same
+/// lemmatization and affix morphology), a token that already matches a
+/// `wordname` is passed through unchanged, and unmatched tokens are reported
+/// as missing so they can be added lazily.
+pub fn translate_direct(
+    dict: &Dictionary,
+    separator: &str,
+    input: &str,
+    choices: &HashMap<usize, Uuid>,
+    affixes: &[AffixRule],
+) -> TranslationReport {
+    let tokens = tokenize(input);
+    let mut slots = Vec::new();
+    let mut morphemes = Vec::new();
+    let mut missing = Vec::new();
+    let mut conflicts = Vec::new();
+
+    for (index, token) in tokens.iter().enumerate() {
+        // A conlang word the user typed is emitted unchanged.
+        if let Some(entry) = dict
+            .all_entries()
+            .find(|entry| entry.wordname.to_lowercase() == token.normalized)
+        {
+            let word = entry.wordname.clone();
+            morphemes.push(GlossMorpheme {
+                surface: word.clone(),
+                gloss: word.clone(),
+            });
+            slots.push(SlotOutcome {
+                index,
+                slot: ClauseSlot::Wildcard,
+                symbol: Symbol::Word(word),
+            });
+            continue;
+        }
+
+        let candidates = matching_entries(dict, token, affixes);
+        let picked = match candidates.len() {
+            0 => {
+                missing.push(index);
+                None
+            }
+            1 => Some(Picked {
+                id: candidates[0].entry.id,
+                affix: candidates[0].affix.clone(),
+                affix_gloss: candidates[0].affix_gloss.clone(),
+                prefix: candidates[0].prefix,
+            }),
+            _ => choices
+                .get(&index)
+                .and_then(|id| candidates.iter().find(|matched| matched.entry.id == *id))
+                .map(|matched| Picked {
+                    id: matched.entry.id,
+                    affix: matched.affix.clone(),
+                    affix_gloss: matched.affix_gloss.clone(),
+                    prefix: matched.prefix,
+                })
+                .or_else(|| {
+                    conflicts.push(index);
+                    None
+                }),
+        };
+
+        match &picked {
+            Some(_) => {
+                if let Some(morpheme) = gloss_for(dict, picked.as_ref()) {
+                    morphemes.push(morpheme);
+                }
+                slots.push(SlotOutcome {
+                    index,
+                    slot: ClauseSlot::Wildcard,
+                    symbol: Symbol::Word(word_for(dict, picked.as_ref())),
+                });
+            }
+            None => {
+                morphemes.push(GlossMorpheme {
+                    surface: "*?".to_string(),
+                    gloss: "?".to_string(),
+                });
+                slots.push(SlotOutcome {
+                    index,
+                    slot: ClauseSlot::Wildcard,
+                    symbol: Symbol::Placeholder("*?".to_string()),
+                });
+            }
+        }
+    }
+
+    let output = render(&slots, if separator.is_empty() { " " } else { separator });
+    let complete = missing.is_empty() && conflicts.is_empty();
+
+    TranslationReport {
+        output,
+        complete,
+        tokens,
+        slots,
+        missing,
+        conflicts,
+        leftovers: Vec::new(),
+        unfilled: Vec::new(),
+        gloss: InterlinearGloss {
+            morphemes,
+            translation: input.to_string(),
+        },
+    }
+}
+
 /// Build the interlinear gloss morpheme for a chosen word (with affix).
 fn gloss_for(dict: &Dictionary, picked: Option<&Picked>) -> Option<GlossMorpheme> {
     let picked = picked?;
@@ -788,5 +896,84 @@ mod tests {
         let last = report.gloss.morphemes.last().unwrap();
         assert_eq!(last.surface, "#Verb?");
         assert_eq!(last.gloss, "?");
+    }
+
+    // -- word-for-word (direct) mode -----------------------------------------
+
+    #[test]
+    fn direct_translates_in_input_order() {
+        let dict = build(&[
+            ("kala", &["dog"], &["Subject"]),
+            ("velo", &["to run"], &["Verb"]),
+        ]);
+        let report = translate_direct(&dict, " ", "dog run", &HashMap::new(), &no_affixes());
+        assert!(report.complete);
+        assert_eq!(report.output, "kala velo");
+        assert_eq!(report.slots.len(), 2);
+        assert!(report.unfilled.is_empty());
+    }
+
+    #[test]
+    fn direct_passes_through_conlang_wordnames() {
+        // "kala" is already conlang: it should be emitted unchanged.
+        let dict = build(&[
+            ("kala", &["dog"], &["Subject"]),
+            ("velo", &["to run"], &["Verb"]),
+        ]);
+        let report = translate_direct(&dict, " ", "kala run", &HashMap::new(), &no_affixes());
+        assert!(report.complete);
+        assert_eq!(report.output, "kala velo");
+    }
+
+    #[test]
+    fn direct_drops_stopwords() {
+        let dict = build(&[("kala", &["dog"], &["Subject"])]);
+        let report = translate_direct(&dict, " ", "the dog", &HashMap::new(), &no_affixes());
+        assert_eq!(report.output, "kala");
+    }
+
+    #[test]
+    fn direct_reports_missing_words() {
+        let dict = build(&[("kala", &["dog"], &["Subject"])]);
+        let report = translate_direct(&dict, " ", "dog fly", &HashMap::new(), &no_affixes());
+        assert!(!report.complete);
+        assert_eq!(report.missing, vec![1]);
+    }
+
+    #[test]
+    fn direct_applies_morphology_affixes() {
+        let dict = build(&[("kala", &["dog"], &["Subject"])]);
+        let rules = vec![AffixRule {
+            kind: AffixKind::Suffix,
+            english: "z".into(),
+            conlang: "i".into(),
+        }];
+        let report = translate_direct(&dict, " ", "dogz", &HashMap::new(), &rules);
+        assert!(report.complete);
+        assert_eq!(report.output, "kalai");
+    }
+
+    #[test]
+    fn direct_resolves_conflicts_by_choice() {
+        let dict = build(&[
+            ("velo", &["to run"], &["Verb"]),
+            ("koro", &["to run"], &["Verb"]),
+        ]);
+        let unresolved = translate_direct(&dict, " ", "run", &HashMap::new(), &no_affixes());
+        assert!(!unresolved.complete);
+        assert_eq!(unresolved.conflicts, vec![0]);
+
+        let chosen_id = dict
+            .table("t")
+            .unwrap()
+            .entries
+            .iter()
+            .find(|e| e.wordname == "koro")
+            .unwrap()
+            .id;
+        let choices = HashMap::from([(0usize, chosen_id)]);
+        let resolved = translate_direct(&dict, " ", "run", &choices, &no_affixes());
+        assert!(resolved.complete);
+        assert_eq!(resolved.output, "koro");
     }
 }

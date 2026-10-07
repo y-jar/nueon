@@ -1065,6 +1065,28 @@ button.link {
   width: 160px;
 }
 
+.translation-toolbar .mode-switch {
+  display: inline-flex;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  overflow: hidden;
+}
+
+.translation-toolbar .mode-switch button {
+  border: none;
+  border-radius: 0;
+  padding: 3px 10px;
+}
+
+.translation-toolbar .mode-switch button + button {
+  border-left: 1px solid var(--border);
+}
+
+.translation-toolbar .mode-switch button.active {
+  background: var(--accent);
+  color: var(--bg);
+}
+
 .translation-toolbar button.active {
   color: var(--accent);
   border-color: var(--accent);

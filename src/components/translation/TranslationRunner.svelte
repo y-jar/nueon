@@ -4,6 +4,7 @@
   import type {
     Symbol,
     TableSummary,
+    TranslationMode,
     TranslationReport,
     WordHit,
   } from "../../lib/api";
@@ -22,6 +23,7 @@
     report: TranslationReport | null;
     choices: Record<string, string>;
     drafts: Record<number, Draft>;
+    mode: TranslationMode;
     tables: TableSummary[];
     error: string;
     onRun: () => void;
@@ -38,6 +40,7 @@
     report,
     choices,
     drafts,
+    mode,
     tables,
     error,
     onRun,
@@ -170,7 +173,7 @@
         {/each}
       {/if}
 
-      {#if report.unfilled.length}
+      {#if mode === "grid" && report.unfilled.length}
         <div class="section-title">{$t("translation.unfilledSlots")}</div>
         <p class="muted">
           {#each report.unfilled as index (index)}
@@ -181,10 +184,18 @@
         </p>
       {/if}
 
-      <div class="section-title">{$t("translation.breakdown")}</div>
+      <div class="section-title">
+        {mode === "direct"
+          ? $t("translation.wordForWord")
+          : $t("translation.breakdown")}
+      </div>
       {#each report.slots as outcome (outcome.index)}
         <div class="row">
-          <span class="muted">{outcome.slot.kind} {outcome.index}</span>
+          <span class="muted">
+            {mode === "direct"
+              ? (report.tokens[outcome.index]?.text ?? outcome.index)
+              : `${outcome.slot.kind} ${outcome.index}`}
+          </span>
           <span>→</span>
           <span class="mono">{symbolText(outcome.symbol)}</span>
         </div>

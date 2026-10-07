@@ -220,6 +220,7 @@ pub fn run() {
             commands::save_preset,
             commands::delete_preset,
             commands::execute_translation,
+            commands::execute_translation_direct,
             commands::create_translation_word,
             commands::translation_options,
             commands::set_translation_options,
