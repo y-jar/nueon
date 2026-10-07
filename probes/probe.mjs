@@ -43,6 +43,8 @@ const INLINE = "above\nplain **bold** and $x+y$ here\n";
 const TYPE = "start\n";
 // A note for Ctrl+click multi-cursor (probe 13).
 const MULTI = "hello world\n";
+// A note for heading/strikethrough shortcuts (probe 14).
+const FMT = "plain line\n";
 
 const DRIVER_CANDIDATES = [
   "/tmp/opencode/tauri-driver-root/bin/tauri-driver",
@@ -166,6 +168,7 @@ async function typeInto(selector, text) {
 const TAB = "\uE004";
 const ENTER = "\uE007";
 const BACKSPACE = "\uE003";
+const SHIFT = "\uE008";
 const CTRL = "\uE009";
 const ARROW_DOWN = "\uE015";
 
@@ -386,6 +389,7 @@ function seedWorkspace() {
   fs.writeFileSync(path.join(WORKSPACE, "notes", "inline.md"), INLINE);
   fs.writeFileSync(path.join(WORKSPACE, "notes", "type.md"), TYPE);
   fs.writeFileSync(path.join(WORKSPACE, "notes", "multi.md"), MULTI);
+  fs.writeFileSync(path.join(WORKSPACE, "notes", "fmt.md"), FMT);
   const configDir = path.join(ROOT, "home", ".config", "nueon");
   fs.mkdirSync(configDir, { recursive: true });
   fs.writeFileSync(
@@ -832,6 +836,34 @@ async function main() {
     // Typing with two cursors inserts at both.
     await pressKey("X");
     assertEqual(await editorText("multi.md"), "Xhello Xworld\n", "typed at both cursors");
+  });
+
+  // -- probe 14: heading and strikethrough shortcuts -----------------------
+  await probe("14-heading-and-strikethrough-shortcuts", async () => {
+    await openNote("fmt.md");
+    await waitEditorText("fmt.md", FMT);
+    await focusEditor("fmt.md");
+    await placeCursor("fmt.md", 2);
+
+    await pressKey("1", [CTRL]);
+    assertEqual(await editorText("fmt.md"), "# plain line\n", "Ctrl+1");
+    await pressKey("1", [CTRL]);
+    assertEqual(await editorText("fmt.md"), "plain line\n", "Ctrl+1 again removes it");
+    await pressKey("2", [CTRL]);
+    assertEqual(await editorText("fmt.md"), "## plain line\n", "Ctrl+2");
+    await pressKey("0", [CTRL]);
+    assertEqual(await editorText("fmt.md"), "plain line\n", "Ctrl+0 clears");
+
+    await pressKey("x", [CTRL, SHIFT]);
+    assertEqual(await editorText("fmt.md"), "~~plain line~~\n", "Ctrl+Shift+X");
+    await pressKey("x", [CTRL, SHIFT]);
+    assertEqual(await editorText("fmt.md"), "plain line\n", "Ctrl+Shift+X toggles off");
+
+    // The bindings are editor-local: focusing the toolbar must not edit.
+    await js(`document.querySelector('.editor-toolbar')?.focus(); return true;`);
+    await pressKey("1", [CTRL]);
+    await new Promise((resolve) => setTimeout(resolve, 150));
+    assertEqual(await editorText("fmt.md"), "plain line\n", "Ctrl+1 outside the editor");
   });
 
   // -- probe 9: ArrowDown from above reveals each block's raw text ---------

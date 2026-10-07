@@ -24,6 +24,9 @@
     toggleBlockquote,
     toggleTaskList,
     toggleCodeBlock,
+    toggleStrikethrough,
+    setHeading,
+    clearHeading,
   } from "../lib/editor/commands";
   import {
     deleteTableColumn,
@@ -280,6 +283,20 @@
         >
         <button onclick={() => editorAction(insertLink)}
           >{$t("editor.menu.link")}</button
+        >
+        <div class="ctx-submenu">
+          <span class="muted">{$t("editor.heading")}</span>
+          {#each [1, 2, 3, 4, 5, 6] as level (level)}
+            <button onclick={() => editorAction(setHeading(level))}
+              >{$t("editor.headingLevel", { values: { level } })}</button
+            >
+          {/each}
+          <button onclick={() => editorAction(clearHeading)}
+            >{$t("editor.normalText")}</button
+          >
+        </div>
+        <button onclick={() => editorAction(toggleStrikethrough)}
+          >{$t("editor.strikethrough")} (Ctrl+Shift+X)</button
         >
       {/if}
     {:else if menu.kind === "tab" && menu.tab}

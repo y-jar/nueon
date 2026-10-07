@@ -9,6 +9,8 @@
     SquareCode,
     Image,
     Table,
+    Heading,
+    Strikethrough,
   } from "@lucide/svelte";
   import type { Snippet } from "svelte";
   import type { EditorView } from "@codemirror/view";
@@ -19,9 +21,13 @@
     toggleBulletList,
     toggleNumberedList,
     toggleCodeBlock,
+    toggleStrikethrough,
+    setHeading,
+    clearHeading,
     insertTable,
     type FormatState,
   } from "../lib/editor/commands";
+  import Popover from "./Popover.svelte";
 
   interface Props {
     view: EditorView | null;
@@ -101,6 +107,36 @@
     onclick={() => run(toggleCodeBlock)}
   >
     <SquareCode size={15} />
+  </button>
+  <Popover>
+    {#snippet label()}
+      <Heading size={15} />
+    {/snippet}
+    {#snippet children(close)}
+      <div class="picker-body">
+        {#each [1, 2, 3, 4, 5, 6] as level (level)}
+          <button
+            onclick={() => {
+              close();
+              run(setHeading(level));
+            }}>{$t("editor.headingLevel", { values: { level } })}</button
+          >
+        {/each}
+        <button
+          onclick={() => {
+            close();
+            run(clearHeading);
+          }}>{$t("editor.normalText")}</button
+        >
+      </div>
+    {/snippet}
+  </Popover>
+  <button
+    title="{$t('editor.strikethrough')} (Ctrl+Shift+X)"
+    aria-label={$t("editor.strikethrough")}
+    onclick={() => run(toggleStrikethrough)}
+  >
+    <Strikethrough size={15} />
   </button>
   <button
     title={$t("editor.menu.table")}

@@ -36,6 +36,22 @@ Repository: <https://github.com/y-jar/nueon>
 
 See [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md) for the three-tier design.
 
+## Keyboard shortcuts
+
+In a Markdown note (`Mod` is `Ctrl` on Linux; these bindings live only in the
+editor, so they never fire in the dictionary grid, inputs or the inspector):
+
+- `Mod+B` / `Mod+I` / `Mod+U` — bold / italic / underline
+- `Mod+K` — link
+- `Mod+Shift+7` / `Mod+Shift+8` / `Mod+Shift+9` — numbered / bullet / quote
+- `Mod+Shift+C` — code block; `Mod+Shift+X` — strikethrough
+- `Mod+1` … `Mod+6` — heading level (the same level again removes it);
+  `Mod+0` — normal text
+- `Tab` / `Shift+Tab` — next / previous table cell; `Enter` — new table row
+- `(` `[` `{` — auto-close the bracket (`'` and `"` are left alone)
+- `Mod+Z` / `Mod+Y` — undo / redo; `Mod+W` — close tab
+- `Ctrl`/`Cmd`+click — add a cursor; `Alt`+drag — rectangular selection
+
 ## Installation
 
 ### Nix (recommended)

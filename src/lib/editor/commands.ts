@@ -1,4 +1,4 @@
-import { syntaxTree } from "@codemirror/language";
+import { ensureSyntaxTree, syntaxTree } from "@codemirror/language";
 import {
   EditorSelection,
   type EditorState,
@@ -7,7 +7,7 @@ import {
 import type { Command, EditorView, KeyBinding } from "@codemirror/view";
 import type { SyntaxNode } from "@lezer/common";
 
-import { generateTable, serializeTable } from "./table";
+import { generateTable, serializeTable } from "./table.ts";
 
 /** Which inline/block formats apply at the cursor (drives toolbar highlights). */
 export interface FormatState {
@@ -60,13 +60,33 @@ function linePrefix(text: string): { kind: LineKind; indent: number; marker: num
   return null;
 }
 
+function treeOf(state: EditorState) {
+  return ensureSyntaxTree(state, state.doc.length, 2000) ?? syntaxTree(state);
+}
+
 function enclosing(state: EditorState, pos: number, names: string[]): SyntaxNode | null {
-  let node: SyntaxNode | null = syntaxTree(state).resolveInner(pos, 0);
+  let node: SyntaxNode | null = treeOf(state).resolveInner(pos, 0);
   while (node) {
     if (names.includes(node.name)) return node;
     node = node.parent;
   }
   return null;
+}
+
+/** Block contexts where headings and strikethrough must not apply. */
+const CODE_OR_TABLE = ["FencedCode", "CodeBlock", "Table"];
+
+/**
+ * Whether a line sits inside code or a table. Probes just inside the line:
+ * `resolveInner` at the exact boundary (`line.from`) is ambiguous and can
+ * report the node before the fence.
+ */
+function lineBlocked(
+  state: EditorState,
+  line: { from: number; to: number },
+): boolean {
+  const pos = Math.min(line.from + 1, line.to);
+  return enclosing(state, pos, CODE_OR_TABLE) !== null;
 }
 
 /** Whether `range` sits inside a `<u>…</u>` pair on one line. */
@@ -239,6 +259,100 @@ export const toggleTaskList = toggleLines("task");
 export const toggleBlockquote = toggleLines("quote");
 
 /**
+ * Set the selected lines to an ATX heading: `level` 1–6 sets that level, the
+ * same level again removes it, and level 0 clears any heading. Lines inside
+ * code blocks or a table are left alone; an all-ineligible selection is a
+ * no-op. One dispatch, so it is a single undo step.
+ */
+export function setHeading(level: number): Command {
+  return (view) => {
+    const { state } = view;
+    const changes: { from: number; to?: number; insert?: string }[] = [];
+    for (const number of selectedLines(state)) {
+      const line = state.doc.line(number);
+      if (line.text.trim() === "") continue;
+      if (lineBlocked(state, line)) continue;
+      const indent = /^[ \t]*/.exec(line.text)?.[0].length ?? 0;
+      const start = line.from + indent;
+      const match = /^(#{1,6})[ \t]+/.exec(line.text.slice(indent));
+      if (match) {
+        if (level === 0 || match[1].length === level) {
+          changes.push({ from: start, to: start + match[0].length, insert: "" });
+        } else {
+          changes.push({
+            from: start,
+            to: start + match[1].length,
+            insert: "#".repeat(level),
+          });
+        }
+      } else if (level > 0) {
+        changes.push({ from: start, insert: `${"#".repeat(level)} ` });
+      }
+    }
+    if (!changes.length) return false;
+    view.dispatch({ changes, scrollIntoView: true, userEvent: "input.format" });
+    return true;
+  };
+}
+
+export const clearHeading = setHeading(0);
+
+/**
+ * Toggle `~~strikethrough~~`. A partial single-line selection wraps just the
+ * selected text; an empty cursor or a multi-line selection wraps each selected
+ * line (skipping blank, code and table lines). No-op inside code or a table.
+ */
+export const toggleStrikethrough: Command = (view) => {
+  const { state } = view;
+  const main = state.selection.main;
+  if (lineBlocked(state, state.doc.lineAt(main.from))) return false;
+  const first = state.doc.lineAt(main.from).number;
+  const last = state.doc.lineAt(main.to).number;
+
+  if (!main.empty && first === last) {
+    const before = state.doc.sliceString(Math.max(0, main.from - 2), main.from);
+    const after = state.doc.sliceString(main.to, main.to + 2);
+    if (before === "~~" && after === "~~") {
+      view.dispatch({
+        changes: [
+          { from: main.from - 2, to: main.from },
+          { from: main.to, to: main.to + 2 },
+        ],
+        userEvent: "input.format",
+      });
+    } else {
+      view.dispatch({
+        changes: [
+          { from: main.from, insert: "~~" },
+          { from: main.to, insert: "~~" },
+        ],
+        userEvent: "input.format",
+      });
+    }
+    return true;
+  }
+
+  const changes: { from: number; to?: number; insert?: string }[] = [];
+  for (let number = first; number <= last; number += 1) {
+    const line = state.doc.line(number);
+    if (line.text.trim() === "") continue;
+    if (lineBlocked(state, line)) continue;
+    const start = line.from + (line.text.length - line.text.trimStart().length);
+    const end = line.from + line.text.trimEnd().length;
+    if (line.text.slice(start - line.from, end - line.from).startsWith("~~")) {
+      changes.push({ from: start, to: start + 2, insert: "" });
+      changes.push({ from: end - 2, to: end, insert: "" });
+    } else {
+      changes.push({ from: start, insert: "~~" });
+      changes.push({ from: end, insert: "~~" });
+    }
+  }
+  if (!changes.length) return false;
+  view.dispatch({ changes, scrollIntoView: true, userEvent: "input.format" });
+  return true;
+};
+
+/**
  * Insert a block (table, rule, …) on its own lines after the current line,
  * optionally selecting `select` (offsets within `block`).
  */
@@ -361,6 +475,14 @@ export const markdownKeymap: readonly KeyBinding[] = [
   { key: "Mod-Shift-7", run: toggleNumberedList, preventDefault: true },
   { key: "Mod-Shift-9", run: toggleBlockquote, preventDefault: true },
   { key: "Mod-Shift-c", run: toggleCodeBlock, preventDefault: true },
+  { key: "Mod-1", run: setHeading(1), preventDefault: true },
+  { key: "Mod-2", run: setHeading(2), preventDefault: true },
+  { key: "Mod-3", run: setHeading(3), preventDefault: true },
+  { key: "Mod-4", run: setHeading(4), preventDefault: true },
+  { key: "Mod-5", run: setHeading(5), preventDefault: true },
+  { key: "Mod-6", run: setHeading(6), preventDefault: true },
+  { key: "Mod-0", run: clearHeading, preventDefault: true },
+  { key: "Mod-Shift-x", run: toggleStrikethrough, preventDefault: true },
 ];
 
 /** Insert `![alt](url)` with the placeholder URL selected for typing. */
