@@ -82,6 +82,9 @@ npm run tauri build    # produces bundles under src-tauri/target/release/bundle
 
 ## Verification
 
+See [`docs/PROBING.md`](docs/PROBING.md) for the full testing/probing
+methodology (unit tests, the WebDriver probe harness, and the traps to avoid).
+
 Run the full gate suite from the Nix shell (`gates` runs these for you):
 
 ```sh

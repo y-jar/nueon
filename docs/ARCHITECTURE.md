@@ -126,6 +126,13 @@ refetching the affected slice.
   highlighting, and a formatting toolbar; notes autosave with dirty tracking
   and disk-conflict detection.
 
+## Testing
+
+Three tiers: pure `node:test` unit tests (`npm run test`), `cargo test` for the
+core, and packaged UI probes via `probes/probe.mjs` (`npm run probe`). The
+methodology, templates, and gotchas live in
+[`docs/PROBING.md`](PROBING.md).
+
 ## Packaging & release
 
 - `flake.nix` exposes `packages.default` (built from source) and
