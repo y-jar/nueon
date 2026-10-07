@@ -1431,6 +1431,7 @@ label.field.inline {
    shifted the cursor/line-number mapping. */
 .cm-table-wrap {
   padding: 6px 0;
+  cursor: text;
 }
 
 table.cm-table {
@@ -1694,6 +1695,13 @@ table.dict-grid td textarea:focus {
   text-align: center;
   /* Padding, not margin — see `table.cm-table` (block-widget measurement). */
   padding: 6px 0;
+  cursor: text;
+}
+
+/* KaTeX gives display math a 1em margin; inside our padded wrapper that both
+   offsets the formula and inflates the measured block height. */
+.cm-math-display .katex-display {
+  margin: 0;
 }
 
 .cm-math {
@@ -1702,6 +1710,11 @@ table.dict-grid td textarea:focus {
 
 .cm-html-block {
   padding: 6px 0;
+  cursor: text;
+  /* The editor content is `white-space: pre-wrap`; without this the raw HTML's
+     newlines render as real line breaks, making a one-line block three lines
+     tall. */
+  white-space: normal;
 }
 
 /* -- interlinear gloss --------------------------------------------------- */

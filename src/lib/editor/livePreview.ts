@@ -202,17 +202,24 @@ class MathWidget extends WidgetType {
   constructor(
     readonly tex: string,
     readonly display: boolean,
+    /** Block start; `-1` for a single-line (plugin) math span. */
+    readonly pos = -1,
   ) {
     super();
   }
 
   eq(other: MathWidget): boolean {
-    return other.tex === this.tex && other.display === this.display;
+    return (
+      other.tex === this.tex &&
+      other.display === this.display &&
+      other.pos === this.pos
+    );
   }
 
-  toDOM(): HTMLElement {
+  toDOM(view: EditorView): HTMLElement {
     const el = document.createElement(this.display ? "div" : "span");
     el.className = this.display ? "cm-math-display" : "cm-math";
+    enterBlockOnClick(el, view, this.pos);
     try {
       katex.render(this.tex, el, {
         displayMode: this.display,
@@ -225,19 +232,43 @@ class MathWidget extends WidgetType {
   }
 }
 
+/**
+ * A block widget swallows events by default, so clicking it never moves the
+ * cursor. For a rendered block, put the cursor at its first line instead, which
+ * makes the block active and switches it back to raw text for editing.
+ */
+function enterBlockOnClick(
+  el: HTMLElement,
+  view: EditorView,
+  pos: number,
+): void {
+  if (pos < 0) return;
+  el.addEventListener("mousedown", (event) => {
+    event.preventDefault();
+    event.stopPropagation();
+    view.dispatch({ selection: { anchor: pos }, scrollIntoView: true });
+    view.focus();
+  });
+}
+
 /** Render an HTML block verbatim (user-authored notes). */
 class HtmlWidget extends WidgetType {
-  constructor(readonly html: string) {
+  constructor(
+    readonly html: string,
+    /** Block start; `-1` for a single-line (plugin) HTML span. */
+    readonly pos = -1,
+  ) {
     super();
   }
 
   eq(other: HtmlWidget): boolean {
-    return other.html === this.html;
+    return other.html === this.html && other.pos === this.pos;
   }
 
-  toDOM(): HTMLElement {
+  toDOM(view: EditorView): HTMLElement {
     const wrap = document.createElement("div");
     wrap.className = "cm-html-block";
+    enterBlockOnClick(wrap, view, this.pos);
     wrap.innerHTML = this.html;
     return wrap;
   }
@@ -514,9 +545,9 @@ function build(view: EditorView): DecorationSet {
  */
 const blockField = makeBlockField((kind, text, from) => {
   if (kind === "table") return new TableWidget(text, from);
-  if (kind === "html") return new HtmlWidget(text);
+  if (kind === "html") return new HtmlWidget(text, from);
   const start = text.indexOf("$$") + 2;
-  return new MathWidget(text.slice(start, text.indexOf("$$", start)), true);
+  return new MathWidget(text.slice(start, text.indexOf("$$", start)), true, from);
 });
 
 /** Block widgets for tables, multi-line math and multi-line HTML. */

@@ -22,7 +22,8 @@ const APP = path.resolve(process.argv[2] ?? "target/debug/nueon");
 const ROOT = "/tmp/opencode/nueon-probe";
 const OUT = path.resolve(import.meta.dirname, "out");
 const PORT = 4444;
-const DISPLAY = `:${99 + (process.pid % 40)}`;
+// Headless Xvfb by default; `PROBE_DISPLAY=:0` drives a display you can watch.
+const DISPLAY = process.env.PROBE_DISPLAY || `:${99 + (process.pid % 40)}`;
 const WORKSPACE = path.join(ROOT, "ws", "probe");
 // A non-table line, then a table, then another line — for probe 7.
 const TABLES = "before line\n\n| h1 | h2 |\n| --- | --- |\n| c1 | c2 |\n\nafter line\n";
@@ -430,6 +431,9 @@ exec "${APP}" "$@"
 const results = [];
 
 async function probe(name, fn) {
+  // `PROBE_DELAY_MS` slows each step so a human can follow it on screen.
+  const delay = Number(process.env.PROBE_DELAY_MS || 0);
+  if (delay > 0) await new Promise((resolve) => setTimeout(resolve, delay));
   try {
     await fn();
     results.push([name, "PASS", ""]);
@@ -489,12 +493,18 @@ async function main() {
   const wrapper = writeWrapper();
   const driver = ensureTauriDriver();
 
-  spawnLogged("xvfb", "Xvfb", [DISPLAY, "-screen", "0", "1400x900x24"]);
-  const socket = `/tmp/.X11-unix/X${DISPLAY.slice(1)}`;
-  for (let i = 0; i < 50 && !fs.existsSync(socket); i += 1) {
-    await new Promise((resolve) => setTimeout(resolve, 100));
+  if (process.env.PROBE_DISPLAY) {
+    // Watch mode: drive the app on a display the user can see instead of a
+    // headless Xvfb. Nothing is spawned here; the driver uses that DISPLAY.
+    console.log(`probe: using existing display ${DISPLAY} (PROBE_DISPLAY)`);
+  } else {
+    spawnLogged("xvfb", "Xvfb", [DISPLAY, "-screen", "0", "1400x900x24"]);
+    const socket = `/tmp/.X11-unix/X${DISPLAY.slice(1)}`;
+    for (let i = 0; i < 50 && !fs.existsSync(socket); i += 1) {
+      await new Promise((resolve) => setTimeout(resolve, 100));
+    }
+    if (!fs.existsSync(socket)) throw new Error("Xvfb did not start");
   }
-  if (!fs.existsSync(socket)) throw new Error("Xvfb did not start");
 
   spawnLogged("driver", driver, ["--port", String(PORT)], { DISPLAY });
   for (let i = 0; i < 50; i += 1) {
@@ -594,6 +604,54 @@ async function main() {
       throw new Error(`cursor landed at ${anchor}, expected on line 6 (45..50)`);
     }
   });
+
+  // -- probe 18: math/HTML blocks are clickable and top-aligned ------------
+  for (const [file, content, from, to, inner, widgetClass] of [
+    ["html.md", HTML, 12, 30, ":scope > *", ".cm-html-block"],
+    ["math.md", MATH, 12, 27, ".katex-display", ".cm-math-display"],
+  ]) {
+    await probe(`18-${file}-block-clickable-and-aligned`, async () => {
+      await openNote(file);
+      await waitEditorText(file, content);
+      await focusEditor(file);
+      await placeCursor(file, 1);
+      await waitJs(
+        `!!document.querySelector('.cm-host[data-note=${JSON.stringify(file)}] ${widgetClass}')`,
+        { label: `${widgetClass} in ${file}` },
+      );
+
+      const geometry = await js(`${viewScript(file)}
+        const widget = host.querySelector(${JSON.stringify(widgetClass)});
+        const inner = widget ? widget.querySelector(${JSON.stringify(inner)}) : null;
+        const c = v.coordsAtPos(${from});
+        const wr = widget ? widget.getBoundingClientRect() : null;
+        const ir = inner ? inner.getBoundingClientRect() : null;
+        return {
+          widgetTop: wr && Math.round(wr.top),
+          widgetBottom: wr && Math.round(wr.bottom),
+          innerTop: ir && Math.round(ir.top),
+          lineTop: c && Math.round(c.top),
+          point: wr ? { x: Math.round(wr.left + 20), y: Math.round(wr.top + 4) } : null,
+        };`);
+      console.log("BLOCK18", file, JSON.stringify(geometry));
+      if (!geometry.point) throw new Error(`${file}: no block to click`);
+
+      await pointerClick(geometry.point.x, geometry.point.y);
+      await new Promise((resolve) => setTimeout(resolve, 200));
+      const anchor = (await readEditorState(file)).anchor;
+
+      if (anchor < from || anchor > to) {
+        throw new Error(
+          `click did not enter the block: anchor=${anchor}, expected ${from}..${to}`,
+        );
+      }
+      if (geometry.innerTop - geometry.lineTop > 10) {
+        throw new Error(
+          `block content is offset: innerTop=${geometry.innerTop} lineTop=${geometry.lineTop}`,
+        );
+      }
+    });
+  }
 
   // -- probe 1: tab switch restores cursor + top line ----------------------
   await openNote("alpha.md");
