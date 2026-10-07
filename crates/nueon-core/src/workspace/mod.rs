@@ -20,8 +20,9 @@ use uuid::Uuid;
 use self::table_files::TableFiles;
 
 use crate::config::{
-    GrammarConfig, GridViewState, LanguageConfig, LayoutState, TilingLayout, TranslationConfig,
-    TranslationMode, TranslationOptions, UiLayout, WindowGeometry, WorkspaceSettings,
+    GrammarConfig, GridViewState, LanguageConfig, LayoutState, PhonologyConfig, TilingLayout,
+    TranslationConfig, TranslationMode, TranslationOptions, UiLayout, WindowGeometry,
+    WorkspaceSettings,
 };
 use crate::export_table::TableFormat;
 use crate::model::{
@@ -46,6 +47,8 @@ pub struct Workspace {
     pub grammar: GrammarConfig,
     /// Translation configuration.
     pub translation: TranslationConfig,
+    /// Phoneme inventory and syllable shapes.
+    pub phonology: PhonologyConfig,
     /// User settings.
     pub settings: WorkspaceSettings,
     /// Detected version-control state.
@@ -118,6 +121,7 @@ impl Workspace {
             language: LanguageConfig::default(),
             grammar: GrammarConfig::default(),
             translation: TranslationConfig::default(),
+            phonology: PhonologyConfig::default(),
             settings,
             vcs,
             table_files: TableFiles::default(),
@@ -159,6 +163,8 @@ impl Workspace {
             storage::load_json(&config_dir.join(storage::GRAMMAR_FILE))?.unwrap_or_default();
         let translation =
             storage::load_json(&config_dir.join(storage::TRANSLATION_FILE))?.unwrap_or_default();
+        let phonology =
+            storage::load_json(&config_dir.join(storage::PHONOLOGY_FILE))?.unwrap_or_default();
         let settings: WorkspaceSettings =
             storage::load_json(&config_dir.join(storage::SETTINGS_FILE))?.unwrap_or_default();
 
@@ -175,6 +181,7 @@ impl Workspace {
             language,
             grammar,
             translation,
+            phonology,
             settings,
             vcs,
             table_files: scan.files,
@@ -212,6 +219,8 @@ impl Workspace {
             storage::load_json(&config_dir.join(storage::GRAMMAR_FILE))?.unwrap_or_default();
         let translation =
             storage::load_json(&config_dir.join(storage::TRANSLATION_FILE))?.unwrap_or_default();
+        let phonology =
+            storage::load_json(&config_dir.join(storage::PHONOLOGY_FILE))?.unwrap_or_default();
         let settings =
             storage::load_json(&config_dir.join(storage::SETTINGS_FILE))?.unwrap_or_default();
 
@@ -220,6 +229,7 @@ impl Workspace {
         self.language = language;
         self.grammar = grammar;
         self.translation = translation;
+        self.phonology = phonology;
         self.settings = settings;
         self.table_files = scan.files;
         self.quarantine = scan.warnings;
@@ -1172,6 +1182,7 @@ impl Workspace {
         storage::save_json(&dir.join(storage::LANGUAGE_FILE), &self.language)?;
         storage::save_json(&dir.join(storage::GRAMMAR_FILE), &self.grammar)?;
         storage::save_json(&dir.join(storage::TRANSLATION_FILE), &self.translation)?;
+        storage::save_json(&dir.join(storage::PHONOLOGY_FILE), &self.phonology)?;
         storage::save_json(&dir.join(storage::SETTINGS_FILE), &self.settings)?;
         self.mark_change(Instant::now(), "nueon: update config");
         Ok(())
@@ -1270,6 +1281,7 @@ impl Workspace {
             "language" => serde_json::to_value(&self.language),
             "grammar" => serde_json::to_value(&self.grammar),
             "translation" => serde_json::to_value(&self.translation),
+            "phonology" => serde_json::to_value(&self.phonology),
             "settings" => serde_json::to_value(&self.settings),
             other => {
                 return Err(StorageError::Config(
@@ -1302,6 +1314,10 @@ impl Workspace {
             "translation" => {
                 self.translation = serde_json::from_value(value).map_err(invalid)?;
                 storage::save_json(&dir.join(storage::TRANSLATION_FILE), &self.translation)?;
+            }
+            "phonology" => {
+                self.phonology = serde_json::from_value(value).map_err(invalid)?;
+                storage::save_json(&dir.join(storage::PHONOLOGY_FILE), &self.phonology)?;
             }
             // The settings file also holds grid views, layout and migration
             // flags. Replacing it wholesale from the UI could wipe all of that,

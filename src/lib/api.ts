@@ -220,7 +220,7 @@ export interface GridViewState {
 
 // -- tiling layout -------------------------------------------------------
 export interface TabLayout {
-  kind: "note" | "table" | "translation";
+  kind: "note" | "table" | "translation" | "phonology";
   ref?: string | null;
   title: string;
 }
@@ -542,7 +542,11 @@ export const configGet = <T>(section: string): Promise<T> =>
  * file also holds grid views, layout and migration flags, and the backend
  * refuses to overwrite it wholesale.
  */
-export type WritableConfigSection = "language" | "grammar" | "translation";
+export type WritableConfigSection =
+  | "language"
+  | "grammar"
+  | "translation"
+  | "phonology";
 export const configSet = <T>(
   section: WritableConfigSection,
   value: T,
@@ -555,6 +559,23 @@ export const grammarGet = (): Promise<GrammarConfig> =>
   configGet<GrammarConfig>("grammar");
 export const grammarSet = (value: GrammarConfig): Promise<void> =>
   configSet("grammar", value);
+
+export type PhonemeKind = "consonant" | "vowel" | "other";
+
+export interface Phoneme {
+  symbol: string;
+  kind: PhonemeKind;
+}
+
+export interface PhonologyConfig {
+  phonemes: Phoneme[];
+  syllables: string[];
+}
+
+export const phonologyGet = (): Promise<PhonologyConfig> =>
+  configGet<PhonologyConfig>("phonology");
+export const phonologySet = (value: PhonologyConfig): Promise<void> =>
+  configSet("phonology", value);
 
 export interface UiLayout {
   activity: string;

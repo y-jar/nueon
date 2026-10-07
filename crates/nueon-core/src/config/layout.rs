@@ -12,6 +12,7 @@ pub enum TabKind {
     Note,
     Table,
     Translation,
+    Phonology,
 }
 
 /// One persisted tab.

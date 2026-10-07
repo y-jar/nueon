@@ -128,6 +128,17 @@ async function click(selector) {
   if (!found) throw new Error(`no element: ${selector}`);
 }
 
+/** Click an activity-ribbon button by its title (robust to icon order). */
+async function openActivity(label) {
+  const ok = await js(
+    `const b = [...document.querySelectorAll('.activitybar .activity')]
+       .find((x) => x.getAttribute('title') === ${JSON.stringify(label)});
+     if (b) b.click();
+     return !!b;`,
+  );
+  if (!ok) throw new Error(`no activity button titled ${JSON.stringify(label)}`);
+}
+
 /** Synthetic events for the rename input: deterministic and focus-free. */
 function renameViaInput(notePath, newName) {
   return js(
@@ -1074,7 +1085,7 @@ async function main() {
     check("table renders as a widget", tables >= 1, `count=${tables}`);
 
     // Dictionary: reach the tables panel and create a table to open the grid.
-    await js(`document.querySelectorAll('.activitybar .activity')[1].click(); return true;`);
+    await openActivity("Dictionary");
     await waitJs(`!!document.querySelector('.sidebar .pane-head')`, {
       label: "tables panel",
     });
@@ -1096,15 +1107,15 @@ async function main() {
     await waitJs(`!!document.querySelector('.grid-view')`, { label: "grid view" });
     check("dictionary grid opens", true);
 
-    await js(`document.querySelectorAll('.activitybar .activity')[2].click(); return true;`);
+    await openActivity("Translation");
     await waitJs(`!!document.querySelector('.translation')`, { label: "translation view" });
     check("translation view opens", true);
 
-    await js(`document.querySelectorAll('.activitybar .activity')[3].click(); return true;`);
+    await openActivity("Source Control");
     await waitJs(`!!document.querySelector('.git-panel')`, { label: "source control" });
     check("source control panel opens", true);
 
-    await js(`document.querySelectorAll('.activitybar .activity')[0].click(); return true;`);
+    await openActivity("Notes");
 
     console.log("README-AUDIT", JSON.stringify(audit));
     const failed = audit.filter((entry) => !entry.ok);
@@ -1171,10 +1182,8 @@ async function main() {
 
   // -- probe 19: word-for-word translation mode ----------------------------
   await probe("19-word-for-word-mode", async () => {
-    // Open the Translator (activity index 2 opens a translation tab).
-    await js(
-      `document.querySelectorAll('.activitybar .activity')[2].click(); return true;`,
-    );
+    // Open the Translator.
+    await openActivity("Translation");
     await waitJs(`!!document.querySelector('.translation')`, {
       label: "translation view",
     });
@@ -1226,6 +1235,57 @@ async function main() {
        })()`,
       { label: "missing word listed" },
     );
+  });
+
+  // -- probe 20: IPA chart builder persists the phoneme inventory ----------
+  await probe("20-ipa-chart-inventory", async () => {
+    await openActivity("Phonology");
+    await waitJs(`!!document.querySelector('.phonology .ipa-table')`, {
+      label: "phonology view",
+    });
+
+    const pick = async (symbol) =>
+      js(
+        `const b = [...document.querySelectorAll('.phonology .ipa-cell button')]
+           .find((x) => x.textContent.trim() === ${JSON.stringify(symbol)});
+         if (b) b.click();
+         return !!b;`,
+      );
+
+    if (!(await pick("k"))) throw new Error("no 'k' button on the chart");
+    if (!(await pick("a"))) throw new Error("no 'a' button on the chart");
+
+    await waitJs(
+      `[...document.querySelectorAll('.phonology .ipa-cell button')]
+         .filter((b) => b.classList.contains('active')).length >= 2`,
+      { label: "chart symbols active" },
+    );
+    const counts = await js(
+      `return document.querySelector('.phonology .phonology-bar .muted')?.textContent ?? '';`,
+    );
+    if (!/1/.test(counts)) throw new Error(`counts not updated: ${JSON.stringify(counts)}`);
+
+    // The autosave writes config/phonology on disk.
+    const configPath = path.join(WORKSPACE, "config", "phonology");
+    const deadline = Date.now() + 6000;
+    let saved = null;
+    while (Date.now() < deadline) {
+      try {
+        saved = JSON.parse(fs.readFileSync(configPath, "utf8"));
+        const symbols = (saved.phonemes ?? []).map((p) => p.symbol);
+        if (symbols.includes("k") && symbols.includes("a")) break;
+      } catch {
+        // not written yet
+      }
+      await new Promise((resolve) => setTimeout(resolve, 150));
+    }
+    const symbols = (saved?.phonemes ?? []).map((p) => p.symbol);
+    if (!symbols.includes("k") || !symbols.includes("a")) {
+      throw new Error(`inventory not persisted: ${JSON.stringify(saved)}`);
+    }
+    const kinds = Object.fromEntries((saved.phonemes ?? []).map((p) => [p.symbol, p.kind]));
+    assertEqual(kinds.k, "consonant", "k kind");
+    assertEqual(kinds.a, "vowel", "a kind");
   });
 }
 

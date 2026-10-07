@@ -11,10 +11,15 @@ import { beginRead, isFreshest } from "./editor/freshness";
 import { dropPosition, movePosition } from "./editor/positions";
 
 /** Left activity ribbon selection. */
-export type Activity = "notes" | "dictionary" | "translation" | "git";
+export type Activity =
+  | "notes"
+  | "dictionary"
+  | "translation"
+  | "phonology"
+  | "git";
 
 /** The kind of document a center tab represents. */
-export type TabKind = "note" | "table" | "translation";
+export type TabKind = "note" | "table" | "translation" | "phonology";
 
 /** A center workspace tab. */
 export interface Tab {
@@ -26,7 +31,7 @@ export interface Tab {
 }
 
 /** Which panel a group's center pane is rendering. */
-export type View = "notes" | "dictionary" | "translation";
+export type View = "notes" | "dictionary" | "translation" | "phonology";
 
 /** The loaded document for one tab group. */
 export interface DocState {
@@ -310,6 +315,7 @@ export function setActivity(activity: Activity): void {
   ui.activity = activity;
   ui.sidebarOpen = true;
   if (activity === "translation") openTranslation();
+  if (activity === "phonology") openPhonology();
 }
 
 export function toggleSidebar(): void {
@@ -373,6 +379,8 @@ export async function activateTab(
     group.doc.currentTable = tab.ref;
     group.doc.selectedEntry = null;
     await syncGroupTable(group.id);
+  } else if (tab.kind === "phonology") {
+    group.doc.view = "phonology";
   } else {
     group.doc.view = "translation";
   }
@@ -409,6 +417,21 @@ export async function openTranslation(): Promise<void> {
       kind: "translation",
       ref: null,
       title: "Translation",
+    };
+    group.tabs = [...group.tabs, tab];
+  }
+  await activateTab(group.id, tab.id);
+}
+
+export async function openPhonology(): Promise<void> {
+  const group = activeGroup();
+  let tab = group.tabs.find((t) => t.kind === "phonology");
+  if (!tab) {
+    tab = {
+      id: newId(),
+      kind: "phonology",
+      ref: null,
+      title: "Phonology",
     };
     group.tabs = [...group.tabs, tab];
   }
@@ -932,6 +955,7 @@ export async function restoreTiling(layout: api.TilingLayout): Promise<void> {
   const notes = notePaths(ui.tree);
   const exists = (tab: api.TabLayout): boolean =>
     tab.kind === "translation" ||
+    tab.kind === "phonology" ||
     (tab.ref != null &&
       (tab.kind === "table" ? tables.has(tab.ref) : notes.has(tab.ref)));
 

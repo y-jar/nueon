@@ -29,6 +29,8 @@ pub const LANGUAGE_FILE: &str = "language";
 pub const GRAMMAR_FILE: &str = "grammar";
 /// `config/` file holding translation configuration.
 pub const TRANSLATION_FILE: &str = "translation";
+/// `config/` file holding the phoneme inventory and syllable shapes.
+pub const PHONOLOGY_FILE: &str = "phonology";
 /// `config/` file holding workspace settings.
 pub const SETTINGS_FILE: &str = "settings";
 
@@ -176,8 +178,13 @@ pub fn ensure_gitignore(root: &Path) -> Result<(), StorageError> {
 }
 
 /// Default config files written when a workspace is created or opened empty.
-pub const DEFAULT_CONFIG_FILES: &[&str] =
-    &[LANGUAGE_FILE, GRAMMAR_FILE, TRANSLATION_FILE, SETTINGS_FILE];
+pub const DEFAULT_CONFIG_FILES: &[&str] = &[
+    LANGUAGE_FILE,
+    GRAMMAR_FILE,
+    TRANSLATION_FILE,
+    PHONOLOGY_FILE,
+    SETTINGS_FILE,
+];
 
 /// Write any missing default config files (`config/<name>` = `{}`).
 pub fn ensure_config_files(root: &Path) -> Result<(), StorageError> {

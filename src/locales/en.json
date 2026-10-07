@@ -100,6 +100,7 @@
     "notes": "Notes",
     "dictionary": "Dictionary",
     "translation": "Translation",
+    "phonology": "Phonology",
     "git": "Source Control",
     "settings": "Settings",
     "toggleSidebar": "Toggle sidebar"
@@ -274,6 +275,26 @@
     "dropHint": "Drag or click chips above to build the clause.",
     "confirmDelete": "Delete?",
     "noAffixes": "No affix rules yet."
+  },
+  "phonology": {
+    "title": "Phonology",
+    "counts": "{consonants} consonants · {vowels} vowels",
+    "hint": "Click a symbol to add it to your language's sound inventory.",
+    "consonants": "Consonants (pulmonic)",
+    "vowels": "Vowels",
+    "inventory": "Sound inventory",
+    "empty": "No sounds selected yet.",
+    "syllableShapes": "Syllable shapes",
+    "syllableHint": "Patterns over C (consonant) and V (vowel); a word must match one or more in sequence.",
+    "symbolPlaceholder": "Custom symbol",
+    "syllablePlaceholder": "e.g. CV, CVC",
+    "kindConsonant": "Consonant",
+    "kindVowel": "Vowel",
+    "kindOther": "Other",
+    "add": "Add",
+    "remove": "Remove",
+    "clear": "Clear",
+    "saved": "Saved"
   },
   "derivation": {
     "title": "Derivation",

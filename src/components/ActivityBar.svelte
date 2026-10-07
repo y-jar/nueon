@@ -4,6 +4,7 @@
     FileText,
     Table2,
     Languages,
+    AudioLines,
     GitBranch,
     Settings,
     FolderOpen,
@@ -34,6 +35,7 @@
     { id: "notes", icon: FileText, label: "activity.notes" },
     { id: "dictionary", icon: Table2, label: "activity.dictionary" },
     { id: "translation", icon: Languages, label: "activity.translation" },
+    { id: "phonology", icon: AudioLines, label: "activity.phonology" },
     { id: "git", icon: GitBranch, label: "activity.git" },
   ] as const;
 </script>

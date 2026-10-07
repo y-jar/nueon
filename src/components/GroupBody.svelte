@@ -2,6 +2,7 @@
   import Editor from "./Editor.svelte";
   import Grid from "./Grid.svelte";
   import Translation from "./Translation.svelte";
+  import PhonologyView from "./PhonologyView.svelte";
   import EmptyState from "./EmptyState.svelte";
   import { reloadGroupTable, type TabGroup } from "../lib/state.svelte";
 
@@ -23,6 +24,8 @@
   {#key group.id + (group.doc.currentTable ?? "")}
     <Grid doc={group.doc} onRefresh={() => reloadGroupTable(groupId)} />
   {/key}
+{:else if group.doc.view === "phonology"}
+  <PhonologyView />
 {:else}
   <Translation />
 {/if}
