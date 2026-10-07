@@ -134,6 +134,11 @@ impl GlobalConfig {
         }
     }
 
+    /// Whether `path` is a registered workspace.
+    pub fn contains(&self, path: &Path) -> bool {
+        self.workspaces.iter().any(|entry| entry.path == path)
+    }
+
     /// Rename a workspace's display name.
     pub fn rename(&mut self, path: &Path, name: impl Into<String>) {
         if let Some(entry) = self.workspaces.iter_mut().find(|entry| entry.path == path) {
@@ -189,6 +194,14 @@ mod tests {
         let dir = tempfile::tempdir().unwrap();
         let loaded = GlobalConfig::load_from(&dir.path().join("nope.toml")).unwrap();
         assert!(loaded.workspaces.is_empty());
+    }
+
+    #[test]
+    fn contains_only_registered_paths() {
+        let mut config = GlobalConfig::default();
+        config.add("/a/one", "One");
+        assert!(config.contains(Path::new("/a/one")));
+        assert!(!config.contains(Path::new("/a/two")));
     }
 
     #[test]

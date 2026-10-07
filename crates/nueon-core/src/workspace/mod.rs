@@ -269,12 +269,13 @@ impl Workspace {
         &mut self,
     ) -> Result<table_files::MigrationReport, StorageError> {
         // A checkpoint is a no-op commit when nothing is pending, so it is
-        // always safe to take one before a risky, file-touching repair.
-        self.force_checkin("nueon: checkpoint before table filename migration");
+        // always safe to take one before a risky, file-touching repair. The
+        // repair already happened, so a failed commit is best-effort.
+        let _ = self.force_checkin("nueon: checkpoint before table filename migration");
         let report = table_files::migrate_collisions(&self.dictionary_dir())?;
         if !report.is_empty() {
             self.refresh_dictionary_from_disk()?;
-            self.force_checkin(&format!(
+            let _ = self.force_checkin(&format!(
                 "nueon: migrated {} table file(s) <CAN REVERT>",
                 report.renamed_tables.len()
             ));
@@ -767,8 +768,9 @@ impl Workspace {
         };
         self.save_table(table)?;
         // Schema edits are committed immediately, like tag deletion, so a
-        // type change is always a single revertible step in history.
-        self.force_checkin(&format!(
+        // type change is always a single revertible step in history. The
+        // change is already saved, so a failed commit is best-effort.
+        let _ = self.force_checkin(&format!(
             "nueon: change type of tag \"{tag}\" in table \"{table}\" to {:?} <CAN REVERT>",
             kind
         ));
@@ -826,7 +828,7 @@ impl Workspace {
             "nueon: DELETED TAGS: {table}.{tag} ({} words) <CAN REVERT>",
             removal.affected
         );
-        self.force_checkin(&message);
+        let _ = self.force_checkin(&message);
         Ok(Some(removal))
     }
 
@@ -1412,13 +1414,13 @@ impl Workspace {
     // -- check-ins ------------------------------------------------------
 
     /// Commit all pending changes immediately with an explicit message.
-    pub fn checkin(&mut self, message: &str) -> Option<String> {
+    pub fn checkin(&mut self, message: &str) -> Result<Option<String>, VcsError> {
         self.auto.cancel();
         self.force_checkin(message)
     }
 
     /// Commit pending changes when the application is closing.
-    pub fn close_checkin(&mut self) -> Option<String> {
+    pub fn close_checkin(&mut self) -> Result<Option<String>, VcsError> {
         self.auto.cancel();
         self.force_checkin("nueon: session check-in")
     }
@@ -1447,13 +1449,17 @@ impl Workspace {
 
     /// Commit the pending auto-check-in if the workspace has been idle long
     /// enough. Intended to be called from the UI event loop.
-    pub fn pump_auto_checkin(&mut self, now: Instant) -> Option<String> {
+    pub fn pump_auto_checkin(&mut self, now: Instant) -> Result<Option<String>, VcsError> {
         if !self.auto.due(now) {
-            return None;
+            return Ok(None);
         }
-        let message = self.auto.take()?;
-        let repo = self.vcs.repo()?;
-        repo.commit_all(&message).ok().flatten()
+        let Some(message) = self.auto.take() else {
+            return Ok(None);
+        };
+        let Some(repo) = self.vcs.repo() else {
+            return Ok(None);
+        };
+        repo.commit_all(&message)
     }
 
     fn mark_change(&mut self, now: Instant, message: impl Into<String>) {
@@ -1462,9 +1468,11 @@ impl Workspace {
         }
     }
 
-    fn force_checkin(&mut self, message: &str) -> Option<String> {
-        let repo = self.vcs.repo()?;
-        repo.commit_all(message).ok().flatten()
+    fn force_checkin(&mut self, message: &str) -> Result<Option<String>, VcsError> {
+        match self.vcs.repo() {
+            Some(repo) => repo.commit_all(message),
+            None => Ok(None),
+        }
     }
 }
 
@@ -1567,7 +1575,9 @@ mod tests {
         ws.create_table("verbs").unwrap();
         ws.create_entry("verbs", "kala").unwrap();
 
-        let committed = ws.pump_auto_checkin(Instant::now() + Duration::from_secs(1));
+        let committed = ws
+            .pump_auto_checkin(Instant::now() + Duration::from_secs(1))
+            .unwrap();
         assert!(committed.is_some());
         assert!(ws.git().unwrap().is_clean().unwrap());
 
@@ -1588,6 +1598,7 @@ mod tests {
         ws.create_table("verbs").unwrap();
         assert!(ws
             .pump_auto_checkin(Instant::now() + Duration::from_secs(1))
+            .unwrap()
             .is_none());
         assert!(!ws.git().unwrap().is_clean().unwrap());
     }
@@ -1775,16 +1786,16 @@ mod tests {
         ws.create_note("keep").unwrap();
         ws.create_note("doomed").unwrap();
         ws.create_table("verbs").unwrap();
-        ws.checkin("nueon: baseline");
+        ws.checkin("nueon: baseline").unwrap();
 
         ws.delete_note("doomed.md").unwrap();
         ws.delete_table("verbs").unwrap();
         assert!(!trash_entries(dir.path()).is_empty());
-        ws.checkin("nueon: after deletes");
+        ws.checkin("nueon: after deletes").unwrap();
         // Trash again after a commit, then commit again.
         ws.create_note("second").unwrap();
         ws.delete_note("second.md").unwrap();
-        ws.checkin("nueon: after more deletes");
+        ws.checkin("nueon: after more deletes").unwrap();
 
         let tracked = git_out(dir.path(), &["ls-files"]);
         assert!(!tracked.contains(".trash"), "tracked files: {tracked}");
@@ -2637,7 +2648,7 @@ mod tests {
         ws.create_table("verbs").unwrap();
         ws.add_tag("verbs", TagDef::new("flag", FieldType::Text))
             .unwrap();
-        ws.checkin("nueon: baseline");
+        ws.checkin("nueon: baseline").unwrap();
 
         assert!(ws
             .set_tag_kind("verbs", "flag", FieldType::Boolean)
@@ -2715,7 +2726,7 @@ mod tests {
         ws.set_auto_checkin(false, 60);
         ws.create_table("verbs").unwrap();
 
-        assert!(ws.close_checkin().is_some());
+        assert!(ws.close_checkin().unwrap().is_some());
         assert!(ws.git().unwrap().is_clean().unwrap());
     }
 

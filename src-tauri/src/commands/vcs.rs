@@ -168,7 +168,7 @@ pub fn vcs_commit(
 ) -> Result<Option<String>, String> {
     let mut state = state.lock().map_err(|_| "state poisoned".to_string())?;
     let workspace = state.workspace_mut()?;
-    let id = workspace.checkin(&message);
+    let id = workspace.checkin(&message).map_err(|err| err.to_string())?;
     drop(state);
     changed(&app, "vcs");
     Ok(id)
@@ -240,7 +240,9 @@ pub fn autocheckin_pump(
     let committed = {
         let mut state = state.lock().map_err(|_| "state poisoned".to_string())?;
         match state.workspace.as_mut() {
-            Some(workspace) => workspace.pump_auto_checkin(Instant::now()),
+            Some(workspace) => workspace
+                .pump_auto_checkin(Instant::now())
+                .map_err(|err| err.to_string())?,
             None => None,
         }
     };

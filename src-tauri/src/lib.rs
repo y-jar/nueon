@@ -22,10 +22,10 @@ fn ping() -> String {
 
 /// Background auto-check-in pump.
 ///
-/// Sleeps, briefly locks the state only for the pump call (never during I/O
-/// with the UI), and notifies the frontend when a commit lands. Because note
-/// saves and the pump both take the same mutex, they serialize cleanly against
-/// the debounced autosave.
+/// Sleeps, briefly locks the state for the pump call (which performs the git
+/// commit), and notifies the frontend when a commit lands. Because note saves
+/// and the pump both take the same mutex, they serialize cleanly against the
+/// debounced autosave.
 fn background_pump(handle: tauri::AppHandle) {
     loop {
         std::thread::sleep(Duration::from_secs(5));
@@ -36,7 +36,13 @@ fn background_pump(handle: tauri::AppHandle) {
                 Err(_) => continue,
             };
             match guard.workspace.as_mut() {
-                Some(workspace) => workspace.pump_auto_checkin(Instant::now()).is_some(),
+                Some(workspace) => match workspace.pump_auto_checkin(Instant::now()) {
+                    Ok(id) => id.is_some(),
+                    Err(err) => {
+                        eprintln!("auto check-in failed: {err}");
+                        false
+                    }
+                },
                 None => false,
             }
         };
@@ -104,7 +110,9 @@ pub fn run() {
                         Err(_) => return,
                     };
                     if let Some(workspace) = guard.workspace.as_mut() {
-                        let _ = workspace.close_checkin();
+                        if let Err(err) = workspace.close_checkin() {
+                            eprintln!("close check-in failed: {err}");
+                        }
                     }
                 }
                 tauri::WindowEvent::Resized(size) if label == "main" => {

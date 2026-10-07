@@ -26,22 +26,19 @@ fn retire_secondary_windows(app: &AppHandle, state: &mut AppState) -> Vec<String
 
 /// Registered workspaces (name + path).
 #[tauri::command]
-pub fn workspace_list(state: State<'_, Shared>) -> Vec<WorkspaceEntry> {
-    state
-        .lock()
-        .map(|state| state.global.workspaces.clone())
-        .unwrap_or_default()
+pub fn workspace_list(state: State<'_, Shared>) -> Result<Vec<WorkspaceEntry>, String> {
+    let state = state.lock().map_err(|_| "state poisoned".to_string())?;
+    Ok(state.global.workspaces.clone())
 }
 
 /// The root path of the currently open workspace, if any.
 #[tauri::command]
-pub fn workspace_current(state: State<'_, Shared>) -> Option<String> {
-    state.lock().ok().and_then(|state| {
-        state
-            .workspace
-            .as_ref()
-            .map(|workspace| workspace.root_path.display().to_string())
-    })
+pub fn workspace_current(state: State<'_, Shared>) -> Result<Option<String>, String> {
+    let state = state.lock().map_err(|_| "state poisoned".to_string())?;
+    Ok(state
+        .workspace
+        .as_ref()
+        .map(|workspace| workspace.root_path.display().to_string()))
 }
 
 /// Open (and register) an existing workspace directory.
@@ -57,10 +54,10 @@ pub fn workspace_open(
             // A vanished directory is dropped from the registry so the
             // stale entry does not linger in the workspace list.
             if matches!(err, StorageError::NotFound(_)) {
-                if let Ok(mut state) = state.lock() {
-                    state.global.remove(&PathBuf::from(&path));
-                    let _ = state.global.save();
-                }
+                let mut state = state.lock().map_err(|_| "state poisoned".to_string())?;
+                state.global.remove(&PathBuf::from(&path));
+                let _ = state.global.save();
+                drop(state);
                 changed(&app, "workspace");
                 return Err(format!("workspace folder not found: {path}"));
             }
@@ -171,6 +168,9 @@ pub fn workspace_set_path(
 }
 
 /// Delete a workspace directory from disk and unregister it.
+///
+/// Refuses any path that is not a registered workspace, and any filesystem
+/// root, so a bad argument cannot remove an arbitrary directory.
 #[tauri::command]
 pub fn workspace_delete_from_disk(
     app: AppHandle,
@@ -178,9 +178,22 @@ pub fn workspace_delete_from_disk(
     path: String,
 ) -> Result<(), String> {
     let path = PathBuf::from(path);
-    std::fs::remove_dir_all(&path).map_err(|err| err.to_string())?;
 
     let mut state = state.lock().map_err(|_| "state poisoned".to_string())?;
+    if path.parent().is_none() {
+        return Err(format!(
+            "refusing to delete filesystem root: {}",
+            path.display()
+        ));
+    }
+    if !state.global.contains(&path) {
+        return Err(format!(
+            "refusing to delete unregistered workspace: {}",
+            path.display()
+        ));
+    }
+
+    std::fs::remove_dir_all(&path).map_err(|err| err.to_string())?;
     state.global.remove(&path);
     if state
         .workspace

@@ -133,6 +133,8 @@ pub enum ImportError {
     },
     #[error(transparent)]
     Storage(#[from] StorageError),
+    #[error("git error: {0}")]
+    Vcs(String),
     #[error("the file has no data rows")]
     Empty,
     #[error("no column is mapped as the wordname")]
@@ -957,10 +959,12 @@ pub fn import_apply(
     // A git checkpoint before touching anything, when a repo is present.
     let checkpoint = workspace.git().is_some();
     if checkpoint {
-        workspace.checkin(&format!(
-            "nueon: checkpoint before importing {}",
-            plan.source.display()
-        ));
+        workspace
+            .checkin(&format!(
+                "nueon: checkpoint before importing {}",
+                plan.source.display()
+            ))
+            .map_err(|err| ImportError::Vcs(err.to_string()))?;
     }
 
     if workspace.dictionary.table(&options.target_table).is_none() {
@@ -1239,11 +1243,13 @@ pub fn import_apply(
     }
 
     if checkpoint {
-        workspace.checkin(&format!(
-            "nueon: import {} word(s) into \"{}\" <CAN REVERT>",
-            report.words_created + report.words_updated,
-            options.target_table
-        ));
+        workspace
+            .checkin(&format!(
+                "nueon: import {} word(s) into \"{}\" <CAN REVERT>",
+                report.words_created + report.words_updated,
+                options.target_table
+            ))
+            .map_err(|err| ImportError::Vcs(err.to_string()))?;
     }
     Ok(report)
 }
