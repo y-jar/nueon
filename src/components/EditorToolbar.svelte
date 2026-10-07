@@ -8,6 +8,7 @@
     ListOrdered,
     SquareCode,
     Image,
+    Table,
   } from "@lucide/svelte";
   import type { Snippet } from "svelte";
   import type { EditorView } from "@codemirror/view";
@@ -18,6 +19,7 @@
     toggleBulletList,
     toggleNumberedList,
     toggleCodeBlock,
+    insertTable,
     type FormatState,
   } from "../lib/editor/commands";
 
@@ -99,6 +101,13 @@
     onclick={() => run(toggleCodeBlock)}
   >
     <SquareCode size={15} />
+  </button>
+  <button
+    title={$t("editor.menu.table")}
+    aria-label={$t("editor.menu.table")}
+    onclick={() => run(insertTable)}
+  >
+    <Table size={15} />
   </button>
 
   <span class="toolbar-sep"></span>

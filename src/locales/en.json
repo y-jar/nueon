@@ -77,6 +77,22 @@
       "rule": "Horizontal rule",
       "link": "Link"
     },
+    "table": {
+      "rows": "Rows",
+      "rowAbove": "Insert row above",
+      "rowBelow": "Insert row below",
+      "deleteRow": "Delete row",
+      "columns": "Columns",
+      "columnLeft": "Insert column left",
+      "columnRight": "Insert column right",
+      "deleteColumn": "Delete column",
+      "align": "Align column",
+      "alignLeft": "Align left",
+      "alignCenter": "Align center",
+      "alignRight": "Align right",
+      "alignNone": "No alignment",
+      "format": "Format table"
+    },
     "selectNote": "Select a note, or create one from the sidebar."
   },
   "activity": {

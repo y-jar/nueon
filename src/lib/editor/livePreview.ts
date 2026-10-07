@@ -1,4 +1,4 @@
-import type { Range } from "@codemirror/state";
+import { StateField, type EditorState, type Range } from "@codemirror/state";
 import {
   Decoration,
   type DecorationSet,
@@ -10,6 +10,7 @@ import {
 import { convertFileSrc } from "@tauri-apps/api/core";
 import katex from "katex";
 import { normalizePath } from "../assets";
+import { parseTable, rawCellOffset } from "./table";
 import "katex/dist/katex.min.css";
 
 // Absolute `notes/` directory and the open note's folder inside it, used to
@@ -118,17 +119,50 @@ function isDelimiter(text: string): boolean {
 }
 
 class TableWidget extends WidgetType {
-  constructor(readonly block: string) {
+  constructor(
+    readonly block: string,
+    readonly pos: number,
+  ) {
     super();
   }
 
   eq(other: TableWidget): boolean {
-    return other.block === this.block;
+    return other.block === this.block && other.pos === this.pos;
   }
 
-  toDOM(): HTMLElement {
+  toDOM(view: EditorView): HTMLElement {
     const table = document.createElement("table");
     table.className = "cm-table";
+    const model = parseTable(this.block);
+    if (model) {
+      const rows = [
+        { header: true, cells: model.header },
+        ...model.rows.map((cells) => ({ header: false, cells })),
+      ];
+      rows.forEach((row, index) => {
+        const tr = document.createElement("tr");
+        row.cells.forEach((text, col) => {
+          const el = document.createElement(row.header ? "th" : "td");
+          el.textContent = text;
+          // Clicking a cell drops the cursor into its raw Markdown text.
+          el.addEventListener("mousedown", (event) => {
+            event.preventDefault();
+            event.stopPropagation();
+            const offset = rawCellOffset(this.block, index - 1, col);
+            if (offset === null) return;
+            view.dispatch({
+              selection: { anchor: this.pos + offset },
+              scrollIntoView: true,
+            });
+            view.focus();
+          });
+          tr.appendChild(el);
+        });
+        table.appendChild(tr);
+      });
+      return table;
+    }
+    // Not a valid table (ragged/mismatched): render as before, no bridge.
     let headerDone = false;
     for (const rowText of this.block.split("\n")) {
       if (rowText.trim() === "" || isDelimiter(rowText)) continue;
@@ -393,13 +427,8 @@ function build(view: EditorView): DecorationSet {
           }
         }
         if (!blockActive) {
-          const blockFrom = line.from;
-          const blockTo = state.doc.line(last).to;
-          ranges.push(
-            Decoration.replace({
-              widget: new TableWidget(state.doc.sliceString(blockFrom, blockTo)),
-            }).range(blockFrom, blockTo),
-          );
+          // The block widget itself comes from `tableBlocks` (a state field,
+          // which may replace line breaks); here we only skip inline marks.
           if (state.doc.line(last).to >= visible.to) break;
           pos = state.doc.line(last).to + 1;
           continue;
@@ -482,6 +511,63 @@ function build(view: EditorView): DecorationSet {
   }
 
   return Decoration.set(ranges, true);
+}
+
+/**
+ * GFM tables as block widgets. A `ViewPlugin` may not replace line breaks, so
+ * tables must be provided from a state field; the field sees the selection and
+ * leaves a table raw while the cursor is inside it.
+ */
+function tableDecorations(state: EditorState): DecorationSet {
+  const active = activeLines(state);
+  const ranges: Range<Decoration>[] = [];
+  for (let number = 1; number < state.doc.lines; number += 1) {
+    const line = state.doc.line(number);
+    const next = state.doc.line(number + 1);
+    if (!line.text.includes("|") || !isDelimiter(next.text)) continue;
+    let last = number + 1;
+    while (
+      last < state.doc.lines &&
+      state.doc.line(last + 1).text.includes("|") &&
+      state.doc.line(last + 1).text.trim() !== ""
+    ) {
+      last += 1;
+    }
+    let blockActive = false;
+    for (let n = number; n <= last; n += 1) {
+      if (active.has(n)) {
+        blockActive = true;
+        break;
+      }
+    }
+    if (!blockActive) {
+      const from = line.from;
+      const to = state.doc.line(last).to;
+      ranges.push(
+        Decoration.replace({
+          widget: new TableWidget(state.doc.sliceString(from, to), from),
+          block: true,
+        }).range(from, to),
+      );
+    }
+    number = last;
+  }
+  return Decoration.set(ranges, true);
+}
+
+const tableField = StateField.define<DecorationSet>({
+  create: (state) => tableDecorations(state),
+  update: (decorations, tr) =>
+    tr.docChanged ||
+    (tr.selection != null && !tr.selection.eq(tr.startState.selection))
+      ? tableDecorations(tr.state)
+      : decorations,
+  provide: (field) => EditorView.decorations.from(field),
+});
+
+/** Tables rendered as block widgets (see `tableDecorations`). */
+export function tableBlocks() {
+  return tableField;
 }
 
 /**

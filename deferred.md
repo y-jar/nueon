@@ -16,6 +16,8 @@ were completed during the Tauri migration (R0–R8).
 - ~~Cache the dictionary word index (currently rebuilt on each rendered frame).~~ (R7)
 - ~~Inline/display **math via KaTeX** rendering.~~ (D7)
 - ~~HTML block rendering.~~ (D7)
+- Tables inside blockquotes and list items aren't editable with the table
+  commands (raw editing only); handle the line prefix later if needed.
 
 ## Dictionary grid
 

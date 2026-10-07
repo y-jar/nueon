@@ -7,6 +7,8 @@ import {
 import type { Command, EditorView, KeyBinding } from "@codemirror/view";
 import type { SyntaxNode } from "@lezer/common";
 
+import { generateTable, serializeTable } from "./table";
+
 /** Which inline/block formats apply at the cursor (drives toolbar highlights). */
 export interface FormatState {
   bold: boolean;
@@ -291,8 +293,9 @@ export const toggleCodeBlock: Command = (view) => {
 };
 
 export const insertTable: Command = (view) => {
-  const block = "| Column 1 | Column 2 | Column 3 |\n| --- | --- | --- |\n|  |  |  |";
-  insertBlock(view, block, { from: 2, to: 10 });
+  const block = serializeTable(generateTable(3, 1));
+  // Cursor lands in the first header cell.
+  insertBlock(view, block, { from: 2, to: 2 });
   return true;
 };
 

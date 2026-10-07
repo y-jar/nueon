@@ -42,6 +42,16 @@ function hasUnescapedPipe(line: string): boolean {
   return false;
 }
 
+/** One cell on a table line, with its text and its offsets within the line. */
+export interface CellRange {
+  /** Offset of the cell's first character (for an empty cell, the pipe). */
+  from: number;
+  /** Offset just past the cell's last character. */
+  to: number;
+  /** The cell's raw text (empty string for an empty cell). */
+  text: string;
+}
+
 /**
  * Split a table line into cells exactly as lezer's GFM parser counts them:
  * boundaries are unescaped `|`, surrounding spaces/tabs are dropped, and
@@ -49,9 +59,10 @@ function hasUnescapedPipe(line: string): boolean {
  *
  * Unlike lezer (which emits no node for an empty cell), we keep empty cells so
  * column positions survive; an all-empty header line still yields its columns.
+ * Empty cells get a zero-width range at their bounding pipe.
  */
-function splitCells(line: string): string[] {
-  const cells: string[] = [];
+export function cellRanges(line: string): CellRange[] {
+  const cells: CellRange[] = [];
   let first = true;
   let cellStart = -1;
   let cellEnd = -1;
@@ -60,7 +71,11 @@ function splitCells(line: string): string[] {
     const code = line.charCodeAt(i);
     if (code === PIPE && !escaped) {
       if (!first || cellStart > -1) {
-        cells.push(cellStart > -1 ? line.slice(cellStart, cellEnd) : "");
+        cells.push(
+          cellStart > -1
+            ? { from: cellStart, to: cellEnd, text: line.slice(cellStart, cellEnd) }
+            : { from: i, to: i, text: "" },
+        );
       }
       first = false;
       cellStart = cellEnd = -1;
@@ -70,8 +85,47 @@ function splitCells(line: string): string[] {
     }
     escaped = !escaped && code === BACKSLASH;
   }
-  if (cellStart > -1) cells.push(line.slice(cellStart, cellEnd));
+  if (cellStart > -1) {
+    cells.push({ from: cellStart, to: cellEnd, text: line.slice(cellStart, cellEnd) });
+  }
   return cells;
+}
+
+function splitCells(line: string): string[] {
+  return cellRanges(line).map((cell) => cell.text);
+}
+
+/**
+ * The index of the cell containing `offset` on a table line. Offsets in the
+ * gaps (pipes, surrounding spaces) belong to the following cell.
+ */
+export function cellIndexAt(line: string, offset: number): number {
+  const cells = cellRanges(line);
+  if (cells.length === 0) return 0;
+  for (let i = 0; i < cells.length; i++) {
+    if (offset <= cells[i].to) return i;
+  }
+  return cells.length - 1;
+}
+
+/**
+ * The document offset (relative to the table block) of cell `col` in the
+ * rendered row `row` (`-1` is the header, `0…` the body rows). The delimiter
+ * row is not rendered, so body row `r` is block line `r + 2`.
+ */
+export function rawCellOffset(
+  block: string,
+  row: number,
+  col: number,
+): number | null {
+  const lines = block.split("\n");
+  const index = row < 0 ? 0 : row + 2;
+  if (index < 0 || index >= lines.length) return null;
+  const cell = cellRanges(lines[index])[col];
+  if (!cell) return null;
+  let offset = cell.from;
+  for (let i = 0; i < index; i++) offset += lines[i].length + 1;
+  return offset;
 }
 
 function alignmentOf(cell: string): Align {

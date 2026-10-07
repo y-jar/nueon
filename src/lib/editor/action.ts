@@ -28,8 +28,9 @@ import {
   type FormatState,
 } from "./commands";
 import { diffSplice } from "./diff";
-import { livePreview, setAssetBase } from "./livePreview";
+import { livePreview, setAssetBase, tableBlocks } from "./livePreview";
 import { initialPosition, restoreScroll, savePosition } from "./positions";
+import { tableKeymap } from "./tableEditing";
 import { highlight, theme } from "./theme";
 
 export interface EditorParams {
@@ -154,6 +155,7 @@ export const codemirror: Action<HTMLElement, EditorParams> = (node, params) => {
         theme,
         wordIndexField,
         livePreview(),
+        tableBlocks(),
         dictionaryHighlight(),
         dictionaryHover(),
         search({ top: true }),
@@ -161,6 +163,9 @@ export const codemirror: Action<HTMLElement, EditorParams> = (node, params) => {
         // Ahead of the default keymap, which binds Mod-i to "select parent".
         Prec.high(keymap.of(markdownKeymap)),
         keymap.of([
+          // Table keys first: Enter must beat `defaultKeymap`, and Tab must
+          // beat `indentWithTab`. Outside a table they return false.
+          ...tableKeymap,
           ...defaultKeymap,
           ...historyKeymap,
           ...searchKeymap,

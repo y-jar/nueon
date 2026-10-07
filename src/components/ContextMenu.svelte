@@ -25,6 +25,17 @@
     toggleTaskList,
     toggleCodeBlock,
   } from "../lib/editor/commands";
+  import {
+    deleteTableColumn,
+    deleteTableRow,
+    formatTable,
+    getTableAtCursor,
+    insertColumnLeft,
+    insertColumnRight,
+    insertRowAbove,
+    insertRowBelow,
+    setColumnAlignment,
+  } from "../lib/editor/tableEditing";
 
   /** Close the menu, then apply an editing command to the editor it opened on. */
   function editorAction(command: (view: EditorView) => boolean) {
@@ -50,6 +61,13 @@
   }
 
   const menu = $derived(ui.contextMenu);
+
+  // The table under the cursor when an editor menu opens, or null.
+  const table = $derived.by(() => {
+    if (!menu || menu.kind !== "editor") return null;
+    const view = getContextEditor();
+    return view ? getTableAtCursor(view.state) : null;
+  });
 
   const TYPES: { id: api.FieldType; label: string }[] = [
     { id: "text", label: "Text" },
@@ -189,24 +207,81 @@
         >
       {/if}
     {:else if menu.kind === "editor"}
-      <button onclick={() => editorAction(insertTable)}
-        >{$t("editor.menu.table")}</button
-      >
-      <button onclick={() => editorAction(toggleBlockquote)}
-        >{$t("editor.menu.blockquote")}</button
-      >
-      <button onclick={() => editorAction(toggleTaskList)}
-        >{$t("editor.menu.taskList")}</button
-      >
-      <button onclick={() => editorAction(toggleCodeBlock)}
-        >{$t("editor.codeBlock")}</button
-      >
-      <button onclick={() => editorAction(insertHorizontalRule)}
-        >{$t("editor.menu.rule")}</button
-      >
-      <button onclick={() => editorAction(insertLink)}
-        >{$t("editor.menu.link")}</button
-      >
+      {#if table}
+        <div class="ctx-submenu">
+          <span class="muted">{$t("editor.table.rows")}</span>
+          <button onclick={() => editorAction(insertRowAbove)}
+            >{$t("editor.table.rowAbove")}</button
+          >
+          <button onclick={() => editorAction(insertRowBelow)}
+            >{$t("editor.table.rowBelow")}</button
+          >
+          <button
+            disabled={table.row < 0}
+            onclick={() => editorAction(deleteTableRow)}
+            >{$t("editor.table.deleteRow")}</button
+          >
+        </div>
+        <div class="ctx-submenu">
+          <span class="muted">{$t("editor.table.columns")}</span>
+          <button onclick={() => editorAction(insertColumnLeft)}
+            >{$t("editor.table.columnLeft")}</button
+          >
+          <button onclick={() => editorAction(insertColumnRight)}
+            >{$t("editor.table.columnRight")}</button
+          >
+          <button
+            disabled={table.model.header.length <= 1}
+            onclick={() => editorAction(deleteTableColumn)}
+            >{$t("editor.table.deleteColumn")}</button
+          >
+        </div>
+        <div class="ctx-submenu">
+          <span class="muted">{$t("editor.table.align")}</span>
+          <button
+            class:active={table.align === "left"}
+            onclick={() => editorAction(setColumnAlignment("left"))}
+            >{$t("editor.table.alignLeft")}</button
+          >
+          <button
+            class:active={table.align === "center"}
+            onclick={() => editorAction(setColumnAlignment("center"))}
+            >{$t("editor.table.alignCenter")}</button
+          >
+          <button
+            class:active={table.align === "right"}
+            onclick={() => editorAction(setColumnAlignment("right"))}
+            >{$t("editor.table.alignRight")}</button
+          >
+          <button
+            class:active={table.align === "none"}
+            onclick={() => editorAction(setColumnAlignment("none"))}
+            >{$t("editor.table.alignNone")}</button
+          >
+        </div>
+        <button onclick={() => editorAction(formatTable)}
+          >{$t("editor.table.format")}</button
+        >
+      {:else}
+        <button onclick={() => editorAction(insertTable)}
+          >{$t("editor.menu.table")}</button
+        >
+        <button onclick={() => editorAction(toggleBlockquote)}
+          >{$t("editor.menu.blockquote")}</button
+        >
+        <button onclick={() => editorAction(toggleTaskList)}
+          >{$t("editor.menu.taskList")}</button
+        >
+        <button onclick={() => editorAction(toggleCodeBlock)}
+          >{$t("editor.codeBlock")}</button
+        >
+        <button onclick={() => editorAction(insertHorizontalRule)}
+          >{$t("editor.menu.rule")}</button
+        >
+        <button onclick={() => editorAction(insertLink)}
+          >{$t("editor.menu.link")}</button
+        >
+      {/if}
     {:else if menu.kind === "tab" && menu.tab}
       <!-- Read the target before closing: closing nulls `menu`. -->
       <button

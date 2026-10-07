@@ -5,6 +5,8 @@ import { GFM, parser } from "@lezer/markdown";
 import {
   addColumn,
   addRow,
+  cellIndexAt,
+  cellRanges,
   clusterWidth,
   deleteColumn,
   deleteRow,
@@ -14,6 +16,7 @@ import {
   moveColumn,
   moveRow,
   parseTable,
+  rawCellOffset,
   serializeTable,
   setAlignment,
   type TableModel,
@@ -184,6 +187,34 @@ test("serialize round-trips through parse, and is idempotent", () => {
 test("serialize emits a blank minimum-width table for an empty model", () => {
   const model: TableModel = { alignments: ["none"], header: [""], rows: [] };
   assert.equal(serializeTable(model), "|     |\n| --- |\n");
+});
+
+// -- cell offsets ------------------------------------------------------------
+
+test("cellRanges keeps empty cells and their positions", () => {
+  assert.deepEqual(cellRanges("| a | | c |"), [
+    { from: 2, to: 3, text: "a" },
+    { from: 6, to: 6, text: "" },
+    { from: 8, to: 9, text: "c" },
+  ]);
+});
+
+test("cellIndexAt maps a cursor in an empty cell", () => {
+  assert.equal(cellIndexAt("| a | | c |", 2), 0);
+  assert.equal(cellIndexAt("| a | | c |", 5), 1);
+  assert.equal(cellIndexAt("| a | | c |", 6), 1);
+  assert.equal(cellIndexAt("| a | | c |", 8), 2);
+});
+
+test("rawCellOffset splits like parseTable, not naively on every pipe", () => {
+  const block = "| a \\| b | c |\n| --- | --- |\n| d | e |";
+  const secondLineStart = block.indexOf("\n") + 1;
+  const thirdLineStart = block.indexOf("\n", secondLineStart) + 1;
+  // Naive splitting would see "a \\", "b", "c" and put column 1 at "b".
+  assert.equal(block.indexOf("c"), 11);
+  assert.equal(rawCellOffset(block, -1, 1), 11);
+  assert.equal(rawCellOffset(block, 0, 0), thirdLineStart + 2);
+  assert.equal(rawCellOffset(block, 0, 1), thirdLineStart + 6);
 });
 
 // -- transforms --------------------------------------------------------------

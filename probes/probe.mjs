@@ -24,6 +24,8 @@ const OUT = path.resolve(import.meta.dirname, "out");
 const PORT = 4444;
 const DISPLAY = `:${99 + (process.pid % 40)}`;
 const WORKSPACE = path.join(ROOT, "ws", "probe");
+// A non-table line, then a table, then another line — for probe 7.
+const TABLES = "before line\n\n| h1 | h2 |\n| --- | --- |\n| c1 | c2 |\n\nafter line\n";
 
 const DRIVER_CANDIDATES = [
   "/tmp/opencode/tauri-driver-root/bin/tauri-driver",
@@ -322,6 +324,7 @@ function seedWorkspace() {
   );
   fs.writeFileSync(path.join(WORKSPACE, "notes", "alpha.md"), `${lines.join("\n")}\n`);
   fs.writeFileSync(path.join(WORKSPACE, "notes", "beta.md"), "beta note\n");
+  fs.writeFileSync(path.join(WORKSPACE, "notes", "tables.md"), TABLES);
   const configDir = path.join(ROOT, "home", ".config", "nueon");
   fs.mkdirSync(configDir, { recursive: true });
   fs.writeFileSync(
@@ -582,6 +585,86 @@ async function main() {
   await screenshot("p6-undo-after-reload");
   await probe("6-undo-cannot-revert-external-reload", async () => {
     assertEqual(afterUndo6, reloaded, "buffer after undo");
+  });
+
+  // -- probe 7: table navigation, row append, undo, Tab outside ------------
+  // Offsets in TABLES: header "h1"=15, "h2"=20, body "c1"=41, "c2"=46.
+  await openNote("tables.md");
+  await waitEditorText("tables.md", TABLES);
+
+  await focusEditor("tables.md");
+  await placeCursor("tables.md", 15);
+  await pressKey(TAB);
+  const afterTab = await readEditorState("tables.md");
+  await probe("7a-tab-moves-to-the-next-cell", async () => {
+    assertEqual(afterTab?.anchor, 20, "cursor after Tab");
+  });
+
+  await focusEditor("tables.md");
+  await placeCursor("tables.md", 46); // last cell "c2"
+  await pressKey(TAB);
+  const grown = await editorText("tables.md");
+  const grownState = await readEditorState("tables.md");
+  await screenshot("p7-tab-append");
+  await probe("7b-tab-appends-a-row-and-lands-in-it", async () => {
+    const seeded = TABLES.split("\n").filter(Boolean).length;
+    if (grown.split("\n").filter(Boolean).length !== seeded + 1) {
+      throw new Error(`expected a new row: ${JSON.stringify(grown)}`);
+    }
+    const start = grown.indexOf("| h1");
+    const end = grown.indexOf("after line");
+    if (!(grownState.anchor >= start && grownState.anchor <= end)) {
+      throw new Error(`cursor not in the table: ${grownState.anchor}`);
+    }
+  });
+
+  await focusEditor("tables.md");
+  await pressKey("z", [CTRL]);
+  await waitEditorText("tables.md", TABLES);
+  const undone7 = await readEditorState("tables.md");
+  await screenshot("p7-undo");
+  await probe("7c-undo-restores-the-table-and-the-cursor", async () => {
+    assertEqual(await editorText("tables.md"), TABLES, "doc after undo");
+    if (!(undone7.anchor >= TABLES.indexOf("| h1") && undone7.anchor <= TABLES.indexOf("after line"))) {
+      throw new Error(`cursor not in the table: ${undone7.anchor}`);
+    }
+  });
+
+  // -- click bridge: clicking a cell puts the cursor in its raw text --------
+  await focusEditor("tables.md");
+  await placeCursor("tables.md", 5); // cursor off the table → widget renders
+  await waitJs(
+    `!!document.querySelector('.cm-host[data-note="tables.md"] .cm-table')`,
+    { label: "table widget rendered" },
+  );
+  await js(`const cell = document.querySelector(
+      '.cm-host[data-note="tables.md"] .cm-table th:nth-child(2)');
+    if (!cell) return false;
+    cell.dispatchEvent(new MouseEvent("mousedown", { bubbles: true, cancelable: true }));
+    return true;`);
+  await new Promise((resolve) => setTimeout(resolve, 250));
+  const clickedCell = await readEditorState("tables.md");
+  await screenshot("p7-click-bridge");
+  await probe("7d-clicking-a-cell-places-the-cursor", async () => {
+    assertEqual(clickedCell?.anchor, 20, "cursor after clicking the second header cell");
+  });
+
+  // -- Tab outside a table still indents -----------------------------------
+  await focusEditor("tables.md");
+  await placeCursor("tables.md", 5); // inside "before line", outside the table
+  await pressKey(TAB);
+  const indentDeadline = Date.now() + 2000;
+  while (
+    Date.now() < indentDeadline &&
+    !(await editorText("tables.md")).startsWith("  before line")
+  ) {
+    await new Promise((resolve) => setTimeout(resolve, 100));
+  }
+  await probe("7e-tab-outside-a-table-still-indents", async () => {
+    const text = await editorText("tables.md");
+    if (!text.startsWith("  before line")) {
+      throw new Error(`not indented: ${JSON.stringify(text.slice(0, 24))}`);
+    }
   });
 }
 
