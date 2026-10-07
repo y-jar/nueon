@@ -47,6 +47,8 @@ const MULTI = "hello world\n";
 const FMT = "plain line\n";
 // A note with a task list, for the README audit probe 15.
 const TASK = "above\n- [ ] todo\n";
+// A note with a rendered table and a line after it (probe 17).
+const GUTTER = "above\n\n| h1 | h2 |\n| --- | --- |\n| c1 | c2 |\nbelow\n";
 
 const DRIVER_CANDIDATES = [
   "/tmp/opencode/tauri-driver-root/bin/tauri-driver",
@@ -393,6 +395,7 @@ function seedWorkspace() {
   fs.writeFileSync(path.join(WORKSPACE, "notes", "multi.md"), MULTI);
   fs.writeFileSync(path.join(WORKSPACE, "notes", "fmt.md"), FMT);
   fs.writeFileSync(path.join(WORKSPACE, "notes", "task.md"), TASK);
+  fs.writeFileSync(path.join(WORKSPACE, "notes", "gutter.md"), GUTTER);
   const configDir = path.join(ROOT, "home", ".config", "nueon");
   fs.mkdirSync(configDir, { recursive: true });
   fs.writeFileSync(
@@ -553,6 +556,42 @@ async function main() {
     if (brand.imgs < 1) throw new Error("brand has no <img>");
     if (!(brand.natural > 0)) {
       throw new Error(`logo image not loaded (naturalWidth=${brand.natural})`);
+    }
+  });
+
+  // -- probe 17: a rendered block still shows its line number --------------
+  await probe("17-rendered-block-line-numbers", async () => {
+    await openNote("gutter.md");
+    await waitEditorText("gutter.md", GUTTER);
+    await focusEditor("gutter.md");
+    await placeCursor("gutter.md", 1); // on line 1, so the table renders
+    await waitJs(
+      `!!document.querySelector('.cm-host[data-note="gutter.md"] .cm-table')`,
+      { label: "table widget rendered" },
+    );
+
+    const gutter = await js(
+      `return [...document.querySelectorAll('.cm-host[data-note="gutter.md"] .cm-lineNumbers .cm-gutterElement')]
+         .map((el) => el.textContent)
+         .filter((text) => text);`,
+    );
+    console.log("GUTTER", JSON.stringify(gutter));
+
+    // Clicking the line after the table must land on it, not inside the table.
+    const point = await js(`${viewScript("gutter.md")}
+      const c = v.coordsAtPos(45);
+      return c ? { x: c.left + 2, y: (c.top + c.bottom) / 2 } : null;`);
+    if (!point) throw new Error("could not locate the line after the table");
+    await pointerClick(point.x, point.y);
+    await new Promise((resolve) => setTimeout(resolve, 200));
+    const anchor = (await readEditorState("gutter.md")).anchor;
+    console.log("CLICK-ANCHOR", anchor);
+
+    if (!gutter.includes("3")) {
+      throw new Error(`gutter is missing the table's line number: ${JSON.stringify(gutter)}`);
+    }
+    if (anchor < 45 || anchor > 50) {
+      throw new Error(`cursor landed at ${anchor}, expected on line 6 (45..50)`);
     }
   });
 

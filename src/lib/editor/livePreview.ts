@@ -1,11 +1,14 @@
 import { type Range } from "@codemirror/state";
 import {
   Decoration,
+  type BlockInfo,
   type DecorationSet,
   EditorView,
+  GutterMarker,
   ViewPlugin,
   type ViewUpdate,
   WidgetType,
+  lineNumberWidgetMarker,
 } from "@codemirror/view";
 import { convertFileSrc } from "@tauri-apps/api/core";
 import katex from "katex";
@@ -125,6 +128,11 @@ class TableWidget extends WidgetType {
   toDOM(view: EditorView): HTMLElement {
     const table = document.createElement("table");
     table.className = "cm-table";
+    // Wrapped so the vertical spacing is padding, which CodeMirror measures;
+    // padding on a <table> itself is ignored by the engine.
+    const wrap = document.createElement("div");
+    wrap.className = "cm-table-wrap";
+    wrap.appendChild(table);
     const model = parseTable(this.block);
     if (model) {
       const rows = [
@@ -152,7 +160,7 @@ class TableWidget extends WidgetType {
         });
         table.appendChild(tr);
       });
-      return table;
+      return wrap;
     }
     // Not a valid table (ragged/mismatched): render as before, no bridge.
     let headerDone = false;
@@ -168,7 +176,7 @@ class TableWidget extends WidgetType {
       headerDone = true;
       table.appendChild(tr);
     }
-    return table;
+    return wrap;
   }
 }
 
@@ -514,6 +522,41 @@ const blockField = makeBlockField((kind, text, from) => {
 /** Block widgets for tables, multi-line math and multi-line HTML. */
 export function blockBlocks() {
   return blockField;
+}
+
+/**
+ * A block widget replaces whole lines, so CodeMirror's gutter has no text line
+ * to number for them and the numbers after the block look offset. Show the
+ * block's starting line number in the blank slot instead.
+ */
+class BlockLineMarker extends GutterMarker {
+  constructor(readonly number: number) {
+    super();
+  }
+
+  eq(other: BlockLineMarker): boolean {
+    return other.number === this.number;
+  }
+
+  toDOM(): Text {
+    return document.createTextNode(String(this.number));
+  }
+}
+
+/** Line numbers for the rendered block widgets (tables, math, HTML). */
+export function blockLineNumbers() {
+  return lineNumberWidgetMarker.of(
+    (view: EditorView, widget: WidgetType, block: BlockInfo) => {
+      if (
+        widget instanceof TableWidget ||
+        widget instanceof MathWidget ||
+        widget instanceof HtmlWidget
+      ) {
+        return new BlockLineMarker(view.state.doc.lineAt(block.from).number);
+      }
+      return null;
+    },
+  );
 }
 
 /**

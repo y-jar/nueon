@@ -1425,9 +1425,16 @@ label.field.inline {
   font-style: italic;
 }
 
+/* Vertical spacing lives on the wrapper as padding: CodeMirror measures a
+   block widget with getBoundingClientRect().height, which excludes margins but
+   includes padding, so a margin made the layout taller than the model and
+   shifted the cursor/line-number mapping. */
+.cm-table-wrap {
+  padding: 6px 0;
+}
+
 table.cm-table {
   border-collapse: collapse;
-  margin: 6px 0;
   font-size: 13px;
 }
 
@@ -1685,7 +1692,8 @@ table.dict-grid td textarea:focus {
 .cm-math-display {
   display: block;
   text-align: center;
-  margin: 6px 0;
+  /* Padding, not margin — see `table.cm-table` (block-widget measurement). */
+  padding: 6px 0;
 }
 
 .cm-math {
@@ -1693,7 +1701,7 @@ table.dict-grid td textarea:focus {
 }
 
 .cm-html-block {
-  margin: 6px 0;
+  padding: 6px 0;
 }
 
 /* -- interlinear gloss --------------------------------------------------- */

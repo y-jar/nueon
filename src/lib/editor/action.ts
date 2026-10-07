@@ -31,7 +31,12 @@ import {
 } from "./commands";
 import { bracketAutoClose } from "./brackets";
 import { diffSplice } from "./diff";
-import { blockBlocks, livePreview, setAssetBase } from "./livePreview";
+import {
+  blockBlocks,
+  blockLineNumbers,
+  livePreview,
+  setAssetBase,
+} from "./livePreview";
 import { multiSelect } from "./multiselect";
 import { initialPosition, restoreScroll, savePosition } from "./positions";
 import { tableKeymap } from "./tableEditing";
@@ -164,6 +169,7 @@ export const codemirror: Action<HTMLElement, EditorParams> = (node, params) => {
         wordIndexField,
         livePreview(),
         blockBlocks(),
+        blockLineNumbers(),
         dictionaryHighlight(),
         dictionaryHover(),
         search({ top: true }),
