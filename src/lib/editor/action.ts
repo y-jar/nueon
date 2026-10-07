@@ -32,6 +32,7 @@ import {
 import { bracketAutoClose } from "./brackets";
 import { diffSplice } from "./diff";
 import { blockBlocks, livePreview, setAssetBase } from "./livePreview";
+import { multiSelect } from "./multiselect";
 import { initialPosition, restoreScroll, savePosition } from "./positions";
 import { tableKeymap } from "./tableEditing";
 import { highlight, theme } from "./theme";
@@ -152,6 +153,7 @@ export const codemirror: Action<HTMLElement, EditorParams> = (node, params) => {
         drawSelection(),
         highlightActiveLine(),
         rectangularSelection(),
+        multiSelect(),
         crosshairCursor(),
         EditorView.lineWrapping,
         markdown({ extensions: [GFM] }),

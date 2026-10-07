@@ -41,6 +41,8 @@ const RACE_MARKER = "TYPED_IN_A ";
 const INLINE = "above\nplain **bold** and $x+y$ here\n";
 // A note to type brackets into (probe 12).
 const TYPE = "start\n";
+// A note for Ctrl+click multi-cursor (probe 13).
+const MULTI = "hello world\n";
 
 const DRIVER_CANDIDATES = [
   "/tmp/opencode/tauri-driver-root/bin/tauri-driver",
@@ -186,6 +188,39 @@ async function focusEditor(notePath) {
   const id = await find(`.cm-host[data-note="${notePath}"] .cm-content`);
   if (!id) throw new Error(`no editor content for ${notePath}`);
   await wd("POST", `/session/${sessionId}/element/${id}/click`);
+}
+
+/**
+ * A real pointer click at viewport coordinates, optionally with modifiers held
+ * for the whole press (e.g. `pointerClick(x, y, [CTRL])`).
+ */
+async function pointerClick(x, y, hold = []) {
+  const sources = [
+    {
+      type: "pointer",
+      id: "mouse",
+      parameters: { pointerType: "mouse" },
+      actions: [
+        { type: "pointerMove", duration: 0, origin: "viewport", x, y },
+        { type: "pointerDown", button: 0 },
+        { type: "pointerUp", button: 0 },
+        ...hold.map(() => ({ type: "pause", duration: 0 })),
+      ],
+    },
+  ];
+  if (hold.length) {
+    sources.unshift({
+      type: "key",
+      id: "keys",
+      actions: [
+        ...hold.map((value) => ({ type: "keyDown", value })),
+        { type: "pause", duration: 0 },
+        { type: "pause", duration: 0 },
+        ...[...hold].reverse().map((value) => ({ type: "keyUp", value })),
+      ],
+    });
+  }
+  await wd("POST", `/session/${sessionId}/actions`, { actions: sources });
 }
 
 async function screenshot(name) {
@@ -350,6 +385,7 @@ function seedWorkspace() {
   fs.writeFileSync(path.join(WORKSPACE, "notes", "raceB.md"), RACE_B);
   fs.writeFileSync(path.join(WORKSPACE, "notes", "inline.md"), INLINE);
   fs.writeFileSync(path.join(WORKSPACE, "notes", "type.md"), TYPE);
+  fs.writeFileSync(path.join(WORKSPACE, "notes", "multi.md"), MULTI);
   const configDir = path.join(ROOT, "home", ".config", "nueon");
   fs.mkdirSync(configDir, { recursive: true });
   fs.writeFileSync(
@@ -775,6 +811,27 @@ async function main() {
     await placeCursor("type.md", 9);
     await pressKey("{");
     assertEqual(await editorText("type.md"), "start()[]{}\n", "after {");
+  });
+
+  // -- probe 13: Ctrl+click adds a second cursor ---------------------------
+  await probe("13-ctrl-click-adds-a-cursor", async () => {
+    await openNote("multi.md");
+    await waitEditorText("multi.md", MULTI);
+    await focusEditor("multi.md");
+    await placeCursor("multi.md", 0);
+    const point = await js(`${viewScript("multi.md")}
+      const c = v.coordsAtPos(6);
+      return c ? { x: c.left + 1, y: (c.top + c.bottom) / 2 } : null;`);
+    if (!point) throw new Error("could not locate position 6");
+    await pointerClick(point.x, point.y, [CTRL]);
+    await new Promise((resolve) => setTimeout(resolve, 250));
+    const ranges = await js(
+      `${viewScript("multi.md")} return v.state.selection.ranges.length;`,
+    );
+    if (ranges !== 2) throw new Error(`expected 2 cursors, got ${ranges}`);
+    // Typing with two cursors inserts at both.
+    await pressKey("X");
+    assertEqual(await editorText("multi.md"), "Xhello Xworld\n", "typed at both cursors");
   });
 
   // -- probe 9: ArrowDown from above reveals each block's raw text ---------
