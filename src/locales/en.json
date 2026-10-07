@@ -22,12 +22,9 @@
     "notes": "Notes",
     "tables": "Tables",
     "workspace": "Workspace",
-    "openWorkspace": "Open workspace",
     "switchOrNew": "Switch / New Workspace",
     "newNoteTooltip": "New note",
     "newFolderTooltip": "New folder",
-    "noteButton": "\uff0bnote",
-    "folderButton": "\uff0bdir",
     "notePathPlaceholder": "path/to/note",
     "folderPathPlaceholder": "path/to/folder",
     "noNotes": "No notes yet."
@@ -108,10 +105,6 @@
     "toggleSidebar": "Toggle sidebar"
   },
   "tabs": {
-    "notes": "Notes",
-    "dictionary": "Dictionary",
-    "translation": "Translation",
-    "settings": "Settings",
     "close": "Close tab",
     "newNote": "New note",
     "emptyTitle": "Nothing open",
@@ -155,7 +148,6 @@
     "filter": "Filter tables\u2026",
     "rename": "Rename",
     "delete": "Delete",
-    "deleteConfirm": "Delete \"{name}\" and all of its words?",
     "noMatches": "No matching tables."
   },
   "settings": {
@@ -177,7 +169,6 @@
     "saved": "Saved"
   },
   "grid": {
-    "newTable": "new table",
     "search": "search\u2026",
     "newWord": "new word",
     "addWord": "\uff0b word",
@@ -195,8 +186,6 @@
     "redo": "Redo",
     "dontShowAgain": "Don't show this warning again",
     "cancel": "Cancel",
-    "noWords": "No words yet \u2014 add the first one.",
-    "firstWordPlaceholder": "first word",
     "results": "{count} results",
     "sort": "Sort",
     "sortColumn": "Sort by",
@@ -235,7 +224,6 @@
     "cannotAddParent": "Cannot add parent: it would create a cycle",
     "addField": "add field\u2026",
     "spelling": "Possible misspellings: {words}",
-    "apply": "Apply",
     "toggle": "Toggle Inspector"
   },
   "translation": {
@@ -248,9 +236,6 @@
     "literal": "literal",
     "wildcard": "wildcard",
     "spacer": "spacer",
-    "wildcardLabel": "* wildcard",
-    "spacerLabel": "\u2423 spacer",
-    "emptyHint": "Add tags to build a clause structure.",
     "separator": "separator",
     "englishPlaceholder": "English sentence",
     "translate": "Translate",
@@ -305,7 +290,6 @@
     "installHint": "Install git to enable version control.",
     "notARepo": "This workspace is not a git repository.",
     "initialize": "Initialize repository",
-    "branch": "branch: {branch}",
     "autoCheckin": "auto check-in ({secs}s idle)",
     "changes": "Changes ({count})",
     "clean": "clean",
@@ -395,5 +379,33 @@
     "done": "Done",
     "storeAsList": "Store as one list instead",
     "role_references": "References (links)"
+  },
+  "status": {
+    "couldNotLoadTable": "could not load table {name}: {error}",
+    "couldNotRename": "could not rename {name}",
+    "renamed": "renamed {from} to {to}",
+    "deletedTable": "deleted table {name}",
+    "couldNotOpenWindow": "could not open a new window: {error}",
+    "couldNotRestoreWindowLayout": "could not restore window layout: {error}",
+    "couldNotRestoreLayout": "could not restore layout: {error}",
+    "couldNotResolveConflict": "could not resolve the conflict: {error}",
+    "opening": "opening {path}\u2026",
+    "creating": "creating {name}\u2026",
+    "created": "created {path}",
+    "createdFolder": "created {path}/",
+    "couldNotMove": "could not move {name}: {error}",
+    "couldNotReopen": "could not reopen {path}: {error}",
+    "renamedTo": "renamed to {path}",
+    "deleted": "deleted {path}",
+    "couldNotDelete": "could not delete {name}: {error}",
+    "couldNotImport": "could not import {path}: {error}",
+    "importedFiles": "imported {count} file(s) to assets",
+    "imported": "imported {names}",
+    "dropHint": "drop files on the editor or the explorer to import them",
+    "exporting": "exporting {name}\u2026",
+    "exported": "exported {name} \u2192 {path}",
+    "exportFailed": "export failed: {error}",
+    "couldNotInsertImage": "could not insert image: {error}",
+    "couldNotRenameFile": "could not rename {name}: {error}"
   }
 }

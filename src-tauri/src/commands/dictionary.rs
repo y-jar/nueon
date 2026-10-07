@@ -82,6 +82,7 @@ pub fn get_table(state: State<'_, Shared>, table: String) -> Result<WordTable, S
         .ok_or_else(|| format!("no such table: {table}"))
 }
 
+/// Create an empty word table; returns `false` if the name is taken.
 #[tauri::command]
 pub fn create_table(
     app: AppHandle,
@@ -116,6 +117,7 @@ pub fn delete_table(
     Ok(deleted)
 }
 
+/// Rename a table; returns `false` if it does not exist or the name is taken.
 #[tauri::command]
 pub fn rename_table(
     app: AppHandle,
@@ -133,6 +135,7 @@ pub fn rename_table(
     Ok(renamed)
 }
 
+/// Add a word to a table; returns its id, or `None` if it already exists.
 #[tauri::command]
 pub fn create_word(
     app: AppHandle,
@@ -150,6 +153,7 @@ pub fn create_word(
     Ok(id)
 }
 
+/// Replace a word entry wholesale; returns `false` if it no longer exists.
 #[tauri::command]
 pub fn save_word_entry(
     app: AppHandle,
@@ -230,6 +234,7 @@ pub fn rename_word(
     Ok(applied)
 }
 
+/// Delete a word; returns `false` if it did not exist.
 #[tauri::command]
 pub fn delete_word(
     app: AppHandle,
@@ -249,6 +254,7 @@ pub fn delete_word(
     Ok(removed)
 }
 
+/// Move a word to another table; returns `false` if it did not exist.
 #[tauri::command]
 pub fn move_word(
     app: AppHandle,
@@ -268,6 +274,7 @@ pub fn move_word(
     Ok(moved)
 }
 
+/// Add a tag (column) to a table; returns `false` if it already exists.
 #[tauri::command]
 pub fn add_tag(
     app: AppHandle,
@@ -286,6 +293,7 @@ pub fn add_tag(
     Ok(added)
 }
 
+/// How many words would lose a value if the tag were removed.
 #[tauri::command]
 pub fn remove_tag_preview(
     state: State<'_, Shared>,
@@ -365,6 +373,7 @@ pub fn grid_view_set(
         .map_err(|err| err.to_string())
 }
 
+/// Remove a tag and strip its values; returns `false` if it did not exist.
 #[tauri::command]
 pub fn remove_tag(
     app: AppHandle,
@@ -383,6 +392,7 @@ pub fn remove_tag(
     Ok(removed)
 }
 
+/// Add a parent link; returns `false` if it would create a cycle or duplicate.
 #[tauri::command]
 pub fn set_parent(
     app: AppHandle,
@@ -403,6 +413,7 @@ pub fn set_parent(
     Ok(added)
 }
 
+/// Remove a parent link; returns `false` if it was not present.
 #[tauri::command]
 pub fn remove_parent(
     app: AppHandle,
@@ -444,6 +455,7 @@ pub fn reparent_word(
     Ok(replaced)
 }
 
+/// Words that can be added as a parent of `child` (excludes self and cycles).
 #[tauri::command]
 pub fn parent_candidates(
     state: State<'_, Shared>,
@@ -467,6 +479,7 @@ pub fn derivation_graph(
     Ok(derivation::graph(&workspace.dictionary, id))
 }
 
+/// A word's ancestors and descendants, for the inspector's text list.
 #[tauri::command]
 pub fn derivation_tree(state: State<'_, Shared>, id: String) -> Result<DerivationTree, String> {
     let id = parse_id(&id)?;

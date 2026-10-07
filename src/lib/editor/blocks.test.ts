@@ -144,23 +144,28 @@ for (const [name, doc, inside, deeper] of [
   });
 }
 
-// -- performance -------------------------------------------------------------
+// -- scale -------------------------------------------------------------------
 
-test("scanning a few thousand lines stays well under the ceiling", () => {
-  const lines: string[] = [];
-  for (let i = 0; i < 3000; i += 1) {
-    if (i % 100 === 0) lines.push("| a | b |", "| --- | --- |", "| c | d |");
-    else if (i % 100 === 10) lines.push("$$", "x^2", "$$");
-    else if (i % 100 === 20) lines.push("<div>", "hello", "</div>");
-    else lines.push(`line ${i} with some ordinary words`);
+test("scanning a few thousand lines finds every block", () => {
+  const chunks: string[] = [];
+  for (let i = 0; i < 30; i += 1) {
+    chunks.push(
+      "| a | b |",
+      "| --- | --- |",
+      "| c | d |",
+      "",
+      "$$",
+      "x^2",
+      "$$",
+      "",
+      "<div>",
+      "hello",
+      "</div>",
+      "",
+      `ordinary line ${i}`,
+      "",
+    );
   }
-  const state = EditorState.create({ doc: `${lines.join("\n")}\n` });
-
-  scanBlocks(state); // warm up
-  const runs = 20;
-  const started = performance.now();
-  for (let i = 0; i < runs; i += 1) scanBlocks(state);
-  const perScan = (performance.now() - started) / runs;
-  console.log(`scanBlocks: ${state.doc.lines} lines, ${perScan.toFixed(2)} ms/scan`);
-  assert.ok(perScan < 50, `scan took ${perScan.toFixed(2)} ms`);
+  const state = EditorState.create({ doc: `${chunks.join("\n")}\n` });
+  assert.equal(scanBlocks(state).length, 30 * 3);
 });

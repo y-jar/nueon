@@ -45,7 +45,7 @@
         ],
       });
       if (!destination) return;
-      ui.status = `exporting ${name}…`;
+      ui.status = $t("status.exporting", { values: { name } });
       ui.status = await api.exportDocument(
         format,
         note,
@@ -53,7 +53,7 @@
         destination,
       );
     } catch (error) {
-      ui.status = `export failed: ${String(error)}`;
+      ui.status = $t("status.exportFailed", { values: { error: String(error) } });
     }
   }
 
@@ -81,7 +81,7 @@
       );
       target.focus();
     } catch (error) {
-      ui.status = `could not insert image: ${String(error)}`;
+      ui.status = $t("status.couldNotInsertImage", { values: { error: String(error) } });
     }
   }
 </script>

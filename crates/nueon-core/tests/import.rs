@@ -77,6 +77,17 @@ fn data_rows(text: &str) -> usize {
     non_blank_lines(text) - 1
 }
 
+/// Data rows whose wordname is a generated placeholder (`Untitled`, `Untitled N`).
+fn placeholder_rows(text: &str) -> usize {
+    text.lines()
+        .skip(1)
+        .filter(|line| {
+            let first = line.split('\t').next().unwrap_or("").trim();
+            first == "Untitled" || first.starts_with("Untitled ")
+        })
+        .count()
+}
+
 // -- tests -------------------------------------------------------------------
 
 #[test]
@@ -124,7 +135,6 @@ fn roots_preview_counts_match_the_file() {
 
     assert_eq!(preview.rows_total, data_rows(&text));
     assert_eq!(preview.rows_blank, blank_lines(&text));
-    assert_eq!(preview.rows_total, 183);
     // 10 short rows; count them independently (rows with fewer than 6 fields).
     let short = text
         .lines()
@@ -133,9 +143,9 @@ fn roots_preview_counts_match_the_file() {
         .filter(|l| l.split('\t').count() < 6)
         .count();
     assert_eq!(preview.short_rows.len(), short);
-    // Two placeholder words (Untitled, Untitled 1), skipped by default.
-    assert_eq!(preview.placeholders.len(), 2);
-    assert_eq!(preview.words, data_rows(&text) - 2);
+    // Placeholder words (Untitled, Untitled 1), skipped by default.
+    assert_eq!(preview.placeholders.len(), placeholder_rows(&text));
+    assert_eq!(preview.words, data_rows(&text) - placeholder_rows(&text));
     // The tags column proposes one boolean tag per distinct flag.
     let tag_names: BTreeSet<&str> = preview.tags.iter().map(|t| t.name.as_str()).collect();
     for expected in [
@@ -163,13 +173,15 @@ fn roots_preview_counts_match_the_file() {
 fn import_roots_creates_words_sparsely_and_stores_valency() {
     let dir = tempfile::tempdir().unwrap();
     let mut ws = Workspace::new(dir.path()).unwrap();
+    let text = read("testlangRoots.csv");
+    let expected = data_rows(&text) - placeholder_rows(&text);
     let plan = ImportPlan::new(fixture("testlangRoots.csv"), roots_options());
     let report = import_apply(&mut ws, &plan).unwrap();
 
-    assert_eq!(report.words_created, 181);
+    assert_eq!(report.words_created, expected);
     assert_eq!(report.table, "roots");
     let table = ws.dictionary.table("roots").unwrap();
-    assert_eq!(table.entries.len(), 181);
+    assert_eq!(table.entries.len(), expected);
 
     // Tags became boolean columns on this table only.
     for tag in [
@@ -242,12 +254,10 @@ fn derived_preview_reports_links_and_the_duplicate_word() {
     let preview = import_preview(&ws, &fixture("testlangDerived.csv"), &derived_options()).unwrap();
 
     assert_eq!(preview.rows_total, data_rows(&text));
-    assert_eq!(preview.rows_total, 134);
     assert_eq!(preview.placeholders.len(), 0);
 
     // Link occurrences and unique targets are computed from the file.
     assert_eq!(preview.links.occurrences, count_substr(&text, "[["));
-    assert_eq!(preview.links.occurrences, 48);
     assert!(preview.links.unique_targets > 0);
     assert!(preview.links.unique_targets <= preview.links.occurrences);
     // Suffixes that are not words stay unresolved.
@@ -259,7 +269,7 @@ fn derived_preview_reports_links_and_the_duplicate_word() {
         .iter()
         .any(|d| d.wordname == "itorei" && d.existing_tables.contains(&"roots".to_string())));
     // The duplicate is skipped by default, so it is not counted as created.
-    assert_eq!(preview.words, 134 - 1);
+    assert_eq!(preview.words, data_rows(&text) - preview.duplicates.len());
 }
 
 #[test]
@@ -271,13 +281,14 @@ fn importing_both_tables_resolves_parents_from_wikilinks() {
         &ImportPlan::new(fixture("testlangRoots.csv"), roots_options()),
     )
     .unwrap();
+    let preview = import_preview(&ws, &fixture("testlangDerived.csv"), &derived_options()).unwrap();
     let report = import_apply(
         &mut ws,
         &ImportPlan::new(fixture("testlangDerived.csv"), derived_options()),
     )
     .unwrap();
 
-    assert_eq!(report.words_created, 133); // itorei skipped
+    assert_eq!(report.words_created, preview.words); // itorei skipped
     assert!(report.parents_linked > 0);
 
     let derived = ws.dictionary.table("derived").unwrap();
@@ -331,7 +342,7 @@ fn reimport_is_idempotent_under_every_duplicate_policy() {
     add.options.duplicate_policy = DuplicatePolicy::Add;
     add.options.skip_placeholders = true;
     let report = import_apply(&mut ws, &add).unwrap();
-    assert_eq!(report.words_created, 181);
+    assert_eq!(report.words_created, before);
     assert_eq!(
         ws.dictionary.table("roots").unwrap().entries.len(),
         before * 2

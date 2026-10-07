@@ -789,11 +789,11 @@
         filters: [{ name: format.toUpperCase(), extensions: [format] }],
       });
       if (!destination) return;
-      ui.status = `exporting ${name}…`;
-      await api.exportTable(name, format, destination);
-      ui.status = `exported ${name} → ${destination}`;
+      ui.status = $t("status.exporting", { values: { name } });
+      ui.status = await api.exportTable(name, format, destination);
+      ui.status = $t("status.exported", { values: { name, path: destination } });
     } catch (e) {
-      ui.status = `export failed: ${String(e)}`;
+      ui.status = $t("status.exportFailed", { values: { error: String(e) } });
     }
   }
 

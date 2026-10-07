@@ -3,7 +3,7 @@ import { getCurrentWebview } from "@tauri-apps/api/webview";
 import * as api from "./api";
 import { assetLink, linkLabel } from "./assets";
 import { insertTextAt } from "./editor/commands";
-import { ui } from "./state.svelte";
+import { tr, ui } from "./state.svelte";
 
 /**
  * OS file drops never reach DOM `drop` events in a Tauri webview; they arrive
@@ -66,7 +66,7 @@ async function dropOnEditor(
           : `[${asset.original_name.replace(/[[\]]/g, "")}](${link})`,
       );
     } catch (error) {
-      ui.status = `could not import ${path}: ${String(error)}`;
+      ui.status = tr("status.couldNotImport", { path, error: String(error) });
     }
   }
   if (lines.length === 0) return;
@@ -76,7 +76,7 @@ async function dropOnEditor(
     target.view.state.selection.main.head;
   insertTextAt(target.view, lines.join("\n"), pos);
   target.view.focus();
-  ui.status = `imported ${lines.length} file${lines.length === 1 ? "" : "s"} to assets`;
+  ui.status = tr("status.importedFiles", { count: lines.length });
 }
 
 async function dropOnFolder(folder: string, paths: string[]): Promise<void> {
@@ -88,17 +88,17 @@ async function dropOnFolder(folder: string, paths: string[]): Promise<void> {
       if (result.type === "note") notes += 1;
       else assets += 1;
     } catch (error) {
-      ui.status = `could not import ${path}: ${String(error)}`;
+      ui.status = tr("status.couldNotImport", { path, error: String(error) });
     }
   }
   const parts: string[] = [];
   if (notes) parts.push(`${notes} note${notes === 1 ? "" : "s"}`);
   if (assets) parts.push(`${assets} file${assets === 1 ? "" : "s"} to assets`);
-  if (parts.length) ui.status = `imported ${parts.join(", ")}`;
+  if (parts.length) ui.status = tr("status.imported", { names: parts.join(", ") });
 }
 
 /** Listen for OS file drops on this window's webview. */
-export async function installFileDrop(): Promise<void> {
+export async function installFileDrop(): Promise<() => void> {
   let hint: HTMLElement | null = null;
   const setHint = (el: HTMLElement | null) => {
     if (hint === el) return;
@@ -107,7 +107,7 @@ export async function installFileDrop(): Promise<void> {
     hint?.classList.add("file-drop");
   };
 
-  await getCurrentWebview().onDragDropEvent((event) => {
+  const unlisten = await getCurrentWebview().onDragDropEvent((event) => {
     const payload = event.payload;
     if (payload.type === "leave") {
       setHint(null);
@@ -120,7 +120,7 @@ export async function installFileDrop(): Promise<void> {
     }
     setHint(null);
     if (!target) {
-      ui.status = "drop files on the editor or the explorer to import them";
+      ui.status = tr("status.dropHint");
       return;
     }
     if (target.kind === "editor") {
@@ -129,4 +129,9 @@ export async function installFileDrop(): Promise<void> {
       void dropOnFolder(target.folder, payload.paths);
     }
   });
+
+  return () => {
+    unlisten();
+    setHint(null);
+  };
 }

@@ -29,6 +29,7 @@ pub struct AutoCheckinInfo {
     pub secs: u64,
 }
 
+/// Detected VCS state (`ready` / `not_a_repo` / `git_missing`) and branch.
 #[tauri::command]
 pub fn vcs_state(state: State<'_, Shared>) -> Result<VcsInfo, String> {
     let state = state.lock().map_err(|_| "state poisoned".to_string())?;
@@ -49,6 +50,7 @@ pub fn vcs_state(state: State<'_, Shared>) -> Result<VcsInfo, String> {
     })
 }
 
+/// Working-tree status entries.
 #[tauri::command]
 pub fn vcs_status(state: State<'_, Shared>) -> Result<Vec<StatusEntry>, String> {
     let state = state.lock().map_err(|_| "state poisoned".to_string())?;
@@ -59,6 +61,7 @@ pub fn vcs_status(state: State<'_, Shared>) -> Result<Vec<StatusEntry>, String> 
     }
 }
 
+/// Recent commits, newest first, up to `limit`.
 #[tauri::command]
 pub fn vcs_log(state: State<'_, Shared>, limit: usize) -> Result<Vec<Commit>, String> {
     let state = state.lock().map_err(|_| "state poisoned".to_string())?;
@@ -69,6 +72,7 @@ pub fn vcs_log(state: State<'_, Shared>, limit: usize) -> Result<Vec<Commit>, St
     }
 }
 
+/// Diff of the working tree, optionally scoped to one `path`.
 #[tauri::command]
 pub fn vcs_diff(state: State<'_, Shared>, path: Option<String>) -> Result<String, String> {
     let state = state.lock().map_err(|_| "state poisoned".to_string())?;
@@ -79,6 +83,7 @@ pub fn vcs_diff(state: State<'_, Shared>, path: Option<String>) -> Result<String
     }
 }
 
+/// The diff introduced by commit `id`.
 #[tauri::command]
 pub fn vcs_show(state: State<'_, Shared>, id: String) -> Result<String, String> {
     let state = state.lock().map_err(|_| "state poisoned".to_string())?;
@@ -89,6 +94,7 @@ pub fn vcs_show(state: State<'_, Shared>, id: String) -> Result<String, String> 
     }
 }
 
+/// Local branch names.
 #[tauri::command]
 pub fn vcs_branches(state: State<'_, Shared>) -> Result<Vec<String>, String> {
     let state = state.lock().map_err(|_| "state poisoned".to_string())?;
@@ -99,6 +105,7 @@ pub fn vcs_branches(state: State<'_, Shared>) -> Result<Vec<String>, String> {
     }
 }
 
+/// Check out a branch and reload the in-memory workspace.
 #[tauri::command]
 pub fn vcs_checkout(app: AppHandle, state: State<'_, Shared>, name: String) -> Result<(), String> {
     let mut state = state.lock().map_err(|_| "state poisoned".to_string())?;
@@ -122,6 +129,7 @@ fn changed_after_disk_change(app: &AppHandle) {
     changed(app, "vcs");
 }
 
+/// Create a new branch.
 #[tauri::command]
 pub fn vcs_create_branch(
     app: AppHandle,
@@ -138,12 +146,14 @@ pub fn vcs_create_branch(
     Ok(())
 }
 
+/// Whether the one-time git prompt has been silenced.
 #[tauri::command]
 pub fn git_prompt_dismissed(state: State<'_, Shared>) -> Result<bool, String> {
     let state = state.lock().map_err(|_| "state poisoned".to_string())?;
     Ok(state.workspace()?.settings.git_prompt_dismissed)
 }
 
+/// Persist the git-prompt dismissal.
 #[tauri::command]
 pub fn git_prompt_dismissed_set(
     app: AppHandle,
@@ -160,6 +170,7 @@ pub fn git_prompt_dismissed_set(
     Ok(())
 }
 
+/// Commit all pending changes with `message`; returns the new commit id.
 #[tauri::command]
 pub fn vcs_commit(
     app: AppHandle,
@@ -174,6 +185,7 @@ pub fn vcs_commit(
     Ok(id)
 }
 
+/// Initialize a git repository for the workspace.
 #[tauri::command]
 pub fn vcs_init(app: AppHandle, state: State<'_, Shared>) -> Result<(), String> {
     let mut state = state.lock().map_err(|_| "state poisoned".to_string())?;
@@ -186,6 +198,7 @@ pub fn vcs_init(app: AppHandle, state: State<'_, Shared>) -> Result<(), String> 
     Ok(())
 }
 
+/// Revert one file to HEAD and reload the workspace.
 #[tauri::command]
 pub fn vcs_revert_file(
     app: AppHandle,
@@ -205,6 +218,7 @@ pub fn vcs_revert_file(
     Ok(())
 }
 
+/// Current auto-check-in settings.
 #[tauri::command]
 pub fn autocheckin_get(state: State<'_, Shared>) -> Result<AutoCheckinInfo, String> {
     let state = state.lock().map_err(|_| "state poisoned".to_string())?;
@@ -215,6 +229,7 @@ pub fn autocheckin_get(state: State<'_, Shared>) -> Result<AutoCheckinInfo, Stri
     })
 }
 
+/// Enable or disable auto-check-in and set its idle delay in seconds.
 #[tauri::command]
 pub fn autocheckin_set(
     app: AppHandle,

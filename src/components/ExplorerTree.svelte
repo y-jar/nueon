@@ -19,6 +19,7 @@
     canMoveInto,
     openContextMenu,
     consumeRename,
+    tr,
   } from "../lib/state.svelte";
   import ExplorerTree from "./ExplorerTree.svelte";
 
@@ -70,7 +71,10 @@
     try {
       await renamePath(node.path, target);
     } catch (error) {
-      ui.status = `could not rename ${labelOf(node)}: ${String(error)}`;
+      ui.status = tr("status.couldNotRenameFile", {
+        name: labelOf(node),
+        error: String(error),
+      });
     }
   }
 

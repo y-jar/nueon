@@ -1,5 +1,5 @@
 <script lang="ts">
-  import { onMount } from "svelte";
+  import { onDestroy, onMount } from "svelte";
   import * as api from "./lib/api";
   import {
     ui,
@@ -29,32 +29,41 @@
 
   const ACTIVITIES: Activity[] = ["notes", "dictionary", "translation", "git"];
   let layoutLoaded = $state(false);
+  let teardown: (() => void)[] = [];
 
-  onMount(async () => {
-    await init();
-    await installDragBridge();
-    await installFileDrop();
-    if (!isMainWindow) {
-      // Torn-off windows show only tab groups; they restore their own tiling.
-      await restoreSecondaryTiling(windowLabel);
+  onMount(() => {
+    void (async () => {
+      await init();
+      teardown.push(await installDragBridge());
+      teardown.push(await installFileDrop());
+      if (!isMainWindow) {
+        // Torn-off windows show only tab groups; they restore their own tiling.
+        await restoreSecondaryTiling(windowLabel);
+        layoutLoaded = true;
+        return;
+      }
+      try {
+        const layout = await api.uiLayoutGet();
+        ui.activity = ACTIVITIES.includes(layout.activity as Activity)
+          ? (layout.activity as Activity)
+          : "notes";
+        ui.sidebarOpen = layout.sidebar_open;
+        ui.inspectorOpen = layout.inspector_open;
+        ui.inspectorDock = layout.inspector_dock === "left" ? "left" : "right";
+      } catch {
+        // Layout is best-effort.
+      }
+      await restoreMainTiling();
+      // Restore the translation tool as a tab when it was the active activity.
+      if (ui.activity === "translation") await openTranslation();
       layoutLoaded = true;
-      return;
-    }
-    try {
-      const layout = await api.uiLayoutGet();
-      ui.activity = ACTIVITIES.includes(layout.activity as Activity)
-        ? (layout.activity as Activity)
-        : "notes";
-      ui.sidebarOpen = layout.sidebar_open;
-      ui.inspectorOpen = layout.inspector_open;
-      ui.inspectorDock = layout.inspector_dock === "left" ? "left" : "right";
-    } catch {
-      // Layout is best-effort.
-    }
-    await restoreMainTiling();
-    // Restore the translation tool as a tab when it was the active activity.
-    if (ui.activity === "translation") await openTranslation();
-    layoutLoaded = true;
+    })();
+  });
+
+  onDestroy(() => {
+    for (const dispose of teardown) dispose();
+    teardown = [];
+    if (tilingTimer) clearTimeout(tilingTimer);
   });
 
   // A torn-off window with no tabs left has nothing to show: close it.

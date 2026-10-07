@@ -321,6 +321,7 @@ pub struct HistoryStatus {
     pub can_redo: bool,
 }
 
+/// Whether an undo and/or redo step is available.
 #[tauri::command]
 pub fn history_status(state: State<'_, Shared>) -> Result<HistoryStatus, String> {
     let state = state.lock().map_err(|_| "state poisoned".to_string())?;
@@ -331,6 +332,7 @@ pub fn history_status(state: State<'_, Shared>) -> Result<HistoryStatus, String>
     })
 }
 
+/// Undo the last revertible dictionary edit; returns `false` if none.
 #[tauri::command]
 pub fn undo(app: AppHandle, state: State<'_, Shared>) -> Result<bool, String> {
     let mut state = state.lock().map_err(|_| "state poisoned".to_string())?;
@@ -345,6 +347,7 @@ pub fn undo(app: AppHandle, state: State<'_, Shared>) -> Result<bool, String> {
     Ok(did)
 }
 
+/// Redo the last undone dictionary edit; returns `false` if none.
 #[tauri::command]
 pub fn redo(app: AppHandle, state: State<'_, Shared>) -> Result<bool, String> {
     let mut state = state.lock().map_err(|_| "state poisoned".to_string())?;
@@ -359,12 +362,14 @@ pub fn redo(app: AppHandle, state: State<'_, Shared>) -> Result<bool, String> {
     Ok(did)
 }
 
+/// Whether the one-time warning `key` has been silenced.
 #[tauri::command]
 pub fn warning_dismissed(state: State<'_, Shared>, key: String) -> Result<bool, String> {
     let state = state.lock().map_err(|_| "state poisoned".to_string())?;
     Ok(state.workspace()?.is_warning_dismissed(&key))
 }
 
+/// Persist the "don't show this warning again" choice.
 #[tauri::command]
 pub fn dismiss_warning(state: State<'_, Shared>, key: String) -> Result<(), String> {
     let mut state = state.lock().map_err(|_| "state poisoned".to_string())?;

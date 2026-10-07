@@ -290,7 +290,7 @@ async function syncGroupTable(groupId: string): Promise<void> {
       group.doc.table = table;
     }
   } catch (error) {
-    ui.status = `could not load table ${name}: ${String(error)}`;
+    ui.status = tr("status.couldNotLoadTable", { name, error: String(error) });
   }
 }
 
@@ -466,7 +466,7 @@ export function closeAllTabs(): void {
 export async function renameTable(from: string, to: string): Promise<void> {
   const ok = await api.renameTable(from, to);
   if (!ok) {
-    ui.status = `could not rename ${from}`;
+    ui.status = tr("status.couldNotRename", { name: from });
     return;
   }
   for (const group of ui.groups) {
@@ -478,7 +478,7 @@ export async function renameTable(from: string, to: string): Promise<void> {
     if (group.doc.currentTable === from) group.doc.currentTable = to;
   }
   await refreshTables();
-  ui.status = `renamed ${from} to ${to}`;
+  ui.status = tr("status.renamed", { from, to });
 }
 
 /** Delete a table, closing any tab that referenced it. */
@@ -500,7 +500,7 @@ export async function deleteTable(name: string): Promise<api.TrashRecord | null>
     if (removedIndex !== -1) activateNeighbor(group, removedIndex);
   }
   await refreshTables();
-  ui.status = `deleted table ${name}`;
+  ui.status = tr("status.deletedTable", { name });
   return record;
 }
 
@@ -604,7 +604,7 @@ export async function moveTabToNewWindow(
     await api.windowSpawn(tabLayoutOf(tab));
     removeSourceTab(groupId, tabId);
   } catch (error) {
-    ui.status = `could not open a new window: ${String(error)}`;
+    ui.status = tr("status.couldNotOpenWindow", { error: String(error) });
   }
 }
 
@@ -663,8 +663,8 @@ function adoptForeignTab(payload: api.TabLayout): Tab {
  * drop target (so a drop inside the window always counts as "here"), and
  * detection of the pointer leaving the window.
  */
-export async function installDragBridge(): Promise<void> {
-  await listen<TabDragEvent>("tab-drag", (event) => {
+export async function installDragBridge(): Promise<() => void> {
+  const unlisten = await listen<TabDragEvent>("tab-drag", (event) => {
     const payload = event.payload;
     if (payload.sourceLabel === windowLabel) return;
     if (payload.phase === "start" && payload.tab) {
@@ -675,31 +675,35 @@ export async function installDragBridge(): Promise<void> {
     }
   });
 
-  document.addEventListener(
-    "dragenter",
-    () => {
-      if (pendingForeign && !ui.dragTab) activateForeignDrag(pendingForeign);
-    },
-    true,
-  );
-  document.addEventListener("dragover", (event) => {
+  const onDragEnter = () => {
+    if (pendingForeign && !ui.dragTab) activateForeignDrag(pendingForeign);
+  };
+  const onDragOver = (event: DragEvent) => {
     leftWindow = false;
     if (!ui.dragTab) return;
     event.preventDefault();
     if (event.dataTransfer) event.dataTransfer.dropEffect = "move";
-  });
-  document.addEventListener("dragleave", (event) => {
+  };
+  const onDragLeave = (event: DragEvent) => {
     if (event.relatedTarget !== null) return;
     leftWindow = true;
     clearForeignDrag();
-  });
-  document.addEventListener(
-    "drop",
-    () => {
-      dropSeenInWindow = true;
-    },
-    true,
-  );
+  };
+  const onDrop = () => {
+    dropSeenInWindow = true;
+  };
+  document.addEventListener("dragenter", onDragEnter, true);
+  document.addEventListener("dragover", onDragOver);
+  document.addEventListener("dragleave", onDragLeave);
+  document.addEventListener("drop", onDrop, true);
+
+  return () => {
+    unlisten();
+    document.removeEventListener("dragenter", onDragEnter, true);
+    document.removeEventListener("dragover", onDragOver);
+    document.removeEventListener("dragleave", onDragLeave);
+    document.removeEventListener("drop", onDrop, true);
+  };
 }
 
 /** Remove a group and collapse the split tree around it. */
@@ -982,7 +986,7 @@ export async function restoreSecondaryTiling(label: string): Promise<void> {
     const saved = state.windows?.find((window) => window.label === label);
     if (saved) await restoreTiling(saved.tiling);
   } catch (error) {
-    ui.status = `could not restore window layout: ${String(error)}`;
+    ui.status = tr("status.couldNotRestoreWindowLayout", { error: String(error) });
   } finally {
     ui.layoutReady = true;
   }
@@ -998,7 +1002,7 @@ export async function restoreMainTiling(): Promise<void> {
     if (state.main) await restoreTiling(state.main);
     await api.windowsRestore();
   } catch (error) {
-    ui.status = `could not restore layout: ${String(error)}`;
+    ui.status = tr("status.couldNotRestoreLayout", { error: String(error) });
   } finally {
     ui.layoutReady = true;
   }
@@ -1065,7 +1069,7 @@ export async function resolveConflict(
     doc.noteHash = snapshot.hash;
     doc.conflict = null;
   } catch (error) {
-    ui.status = `could not resolve the conflict: ${String(error)}`;
+    ui.status = tr("status.couldNotResolveConflict", { error: String(error) });
   }
 }
 
@@ -1186,7 +1190,7 @@ export async function init(): Promise<void> {
 }
 
 export async function openWorkspace(path: string): Promise<void> {
-  ui.status = `opening ${path}…`;
+  ui.status = tr("status.opening", { path });
   ui.layoutReady = false;
   try {
     await api.workspaceOpen(path);
@@ -1211,7 +1215,7 @@ export async function createWorkspace(
   name: string,
   destination: string,
 ): Promise<void> {
-  ui.status = `creating ${name}…`;
+  ui.status = tr("status.creating", { name });
   ui.layoutReady = false;
   await api.workspaceCreate(name, destination);
   ui.showWorkspacePicker = false;
@@ -1236,12 +1240,12 @@ export async function createNote(relPath: string): Promise<void> {
   // The backend appends `.md` to a bare name and returns the real path.
   const created = await api.createNote(relPath);
   await selectNote(created);
-  ui.status = `created ${created}`;
+  ui.status = tr("status.created", { path: created });
 }
 
 export async function createFolder(relPath: string): Promise<void> {
   await api.createFolder(relPath);
-  ui.status = `created ${relPath}/`;
+  ui.status = tr("status.createdFolder", { path: relPath });
 }
 
 /** Whether `src` may be moved into `folder` ("" is the notes root). */
@@ -1259,7 +1263,7 @@ export async function movePath(src: string, folder: string): Promise<void> {
   try {
     await renamePath(src, target);
   } catch (error) {
-    ui.status = `could not move ${name}: ${String(error)}`;
+    ui.status = tr("status.couldNotMove", { name, error: String(error) });
   }
 }
 
@@ -1305,11 +1309,14 @@ export async function renamePath(
       try {
         await loadNote(doc, doc.selected);
       } catch (error) {
-        ui.status = `could not reopen ${doc.selected}: ${String(error)}`;
+        ui.status = tr("status.couldNotReopen", {
+          path: doc.selected,
+          error: String(error),
+        });
       }
     }
   }
-  ui.status = `renamed to ${newPath}`;
+  ui.status = tr("status.renamedTo", { path: newPath });
 }
 
 export async function deletePath(relPath: string): Promise<api.TrashRecord> {
@@ -1349,13 +1356,13 @@ export async function deletePath(relPath: string): Promise<api.TrashRecord> {
       group.doc.noteContent = "";
     }
   }
-  ui.status = `deleted ${relPath}`;
+  ui.status = tr("status.deleted", { path: relPath });
   return record;
 }
 
 // -- confirmation, undo toast, trash ------------------------------------
 
-function tr(key: string, values?: Record<string, string | number>): string {
+export function tr(key: string, values?: Record<string, string | number>): string {
   return get(t)(key, values ? { values } : undefined);
 }
 
@@ -1453,7 +1460,7 @@ export async function requestDeleteNote(
   try {
     afterDelete(await deletePath(path));
   } catch (error) {
-    ui.status = `could not delete ${name}: ${String(error)}`;
+    ui.status = tr("status.couldNotDelete", { name, error: String(error) });
   }
 }
 
@@ -1471,6 +1478,6 @@ export async function requestDeleteTable(name: string): Promise<void> {
     const record = await deleteTable(name);
     if (record) afterDelete(record);
   } catch (error) {
-    ui.status = `could not delete ${name}: ${String(error)}`;
+    ui.status = tr("status.couldNotDelete", { name, error: String(error) });
   }
 }
