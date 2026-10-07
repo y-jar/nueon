@@ -222,6 +222,7 @@ pub fn run() {
             commands::execute_translation,
             commands::execute_translation_direct,
             commands::create_translation_word,
+            commands::phonology_check_words,
             commands::translation_options,
             commands::set_translation_options,
             commands::export_presets,

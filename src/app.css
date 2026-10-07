@@ -2106,6 +2106,17 @@ table.dict-grid td.wordname-col {
   background: var(--bg);
 }
 
+/* Non-blocking phonotactic warning on a word name. */
+table.dict-grid td.wordname-col .word-warning {
+  position: absolute;
+  right: 3px;
+  top: 50%;
+  display: inline-flex;
+  transform: translateY(-50%);
+  color: #d6a15a;
+  pointer-events: none;
+}
+
 /* -- sortable / reorderable headers --------------------------------------- */
 
 table.dict-grid th.dragging {

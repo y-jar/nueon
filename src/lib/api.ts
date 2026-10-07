@@ -577,6 +577,16 @@ export const phonologyGet = (): Promise<PhonologyConfig> =>
 export const phonologySet = (value: PhonologyConfig): Promise<void> =>
   configSet("phonology", value);
 
+export type PhonologyViolation =
+  | { kind: "unknown_phoneme"; at: number; symbol: string }
+  | { kind: "bad_syllable"; at: number };
+
+/** Batched phonotactic check; one list of violations per input word. */
+export const phonologyCheckWords = (
+  words: string[],
+): Promise<PhonologyViolation[][]> =>
+  invoke("phonology_check_words", { words });
+
 export interface UiLayout {
   activity: string;
   sidebar_open: boolean;

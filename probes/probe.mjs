@@ -1287,6 +1287,54 @@ async function main() {
     assertEqual(kinds.k, "consonant", "k kind");
     assertEqual(kinds.a, "vowel", "a kind");
   });
+
+  // -- probe 21: non-blocking phonotactic warnings on word names -----------
+  await probe("21-phonotactic-word-warnings", async () => {
+    // The inventory {k, a} was saved by probe 20.
+    await openActivity("Dictionary");
+    await waitJs(`!!document.querySelector('.table-list')`, {
+      label: "tables panel",
+    });
+    const opened = await js(
+      `const b = [...document.querySelectorAll('.table-list .table-row .tree-name')]
+         .find((x) => x.textContent.trim().startsWith('lex'));
+       if (b) b.click();
+       return !!b;`,
+    );
+    if (!opened) throw new Error("no 'lex' table in the panel");
+    await waitJs(`!!document.querySelector('.dict-grid')`, { label: "lex grid" });
+    await waitJs(
+      `document.querySelectorAll('.dict-grid td.wordname-col input').length >= 2`,
+      { label: "lex rows" },
+    );
+    // Let the batched check land.
+    await new Promise((resolve) => setTimeout(resolve, 400));
+
+    const kalaWarns = await js(
+      `const td = [...document.querySelectorAll('.dict-grid td.wordname-col')]
+         .find((x) => x.querySelector('input')?.value === 'kala');
+       return !!td?.querySelector('.word-warning');`,
+    );
+    if (!kalaWarns) throw new Error("'kala' should warn (l is not in the inventory)");
+
+    // Non-blocking: rename to a valid word and the warning clears.
+    await js(`const td = [...document.querySelectorAll('.dict-grid td.wordname-col')]
+        .find((x) => x.querySelector('input')?.value === 'kala');
+      const i = td.querySelector('input');
+      i.focus();
+      i.value = 'kaka';
+      i.dispatchEvent(new Event('input', { bubbles: true }));
+      i.dispatchEvent(new FocusEvent('blur', { bubbles: true }));
+      return true;`);
+    await waitJs(
+      `(() => {
+         const td = [...document.querySelectorAll('.dict-grid td.wordname-col')]
+           .find((x) => x.querySelector('input')?.value === 'kaka');
+         return !!td && !td.querySelector('.word-warning');
+       })()`,
+      { label: "warning cleared after edit" },
+    );
+  });
 }
 
 try {

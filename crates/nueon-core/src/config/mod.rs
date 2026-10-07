@@ -13,7 +13,7 @@ pub use layout::{
     GroupLayout, LayoutState, SecondaryWindow, SplitDirection, SplitLayout, TabKind, TabLayout,
     TilingLayout, WindowGeometry,
 };
-pub use phonology::{Phoneme, PhonemeKind, PhonologyConfig};
+pub use phonology::{check_word, Phoneme, PhonemeKind, PhonologyConfig, Violation};
 pub use settings::{GridViewState, SortSpec, UiLayout, WorkspaceSettings};
 pub use translation::{
     AffixKind, AffixRule, TranslationConfig, TranslationMode, TranslationOptions,

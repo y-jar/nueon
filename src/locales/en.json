@@ -294,7 +294,9 @@
     "add": "Add",
     "remove": "Remove",
     "clear": "Clear",
-    "saved": "Saved"
+    "saved": "Saved",
+    "unknownPhoneme": "unknown sound \u201c{symbol}\u201d at {at}",
+    "badSyllable": "does not match the syllable shapes"
   },
   "derivation": {
     "title": "Derivation",

@@ -26,6 +26,7 @@
     Upload,
     Eye,
     Download,
+    TriangleAlert,
   } from "@lucide/svelte";
   import * as api from "../lib/api";
   import {
@@ -84,7 +85,50 @@
   let warnDismissed = $state(false);
   let dontWarnAgain = $state(false);
 
+  /** Phonotactic warnings per word name (non-blocking). */
+  let wordIssues = $state<Record<string, api.PhonologyViolation[]>>({});
+  let issueRequest = 0;
+
   const FORMATS: api.TagFormat[] = ["default", "multiline", "date", "measurement"];
+
+  /** Re-check every word name against the phonology, batched; never blocks. */
+  async function refreshWordIssues(entries: api.WordEntry[]) {
+    const words = entries.map((entry) => entry.wordname);
+    const request = ++issueRequest;
+    try {
+      const results = await api.phonologyCheckWords(words);
+      if (request !== issueRequest) return;
+      const next: Record<string, api.PhonologyViolation[]> = {};
+      words.forEach((word, index) => {
+        const list = results[index];
+        if (list && list.length) next[word] = list;
+      });
+      wordIssues = next;
+    } catch {
+      // A failed check must never get in the way of editing.
+    }
+  }
+
+  $effect(() => {
+    const entries = doc.table?.entries;
+    if (!entries || entries.length === 0) {
+      wordIssues = {};
+      return;
+    }
+    void refreshWordIssues(entries);
+  });
+
+  function issueText(violations: api.PhonologyViolation[]): string {
+    return violations
+      .map((violation) =>
+        violation.kind === "unknown_phoneme"
+          ? $t("phonology.unknownPhoneme", {
+              values: { symbol: violation.symbol, at: violation.at + 1 },
+            })
+          : $t("phonology.badSyllable"),
+      )
+      .join("; ");
+  }
 
   const tagColumns = $derived(
     (doc.table?.tags ?? []).filter(
@@ -1095,6 +1139,16 @@
                     onblur={(e) =>
                       commitWordname(row.original, e.currentTarget.value)}
                   />
+                  {#if wordIssues[row.original.wordname]?.length}
+                    <span
+                      class="word-warning"
+                      role="img"
+                      title={issueText(wordIssues[row.original.wordname])}
+                      aria-label={issueText(wordIssues[row.original.wordname])}
+                    >
+                      <TriangleAlert size={12} />
+                    </span>
+                  {/if}
                 </td>
               {:else if column.id === "parent"}
                 <td class="editable" onclick={(e) => e.stopPropagation()}>
