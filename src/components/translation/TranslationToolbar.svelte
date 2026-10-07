@@ -13,11 +13,13 @@
 
   interface Props {
     presets: SyntaxGrid[];
+    grammarRules: string[];
     draftName: string;
     hasPreset: boolean;
     showMorphology: boolean;
     mode: TranslationMode;
     onLoad: (name: string) => void;
+    onLoadGrammar: (name: string) => void;
     onSave: () => void;
     onDelete: () => void;
     onExport: () => void;
@@ -28,11 +30,13 @@
 
   let {
     presets,
+    grammarRules,
     draftName = $bindable(),
     hasPreset,
     showMorphology,
     mode,
     onLoad,
+    onLoadGrammar,
     onSave,
     onDelete,
     onExport,
@@ -59,6 +63,22 @@
   </div>
 
   {#if mode === "grid"}
+    {#if grammarRules.length}
+      <select
+        value=""
+        title={$t("translation.loadGrammarHint")}
+        onchange={(e) => {
+          const value = e.currentTarget.value;
+          if (value) onLoadGrammar(value);
+          e.currentTarget.value = "";
+        }}
+      >
+        <option value="">{$t("translation.loadGrammar")}</option>
+        {#each grammarRules as name (name)}
+          <option value={name}>{name}</option>
+        {/each}
+      </select>
+    {/if}
     <select
       value=""
       onchange={(e) => {

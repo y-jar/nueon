@@ -560,6 +560,16 @@ export const grammarGet = (): Promise<GrammarConfig> =>
 export const grammarSet = (value: GrammarConfig): Promise<void> =>
   configSet("grammar", value);
 
+export interface TranslationConfig {
+  default_rule?: string | null;
+  settings: Record<string, string>;
+  grids: SyntaxGrid[];
+  affixes: AffixRule[];
+}
+
+export const translationConfig = (): Promise<TranslationConfig> =>
+  configGet<TranslationConfig>("translation");
+
 export type PhonemeKind = "consonant" | "vowel" | "other";
 
 export interface Phoneme {

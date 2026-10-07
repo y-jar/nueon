@@ -389,7 +389,32 @@ function seedWorkspace() {
   fs.rmSync(ROOT, { recursive: true, force: true });
   fs.mkdirSync(path.join(WORKSPACE, "notes"), { recursive: true });
   fs.mkdirSync(path.join(WORKSPACE, "dictionary"), { recursive: true });
+  fs.mkdirSync(path.join(WORKSPACE, "config"), { recursive: true });
   spawnSync("git", ["init", "-q"], { cwd: WORKSPACE });
+  // A grammar rule + default, so the Translator can load it (probe 22).
+  fs.writeFileSync(
+    path.join(WORKSPACE, "config", "grammar"),
+    JSON.stringify(
+      {
+        rules: [
+          {
+            name: "SVO",
+            description: "Subject Verb Object",
+            slots: [
+              { kind: "required_tag", tag: "Subject" },
+              { kind: "required_tag", tag: "Verb" },
+            ],
+          },
+        ],
+      },
+      null,
+      2,
+    ),
+  );
+  fs.writeFileSync(
+    path.join(WORKSPACE, "config", "translation"),
+    JSON.stringify({ default_rule: "SVO", settings: {}, grids: [], affixes: [] }, null, 2),
+  );
   // A tiny lexicon so the Translator has words to map (probe 19).
   fs.writeFileSync(
     path.join(WORKSPACE, "dictionary", "lex"),
@@ -1334,6 +1359,37 @@ async function main() {
        })()`,
       { label: "warning cleared after edit" },
     );
+  });
+
+  // -- probe 22: the Translator loads grammar rules -------------------------
+  await probe("22-translator-loads-grammar-rule", async () => {
+    await openActivity("Translation");
+    await waitJs(`!!document.querySelector('.translation')`, {
+      label: "translation view",
+    });
+    // Switch back to the rule-tree mode.
+    await js(
+      `const b = [...document.querySelectorAll('.translation-toolbar .mode-switch button')]
+         .find((x) => x.textContent.trim() === 'Rule tree');
+       if (b) b.click();
+       return !!b;`,
+    );
+    await waitJs(`!!document.querySelector('.clause-canvas')`, {
+      label: "clause canvas",
+    });
+    // The default rule ("SVO") auto-loads two slots.
+    await waitJs(
+      `document.querySelectorAll('.clause-canvas .slot-card').length === 2`,
+      { label: "grammar slots loaded" },
+    );
+    const values = await js(
+      `return [...document.querySelectorAll('.translation-toolbar select option')]
+         .map((o) => o.value)
+         .filter(Boolean);`,
+    );
+    if (!values.includes("SVO")) {
+      throw new Error(`grammar rule missing from the picker: ${JSON.stringify(values)}`);
+    }
   });
 }
 

@@ -14,6 +14,7 @@
   const DRAFT_TAG = "draft";
 
   let presets = $state<api.SyntaxGrid[]>([]);
+  let grammarRules = $state<api.GrammarRule[]>([]);
   let draftName = $state($t("translation.newPreset"));
   let slots = $state<SlotItem[]>([]);
   let separator = $state(" ");
@@ -53,6 +54,23 @@
   async function load() {
     await loadPresets();
     await loadOptions();
+    await loadGrammar();
+  }
+
+  async function loadGrammar() {
+    try {
+      grammarRules = (await api.grammarGet()).rules;
+    } catch (e) {
+      error = String(e);
+      return;
+    }
+    // Honour a default rule set in `config/translation`.
+    try {
+      const config = await api.translationConfig();
+      if (config.default_rule) loadGrammarRule(config.default_rule);
+    } catch {
+      // A missing/unreadable config is not fatal.
+    }
   }
 
   async function loadPresets() {
@@ -182,6 +200,15 @@
     report = null;
   }
 
+  /** Pull a grammar rule's slots into the canvas, like loading a preset. */
+  function loadGrammarRule(name: string) {
+    const rule = grammarRules.find((candidate) => candidate.name === name);
+    if (!rule) return;
+    draftName = rule.name;
+    slots = rule.slots.map((slot) => ({ id: newId(), slot }));
+    report = null;
+  }
+
   async function deletePreset(name: string) {
     await api.deletePreset(name);
     await loadPresets();
@@ -270,11 +297,13 @@
 <div class="translation">
   <TranslationToolbar
     {presets}
+    grammarRules={grammarRules.map((rule) => rule.name)}
     bind:draftName
     {hasPreset}
     {showMorphology}
     {mode}
     onLoad={loadPreset}
+    onLoadGrammar={loadGrammarRule}
     onSave={savePreset}
     onDelete={() => deletePreset(draftName)}
     onExport={exportPresets}

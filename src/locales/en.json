@@ -229,6 +229,8 @@
   },
   "translation": {
     "loadPreset": "load preset\u2026",
+    "loadGrammar": "load grammar rule\u2026",
+    "loadGrammarHint": "Copy a rule from Settings \u2192 Grammar into the canvas",
     "presetName": "preset name",
     "savePreset": "Save preset",
     "delete": "Delete",
