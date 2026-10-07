@@ -22,7 +22,7 @@ use std::path::{Path, PathBuf};
 use serde::{Deserialize, Serialize};
 use uuid::Uuid;
 
-use crate::model::{FieldType, FieldValue, TagDef, WordEntry, DEFINITION_TAG};
+use crate::model::{FieldType, FieldValue, TagDef, DEFINITION_TAG};
 use crate::workspace::{StorageError, Workspace};
 
 /// What a column in the input file means.
@@ -1169,21 +1169,7 @@ pub fn import_apply(
             if target.is_empty() {
                 continue;
             }
-            let choice = plan.link_choices.get(&target);
-            let parent = match choice {
-                Some(LinkChoice::UseExisting { table, id }) => Some((table.clone(), *id)),
-                Some(LinkChoice::CreateSuffix) => {
-                    create_suffix(workspace, &options.target_table, &target, &mut report)?
-                }
-                Some(LinkChoice::Leave) => None,
-                None => match resolve_default(workspace, options, &target) {
-                    Some(pair) => Some(pair),
-                    None if options.create_suffix_entries => {
-                        create_suffix(workspace, &options.target_table, &target, &mut report)?
-                    }
-                    None => None,
-                },
-            };
+            let parent = resolve_choice(workspace, options, plan, &target, &mut report)?;
             let Some((_, parent_id)) = parent else {
                 report.parents_skipped += 1;
                 continue;
@@ -1208,20 +1194,7 @@ pub fn import_apply(
             if target.is_empty() {
                 continue;
             }
-            let resolved = match plan.link_choices.get(&target) {
-                Some(LinkChoice::UseExisting { table, id }) => Some((table.clone(), *id)),
-                Some(LinkChoice::CreateSuffix) => {
-                    create_suffix(workspace, &options.target_table, &target, &mut report)?
-                }
-                Some(LinkChoice::Leave) => None,
-                None => match resolve_default(workspace, options, &target) {
-                    Some(pair) => Some(pair),
-                    None if options.create_suffix_entries => {
-                        create_suffix(workspace, &options.target_table, &target, &mut report)?
-                    }
-                    None => None,
-                },
-            };
+            let resolved = resolve_choice(workspace, options, plan, &target, &mut report)?;
             match resolved {
                 Some((_, id)) => {
                     if !ids.contains(&id) {
@@ -1288,6 +1261,32 @@ fn find_exact(workspace: &Workspace, wordname: &str) -> Option<(String, Uuid)> {
     found
 }
 
+/// Resolve one link target to a `(table, id)`, honoring an explicit plan
+/// choice and otherwise falling back to a default lookup, optionally creating
+/// a suffixed entry.
+fn resolve_choice(
+    workspace: &mut Workspace,
+    options: &ImportOptions,
+    plan: &ImportPlan,
+    target: &str,
+    report: &mut ImportReport,
+) -> Result<Option<(String, Uuid)>, ImportError> {
+    match plan.link_choices.get(target) {
+        Some(LinkChoice::UseExisting { table, id }) => Ok(Some((table.clone(), *id))),
+        Some(LinkChoice::CreateSuffix) => {
+            create_suffix(workspace, &options.target_table, target, report)
+        }
+        Some(LinkChoice::Leave) => Ok(None),
+        None => match resolve_default(workspace, options, target) {
+            Some(pair) => Ok(Some(pair)),
+            None if options.create_suffix_entries => {
+                create_suffix(workspace, &options.target_table, target, report)
+            }
+            None => Ok(None),
+        },
+    }
+}
+
 fn resolve_default(
     workspace: &Workspace,
     options: &ImportOptions,
@@ -1341,13 +1340,5 @@ impl fmt::Display for DuplicatePolicy {
             DuplicatePolicy::Add => "add",
         };
         f.write_str(name)
-    }
-}
-
-/// Convenience: the definition senses of an entry, for tests and callers.
-pub fn definition_senses(entry: &WordEntry) -> Vec<String> {
-    match entry.get(DEFINITION_TAG) {
-        Some(FieldValue::TagList(senses)) => senses.clone(),
-        _ => Vec::new(),
     }
 }

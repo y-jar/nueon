@@ -1,7 +1,7 @@
 <script lang="ts">
   import { t } from "svelte-i18n";
   import { revealItemInDir } from "@tauri-apps/plugin-opener";
-  import * as api from "../lib/api";
+  import { COLUMN_TYPES } from "../lib/dictionary";
   import {
     ui,
     closeContextMenu,
@@ -71,13 +71,6 @@
     const view = getContextEditor();
     return view ? getTableAtCursor(view.state) : null;
   });
-
-  const TYPES: { id: api.FieldType; label: string }[] = [
-    { id: "text", label: "Text" },
-    { id: "tag_list", label: "List" },
-    { id: "references", label: "Relation" },
-    { id: "boolean", label: "Checkbox" },
-  ];
 
   const base = $derived(
     menu
@@ -189,7 +182,7 @@
       {#if col.isTag && col.onChangeKind}
         <div class="ctx-submenu">
           <span class="muted">{$t("grid.changeType")}</span>
-          {#each TYPES as type (type.id)}
+          {#each COLUMN_TYPES as type (type.id)}
             <button
               class:active={col.kind === type.id}
               onclick={() => {

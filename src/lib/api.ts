@@ -27,8 +27,6 @@ export interface WordHit {
 /** Lowercased wordname → matching entries. */
 export type WordIndex = Record<string, WordHit[]>;
 
-export const ping = (): Promise<string> => invoke("ping");
-
 // -- workspace registry --------------------------------------------------
 export const workspaceList = (): Promise<WorkspaceEntry[]> =>
   invoke("workspace_list");
@@ -40,14 +38,6 @@ export const workspaceCreate = (
   name: string,
   destination: string,
 ): Promise<string> => invoke("workspace_create", { name, destination });
-export const workspaceRemove = (path: string): Promise<void> =>
-  invoke("workspace_remove", { path });
-export const workspaceRename = (path: string, name: string): Promise<void> =>
-  invoke("workspace_rename", { path, name });
-export const workspaceSetPath = (from: string, to: string): Promise<void> =>
-  invoke("workspace_set_path", { from, to });
-export const workspaceDeleteFromDisk = (path: string): Promise<void> =>
-  invoke("workspace_delete_from_disk", { path });
 
 // -- notes ---------------------------------------------------------------
 export const listWorkspace = (): Promise<NoteNode[]> =>
@@ -199,12 +189,6 @@ export interface RelatedWord {
   table: string;
   id: string;
   wordname: string;
-}
-
-export interface DerivationTree {
-  ancestors: RelatedWord[];
-  children: RelatedWord[];
-  descendants: RelatedWord[];
 }
 
 export interface DerivationNode extends RelatedWord {
@@ -369,11 +353,6 @@ export const renameWord = (
 ): Promise<boolean> => invoke("rename_word", { table, id, wordname });
 export const deleteWord = (table: string, id: string): Promise<boolean> =>
   invoke("delete_word", { table, id });
-export const moveWord = (
-  from: string,
-  to: string,
-  id: string,
-): Promise<boolean> => invoke("move_word", { from, to, id });
 export const addTag = (
   table: string,
   name: string,
@@ -396,12 +375,6 @@ export const setTagFormat = (
   tag: string,
   format: TagFormat,
 ): Promise<boolean> => invoke("set_tag_format", { table, tag, format });
-export interface HistoryStatus {
-  can_undo: boolean;
-  can_redo: boolean;
-}
-export const historyStatus = (): Promise<HistoryStatus> =>
-  invoke("history_status");
 export const undo = (): Promise<boolean> => invoke("undo");
 export const redo = (): Promise<boolean> => invoke("redo");
 export const warningDismissed = (key: string): Promise<boolean> =>
@@ -433,8 +406,6 @@ export const reparentWord = (
 ): Promise<boolean> => invoke("reparent_word", { table, child, parent });
 export const parentCandidates = (child: string): Promise<RelatedWord[]> =>
   invoke("parent_candidates", { child });
-export const derivationTree = (id: string): Promise<DerivationTree> =>
-  invoke("derivation_tree", { id });
 export const derivationGraph = (id: string): Promise<DerivationNode[]> =>
   invoke("derivation_graph", { id });
 
@@ -554,14 +525,9 @@ export interface GrammarConfig {
   rules: GrammarRule[];
 }
 
-export interface WindowLayout {
-  width: number;
-  height: number;
-  git_panel_open: boolean;
-}
-
 export const configGet = <T>(section: string): Promise<T> =>
   invoke("config_get", { section });
+
 /**
  * Config sections the UI may replace. `settings` is deliberately absent: that
  * file also holds grid views, layout and migration flags, and the backend
@@ -580,10 +546,6 @@ export const grammarGet = (): Promise<GrammarConfig> =>
   configGet<GrammarConfig>("grammar");
 export const grammarSet = (value: GrammarConfig): Promise<void> =>
   configSet("grammar", value);
-export const layoutGet = (): Promise<WindowLayout> =>
-  invoke("layout_get");
-export const layoutSetGitPanel = (open: boolean): Promise<void> =>
-  invoke("layout_set_git_panel", { open });
 
 export interface UiLayout {
   activity: string;
@@ -646,9 +608,6 @@ export const autocheckinSet = (
   enabled: boolean,
   secs: number,
 ): Promise<void> => invoke("autocheckin_set", { enabled, secs });
-export const autocheckinPump = (): Promise<string | null> =>
-  invoke("autocheckin_pump");
-
 
 // -- import --------------------------------------------------------------
 /** What a column in an imported file means (mirrors `ColumnRole`). */

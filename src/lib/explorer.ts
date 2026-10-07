@@ -1,7 +1,7 @@
 import type { NoteNode } from "./api";
 
 /** Depth-first flatten of a notes tree. */
-export function flattenNotes(nodes: NoteNode[], out: NoteNode[] = []): NoteNode[] {
+function flattenNotes(nodes: NoteNode[], out: NoteNode[] = []): NoteNode[] {
   for (const node of nodes) {
     out.push(node);
     if (node.children.length) flattenNotes(node.children, out);

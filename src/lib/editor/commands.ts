@@ -484,17 +484,3 @@ export const markdownKeymap: readonly KeyBinding[] = [
   { key: "Mod-0", run: clearHeading, preventDefault: true },
   { key: "Mod-Shift-x", run: toggleStrikethrough, preventDefault: true },
 ];
-
-/** Insert `![alt](url)` with the placeholder URL selected for typing. */
-export const insertImageTemplate: Command = (view) => {
-  const main = view.state.selection.main;
-  const alt = main.empty ? "image" : view.state.doc.sliceString(main.from, main.to);
-  const urlFrom = main.from + alt.length + 4;
-  view.dispatch({
-    changes: { from: main.from, to: main.to, insert: `![${alt}](url)` },
-    selection: EditorSelection.range(urlFrom, urlFrom + 3),
-    scrollIntoView: true,
-    userEvent: "input.format",
-  });
-  return true;
-};

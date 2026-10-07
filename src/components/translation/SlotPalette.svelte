@@ -1,6 +1,7 @@
 <script lang="ts">
   import { t } from "svelte-i18n";
   import type { ClauseSlot } from "../../lib/api";
+  import { SLOT_DRAG_TYPE } from "./types";
 
   interface Props {
     tags: string[];
@@ -10,11 +11,9 @@
 
   let { tags, onAddTag, onAddPrimitive }: Props = $props();
 
-  const DRAG_TYPE = "application/x-nueon-slot";
-
   function dragStart(event: DragEvent, slot: ClauseSlot) {
     const payload = JSON.stringify(slot);
-    event.dataTransfer?.setData(DRAG_TYPE, payload);
+    event.dataTransfer?.setData(SLOT_DRAG_TYPE, payload);
     event.dataTransfer?.setData("text/plain", payload);
     if (event.dataTransfer) event.dataTransfer.effectAllowed = "copy";
   }

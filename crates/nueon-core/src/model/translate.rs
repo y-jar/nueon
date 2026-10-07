@@ -44,17 +44,6 @@ pub struct SlotOutcome {
     pub symbol: Symbol,
 }
 
-/// A potential conlang equivalent for a token.
-#[derive(Debug, Clone, PartialEq, Eq)]
-pub struct Candidate {
-    pub table: String,
-    pub id: Uuid,
-    pub wordname: String,
-    pub senses: Vec<String>,
-    /// Morphology affix to attach to the wordname (empty when none).
-    pub affix: String,
-}
-
 /// One morpheme of an interlinear gloss: its surface form and gloss.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct GlossMorpheme {
@@ -285,24 +274,6 @@ fn matching_entries<'a>(
         }
     }
     results
-}
-
-/// Candidates for a token, for use by UI conflict pickers.
-pub fn token_candidates(dict: &Dictionary, token: &Token, affixes: &[AffixRule]) -> Vec<Candidate> {
-    matching_entries(dict, token, affixes)
-        .into_iter()
-        .map(|matched| Candidate {
-            table: matched.table.to_string(),
-            id: matched.entry.id,
-            wordname: matched.entry.wordname.clone(),
-            senses: matched
-                .entry
-                .definition()
-                .map(<[String]>::to_vec)
-                .unwrap_or_default(),
-            affix: matched.affix,
-        })
-        .collect()
 }
 
 /// A chosen dictionary entry plus its morphology affix.

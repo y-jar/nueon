@@ -30,8 +30,10 @@
   import * as api from "../lib/api";
   import {
     boolValue,
+    COLUMN_TYPES,
     displayValue,
     textValue,
+    typeLabel,
   } from "../lib/dictionary";
   import { misspelledWords } from "../lib/spellcheck";
   import {
@@ -82,18 +84,7 @@
   let warnDismissed = $state(false);
   let dontWarnAgain = $state(false);
 
-  // Notion-style column types backed by the existing FieldTypes.
-  const COLUMN_TYPES: { id: api.FieldType; label: string }[] = [
-    { id: "text", label: "Text" },
-    { id: "tag_list", label: "List" },
-    { id: "references", label: "Relation" },
-    { id: "boolean", label: "Checkbox" },
-  ];
   const FORMATS: api.TagFormat[] = ["default", "multiline", "date", "measurement"];
-
-  function typeLabel(kind: api.FieldType): string {
-    return COLUMN_TYPES.find((type) => type.id === kind)?.label ?? kind;
-  }
 
   const tagColumns = $derived(
     (doc.table?.tags ?? []).filter(

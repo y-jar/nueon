@@ -1,4 +1,17 @@
-import type { FieldValue } from "./api";
+import type { FieldType, FieldValue } from "./api";
+
+/** The column types offered by the grid and context menu, in menu order. */
+export const COLUMN_TYPES: { id: FieldType; label: string }[] = [
+  { id: "text", label: "Text" },
+  { id: "tag_list", label: "List" },
+  { id: "references", label: "Relation" },
+  { id: "boolean", label: "Checkbox" },
+];
+
+/** The menu label for a field type. */
+export function typeLabel(kind: FieldType): string {
+  return COLUMN_TYPES.find((type) => type.id === kind)?.label ?? kind;
+}
 
 /** Human-readable text for any field value. */
 export function displayValue(value?: FieldValue): string {

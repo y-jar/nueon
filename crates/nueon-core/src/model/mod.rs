@@ -4,7 +4,6 @@ pub mod derivation;
 mod dictionary;
 mod entry;
 pub mod field;
-pub mod query;
 mod table;
 pub mod tag;
 pub mod translate;
@@ -19,6 +18,6 @@ pub use field::{FieldType, FieldValue};
 pub use table::{TagKindChange, TagRemoval, WordTable};
 pub use tag::{TagDef, TagFormat, DEFINITION_TAG, PARENT_TAG, WORDNAME_TAG};
 pub use translate::{
-    token_candidates, tokenize, translate, Candidate, GlossMorpheme, InterlinearGloss, SlotOutcome,
-    Symbol, Token, TranslationReport,
+    tokenize, translate, GlossMorpheme, InterlinearGloss, SlotOutcome, Symbol, Token,
+    TranslationReport,
 };
