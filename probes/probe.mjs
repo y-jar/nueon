@@ -535,6 +535,27 @@ async function main() {
     label: "seeded notes in tree",
   });
 
+  // -- probe 16: the brand is the new logo, not the old "L" ----------------
+  // (The app has a single dark theme, so there is no light theme to check.)
+  await probe("16-app-brand-logo", async () => {
+    const brand = await js(
+      `const b = document.querySelector('.brand');
+       const img = b ? b.querySelector('img') : null;
+       return {
+         text: b ? b.textContent.trim() : null,
+         imgs: b ? b.querySelectorAll('img').length : 0,
+         natural: img ? img.naturalWidth : 0,
+       };`,
+    );
+    if (brand.text && brand.text.length) {
+      throw new Error(`brand still shows text: ${JSON.stringify(brand.text)}`);
+    }
+    if (brand.imgs < 1) throw new Error("brand has no <img>");
+    if (!(brand.natural > 0)) {
+      throw new Error(`logo image not loaded (naturalWidth=${brand.natural})`);
+    }
+  });
+
   // -- probe 1: tab switch restores cursor + top line ----------------------
   await openNote("alpha.md");
   await waitJs(

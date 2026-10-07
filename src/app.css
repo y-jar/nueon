@@ -148,10 +148,12 @@ textarea:focus {
   width: 30px;
   height: 30px;
   margin-bottom: 8px;
-  border-radius: 8px;
-  background: var(--accent);
-  color: var(--bg);
-  font-weight: 700;
+}
+
+.activitybar .brand img {
+  display: block;
+  width: 26px;
+  height: 26px;
 }
 
 .activity {
@@ -579,6 +581,13 @@ textarea:focus {
   max-width: 720px;
   margin: 8vh auto;
   padding: 0 24px;
+}
+
+.onboarding .onboarding-logo {
+  display: block;
+  width: 64px;
+  height: 64px;
+  margin-bottom: 10px;
 }
 
 .onboarding h1 {

@@ -15,6 +15,7 @@
     openSettings,
     openWorkspace,
   } from "../lib/state.svelte";
+  import logo from "../assets/nueon-64.png";
 
   let wsMenu = $state(false);
   let wsError = $state("");
@@ -38,7 +39,9 @@
 </script>
 
 <nav class="activitybar">
-  <div class="brand" title={$t("app.brand")}>L</div>
+  <div class="brand" title={$t("app.brand")}>
+    <img src={logo} alt={$t("app.brand")} width="26" height="26" />
+  </div>
 
   {#each items as item (item.id)}
     <button

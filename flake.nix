@@ -92,6 +92,10 @@
 
           install -Dm644 src-tauri/icons/32x32.png \
             $out/share/icons/hicolor/32x32/apps/nueon.png
+          install -Dm644 src-tauri/icons/48x48.png \
+            $out/share/icons/hicolor/48x48/apps/nueon.png
+          install -Dm644 src-tauri/icons/64x64.png \
+            $out/share/icons/hicolor/64x64/apps/nueon.png
           install -Dm644 src-tauri/icons/128x128.png \
             $out/share/icons/hicolor/128x128/apps/nueon.png
           install -Dm644 src-tauri/icons/icon.png \

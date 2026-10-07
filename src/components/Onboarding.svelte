@@ -3,6 +3,7 @@
   import { t } from "svelte-i18n";
   import { open } from "@tauri-apps/plugin-dialog";
   import { ui, openWorkspace, createWorkspace } from "../lib/state.svelte";
+  import logo from "../assets/nueon-64.png";
 
   let name = $state("");
   let destination = $state("");
@@ -63,6 +64,7 @@
       {$t("onboarding.cancel")}
     </button>
   {/if}
+  <img class="onboarding-logo" src={logo} alt={$t("app.brand")} width="64" height="64" />
   <h1>{$t("app.brand")}</h1>
   <p class="muted">{$t("onboarding.tagline")}</p>
 

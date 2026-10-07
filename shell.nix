@@ -38,6 +38,9 @@ let
     rustfmt
     nodejs_22
     git
+    # Regenerate/verify the app icons, and validate the desktop entry.
+    imagemagick
+    desktop-file-utils
   ];
 
   # Canonical dev commands. Short shell aliases are defined in `shellHook`.
@@ -54,11 +57,14 @@ let
     "loom-testall" = "cargo test --workspace";
     "loom-fecheck" = "npm run check";
     "loom-febuild" = "npm run build";
+    "loom-icons" = "sh scripts/make-icons.sh";
+    "loom-iconcheck" = "sh scripts/check-icons.sh";
     "loom-clean" = "cargo clean && rm -rf dist";
     "loom-gates" = ''
       cargo fmt --all --check \
         && cargo clippy --workspace --all-targets -- -D warnings \
         && cargo test -p nueon-core \
+        && sh scripts/check-icons.sh \
         && npm run check \
         && npm run test \
         && npm run build
@@ -78,8 +84,10 @@ nueon dev commands
   testall   cargo test --workspace
   fecheck   npm run check                (svelte-check)
   febuild   npm run build
+  icons     regenerate the app icon set from assets/branding/nueon-logo.png
+  iconcheck verify the generated icons (size + alpha)
   clean     cargo clean && rm -rf dist
-  gates     fmtcheck + clippy + ctest + fecheck + febuild
+  gates     fmtcheck + clippy + ctest + iconcheck + fecheck + febuild
 EOF
     '';
   };
@@ -106,6 +114,9 @@ pkgs.mkShell {
     rustfmt
     git
     nodejs_22
+    # Regenerate/verify the app icons, and validate the desktop entry.
+    imagemagick
+    desktop-file-utils
     # Packaged-build probes (probes/): virtual display for the webview.
     xorg-server
   ] ++ commandPackages;
@@ -130,11 +141,13 @@ pkgs.mkShell {
     alias testall=loom-testall
     alias fecheck=loom-fecheck
     alias febuild=loom-febuild
+    alias icons=loom-icons
+    alias iconcheck=loom-iconcheck
     alias clean=loom-clean
     alias gates=loom-gates
     alias aliases=loom-help
     alias help=loom-help
 
-    echo "nueon dev shell — type 'help' for commands (deps dev run app pkg fmt fmtcheck clippy ctest testall fecheck febuild clean gates)"
+    echo "nueon dev shell — type 'help' for commands (deps dev run app pkg fmt fmtcheck clippy ctest testall fecheck febuild icons iconcheck clean gates)"
   '';
 }

@@ -1,3 +1,5 @@
+<p align="center"><img src="assets/branding/nueon-logo.png" width="128" alt="nueon"></p>
+
 # nueon
 
 A conlang editor and creation app for Linux: a Markdown notebook, a
