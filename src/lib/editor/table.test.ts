@@ -128,6 +128,18 @@ test("displayWidth counts grapheme clusters, not code units", () => {
   assert.equal(displayWidth("🇯🇵"), 2);
 });
 
+test("displayWidth handles tie bars, PUA, Unicode forms and Hangul", () => {
+  // The tie bar (U+0361) extends its base, so "k͡p" is two clusters of one.
+  assert.equal(displayWidth("k\u0361p"), 2);
+  // Private Use Area is narrow, not wide.
+  assert.equal(displayWidth("\uE000"), 1);
+  // NFC and NFD spellings of "é" are both one column.
+  assert.equal(displayWidth("\u00E9"), 1);
+  assert.equal(displayWidth("e\u0301"), 1);
+  // Hangul syllables are wide.
+  assert.equal(displayWidth("\uD55C\uAE00"), 4);
+});
+
 test("graphemes returns user-perceived clusters", () => {
   assert.deepEqual(graphemes("a\u{0301}b"), ["a\u{0301}", "b"]);
   assert.deepEqual(graphemes("👨‍👩‍👧x"), ["👨‍👩‍👧", "x"]);

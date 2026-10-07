@@ -143,15 +143,30 @@ async function typeInto(selector, text) {
   await wd("POST", `/session/${sessionId}/element/${id}/value`, { text });
 }
 
-async function pressEnter() {
+// WebDriver key values: Tab, Enter, Control.
+const TAB = "\uE004";
+const ENTER = "\uE007";
+const CTRL = "\uE009";
+
+/** Press a key, optionally held with modifiers (e.g. `pressKey("z", [CTRL])`). */
+async function pressKey(value, modifiers = []) {
+  const actions = [];
+  for (const modifier of modifiers) actions.push({ type: "keyDown", value: modifier });
+  actions.push({ type: "keyDown", value });
+  actions.push({ type: "keyUp", value });
+  for (const modifier of [...modifiers].reverse()) {
+    actions.push({ type: "keyUp", value: modifier });
+  }
   await wd("POST", `/session/${sessionId}/actions`, {
-    actions: [
-      { type: "key", id: "keys", actions: [
-        { type: "keyDown", value: "" },
-        { type: "keyUp", value: "" },
-      ] },
-    ],
+    actions: [{ type: "key", id: "keys", actions }],
   });
+}
+
+/** Focus the editor for `notePath` with a real WebDriver element click. */
+async function focusEditor(notePath) {
+  const id = await find(`.cm-host[data-note="${notePath}"] .cm-content`);
+  if (!id) throw new Error(`no editor content for ${notePath}`);
+  await wd("POST", `/session/${sessionId}/element/${id}/click`);
 }
 
 async function screenshot(name) {
@@ -221,6 +236,20 @@ function editorText(notePath) {
   return js(
     `${viewScript(notePath)}
      return v.state.doc.toString();`,
+  );
+}
+
+/** Poll until the editor's document equals `expected` (or throw). */
+async function waitEditorText(notePath, expected, timeout = 10000) {
+  const deadline = Date.now() + timeout;
+  let last;
+  while (Date.now() < deadline) {
+    last = await editorText(notePath);
+    if (last === expected) return;
+    await new Promise((resolve) => setTimeout(resolve, 150));
+  }
+  throw new Error(
+    `editor ${notePath} mismatch: ${JSON.stringify(last)?.slice(0, 120)}`,
   );
 }
 
@@ -535,6 +564,24 @@ async function main() {
   await screenshot("p5-rename");
   await probe("5-rename-keeps-position-under-new-path", async () => {
     assertEqual(after5?.anchor, before5?.anchor, "cursor after rename");
+  });
+
+  // -- probe 6: undo cannot revert an external reload ----------------------
+  // A git checkout / external write follows the file. If the reload enters
+  // the undo history, Ctrl+Z replays the old text and autosaves it back over
+  // the new file — the buffer must stay on the disk content.
+  await openNote("gamma.md");
+  const reloaded = "reload one\nreload two\nreload three\n";
+  fs.writeFileSync(path.join(WORKSPACE, "notes", "gamma.md"), reloaded);
+  await triggerReload();
+  await waitEditorText("gamma.md", reloaded);
+  await focusEditor("gamma.md");
+  await pressKey("z", [CTRL]);
+  await new Promise((resolve) => setTimeout(resolve, 250));
+  const afterUndo6 = await editorText("gamma.md");
+  await screenshot("p6-undo-after-reload");
+  await probe("6-undo-cannot-revert-external-reload", async () => {
+    assertEqual(afterUndo6, reloaded, "buffer after undo");
   });
 }
 

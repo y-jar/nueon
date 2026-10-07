@@ -1,7 +1,7 @@
 import { defaultKeymap, history, historyKeymap, indentWithTab } from "@codemirror/commands";
 import { markdown } from "@codemirror/lang-markdown";
 import { highlightSelectionMatches, search, searchKeymap } from "@codemirror/search";
-import { EditorState, Prec } from "@codemirror/state";
+import { EditorState, Prec, Transaction } from "@codemirror/state";
 import {
   EditorView,
   crosshairCursor,
@@ -262,12 +262,17 @@ export const codemirror: Action<HTMLElement, EditorParams> = (node, params) => {
   /**
    * Replace the buffer with text from disk as one minimal splice: the
    * cursor and scroll position map through the change instead of resetting.
+   *
+   * Excluded from undo history: a reload follows the file (a git checkout,
+   * another window). If it were undoable, Ctrl+Z would replay the old text
+   * and autosave it back over the new file.
    */
   function replaceBuffer(content: string): void {
     const splice = diffSplice(view.state.doc.toString(), content);
     if (splice) {
       view.dispatch({
         changes: { from: splice.from, to: splice.to, insert: splice.insert },
+        annotations: Transaction.addToHistory.of(false),
       });
     }
   }
