@@ -45,6 +45,8 @@ const TYPE = "start\n";
 const MULTI = "hello world\n";
 // A note for heading/strikethrough shortcuts (probe 14).
 const FMT = "plain line\n";
+// A note with a task list, for the README audit probe 15.
+const TASK = "above\n- [ ] todo\n";
 
 const DRIVER_CANDIDATES = [
   "/tmp/opencode/tauri-driver-root/bin/tauri-driver",
@@ -390,6 +392,7 @@ function seedWorkspace() {
   fs.writeFileSync(path.join(WORKSPACE, "notes", "type.md"), TYPE);
   fs.writeFileSync(path.join(WORKSPACE, "notes", "multi.md"), MULTI);
   fs.writeFileSync(path.join(WORKSPACE, "notes", "fmt.md"), FMT);
+  fs.writeFileSync(path.join(WORKSPACE, "notes", "task.md"), TASK);
   const configDir = path.join(ROOT, "home", ".config", "nueon");
   fs.mkdirSync(configDir, { recursive: true });
   fs.writeFileSync(
@@ -864,6 +867,98 @@ async function main() {
     await pressKey("1", [CTRL]);
     await new Promise((resolve) => setTimeout(resolve, 150));
     assertEqual(await editorText("fmt.md"), "plain line\n", "Ctrl+1 outside the editor");
+  });
+
+  // -- probe 15: README claim audit ----------------------------------------
+  await probe("15-readme-claim-audit", async () => {
+    const audit = [];
+    const check = (name, ok, detail = "") => audit.push({ name, ok, detail });
+
+    check(
+      "workspace boots into the seeded workspace",
+      await js(`return (document.querySelector('.statusbar')?.textContent || '').includes('probe')`),
+    );
+
+    await openNote("inline.md");
+    await waitEditorText("inline.md", INLINE);
+    const labels = await js(
+      `return [...document.querySelectorAll('.editor-toolbar button')].map((b) => b.getAttribute('aria-label') || '').filter(Boolean);`,
+    );
+    for (const want of [
+      "Bold",
+      "Italic",
+      "Underline",
+      "Strikethrough",
+      "Insert table",
+    ]) {
+      check(`formatting toolbar: ${want}`, labels.includes(want));
+    }
+
+    await openNote("task.md");
+    await waitEditorText("task.md", TASK);
+    await focusEditor("task.md");
+    await placeCursor("task.md", 1);
+    const tasks = await js(
+      `return document.querySelectorAll('.cm-host[data-note="task.md"] .cm-task').length;`,
+    );
+    check("task list renders a checkbox", tasks >= 1, `count=${tasks}`);
+
+    await openNote("inline.md");
+    await waitEditorText("inline.md", INLINE);
+    await focusEditor("inline.md");
+    await placeCursor("inline.md", 1);
+    const preview = await js(
+      `const c = document.querySelector('.cm-host[data-note="inline.md"] .cm-content');
+       return { strong: c.querySelectorAll('.cm-strong').length, math: c.querySelectorAll('.cm-math').length };`,
+    );
+    check("live preview conceals bold", preview.strong >= 1, `strong=${preview.strong}`);
+    check("KaTeX inline math renders", preview.math >= 1, `math=${preview.math}`);
+
+    await openNote("blocktable.md");
+    await waitEditorText("blocktable.md", BLOCKTABLE);
+    await focusEditor("blocktable.md");
+    await placeCursor("blocktable.md", 1);
+    const tables = await js(
+      `return document.querySelectorAll('.cm-host[data-note="blocktable.md"] .cm-table').length;`,
+    );
+    check("table renders as a widget", tables >= 1, `count=${tables}`);
+
+    // Dictionary: reach the tables panel and create a table to open the grid.
+    await js(`document.querySelectorAll('.activitybar .activity')[1].click(); return true;`);
+    await waitJs(`!!document.querySelector('.sidebar .pane-head')`, {
+      label: "tables panel",
+    });
+    check(
+      "dictionary tables panel",
+      await js(`return !!document.querySelector('.sidebar .pane-head .pane-title')`),
+    );
+    await js(
+      `document.querySelector('.sidebar .pane-head .actions button:nth-of-type(2)').click(); return true;`,
+    );
+    await waitJs(`!!document.querySelector('.sidebar input.new-input')`, {
+      label: "new table input",
+    });
+    await js(`const input = document.querySelector('.sidebar input.new-input');
+      input.value = "audit";
+      input.dispatchEvent(new Event("input", { bubbles: true }));
+      input.dispatchEvent(new KeyboardEvent("keydown", { key: "Enter", bubbles: true }));
+      return true;`);
+    await waitJs(`!!document.querySelector('.grid-view')`, { label: "grid view" });
+    check("dictionary grid opens", true);
+
+    await js(`document.querySelectorAll('.activitybar .activity')[2].click(); return true;`);
+    await waitJs(`!!document.querySelector('.translation')`, { label: "translation view" });
+    check("translation view opens", true);
+
+    await js(`document.querySelectorAll('.activitybar .activity')[3].click(); return true;`);
+    await waitJs(`!!document.querySelector('.git-panel')`, { label: "source control" });
+    check("source control panel opens", true);
+
+    await js(`document.querySelectorAll('.activitybar .activity')[0].click(); return true;`);
+
+    console.log("README-AUDIT", JSON.stringify(audit));
+    const failed = audit.filter((entry) => !entry.ok);
+    if (failed.length) throw new Error(`README claims failed: ${JSON.stringify(failed)}`);
   });
 
   // -- probe 9: ArrowDown from above reveals each block's raw text ---------

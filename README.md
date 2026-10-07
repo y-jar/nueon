@@ -22,6 +22,9 @@ Repository: <https://github.com/y-jar/nueon>
   type, delete tag) where schema edits commit as revertible steps.
 - **Inspector & etymology** — edit a word's fields, attach tags, and manage
   multi-parent etymology links (a cycle-safe DAG).
+- **Translation builder** — assemble a clause on a slot canvas, open the
+  morphology drawer, and run a translation; words can be looked up in the
+  dictionary and unknown ones added from the Inspector.
 - **Import wizard** — bring in CSV/TSV with auto-detection of delimiter,
   header and column roles, a read-only preview (row/link/duplicate/NFC
   warnings), `[[wiki link]]` parent resolution, and a revertible commit.
@@ -32,7 +35,8 @@ Repository: <https://github.com/y-jar/nueon>
 - **Version control** — opt-in git with idle auto check-in, status/diff/log, and
   revertible schema edits.
 - **Tabs, splits & windows** — tab groups, drag-to-split, persisted layout, and
-  torn-off secondary windows; autofocus on creation prompts; search everywhere.
+  torn-off secondary windows; autofocus on creation prompts; search in the grid
+  and the note editor.
 
 See [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md) for the three-tier design.
 

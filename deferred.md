@@ -11,6 +11,9 @@ were completed during the Tauri migration (R0–R8).
 - ~~Inline images and image files stored in the workspace.~~ (R7)
 - ~~GFM tables, task lists (`- [ ]`), footnotes.~~ (R7)
 - Cross-block keyboard navigation (Up/Down across region boundaries, Home/End).
+  Concretely: arrow-key navigation steps **over** rendered tables, math and
+  HTML blocks instead of revealing them — a click is required to edit a block.
+  Verified by probe 9 (`deferred.md` known limitation).
 - ~~Find/replace within a note.~~ (R7)
 - ~~Optional debounced disk writes (currently every keystroke).~~ (R7)
 - ~~Cache the dictionary word index (currently rebuilt on each rendered frame).~~ (R7)
