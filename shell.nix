@@ -106,6 +106,8 @@ pkgs.mkShell {
     rustfmt
     git
     nodejs_22
+    # Packaged-build probes (probes/): virtual display for the webview.
+    xorg-server
   ] ++ commandPackages;
 
   # WebKitGTK loaded at runtime by the Tauri webview.

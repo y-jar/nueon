@@ -27,7 +27,9 @@ import {
   markdownKeymap,
   type FormatState,
 } from "./commands";
+import { diffSplice } from "./diff";
 import { livePreview, setAssetBase } from "./livePreview";
+import { initialPosition, restoreScroll, savePosition } from "./positions";
 import { highlight, theme } from "./theme";
 
 export interface EditorParams {
@@ -127,10 +129,18 @@ export const codemirror: Action<HTMLElement, EditorParams> = (node, params) => {
   /** Saves run strictly one after another so each uses the previous hash. */
   let queue: Promise<void> = Promise.resolve();
 
+  // A remount (tab switch, rename) starts already placed where the previous
+  // editor left off: initial selection + scroll are construction options,
+  // so no corrective dispatch disturbs the first measure.
+  const restored = initialPosition(params.path, params.content.length);
+
   const view = new EditorView({
     parent: node,
     state: EditorState.create({
       doc: params.content,
+      ...(restored
+        ? { selection: { anchor: restored.anchor, head: restored.head } }
+        : {}),
       extensions: [
         lineNumbers(),
         history(),
@@ -168,6 +178,11 @@ export const codemirror: Action<HTMLElement, EditorParams> = (node, params) => {
             current.onDirty(true);
             schedule();
           }
+          if (update.selectionSet) {
+            // Keep the remembered position fresh; a rename reads it before
+            // this editor's destroy hook gets to save it.
+            savePosition(current.path, view);
+          }
           if (update.docChanged || update.selectionSet) {
             current.onFormat?.(formatAt(update.state));
           }
@@ -197,6 +212,7 @@ export const codemirror: Action<HTMLElement, EditorParams> = (node, params) => {
   setAssetBase(params.assetBase, params.path);
   params.onView?.(view);
   params.onFormat?.(formatAt(view.state) ?? EMPTY_FORMAT);
+  if (restored) restoreScroll(view, restored.top);
 
   function flush(): Promise<void> {
     if (timer) {
@@ -243,11 +259,17 @@ export const codemirror: Action<HTMLElement, EditorParams> = (node, params) => {
     }, AUTOSAVE_MS);
   }
 
+  /**
+   * Replace the buffer with text from disk as one minimal splice: the
+   * cursor and scroll position map through the change instead of resetting.
+   */
   function replaceBuffer(content: string): void {
-    view.dispatch({
-      changes: { from: 0, to: view.state.doc.length, insert: content },
-      selection: { anchor: 0 },
-    });
+    const splice = diffSplice(view.state.doc.toString(), content);
+    if (splice) {
+      view.dispatch({
+        changes: { from: splice.from, to: splice.to, insert: splice.insert },
+      });
+    }
   }
 
   const session: Session = {
@@ -329,6 +351,8 @@ export const codemirror: Action<HTMLElement, EditorParams> = (node, params) => {
       }
     },
     async destroy() {
+      // Outlive the remount: the next editor for this path restores these.
+      savePosition(current.path, view);
       current.onView?.(null);
       sessions.delete(session);
       await flush();

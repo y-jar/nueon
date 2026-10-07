@@ -7,6 +7,8 @@ import { windowLabel } from "./window";
 import { stripMd } from "./explorer";
 import { shouldPruneGroup } from "./tabs";
 import { flushNotes, quiesceNotes, resolveNoteConflict } from "./editor/action";
+import { beginRead, isFreshest } from "./editor/freshness";
+import { dropPosition, movePosition } from "./editor/positions";
 
 /** Left activity ribbon selection. */
 export type Activity = "notes" | "dictionary" | "translation" | "git";
@@ -1023,8 +1025,12 @@ export async function reloadOpenNotes(): Promise<void> {
     const doc = group.doc;
     if (doc.view !== "notes" || !doc.selected) continue;
     const path = doc.selected;
+    const generation = beginRead(path);
     try {
       const snapshot = await api.readNote(path);
+      // A save (or a newer read) landed while this read was in flight: the
+      // response is stale and must not move the note backwards.
+      if (!isFreshest(path, generation)) continue;
       if (doc.selected !== path || snapshot.hash === doc.noteHash) continue;
       doc.noteContent = snapshot.content;
       doc.noteHash = snapshot.hash;
@@ -1270,6 +1276,8 @@ export async function renamePath(
     resume();
     throw error;
   }
+  // Editor positions follow the rename so the remount restores them.
+  movePosition(oldPath, newPath);
   const prefix = `${oldPath}/`;
   for (const group of ui.groups) {
     if (group.doc.selected === oldPath) group.doc.selected = newPath;
@@ -1312,6 +1320,7 @@ export async function deletePath(relPath: string): Promise<api.TrashRecord> {
     resume();
     throw error;
   }
+  dropPosition(relPath);
   const prefix = `${relPath}/`;
   for (const group of [...ui.groups]) {
     const removed = group.tabs.filter(

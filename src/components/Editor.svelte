@@ -15,6 +15,7 @@
     type FormatState,
   } from "../lib/editor/commands";
   import { codemirror } from "../lib/editor/action";
+  import { invalidateReads } from "../lib/editor/freshness";
   import { open, save } from "@tauri-apps/plugin-dialog";
   import { Upload } from "@lucide/svelte";
   import Popover from "./Popover.svelte";
@@ -145,7 +146,9 @@
           onSave: api.saveNote,
           onSaved: (hash: string, text: string) => {
             // Keep the loaded copy in step with disk so a remount (rename,
-            // tab switch) never starts from stale text.
+            // tab switch) never starts from stale text. Any disk read that
+            // was in flight while we saved is now stale.
+            if (doc.selected) invalidateReads(doc.selected);
             doc.noteContent = text;
             doc.noteHash = hash;
           },
