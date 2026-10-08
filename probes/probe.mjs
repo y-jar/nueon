@@ -1588,6 +1588,10 @@ async function main() {
     ) {
       throw new Error(`picker missing candidates: ${JSON.stringify(options)}`);
     }
+    // Each option also shows the candidate's definition, to disambiguate.
+    if (!options.some((label) => label.includes("zzarg"))) {
+      throw new Error(`picker missing definitions: ${JSON.stringify(options)}`);
+    }
 
     // Choosing one resolves the conflict and updates the output.
     await js(

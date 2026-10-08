@@ -194,7 +194,11 @@
                 >
                   <option value="">{$t("translation.choose")}</option>
                   {#each candidatesFor(index) as hit (hit.id)}
-                    <option value={hit.id}>{hit.wordname} · {hit.table}</option>
+                    <option value={hit.id}>
+                      {hit.wordname} · {hit.table}{hit.senses.length
+                        ? ` \u2014 ${hit.senses.join(", ")}`
+                        : ""}
+                    </option>
                   {/each}
                 </select>
               {/if}
@@ -218,7 +222,11 @@
             >
               <option value="">{$t("translation.choose")}</option>
               {#each candidatesFor(index) as hit (hit.id)}
-                <option value={hit.id}>{hit.wordname} · {hit.table}</option>
+                <option value={hit.id}>
+                  {hit.wordname} · {hit.table}{hit.senses.length
+                    ? ` \u2014 ${hit.senses.join(", ")}`
+                    : ""}
+                </option>
               {/each}
             </select>
           </div>
