@@ -1120,8 +1120,8 @@ impl Workspace {
                 .unwrap_or_else(|| " ".to_string()),
             affixes: self.translation.affixes.clone(),
             mode: match self.translation.settings.get("mode").map(String::as_str) {
-                Some("direct") => TranslationMode::Direct,
-                _ => TranslationMode::Grid,
+                Some("grid") => TranslationMode::Grid,
+                _ => TranslationMode::Direct,
             },
         }
     }
@@ -2714,7 +2714,11 @@ mod tests {
 
         let dir = tempfile::tempdir().unwrap();
         let mut ws = Workspace::new(dir.path()).unwrap();
-        assert_eq!(ws.translation_options().mode, TranslationMode::Grid);
+        assert_eq!(
+            ws.translation_options().mode,
+            TranslationMode::Direct,
+            "word-for-word is the default"
+        );
         ws.set_translation_options(TranslationOptions {
             separator: "".into(),
             affixes: vec![AffixRule {
@@ -2722,7 +2726,7 @@ mod tests {
                 english: "s".into(),
                 conlang: "i".into(),
             }],
-            mode: TranslationMode::Direct,
+            mode: TranslationMode::Grid,
         })
         .unwrap();
 
@@ -2731,7 +2735,7 @@ mod tests {
         assert_eq!(options.separator, " ", "empty separator resets to default");
         assert_eq!(options.affixes.len(), 1);
         assert_eq!(options.affixes[0].conlang, "i");
-        assert_eq!(options.mode, TranslationMode::Direct);
+        assert_eq!(options.mode, TranslationMode::Grid);
     }
 
     #[test]

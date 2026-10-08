@@ -23,6 +23,7 @@
     report: TranslationReport | null;
     choices: Record<string, string>;
     drafts: Record<number, Draft>;
+    suggestions: Record<number, WordHit[]>;
     mode: TranslationMode;
     tables: TableSummary[];
     error: string;
@@ -32,6 +33,8 @@
     onSetDraft: (index: number, patch: Partial<Draft>) => void;
     onCreateMissing: (index: number) => void;
     onCreateDraft: (index: number) => void;
+    onPickSuggestion: (index: number, hit: WordHit) => void;
+    onCreateAllDrafts: () => void;
   }
 
   let {
@@ -40,6 +43,7 @@
     report,
     choices,
     drafts,
+    suggestions,
     mode,
     tables,
     error,
@@ -49,6 +53,8 @@
     onSetDraft,
     onCreateMissing,
     onCreateDraft,
+    onPickSuggestion,
+    onCreateAllDrafts,
   }: Props = $props();
 
   function candidatesFor(index: number): WordHit[] {
@@ -120,6 +126,88 @@
 
       <InterlinearGloss gloss={report.gloss} />
 
+      {#if mode === "direct"}
+        <div class="section-title">{$t("translation.wordForWord")}</div>
+        <div class="token-rows">
+          {#each report.tokens as token, index (index)}
+            <div
+              class="token-row"
+              class:missing={report.missing.includes(index)}
+            >
+              <span class="token-english">{token.text}</span>
+              <span class="arrow">→</span>
+              <span class="mono token-conlang"
+                >{symbolText(report.slots[index]?.symbol)}</span
+              >
+              {#if report.missing.includes(index)}
+                <select
+                  value={missingDraft(index).table}
+                  onchange={(e) =>
+                    onSetDraft(index, { table: e.currentTarget.value })}
+                >
+                  {#each tables as table (table.name)}
+                    <option value={table.name}>{table.name}</option>
+                  {/each}
+                </select>
+                <input
+                  placeholder={$t("translation.wordname")}
+                  value={missingDraft(index).wordname}
+                  oninput={(e) =>
+                    onSetDraft(index, { wordname: e.currentTarget.value })}
+                />
+                <input
+                  placeholder={$t("translation.tagsComma")}
+                  value={missingDraft(index).tags}
+                  oninput={(e) =>
+                    onSetDraft(index, { tags: e.currentTarget.value })}
+                />
+                <button onclick={() => onCreateMissing(index)}
+                  >{$t("translation.create")}</button
+                >
+                <button onclick={() => onCreateDraft(index)}
+                  >{$t("translation.draft")}</button
+                >
+                {#if suggestions[index]?.length}
+                  <select
+                    value=""
+                    title={$t("translation.linkExistingHint")}
+                    onchange={(e) => {
+                      const picked = Number(e.currentTarget.value);
+                      e.currentTarget.value = "";
+                      const hit = suggestions[index]?.[picked];
+                      if (hit) onPickSuggestion(index, hit);
+                    }}
+                  >
+                    <option value="">{$t("translation.linkExisting")}</option>
+                    {#each suggestions[index] as hit, i (hit.id)}
+                      <option value={i}>
+                        {hit.wordname} · {hit.table}{hit.senses.length
+                          ? ` (${hit.senses.join(", ")})`
+                          : ""}
+                      </option>
+                    {/each}
+                  </select>
+                {/if}
+              {:else if report.conflicts.includes(index)}
+                <select
+                  value={choices[String(index)] ?? ""}
+                  onchange={(e) => onPickChoice(index, e.currentTarget.value)}
+                >
+                  <option value="">{$t("translation.choose")}</option>
+                  {#each candidatesFor(index) as hit (hit.id)}
+                    <option value={hit.id}>{hit.wordname} · {hit.table}</option>
+                  {/each}
+                </select>
+              {/if}
+            </div>
+          {/each}
+        </div>
+        {#if report.missing.length > 1}
+          <button class="draft-all" onclick={onCreateAllDrafts}
+            >{$t("translation.draftAllMissing")}</button
+          >
+        {/if}
+      {:else}
       {#if report.conflicts.length}
         <div class="section-title">{$t("translation.conflicts")}</div>
         {#each report.conflicts as index (index)}
@@ -184,22 +272,15 @@
         </p>
       {/if}
 
-      <div class="section-title">
-        {mode === "direct"
-          ? $t("translation.wordForWord")
-          : $t("translation.breakdown")}
-      </div>
+      <div class="section-title">{$t("translation.breakdown")}</div>
       {#each report.slots as outcome (outcome.index)}
         <div class="row">
-          <span class="muted">
-            {mode === "direct"
-              ? (report.tokens[outcome.index]?.text ?? outcome.index)
-              : `${outcome.slot.kind} ${outcome.index}`}
-          </span>
+          <span class="muted">{outcome.slot.kind} {outcome.index}</span>
           <span>→</span>
           <span class="mono">{symbolText(outcome.symbol)}</span>
         </div>
       {/each}
+      {/if}
     </div>
   {/if}
 </div>

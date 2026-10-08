@@ -494,6 +494,9 @@ export const executeTranslationDirect = (
   choices: Record<string, string>,
 ): Promise<TranslationReport> =>
   invoke("execute_translation_direct", { inputText, choices });
+/** Existing entries whose name/senses match a token (search-as-you-type). */
+export const translationSuggest = (token: string): Promise<WordHit[]> =>
+  invoke("translation_suggest", { token });
 export const createTranslationWord = (
   table: string,
   wordname: string,

@@ -33,9 +33,9 @@ pub struct AffixRule {
 #[serde(rename_all = "snake_case")]
 pub enum TranslationMode {
     /// Use the drag-and-drop syntax grid.
-    #[default]
     Grid,
-    /// Word for word, in the order the input words appear.
+    /// Word for word, in the order the input words appear (the default).
+    #[default]
     Direct,
 }
 

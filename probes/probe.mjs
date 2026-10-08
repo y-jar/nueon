@@ -1256,9 +1256,10 @@ async function main() {
     await waitJs(
       `(() => {
          const r = document.querySelector('.runner');
-         return !!r && r.textContent.includes('Missing words') && r.textContent.includes('fly');
+         return !!r && [...r.querySelectorAll('.token-rows .token-row.missing')]
+           .some((row) => row.querySelector('.token-english')?.textContent.trim() === 'fly');
        })()`,
-      { label: "missing word listed" },
+      { label: "missing word row" },
     );
   });
 
@@ -1390,6 +1391,81 @@ async function main() {
     if (!values.includes("SVO")) {
       throw new Error(`grammar rule missing from the picker: ${JSON.stringify(values)}`);
     }
+  });
+
+  // -- probe 23: word-for-word live rows + inline add ----------------------
+  await probe("23-word-for-word-live-rows", async () => {
+    await openActivity("Translation");
+    await waitJs(`!!document.querySelector('.translation')`, {
+      label: "translation view",
+    });
+    await js(
+      `const b = [...document.querySelectorAll('.translation-toolbar .mode-switch button')]
+         .find((x) => x.textContent.trim() === 'Word for word');
+       if (b) b.click();
+       return !!b;`,
+    );
+    await waitJs(`!!document.querySelector('.runner textarea')`, {
+      label: "runner",
+    });
+
+    // Live preview: no button click, the rows appear as we type.
+    await js(`const t = document.querySelector('.runner textarea');
+      t.value = 'dog run';
+      t.dispatchEvent(new Event('input', { bubbles: true }));
+      return true;`);
+    await waitJs(
+      `document.querySelectorAll('.runner .token-rows .token-row').length === 2`,
+      { label: "two live rows" },
+    );
+    const pairs = await js(
+      `return [...document.querySelectorAll('.runner .token-rows .token-row')].map((r) => ({
+         english: r.querySelector('.token-english')?.textContent.trim(),
+         conlang: r.querySelector('.token-conlang')?.textContent.trim(),
+       }));`,
+    );
+    // Probe 21 renamed kala -> kaka (still the entry for "dog").
+    assertEqual(pairs[0]?.english, "dog", "row 0 english");
+    assertEqual(pairs[0]?.conlang, "kaka", "row 0 conlang");
+    assertEqual(pairs[1]?.english, "run", "row 1 english");
+    assertEqual(pairs[1]?.conlang, "velo", "row 1 conlang");
+    assertEqual(
+      await js(`return document.querySelector('.runner .output').textContent.trim()`),
+      "kaka velo",
+      "output",
+    );
+
+    // A missing token gets an inline create; creating it updates the output.
+    await js(`const t = document.querySelector('.runner textarea');
+      t.value = 'dog fly';
+      t.dispatchEvent(new Event('input', { bubbles: true }));
+      return true;`);
+    await waitJs(
+      `[...document.querySelectorAll('.runner .token-rows .token-row.missing')]
+         .some((r) => r.querySelector('.token-english')?.textContent.trim() === 'fly')`,
+      { label: "fly row missing" },
+    );
+    await js(`const row = [...document.querySelectorAll('.runner .token-rows .token-row.missing')]
+        .find((r) => r.querySelector('.token-english')?.textContent.trim() === 'fly');
+      const input = row.querySelector('input');
+      input.value = 'flai';
+      input.dispatchEvent(new Event('input', { bubbles: true }));
+      row.querySelectorAll('button')[0].click();
+      return true;`);
+    await waitJs(
+      `(() => {
+         const rows = [...document.querySelectorAll('.runner .token-rows .token-row')];
+         const fly = rows.find((r) => r.querySelector('.token-english')?.textContent.trim() === 'fly');
+         return !!fly && !fly.classList.contains('missing') &&
+           fly.querySelector('.token-conlang')?.textContent.trim() === 'flai';
+       })()`,
+      { label: "fly resolved after add" },
+    );
+    assertEqual(
+      await js(`return document.querySelector('.runner .output').textContent.trim()`),
+      "kaka flai",
+      "output after add",
+    );
   });
 }
 

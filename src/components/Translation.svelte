@@ -19,7 +19,8 @@
   let slots = $state<SlotItem[]>([]);
   let separator = $state(" ");
   let affixes = $state<api.AffixRule[]>([]);
-  let mode = $state<api.TranslationMode>("grid");
+  let mode = $state<api.TranslationMode>("direct");
+  let suggestions = $state<Record<number, api.WordHit[]>>({});
   let showMorphology = $state(false);
   let inputText = $state("");
   let choices = $state<Record<string, string>>({});
@@ -221,10 +222,78 @@
           ? await api.executeTranslationDirect(inputText, choices)
           : await api.executeTranslation(inputText, grid(), choices);
       error = "";
+      await loadSuggestions();
     } catch (e) {
       error = String(e);
     }
   }
+
+  /** Search-as-you-type existing entries for each missing token. */
+  async function loadSuggestions() {
+    if (!report || mode !== "direct" || report.missing.length === 0) {
+      suggestions = {};
+      return;
+    }
+    const next: Record<number, api.WordHit[]> = {};
+    await Promise.all(
+      report.missing.map(async (index) => {
+        const token = report?.tokens[index]?.text;
+        if (!token) return;
+        try {
+          next[index] = await api.translationSuggest(token);
+        } catch {
+          next[index] = [];
+        }
+      }),
+    );
+    suggestions = next;
+  }
+
+  /** Point an existing word at this English token by adding it as a sense. */
+  async function pickSuggestion(index: number, hit: api.WordHit) {
+    const token = report?.tokens[index]?.normalized ?? report?.tokens[index]?.text;
+    if (!token) return;
+    try {
+      const senses = hit.senses.some(
+        (sense) => sense.toLowerCase() === token.toLowerCase(),
+      )
+        ? hit.senses
+        : [...hit.senses, token];
+      await api.setWordDefinition(hit.table, hit.id, senses);
+      await run();
+    } catch (e) {
+      error = String(e);
+    }
+  }
+
+  /** Create a stub word for every missing token at once. */
+  async function createAllDrafts() {
+    if (!report) return;
+    const table =
+      activeDoc().currentTable ?? ui.tables[0]?.name;
+    if (!table) return;
+    for (const index of [...report.missing]) {
+      const token = report.tokens[index];
+      if (!token) continue;
+      try {
+        await api.createTranslationWord(table, `*${token.text}*`, token.text, [
+          DRAFT_TAG,
+        ]);
+      } catch {
+        // Skip a token that already exists; the rest still go through.
+      }
+    }
+    await run();
+  }
+
+  // Live preview in word-for-word mode (the default).
+  let runTimer: ReturnType<typeof setTimeout> | undefined;
+  $effect(() => {
+    inputText;
+    if (mode !== "direct") return;
+    if (runTimer) clearTimeout(runTimer);
+    runTimer = setTimeout(() => void run(), 300);
+  });
 
   async function pickChoice(index: number, id: string) {
     choices = { ...choices, [String(index)]: id };
@@ -343,6 +412,7 @@
     {report}
     {choices}
     {drafts}
+    {suggestions}
     {mode}
     tables={ui.tables}
     {error}
@@ -352,5 +422,7 @@
     onSetDraft={setDraft}
     onCreateMissing={createMissing}
     onCreateDraft={createDraft}
+    onPickSuggestion={pickSuggestion}
+    onCreateAllDrafts={createAllDrafts}
   />
 </div>

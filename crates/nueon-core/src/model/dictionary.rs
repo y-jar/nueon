@@ -227,6 +227,24 @@ impl Dictionary {
             .collect()
     }
 
+    /// The same search, as [`WordHit`]s (with table name and senses), for the
+    /// translator's suggestions.
+    pub fn search_hits(&self, query: &str) -> Vec<WordHit> {
+        let needle = query.trim().to_lowercase();
+        if needle.is_empty() {
+            return Vec::new();
+        }
+        let mut hits = Vec::new();
+        for table in self.tables() {
+            for entry in &table.entries {
+                if entry_matches(entry, &needle) {
+                    hits.push(word_hit(&table.name, entry));
+                }
+            }
+        }
+        hits
+    }
+
     /// How many entries share this exact spelling across all tables.
     pub fn homograph_count(&self, wordname: &str) -> usize {
         self.all_entries()

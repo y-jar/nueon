@@ -7,7 +7,7 @@ use tauri::{AppHandle, State};
 use uuid::Uuid;
 
 use nueon_core::model::TranslationReport;
-use nueon_core::{SyntaxGrid, TranslationOptions};
+use nueon_core::{SyntaxGrid, TranslationOptions, WordHit};
 
 use super::changed;
 use crate::state::AppState;
@@ -132,6 +132,17 @@ pub fn execute_translation_direct(
         &resolved,
         &workspace.translation.affixes,
     ))
+}
+
+/// Existing entries whose name or senses contain `token`, for the translator's
+/// "search existing words" suggestions.
+#[tauri::command]
+pub fn translation_suggest(
+    state: State<'_, Shared>,
+    token: String,
+) -> Result<Vec<WordHit>, String> {
+    let state = state.lock().map_err(|_| "state poisoned".to_string())?;
+    Ok(state.workspace()?.dictionary.search_hits(&token))
 }
 
 /// The separator and morphology rules the translation view edits.
