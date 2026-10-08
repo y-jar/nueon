@@ -471,6 +471,8 @@ export interface TranslationReport {
   slots: SlotOutcome[];
   missing: number[];
   conflicts: number[];
+  /** Token index (as a string key) → the entries it could resolve to. */
+  candidates: Record<string, WordHit[]>;
   leftovers: [number, string][];
   unfilled: number[];
   gloss: InterlinearGloss;

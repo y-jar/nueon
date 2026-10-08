@@ -5,12 +5,12 @@
 //! morphology), assigns them to a syntax grid's slots, and reports missing
 //! words, homograph conflicts, and unfilled slots.
 
-use std::collections::HashMap;
+use std::collections::{BTreeMap, HashMap};
 
 use serde::{Deserialize, Serialize};
 use uuid::Uuid;
 
-use super::dictionary::Dictionary;
+use super::dictionary::{contains_word, Dictionary, WordHit};
 use super::entry::WordEntry;
 use crate::config::{AffixKind, AffixRule};
 use crate::translation::{ClauseSlot, SyntaxGrid};
@@ -74,6 +74,10 @@ pub struct TranslationReport {
     pub missing: Vec<usize>,
     /// Indices of tokens with multiple candidates and no chosen meaning.
     pub conflicts: Vec<usize>,
+    /// For each conflicting token, the entries it could resolve to, so the UI
+    /// can offer a real picker.
+    #[serde(default, skip_serializing_if = "BTreeMap::is_empty")]
+    pub candidates: BTreeMap<usize, Vec<WordHit>>,
     /// Matched tokens that no slot consumed.
     pub leftovers: Vec<(usize, Uuid)>,
     /// Indices of `RequiredTag` slots that could not be filled.
@@ -100,6 +104,7 @@ impl TranslationReport {
             slots: Vec::new(),
             missing: Vec::new(),
             conflicts: Vec::new(),
+            candidates: BTreeMap::new(),
             leftovers: Vec::new(),
             unfilled: Vec::new(),
             gloss: InterlinearGloss::default(),
@@ -206,15 +211,18 @@ fn collect_for_form<'a>(
             let normalized: Vec<String> = senses.iter().map(|sense| normalize(sense)).collect();
             if normalized.iter().any(|sense| sense == form) {
                 exact.push((table.name.as_str(), entry));
-            } else if normalized.iter().any(|sense| sense.contains(form)) {
+            } else if form.chars().count() >= 3
+                && normalized.iter().any(|sense| contains_word(sense, form))
+            {
                 partial.push((table.name.as_str(), entry));
             }
         }
     }
 }
 
-/// Find matching entries: exact sense matches win, otherwise substring matches.
-/// Falls back to rule-based morphology on the affix rules.
+/// Find matching entries: exact sense matches win, otherwise whole-word matches
+/// (tokens of at least three characters). Falls back to rule-based morphology
+/// on the affix rules.
 fn matching_entries<'a>(
     dict: &'a Dictionary,
     token: &Token,
@@ -405,6 +413,18 @@ pub fn translate(
         }
     }
 
+    let mut candidate_map: BTreeMap<usize, Vec<WordHit>> = BTreeMap::new();
+    for &index in &conflicts {
+        if let Some(list) = candidates.get(index) {
+            candidate_map.insert(
+                index,
+                list.iter()
+                    .map(|matched| WordHit::from_entry(matched.table, matched.entry))
+                    .collect(),
+            );
+        }
+    }
+
     let output = render(&slots, if separator.is_empty() { " " } else { separator });
     let complete =
         missing.is_empty() && conflicts.is_empty() && unfilled.is_empty() && leftovers.is_empty();
@@ -416,6 +436,7 @@ pub fn translate(
         slots,
         missing,
         conflicts,
+        candidates: candidate_map,
         leftovers,
         unfilled,
         gloss: InterlinearGloss {
@@ -442,6 +463,7 @@ pub fn translate_direct(
     let mut morphemes = Vec::new();
     let mut missing = Vec::new();
     let mut conflicts = Vec::new();
+    let mut candidate_map: BTreeMap<usize, Vec<WordHit>> = BTreeMap::new();
 
     for (index, token) in tokens.iter().enumerate() {
         // A conlang word the user typed is emitted unchanged.
@@ -474,19 +496,28 @@ pub fn translate_direct(
                 affix_gloss: candidates[0].affix_gloss.clone(),
                 prefix: candidates[0].prefix,
             }),
-            _ => choices
-                .get(&index)
-                .and_then(|id| candidates.iter().find(|matched| matched.entry.id == *id))
-                .map(|matched| Picked {
-                    id: matched.entry.id,
-                    affix: matched.affix.clone(),
-                    affix_gloss: matched.affix_gloss.clone(),
-                    prefix: matched.prefix,
-                })
-                .or_else(|| {
+            _ => {
+                let picked = choices
+                    .get(&index)
+                    .and_then(|id| candidates.iter().find(|matched| matched.entry.id == *id))
+                    .map(|matched| Picked {
+                        id: matched.entry.id,
+                        affix: matched.affix.clone(),
+                        affix_gloss: matched.affix_gloss.clone(),
+                        prefix: matched.prefix,
+                    });
+                if picked.is_none() {
                     conflicts.push(index);
-                    None
-                }),
+                    candidate_map.insert(
+                        index,
+                        candidates
+                            .iter()
+                            .map(|matched| WordHit::from_entry(matched.table, matched.entry))
+                            .collect(),
+                    );
+                }
+                picked
+            }
         };
 
         match &picked {
@@ -524,6 +555,7 @@ pub fn translate_direct(
         slots,
         missing,
         conflicts,
+        candidates: candidate_map,
         leftovers: Vec::new(),
         unfilled: Vec::new(),
         gloss: InterlinearGloss {
@@ -819,11 +851,17 @@ mod tests {
     }
 
     #[test]
-    fn substring_matching_when_no_exact() {
-        let dict = build(&[("kala", &["speaker"], &[])]);
+    fn whole_word_matching_when_no_exact() {
         let grid = grid(vec![ClauseSlot::Wildcard]);
+        // A whole word inside a sense still matches...
+        let dict = build(&[("kala", &["to speak loudly"], &[])]);
         let report = translate(&dict, &grid, " ", "speak", &HashMap::new(), &no_affixes());
         assert_eq!(report.output, "kala");
+
+        // ...but a bare substring ("speaker") no longer does.
+        let sub = build(&[("kala", &["speaker"], &[])]);
+        let report = translate(&sub, &grid, " ", "speak", &HashMap::new(), &no_affixes());
+        assert_eq!(report.missing, vec![0]);
     }
 
     #[test]
@@ -951,6 +989,50 @@ mod tests {
         let report = translate_direct(&dict, " ", "dogz", &HashMap::new(), &rules);
         assert!(report.complete);
         assert_eq!(report.output, "kalai");
+    }
+
+    #[test]
+    fn short_tokens_do_not_match_substrings() {
+        // "i" must not match every sense containing an "i".
+        let dict = build(&[("big", &["big"], &[]), ("with", &["with"], &[])]);
+        let grid = grid(vec![ClauseSlot::Wildcard]);
+        let report = translate(&dict, &grid, " ", "i", &HashMap::new(), &no_affixes());
+        assert_eq!(report.missing, vec![0]);
+        assert!(report.conflicts.is_empty());
+        assert!(report.candidates.is_empty());
+    }
+
+    #[test]
+    fn whole_words_match_but_substrings_do_not() {
+        let grid = grid(vec![ClauseSlot::Wildcard]);
+        let hit = build(&[("name", &["to eat food"], &[])]);
+        let report = translate(&hit, &grid, " ", "eat", &HashMap::new(), &no_affixes());
+        assert!(report.missing.is_empty());
+        assert_eq!(report.output, "name");
+
+        let miss = build(&[("feat", &["feature"], &[])]);
+        let report = translate(&miss, &grid, " ", "eat", &HashMap::new(), &no_affixes());
+        assert_eq!(report.missing, vec![0]);
+    }
+
+    #[test]
+    fn ambiguous_matches_expose_candidates() {
+        let dict = build(&[("velo", &["to run"], &[]), ("koro", &["to run"], &[])]);
+        let grid = grid(vec![ClauseSlot::Wildcard]);
+        let report = translate(&dict, &grid, " ", "run", &HashMap::new(), &no_affixes());
+        assert_eq!(report.conflicts, vec![0]);
+        let list = report.candidates.get(&0).expect("candidates");
+        assert_eq!(list.len(), 2);
+        assert!(list.iter().any(|hit| hit.wordname == "velo"));
+        assert!(list.iter().any(|hit| hit.wordname == "koro"));
+    }
+
+    #[test]
+    fn direct_conflicts_expose_candidates() {
+        let dict = build(&[("velo", &["to run"], &[]), ("koro", &["to run"], &[])]);
+        let report = translate_direct(&dict, " ", "run", &HashMap::new(), &no_affixes());
+        assert_eq!(report.conflicts, vec![0]);
+        assert_eq!(report.candidates.get(&0).map(Vec::len), Some(2));
     }
 
     #[test]

@@ -440,6 +440,28 @@ function seedWorkspace() {
             wordname: "velo",
             values: { definition: { type: "tag_list", value: ["to run"] } },
           },
+          // Two entries for one sense => a real conflict (probe 24).
+          {
+            id: "33333333-3333-4333-8333-333333333333",
+            wordname: "paka",
+            values: { definition: { type: "tag_list", value: ["to zzarg"] } },
+          },
+          {
+            id: "44444444-4444-4444-8444-444444444444",
+            wordname: "pako",
+            values: { definition: { type: "tag_list", value: ["to zzarg"] } },
+          },
+          // Decoys: senses that merely *contain* "i"/"eat" (probe 24).
+          {
+            id: "55555555-5555-4555-8555-555555555555",
+            wordname: "big",
+            values: { definition: { type: "tag_list", value: ["big"] } },
+          },
+          {
+            id: "66666666-6666-4666-8666-666666666666",
+            wordname: "feat",
+            values: { definition: { type: "tag_list", value: ["feature"] } },
+          },
         ],
       },
       null,
@@ -1465,6 +1487,79 @@ async function main() {
       await js(`return document.querySelector('.runner .output').textContent.trim()`),
       "kaka flai",
       "output after add",
+    );
+  });
+
+  // -- probe 24: tighter matching + working conflict picker ----------------
+  await probe("24-tighter-matching-and-conflict-picker", async () => {
+    await openActivity("Translation");
+    await waitJs(`!!document.querySelector('.translation')`, {
+      label: "translation view",
+    });
+    await js(
+      `const b = [...document.querySelectorAll('.translation-toolbar .mode-switch button')]
+         .find((x) => x.textContent.trim() === 'Word for word');
+       if (b) b.click();
+       return !!b;`,
+    );
+    await waitJs(`!!document.querySelector('.runner textarea')`, { label: "runner" });
+
+    const type = async (text) =>
+      js(`const t = document.querySelector('.runner textarea');
+        t.value = ${JSON.stringify(text)};
+        t.dispatchEvent(new Event('input', { bubbles: true }));
+        return true;`);
+
+    // "i" and "eat" are missing words, not fuzzy multi-candidate conflicts.
+    await type("i");
+    await waitJs(
+      `(() => {
+         const r = [...document.querySelectorAll('.runner .token-rows .token-row')]
+           .find((x) => x.querySelector('.token-english')?.textContent.trim() === 'i');
+         return !!r && r.classList.contains('missing');
+       })()`,
+      { label: "i is missing" },
+    );
+    await type("eat");
+    await waitJs(
+      `(() => {
+         const r = [...document.querySelectorAll('.runner .token-rows .token-row')]
+           .find((x) => x.querySelector('.token-english')?.textContent.trim() === 'eat');
+         return !!r && r.classList.contains('missing');
+       })()`,
+      { label: "eat is missing" },
+    );
+
+    // "zzarg" really is ambiguous; the picker lists both candidates.
+    await type("zzarg");
+    await waitJs(
+      `document.querySelectorAll('.runner .token-rows .token-row select option').length >= 3`,
+      { label: "conflict picker populated" },
+    );
+    const options = await js(
+      `return [...document.querySelectorAll('.runner .token-rows .token-row select option')]
+         .map((o) => o.textContent.trim())
+         .filter(Boolean);`,
+    );
+    if (
+      !options.some((label) => label.startsWith("paka")) ||
+      !options.some((label) => label.startsWith("pako"))
+    ) {
+      throw new Error(`picker missing candidates: ${JSON.stringify(options)}`);
+    }
+
+    // Choosing one resolves the conflict and updates the output.
+    await js(
+      `const row = document.querySelector('.runner .token-rows .token-row');
+       const select = row.querySelector('select');
+       const option = [...select.options].find((o) => o.textContent.includes('pako'));
+       select.value = option.value;
+       select.dispatchEvent(new Event('change', { bubbles: true }));
+       return true;`,
+    );
+    await waitJs(
+      `(document.querySelector('.runner .output')?.textContent ?? '').includes('pako')`,
+      { label: "conflict resolved" },
     );
   });
 }

@@ -8,7 +8,7 @@
     TranslationReport,
     WordHit,
   } from "../../lib/api";
-  import { ui, activeDoc } from "../../lib/state.svelte";
+  import { activeDoc } from "../../lib/state.svelte";
   import InterlinearGloss from "../InterlinearGloss.svelte";
 
   interface Draft {
@@ -58,9 +58,8 @@
   }: Props = $props();
 
   function candidatesFor(index: number): WordHit[] {
-    const token = report?.tokens[index];
-    if (!token) return [];
-    return ui.wordIndex[token.normalized] ?? [];
+    // The engine reports the entries each conflicting token matched.
+    return report?.candidates?.[String(index)] ?? [];
   }
 
   function missingDraft(index: number): Draft {

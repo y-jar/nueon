@@ -22,22 +22,54 @@ pub struct WordHit {
     pub tags: Vec<String>,
 }
 
-fn word_hit(table: &str, entry: &WordEntry) -> WordHit {
-    WordHit {
-        id: entry.id,
-        table: table.to_string(),
-        wordname: entry.wordname.clone(),
-        senses: entry
-            .definition()
-            .map(<[String]>::to_vec)
-            .unwrap_or_default(),
-        tags: entry
-            .values
-            .keys()
-            .filter(|name| *name != DEFINITION_TAG && *name != PARENT_TAG)
-            .cloned()
-            .collect(),
+impl WordHit {
+    /// Build a hit for `entry`, which lives in `table`.
+    pub fn from_entry(table: &str, entry: &WordEntry) -> Self {
+        Self {
+            id: entry.id,
+            table: table.to_string(),
+            wordname: entry.wordname.clone(),
+            senses: entry
+                .definition()
+                .map(<[String]>::to_vec)
+                .unwrap_or_default(),
+            tags: entry
+                .values
+                .keys()
+                .filter(|name| *name != DEFINITION_TAG && *name != PARENT_TAG)
+                .cloned()
+                .collect(),
+        }
     }
+}
+
+fn word_hit(table: &str, entry: &WordEntry) -> WordHit {
+    WordHit::from_entry(table, entry)
+}
+
+/// Whether `needle` occurs in `haystack` as a whole word (an alphanumeric
+/// boundary on each side), not merely as a substring. Used by the translator
+/// so a one-letter token like `i` cannot match every gloss containing an "i".
+pub(crate) fn contains_word(haystack: &str, needle: &str) -> bool {
+    if needle.is_empty() {
+        return false;
+    }
+    let hay: Vec<char> = haystack.chars().collect();
+    let nee: Vec<char> = needle.chars().collect();
+    if nee.len() > hay.len() {
+        return false;
+    }
+    let is_word = |c: char| c.is_alphanumeric();
+    for start in 0..=(hay.len() - nee.len()) {
+        if hay[start..start + nee.len()] == nee[..] {
+            let before = start == 0 || !is_word(hay[start - 1]);
+            let after = start + nee.len() == hay.len() || !is_word(hay[start + nee.len()]);
+            if before && after {
+                return true;
+            }
+        }
+    }
+    false
 }
 
 /// The master database held in memory during runtime.
@@ -237,7 +269,7 @@ impl Dictionary {
         let mut hits = Vec::new();
         for table in self.tables() {
             for entry in &table.entries {
-                if entry_matches(entry, &needle) {
+                if entry_matches_word(entry, &needle) {
                     hits.push(word_hit(&table.name, entry));
                 }
             }
@@ -424,6 +456,21 @@ fn entry_matches(entry: &WordEntry, needle: &str) -> bool {
     entry.values.values().any(|value| match value {
         FieldValue::Text(text) => text.to_lowercase().contains(needle),
         FieldValue::TagList(list) => list.iter().any(|s| s.to_lowercase().contains(needle)),
+        FieldValue::Boolean(_) | FieldValue::Reference(_) | FieldValue::References(_) => false,
+    })
+}
+
+/// Whole-word version of [`entry_matches`], used for the translator's
+/// suggestions so short queries don't match everything.
+fn entry_matches_word(entry: &WordEntry, needle: &str) -> bool {
+    if contains_word(&entry.wordname.to_lowercase(), needle) {
+        return true;
+    }
+    entry.values.values().any(|value| match value {
+        FieldValue::Text(text) => contains_word(&text.to_lowercase(), needle),
+        FieldValue::TagList(list) => list
+            .iter()
+            .any(|sense| contains_word(&sense.to_lowercase(), needle)),
         FieldValue::Boolean(_) | FieldValue::Reference(_) | FieldValue::References(_) => false,
     })
 }
