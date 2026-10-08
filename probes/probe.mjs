@@ -1571,14 +1571,21 @@ async function main() {
       { label: "eat is missing" },
     );
 
+    const zzargRow = `[...document.querySelectorAll('.runner .token-rows .token-row')]
+       .find((x) => x.querySelector('.token-english')?.textContent.trim() === 'zzarg')`;
+
     // "zzarg" really is ambiguous; the picker lists both candidates.
     await type("zzarg");
     await waitJs(
-      `document.querySelectorAll('.runner .token-rows .token-row select option').length >= 3`,
+      `(() => {
+         const r = ${zzargRow};
+         return !!r && r.querySelectorAll('select option').length >= 3;
+       })()`,
       { label: "conflict picker populated" },
     );
     const options = await js(
-      `return [...document.querySelectorAll('.runner .token-rows .token-row select option')]
+      `const r = ${zzargRow};
+       return [...(r?.querySelectorAll('select option') ?? [])]
          .map((o) => o.textContent.trim())
          .filter(Boolean);`,
     );
@@ -1595,7 +1602,7 @@ async function main() {
 
     // Choosing one resolves the conflict and updates the output.
     await js(
-      `const row = document.querySelector('.runner .token-rows .token-row');
+      `const row = ${zzargRow};
        const select = row.querySelector('select');
        const option = [...select.options].find((o) => o.textContent.includes('pako'));
        select.value = option.value;
@@ -1658,6 +1665,77 @@ async function main() {
       `(document.querySelector('.runner .output')?.textContent ?? '').trim() === 'velo'`,
       { label: "ending removed" },
     );
+  });
+
+  // -- probe 26: class-role slots (the #flags gone) ------------------------
+  await probe("26-class-role-slots", async () => {
+    await openActivity("Translation");
+    await waitJs(`!!document.querySelector('.translation')`, {
+      label: "translation view",
+    });
+    await js(
+      `const b = [...document.querySelectorAll('.translation-toolbar .mode-switch button')]
+         .find((x) => x.textContent.trim() === 'Rule tree');
+       if (b) b.click();
+       return !!b;`,
+    );
+    await waitJs(`!!document.querySelector('.clause-canvas')`, {
+      label: "clause canvas",
+    });
+    await waitJs(`document.querySelectorAll('.palette-chip.tag').length > 0`, {
+      label: "class palette",
+    });
+
+    // The palette offers word classes, not "#flags".
+    const chips = await js(
+      `return [...document.querySelectorAll('.palette-row .palette-chip.tag')]
+         .map((c) => c.textContent.trim());`,
+    );
+    if (chips.some((name) => name.includes("#"))) {
+      throw new Error(`palette still shows #flags: ${JSON.stringify(chips)}`);
+    }
+    if (!chips.includes("verb")) {
+      throw new Error(`palette missing the verb class: ${JSON.stringify(chips)}`);
+    }
+
+    // Build a grid of one verb-class slot.
+    await js(
+      `document.querySelectorAll('.clause-canvas .slot-remove').forEach((b) => b.click());
+       return true;`,
+    );
+    await waitJs(`document.querySelectorAll('.clause-canvas .slot-card').length === 0`, {
+      label: "grid cleared",
+    });
+    await js(
+      `const c = [...document.querySelectorAll('.palette-row .palette-chip.tag')]
+         .find((x) => x.textContent.trim() === 'verb');
+       if (c) c.click();
+       return !!c;`,
+    );
+    await waitJs(`document.querySelectorAll('.clause-canvas .slot-card').length === 1`, {
+      label: "one class slot",
+    });
+    assertEqual(
+      await js(
+        `return document.querySelector('.clause-canvas .slot-card .badge')?.textContent.trim()`,
+      ),
+      "verb",
+      "slot badge is the class",
+    );
+
+    // "run" matches velo (pos=verb); the slot accepts it.
+    await js(`const t = document.querySelector('.runner textarea');
+      t.value = 'run';
+      t.dispatchEvent(new Event('input', { bubbles: true }));
+      return true;`);
+    await js(`document.querySelector('.runner button.translate')?.click(); return true;`);
+    await waitJs(
+      `(document.querySelector('.runner .output')?.textContent ?? '').trim() === 'velo'`,
+      { label: "verb-class slot filled" },
+    );
+    if (!(await js(`return !!document.querySelector('.runner .status-badge.ok')`))) {
+      throw new Error("class-slot translation did not report complete");
+    }
   });
 }
 

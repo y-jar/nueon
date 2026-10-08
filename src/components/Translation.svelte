@@ -12,6 +12,7 @@
   import ClauseCanvas from "./translation/ClauseCanvas.svelte";
   import TranslationRunner from "./translation/TranslationRunner.svelte";
   import type { SlotItem } from "./translation/types";
+  import { POS_CLASSES } from "../lib/dictionary";
 
   const DRAFT_TAG = "draft";
 
@@ -31,7 +32,7 @@
   let choices = $state<Record<string, string>>({});
   let report = $state<api.TranslationReport | null>(null);
   let drafts = $state<
-    Record<number, { table: string; wordname: string; tags: string }>
+    Record<number, { table: string; wordname: string; tags: string; pos: string }>
   >({});
   let error = $state("");
 
@@ -39,8 +40,8 @@
     presets.some((preset) => preset.preset_name === draftName),
   );
 
-  // Tag palette = union of all table tag names.
-  const palette = $derived(
+  // Legacy #tag palette, for editing slots saved before class roles.
+  const tags = $derived(
     Array.from(
       new Set(
         ui.tables
@@ -53,6 +54,18 @@
           ),
       ),
     ).sort(),
+  );
+
+  // Class roles = the built-in classes plus any already used in this grid.
+  const classes = $derived(
+    Array.from(
+      new Set([
+        ...POS_CLASSES,
+        ...slots.flatMap((item) =>
+          item.slot.kind === "pos" ? [item.slot.class] : [],
+        ),
+      ]),
+    ),
   );
 
   onMount(load);
@@ -347,19 +360,21 @@
     table: string;
     wordname: string;
     tags: string;
+    pos: string;
   } {
     return (
       drafts[index] ?? {
         table: activeDoc().currentTable ?? ui.tables[0]?.name ?? "",
         wordname: "",
         tags: "",
+        pos: "",
       }
     );
   }
 
   function setDraft(
     index: number,
-    patch: Partial<{ table: string; wordname: string; tags: string }>,
+    patch: Partial<{ table: string; wordname: string; tags: string; pos: string }>,
   ) {
     drafts = { ...drafts, [index]: { ...missingDraft(index), ...patch } };
   }
@@ -378,6 +393,7 @@
         draft.wordname.trim(),
         token.text,
         tags,
+        draft.pos || null,
       );
       drafts = { ...drafts };
       await run();
@@ -440,14 +456,15 @@
 
   {#if mode === "grid"}
     <SlotPalette
-      tags={palette}
-      onAddTag={(name) => addSlot({ kind: "required_tag", tag: name })}
+      {classes}
+      onAddClass={(name) => addSlot({ kind: "pos", class: name })}
       onAddPrimitive={(slot) => addSlot(slot)}
     />
 
     <ClauseCanvas
       items={slots}
-      tags={palette}
+      {tags}
+      {classes}
       {separator}
       onReorder={(items) => (slots = [...items])}
       onUpdate={updateSlot}

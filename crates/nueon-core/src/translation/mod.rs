@@ -57,6 +57,9 @@ impl SyntaxGrid {
 pub enum ClauseSlot {
     /// Looks for a word carrying a specific user-defined tag, e.g. "Subject".
     RequiredTag { tag: String },
+    /// Looks for a word of a given class (`pos`), e.g. `verb`. Position, not a
+    /// tag, carries the syntactic role.
+    Pos { class: String },
     /// A hardcoded conlang particle that must always appear in this slot.
     Literal { text: String },
     /// A flexible space where untagged or secondary words fall.
@@ -74,6 +77,7 @@ impl ClauseSlot {
     pub fn label(&self) -> String {
         match self {
             ClauseSlot::RequiredTag { tag } => format!("#{tag}"),
+            ClauseSlot::Pos { class } => class.clone(),
             ClauseSlot::Literal { text } => format!("\"{text}\""),
             ClauseSlot::Wildcard => "*".to_string(),
             ClauseSlot::Spacer { text } => match text.as_deref() {
@@ -130,6 +134,13 @@ mod tests {
     #[test]
     fn labels_describe_slots() {
         assert_eq!(tag("Subject").label(), "#Subject");
+        assert_eq!(
+            ClauseSlot::Pos {
+                class: "verb".into()
+            }
+            .label(),
+            "verb"
+        );
         assert_eq!(ClauseSlot::Literal { text: "ka".into() }.label(), "\"ka\"");
         assert_eq!(ClauseSlot::Wildcard.label(), "*");
         assert_eq!(ClauseSlot::Spacer { text: None }.label(), "␣");

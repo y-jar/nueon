@@ -225,12 +225,18 @@ pub fn create_translation_word(
     wordname: String,
     definition: String,
     tags: Vec<String>,
+    pos: Option<String>,
 ) -> Result<Option<Uuid>, String> {
     let mut state = state.lock().map_err(|_| "state poisoned".to_string())?;
-    let id = state
-        .workspace_mut()?
+    let workspace = state.workspace_mut()?;
+    let id = workspace
         .create_defined_entry(&table, wordname, &definition, &tags)
         .map_err(|err| err.to_string())?;
+    if let (Some(id), Some(pos)) = (id, pos.as_deref()) {
+        workspace
+            .set_class(&table, id, Some(pos))
+            .map_err(|err| err.to_string())?;
+    }
     drop(state);
     changed(&app, "dictionary");
     Ok(id)

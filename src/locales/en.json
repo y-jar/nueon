@@ -238,6 +238,7 @@
     "savePreset": "Save preset",
     "delete": "Delete",
     "tags": "Tags",
+    "classes": "Word classes",
     "add": "Add",
     "literal": "literal",
     "wildcard": "wildcard",

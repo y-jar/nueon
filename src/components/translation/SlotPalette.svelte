@@ -4,12 +4,12 @@
   import { SLOT_DRAG_TYPE } from "./types";
 
   interface Props {
-    tags: string[];
-    onAddTag: (name: string) => void;
+    classes: string[];
+    onAddClass: (name: string) => void;
     onAddPrimitive: (slot: ClauseSlot) => void;
   }
 
-  let { tags, onAddTag, onAddPrimitive }: Props = $props();
+  let { classes, onAddClass, onAddPrimitive }: Props = $props();
 
   function dragStart(event: DragEvent, slot: ClauseSlot) {
     const payload = JSON.stringify(slot);
@@ -21,13 +21,13 @@
 
 <div class="palette-row">
   <div class="palette-group">
-    <span class="palette-label">{$t("translation.tags")}</span>
-    {#each tags as name (name)}
+    <span class="palette-label">{$t("translation.classes")}</span>
+    {#each classes as name (name)}
       <button
         class="palette-chip tag"
         draggable="true"
-        ondragstart={(e) => dragStart(e, { kind: "required_tag", tag: name })}
-        onclick={() => onAddTag(name)}>#{name}</button
+        ondragstart={(e) => dragStart(e, { kind: "pos", class: name })}
+        onclick={() => onAddClass(name)}>{name}</button
       >
     {/each}
   </div>

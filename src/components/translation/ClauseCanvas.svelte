@@ -8,6 +8,7 @@
   interface Props {
     items: SlotItem[];
     tags: string[];
+    classes: string[];
     separator: string;
     onReorder: (items: SlotItem[]) => void;
     onUpdate: (id: string, slot: ClauseSlot) => void;
@@ -18,6 +19,7 @@
   let {
     items,
     tags,
+    classes,
     separator,
     onReorder,
     onUpdate,
@@ -75,6 +77,7 @@
     <SlotCard
       {item}
       {tags}
+      {classes}
       {separator}
       onUpdate={(slot) => onUpdate(item.id, slot)}
       onRemove={() => onRemove(item.id)}

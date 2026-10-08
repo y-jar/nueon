@@ -9,12 +9,14 @@
     WordHit,
   } from "../../lib/api";
   import { activeDoc } from "../../lib/state.svelte";
+  import { POS_CLASSES } from "../../lib/dictionary";
   import InterlinearGloss from "../InterlinearGloss.svelte";
 
   interface Draft {
     table: string;
     wordname: string;
     tags: string;
+    pos: string;
   }
 
   interface Props {
@@ -68,6 +70,7 @@
         table: activeDoc().currentTable ?? tables[0]?.name ?? "",
         wordname: "",
         tags: "",
+        pos: "",
       }
     );
   }
@@ -160,6 +163,17 @@
                   oninput={(e) =>
                     onSetDraft(index, { tags: e.currentTarget.value })}
                 />
+                <select
+                  value={missingDraft(index).pos}
+                  title={$t("translation.classes")}
+                  onchange={(e) =>
+                    onSetDraft(index, { pos: e.currentTarget.value })}
+                >
+                  <option value="">{$t("translation.classes")}</option>
+                  {#each POS_CLASSES as name (name)}
+                    <option value={name}>{name}</option>
+                  {/each}
+                </select>
                 <button onclick={() => onCreateMissing(index)}
                   >{$t("translation.create")}</button
                 >
@@ -258,6 +272,16 @@
               value={missingDraft(index).tags}
               oninput={(e) => onSetDraft(index, { tags: e.currentTarget.value })}
             />
+            <select
+              value={missingDraft(index).pos}
+              title={$t("translation.classes")}
+              onchange={(e) => onSetDraft(index, { pos: e.currentTarget.value })}
+            >
+              <option value="">{$t("translation.classes")}</option>
+              {#each POS_CLASSES as name (name)}
+                <option value={name}>{name}</option>
+              {/each}
+            </select>
             <button onclick={() => onCreateMissing(index)}
               >{$t("translation.create")}</button
             >

@@ -386,31 +386,33 @@ pub fn translate_with(
                 Symbol::Literal(text.clone())
             }
             ClauseSlot::Spacer { text } => Symbol::Separator(text.clone()),
-            ClauseSlot::Wildcard => match pick(&candidates, &chosen, &assigned, count, None) {
-                Some(token) => {
-                    assigned[token] = true;
-                    if let Some(morpheme) =
-                        render_gloss(dict, chosen[token].as_ref(), morphology, selections)
-                    {
-                        morphemes.push(morpheme);
+            ClauseSlot::Wildcard => {
+                match pick(&candidates, &chosen, &assigned, count, None, None) {
+                    Some(token) => {
+                        assigned[token] = true;
+                        if let Some(morpheme) =
+                            render_gloss(dict, chosen[token].as_ref(), morphology, selections)
+                        {
+                            morphemes.push(morpheme);
+                        }
+                        Symbol::Word(render_word(
+                            dict,
+                            chosen[token].as_ref(),
+                            morphology,
+                            selections,
+                        ))
                     }
-                    Symbol::Word(render_word(
-                        dict,
-                        chosen[token].as_ref(),
-                        morphology,
-                        selections,
-                    ))
+                    None => {
+                        morphemes.push(GlossMorpheme {
+                            surface: "*?".to_string(),
+                            gloss: "?".to_string(),
+                        });
+                        Symbol::Placeholder("*?".to_string())
+                    }
                 }
-                None => {
-                    morphemes.push(GlossMorpheme {
-                        surface: "*?".to_string(),
-                        gloss: "?".to_string(),
-                    });
-                    Symbol::Placeholder("*?".to_string())
-                }
-            },
+            }
             ClauseSlot::RequiredTag { tag } => {
-                match pick(&candidates, &chosen, &assigned, count, Some(tag)) {
+                match pick(&candidates, &chosen, &assigned, count, Some(tag), None) {
                     Some(token) => {
                         assigned[token] = true;
                         if let Some(morpheme) =
@@ -428,6 +430,33 @@ pub fn translate_with(
                     None => {
                         unfilled.push(index);
                         let placeholder = format!("#{tag}?");
+                        morphemes.push(GlossMorpheme {
+                            surface: placeholder.clone(),
+                            gloss: "?".to_string(),
+                        });
+                        Symbol::Placeholder(placeholder)
+                    }
+                }
+            }
+            ClauseSlot::Pos { class } => {
+                match pick(&candidates, &chosen, &assigned, count, None, Some(class)) {
+                    Some(token) => {
+                        assigned[token] = true;
+                        if let Some(morpheme) =
+                            render_gloss(dict, chosen[token].as_ref(), morphology, selections)
+                        {
+                            morphemes.push(morpheme);
+                        }
+                        Symbol::Word(render_word(
+                            dict,
+                            chosen[token].as_ref(),
+                            morphology,
+                            selections,
+                        ))
+                    }
+                    None => {
+                        unfilled.push(index);
+                        let placeholder = format!("[{class}?]");
                         morphemes.push(GlossMorpheme {
                             surface: placeholder.clone(),
                             gloss: "?".to_string(),
@@ -738,6 +767,7 @@ fn pick(
     assigned: &[bool],
     count: usize,
     tag: Option<&str>,
+    class: Option<&str>,
 ) -> Option<usize> {
     for index in 0..count {
         if assigned[index] {
@@ -753,6 +783,9 @@ fn pick(
             continue;
         };
         if tag.is_some_and(|tag| !matched.entry.has(tag)) {
+            continue;
+        }
+        if class.is_some_and(|class| word_class(matched.entry) != Some(class)) {
             continue;
         }
         return Some(index);
@@ -948,6 +981,47 @@ mod tests {
         let grid = grid(vec![tag("Subject"), tag("Verb")]);
         let report = translate(&dict, &grid, " ", "dog", &HashMap::new(), &no_affixes());
         assert_eq!(report.unfilled, vec![1]);
+        assert!(!report.complete);
+    }
+
+    fn classed(word: &str, sense: &str, class: &str) -> WordEntry {
+        let mut entry = WordEntry::new(word);
+        entry.set(
+            crate::model::DEFINITION_TAG,
+            FieldValue::TagList(vec![sense.to_string()]),
+        );
+        entry.set(POS_TAG, FieldValue::TagList(vec![class.to_string()]));
+        entry
+    }
+
+    #[test]
+    fn pos_slot_matches_by_class() {
+        let mut dict = Dictionary::new();
+        dict.add_table("t");
+        dict.add_tag("t", TagDef::new(POS_TAG, FieldType::TagList));
+        dict.add_entry("t", classed("velo", "to run", "verb"));
+        dict.add_entry("t", classed("kala", "dog", "noun"));
+
+        let grid = grid(vec![ClauseSlot::Pos {
+            class: "verb".into(),
+        }]);
+        let report = translate(&dict, &grid, " ", "run", &HashMap::new(), &no_affixes());
+        assert!(report.complete);
+        assert_eq!(report.output, "velo");
+    }
+
+    #[test]
+    fn pos_slot_ignores_other_classes() {
+        let mut dict = Dictionary::new();
+        dict.add_table("t");
+        dict.add_tag("t", TagDef::new(POS_TAG, FieldType::TagList));
+        dict.add_entry("t", classed("kala", "dog", "noun"));
+
+        let grid = grid(vec![ClauseSlot::Pos {
+            class: "verb".into(),
+        }]);
+        let report = translate(&dict, &grid, " ", "dog", &HashMap::new(), &no_affixes());
+        assert_eq!(report.unfilled, vec![0]);
         assert!(!report.complete);
     }
 

@@ -8,6 +8,24 @@ export const COLUMN_TYPES: { id: FieldType; label: string }[] = [
   { id: "boolean", label: "Checkbox" },
 ];
 
+/**
+ * Part-of-speech classes offered as translation slot roles. A slot's position
+ * carries the syntactic role, so a slot just names the word class it accepts.
+ */
+export const POS_CLASSES: string[] = [
+  "noun",
+  "verb",
+  "adjective",
+  "adverb",
+  "pronoun",
+  "determiner",
+  "numeral",
+  "adposition",
+  "conjunction",
+  "particle",
+  "interjection",
+];
+
 /** The menu label for a field type. */
 export function typeLabel(kind: FieldType): string {
   return COLUMN_TYPES.find((type) => type.id === kind)?.label ?? kind;

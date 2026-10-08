@@ -79,6 +79,8 @@
         switch (slot.kind) {
           case "required_tag":
             return `#${slot.tag}`;
+          case "pos":
+            return `%${slot.class}`;
           case "literal":
             return `"${slot.text}"`;
           case "wildcard":
@@ -94,6 +96,9 @@
     if (token === "*") return { kind: "wildcard" };
     if (token.startsWith("#")) {
       return { kind: "required_tag", tag: token.slice(1) };
+    }
+    if (token.startsWith("%") && token.length > 1) {
+      return { kind: "pos", class: token.slice(1) };
     }
     if (token.startsWith("␣")) {
       const text = token.slice(1);

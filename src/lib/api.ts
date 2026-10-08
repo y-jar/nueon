@@ -412,6 +412,7 @@ export const derivationGraph = (id: string): Promise<DerivationNode[]> =>
 // -- translation ---------------------------------------------------------
 export type ClauseSlot =
   | { kind: "required_tag"; tag: string }
+  | { kind: "pos"; class: string }
   | { kind: "literal"; text: string }
   | { kind: "wildcard" }
   | { kind: "spacer"; text?: string | null };
@@ -506,8 +507,9 @@ export const createTranslationWord = (
   wordname: string,
   definition: string,
   tags: string[],
+  pos?: string | null,
 ): Promise<string | null> =>
-  invoke("create_translation_word", { table, wordname, definition, tags });
+  invoke("create_translation_word", { table, wordname, definition, tags, pos });
 export const translationOptions = (): Promise<TranslationOptions> =>
   invoke("translation_options");
 export const setTranslationOptions = (

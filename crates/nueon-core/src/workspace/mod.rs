@@ -22,7 +22,7 @@ use self::table_files::TableFiles;
 use crate::config::{
     GrammarConfig, GridViewState, LanguageConfig, LayoutState, Morphology, PhonologyConfig,
     TilingLayout, TranslationConfig, TranslationMode, TranslationOptions, UiLayout, WindowGeometry,
-    WorkspaceSettings,
+    WorkspaceSettings, POS_TAG,
 };
 use crate::export_table::TableFormat;
 use crate::model::{
@@ -518,6 +518,38 @@ impl Workspace {
             format!("nueon: add word \"{wordname}\" (from translation) to table \"{table}\""),
         );
         Ok(Some(id))
+    }
+
+    /// Set a word's class (`pos`), declaring the tag as a list column when it
+    /// is not yet present. `None` clears the word's class.
+    pub fn set_class(
+        &mut self,
+        table: &str,
+        id: Uuid,
+        class: Option<&str>,
+    ) -> Result<bool, StorageError> {
+        if self.dictionary.get_entry(table, id).is_none() {
+            return Ok(false);
+        }
+        match class.map(str::trim).filter(|value| !value.is_empty()) {
+            Some(class) => {
+                let declared = self
+                    .dictionary
+                    .table(table)
+                    .is_some_and(|t| t.has_tag(POS_TAG));
+                if !declared {
+                    self.dictionary
+                        .add_tag(table, TagDef::new(POS_TAG, FieldType::TagList));
+                }
+                self.set_value(
+                    table,
+                    id,
+                    POS_TAG,
+                    Some(FieldValue::TagList(vec![class.to_string()])),
+                )
+            }
+            None => self.set_value(table, id, POS_TAG, None),
+        }
     }
 
     /// Persist an existing word after it has been edited.
@@ -1515,6 +1547,7 @@ impl Workspace {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::config::POS_TAG;
     use crate::model::{FieldType, FieldValue};
     use crate::vcs::git_available;
     use crate::WORDNAME_TAG;
@@ -2269,6 +2302,34 @@ mod tests {
         assert!(!ws
             .set_definition("verbs", missing, vec!["x".into()])
             .unwrap());
+    }
+
+    #[test]
+    fn set_class_declares_the_pos_column_and_sets_the_value() {
+        let dir = tempfile::tempdir().unwrap();
+        let mut ws = Workspace::new(dir.path()).unwrap();
+        ws.create_table("verbs").unwrap();
+        let id = ws.create_entry("verbs", "velo").unwrap().unwrap();
+
+        assert!(!ws.dictionary.table("verbs").unwrap().has_tag(POS_TAG));
+        assert!(ws.set_class("verbs", id, Some("verb")).unwrap());
+        assert!(ws.dictionary.table("verbs").unwrap().has_tag(POS_TAG));
+        assert_eq!(
+            ws.dictionary.get_entry("verbs", id).unwrap().get(POS_TAG),
+            Some(&FieldValue::TagList(vec!["verb".into()]))
+        );
+
+        // Blank clears the class rather than storing an empty string.
+        assert!(ws.set_class("verbs", id, Some("  ")).unwrap());
+        assert!(ws
+            .dictionary
+            .get_entry("verbs", id)
+            .unwrap()
+            .get(POS_TAG)
+            .is_none());
+
+        let missing = Uuid::new_v4();
+        assert!(!ws.set_class("verbs", missing, Some("verb")).unwrap());
     }
 
     #[test]

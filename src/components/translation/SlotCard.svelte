@@ -7,12 +7,19 @@
   interface Props {
     item: SlotItem;
     tags: string[];
+    classes: string[];
     separator: string;
     onUpdate: (slot: ClauseSlot) => void;
     onRemove: () => void;
   }
 
-  let { item, tags, separator, onUpdate, onRemove }: Props = $props();
+  let { item, tags, classes, separator, onUpdate, onRemove }: Props = $props();
+
+  const classOptions = $derived(
+    item.slot.kind === "pos" && !classes.includes(item.slot.class)
+      ? [item.slot.class, ...classes]
+      : classes,
+  );
 </script>
 
 <div class="slot-card {item.slot.kind}">
@@ -29,6 +36,17 @@
         onUpdate({ kind: "required_tag", tag: e.currentTarget.value })}
     >
       {#each tags as name (name)}
+        <option value={name}>{name}</option>
+      {/each}
+    </select>
+  {:else if item.slot.kind === "pos"}
+    <span class="badge tag">{item.slot.class}</span>
+    <select
+      value={item.slot.class}
+      onpointerdown={(e) => e.stopPropagation()}
+      onchange={(e) => onUpdate({ kind: "pos", class: e.currentTarget.value })}
+    >
+      {#each classOptions as name (name)}
         <option value={name}>{name}</option>
       {/each}
     </select>
