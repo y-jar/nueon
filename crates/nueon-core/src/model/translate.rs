@@ -12,7 +12,8 @@ use uuid::Uuid;
 
 use super::dictionary::{contains_word, Dictionary, WordHit};
 use super::entry::WordEntry;
-use crate::config::{AffixKind, AffixRule};
+use super::field::FieldValue;
+use crate::config::{AffixKind, AffixRule, Morphology, POS_TAG};
 use crate::translation::{ClauseSlot, SyntaxGrid};
 
 /// English function words dropped during tokenization.
@@ -293,7 +294,7 @@ struct Picked {
     prefix: bool,
 }
 
-/// Translate `input` using `grid`. `choices` resolves conflicts by token index.
+/// Translate `input` using `grid`, without any feature morphology.
 pub fn translate(
     dict: &Dictionary,
     grid: &SyntaxGrid,
@@ -301,6 +302,31 @@ pub fn translate(
     input: &str,
     choices: &HashMap<usize, Uuid>,
     affixes: &[AffixRule],
+) -> TranslationReport {
+    translate_with(
+        dict,
+        grid,
+        separator,
+        input,
+        choices,
+        affixes,
+        &Morphology::default(),
+        &BTreeMap::new(),
+    )
+}
+
+/// Translate `input` using `grid`, applying `morphology` for any selected
+/// features. `choices` resolves conflicts by token index.
+#[allow(clippy::too_many_arguments)]
+pub fn translate_with(
+    dict: &Dictionary,
+    grid: &SyntaxGrid,
+    separator: &str,
+    input: &str,
+    choices: &HashMap<usize, Uuid>,
+    affixes: &[AffixRule],
+    morphology: &Morphology,
+    selections: &BTreeMap<String, String>,
 ) -> TranslationReport {
     let tokens = tokenize(input);
     let candidates: Vec<Vec<Match>> = tokens
@@ -363,10 +389,17 @@ pub fn translate(
             ClauseSlot::Wildcard => match pick(&candidates, &chosen, &assigned, count, None) {
                 Some(token) => {
                     assigned[token] = true;
-                    if let Some(morpheme) = gloss_for(dict, chosen[token].as_ref()) {
+                    if let Some(morpheme) =
+                        render_gloss(dict, chosen[token].as_ref(), morphology, selections)
+                    {
                         morphemes.push(morpheme);
                     }
-                    Symbol::Word(word_for(dict, chosen[token].as_ref()))
+                    Symbol::Word(render_word(
+                        dict,
+                        chosen[token].as_ref(),
+                        morphology,
+                        selections,
+                    ))
                 }
                 None => {
                     morphemes.push(GlossMorpheme {
@@ -380,10 +413,17 @@ pub fn translate(
                 match pick(&candidates, &chosen, &assigned, count, Some(tag)) {
                     Some(token) => {
                         assigned[token] = true;
-                        if let Some(morpheme) = gloss_for(dict, chosen[token].as_ref()) {
+                        if let Some(morpheme) =
+                            render_gloss(dict, chosen[token].as_ref(), morphology, selections)
+                        {
                             morphemes.push(morpheme);
                         }
-                        Symbol::Word(word_for(dict, chosen[token].as_ref()))
+                        Symbol::Word(render_word(
+                            dict,
+                            chosen[token].as_ref(),
+                            morphology,
+                            selections,
+                        ))
                     }
                     None => {
                         unfilled.push(index);
@@ -458,6 +498,28 @@ pub fn translate_direct(
     choices: &HashMap<usize, Uuid>,
     affixes: &[AffixRule],
 ) -> TranslationReport {
+    translate_direct_with(
+        dict,
+        separator,
+        input,
+        choices,
+        affixes,
+        &Morphology::default(),
+        &BTreeMap::new(),
+    )
+}
+
+/// Word-for-word with feature morphology applied.
+#[allow(clippy::too_many_arguments)]
+pub fn translate_direct_with(
+    dict: &Dictionary,
+    separator: &str,
+    input: &str,
+    choices: &HashMap<usize, Uuid>,
+    affixes: &[AffixRule],
+    morphology: &Morphology,
+    selections: &BTreeMap<String, String>,
+) -> TranslationReport {
     let tokens = tokenize(input);
     let mut slots = Vec::new();
     let mut morphemes = Vec::new();
@@ -522,13 +584,19 @@ pub fn translate_direct(
 
         match &picked {
             Some(_) => {
-                if let Some(morpheme) = gloss_for(dict, picked.as_ref()) {
+                if let Some(morpheme) = render_gloss(dict, picked.as_ref(), morphology, selections)
+                {
                     morphemes.push(morpheme);
                 }
                 slots.push(SlotOutcome {
                     index,
                     slot: ClauseSlot::Wildcard,
-                    symbol: Symbol::Word(word_for(dict, picked.as_ref())),
+                    symbol: Symbol::Word(render_word(
+                        dict,
+                        picked.as_ref(),
+                        morphology,
+                        selections,
+                    )),
                 });
             }
             None => {
@@ -566,6 +634,76 @@ pub fn translate_direct(
 }
 
 /// Build the interlinear gloss morpheme for a chosen word (with affix).
+/// The word class of an entry (`pos` tag, first sense).
+fn word_class(entry: &WordEntry) -> Option<&str> {
+    match entry.values.get(POS_TAG) {
+        Some(FieldValue::TagList(list)) => list.first().map(String::as_str),
+        Some(FieldValue::Text(text)) => Some(text.as_str()),
+        _ => None,
+    }
+}
+
+/// The paradigm ending for `id`'s class given the selected features:
+/// `(surface, is_prefix, labels)`.
+fn entry_morphology(
+    dict: &Dictionary,
+    id: Uuid,
+    morphology: &Morphology,
+    selections: &BTreeMap<String, String>,
+) -> Option<(String, bool, Vec<String>)> {
+    let (_, entry) = dict.find_entry(id)?;
+    let class = word_class(entry)?;
+    let row = morphology.affix_for(class, selections)?;
+    Some((
+        row.surface.clone(),
+        row.kind == AffixKind::Prefix,
+        morphology.labels_for(row),
+    ))
+}
+
+/// The conlang surface for a chosen word, with any paradigm affix attached.
+fn render_word(
+    dict: &Dictionary,
+    picked: Option<&Picked>,
+    morphology: &Morphology,
+    selections: &BTreeMap<String, String>,
+) -> String {
+    let base = word_for(dict, picked);
+    let Some(picked) = picked else {
+        return base;
+    };
+    match entry_morphology(dict, picked.id, morphology, selections) {
+        Some((surface, true, _)) => format!("{surface}{base}"),
+        Some((surface, false, _)) => format!("{base}{surface}"),
+        None => base,
+    }
+}
+
+/// The interlinear-gloss morpheme for a chosen word, with the paradigm affix
+/// and its feature labels.
+fn render_gloss(
+    dict: &Dictionary,
+    picked: Option<&Picked>,
+    morphology: &Morphology,
+    selections: &BTreeMap<String, String>,
+) -> Option<GlossMorpheme> {
+    let mut morpheme = gloss_for(dict, picked)?;
+    let picked = picked?;
+    if let Some((surface, prefix, labels)) =
+        entry_morphology(dict, picked.id, morphology, selections)
+    {
+        morpheme.surface = if prefix {
+            format!("{surface}-{}", morpheme.surface)
+        } else {
+            format!("{}-{surface}", morpheme.surface)
+        };
+        if !labels.is_empty() {
+            morpheme.gloss = format!("{}.{}", morpheme.gloss, labels.join("."));
+        }
+    }
+    Some(morpheme)
+}
+
 fn gloss_for(dict: &Dictionary, picked: Option<&Picked>) -> Option<GlossMorpheme> {
     let picked = picked?;
     let (_, entry) = dict.find_entry(picked.id)?;

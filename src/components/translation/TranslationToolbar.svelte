@@ -8,6 +8,7 @@
     Download,
     Upload,
     Braces,
+    Table2,
   } from "@lucide/svelte";
   import type { SyntaxGrid, TranslationMode } from "../../lib/api";
 
@@ -17,6 +18,7 @@
     draftName: string;
     hasPreset: boolean;
     showMorphology: boolean;
+    showParadigms: boolean;
     mode: TranslationMode;
     onLoad: (name: string) => void;
     onLoadGrammar: (name: string) => void;
@@ -25,6 +27,7 @@
     onExport: () => void;
     onImport: () => void;
     onToggleMorphology: () => void;
+    onToggleParadigms: () => void;
     onSetMode: (mode: TranslationMode) => void;
   }
 
@@ -34,6 +37,7 @@
     draftName = $bindable(),
     hasPreset,
     showMorphology,
+    showParadigms,
     mode,
     onLoad,
     onLoadGrammar,
@@ -42,6 +46,7 @@
     onExport,
     onImport,
     onToggleMorphology,
+    onToggleParadigms,
     onSetMode,
   }: Props = $props();
 
@@ -138,6 +143,13 @@
     onclick={onToggleMorphology}
   >
     <Braces size={15} />
+  </button>
+  <button
+    class:active={showParadigms}
+    title={$t("translation.paradigms")}
+    onclick={onToggleParadigms}
+  >
+    <Table2 size={15} />
   </button>
   {#if mode === "grid"}
     <button title={$t("translation.exportPresets")} onclick={onExport}>

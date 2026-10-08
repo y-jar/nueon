@@ -488,14 +488,16 @@ export const executeTranslation = (
   inputText: string,
   grid: SyntaxGrid,
   choices: Record<string, string>,
+  selections: FeatureSelections,
 ): Promise<TranslationReport> =>
-  invoke("execute_translation", { inputText, grid, choices });
+  invoke("execute_translation", { inputText, grid, choices, selections });
 /** Word-for-word mode: no syntax grid. */
 export const executeTranslationDirect = (
   inputText: string,
   choices: Record<string, string>,
+  selections: FeatureSelections,
 ): Promise<TranslationReport> =>
-  invoke("execute_translation_direct", { inputText, choices });
+  invoke("execute_translation_direct", { inputText, choices, selections });
 /** Existing entries whose name/senses match a token (search-as-you-type). */
 export const translationSuggest = (token: string): Promise<WordHit[]> =>
   invoke("translation_suggest", { token });
@@ -574,6 +576,37 @@ export interface TranslationConfig {
 
 export const translationConfig = (): Promise<TranslationConfig> =>
   configGet<TranslationConfig>("translation");
+
+export interface FeatureValue {
+  id: string;
+  label: string;
+}
+export interface Feature {
+  id: string;
+  label: string;
+  values: FeatureValue[];
+}
+export interface ParadigmRow {
+  when: Record<string, string>;
+  surface: string;
+  kind: AffixKind;
+}
+export interface Paradigm {
+  class: string;
+  rows: ParadigmRow[];
+}
+export interface Morphology {
+  features: Feature[];
+  paradigms: Paradigm[];
+}
+/** The selected feature values for one clause, e.g. `{ tense: "past" }`. */
+export type FeatureSelections = Record<string, string>;
+
+export const translationMorphology = (): Promise<Morphology> =>
+  invoke("translation_morphology");
+export const setTranslationMorphology = (
+  morphology: Morphology,
+): Promise<void> => invoke("set_translation_morphology", { morphology });
 
 export type PhonemeKind = "consonant" | "vowel" | "other";
 

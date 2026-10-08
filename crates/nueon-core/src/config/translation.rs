@@ -4,13 +4,15 @@ use std::collections::BTreeMap;
 
 use serde::{Deserialize, Serialize};
 
+use super::morphology::Morphology;
 use crate::translation::SyntaxGrid;
 
 /// Whether an affix attaches before or after a root.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default, Serialize, Deserialize)]
 #[serde(rename_all = "snake_case")]
 pub enum AffixKind {
     Prefix,
+    #[default]
     Suffix,
 }
 
@@ -75,6 +77,9 @@ pub struct TranslationConfig {
     pub grids: Vec<SyntaxGrid>,
     /// Minimal rule-based morphology.
     pub affixes: Vec<AffixRule>,
+    /// Feature-based paradigms (tense/number/… realised on a word class).
+    #[serde(default)]
+    pub morphology: Morphology,
 }
 
 #[cfg(test)]

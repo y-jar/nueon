@@ -413,7 +413,44 @@ function seedWorkspace() {
   );
   fs.writeFileSync(
     path.join(WORKSPACE, "config", "translation"),
-    JSON.stringify({ default_rule: "SVO", settings: {}, grids: [], affixes: [] }, null, 2),
+    JSON.stringify(
+      {
+        default_rule: "SVO",
+        settings: {},
+        grids: [],
+        affixes: [],
+        // A past-tense suffix on verbs, for probe 25.
+        morphology: {
+          features: [
+            {
+              id: "tense",
+              label: "Tense",
+              values: [
+                { id: "present", label: "Present" },
+                { id: "past", label: "Past" },
+                { id: "future", label: "Future" },
+              ],
+            },
+            {
+              id: "number",
+              label: "Number",
+              values: [
+                { id: "singular", label: "Singular" },
+                { id: "plural", label: "Plural" },
+              ],
+            },
+          ],
+          paradigms: [
+            {
+              class: "verb",
+              rows: [{ when: { tense: "past" }, surface: "i", kind: "suffix" }],
+            },
+          ],
+        },
+      },
+      null,
+      2,
+    ),
   );
   // A tiny lexicon so the Translator has words to map (probe 19).
   fs.writeFileSync(
@@ -438,7 +475,11 @@ function seedWorkspace() {
           {
             id: "22222222-2222-4222-8222-222222222222",
             wordname: "velo",
-            values: { definition: { type: "tag_list", value: ["to run"] } },
+            values: {
+              definition: { type: "tag_list", value: ["to run"] },
+              // A word class, so the paradigm can inflect it (probe 25).
+              pos: { type: "tag_list", value: ["verb"] },
+            },
           },
           // Two entries for one sense => a real conflict (probe 24).
           {
@@ -1560,6 +1601,58 @@ async function main() {
     await waitJs(
       `(document.querySelector('.runner .output')?.textContent ?? '').includes('pako')`,
       { label: "conflict resolved" },
+    );
+  });
+
+  // -- probe 25: feature bar applies a paradigm affix ----------------------
+  await probe("25-paradigm-tense-affix", async () => {
+    await openActivity("Translation");
+    await waitJs(`!!document.querySelector('.translation')`, {
+      label: "translation view",
+    });
+    await js(
+      `const b = [...document.querySelectorAll('.translation-toolbar .mode-switch button')]
+         .find((x) => x.textContent.trim() === 'Word for word');
+       if (b) b.click();
+       return !!b;`,
+    );
+    await waitJs(`!!document.querySelector('.feature-bar')`, {
+      label: "feature bar",
+    });
+
+    const pickFeature = (label) =>
+      js(
+        `const b = [...document.querySelectorAll('.feature-bar button')]
+           .find((x) => x.textContent.trim() === ${JSON.stringify(label)});
+         if (b) b.click();
+         return !!b;`,
+      );
+
+    // Select "Past": the verb velo (pos=verb) takes its past suffix "i".
+    if (!(await pickFeature("Past"))) throw new Error("no Past button");
+    await js(`const t = document.querySelector('.runner textarea');
+      t.value = 'run';
+      t.dispatchEvent(new Event('input', { bubbles: true }));
+      return true;`);
+    await waitJs(
+      `(document.querySelector('.runner .output')?.textContent ?? '').trim() === 'veloi'`,
+      { label: "past suffix applied" },
+    );
+    const gloss = await js(
+      `return document.querySelector('.runner')?.textContent ?? '';`,
+    );
+    if (!gloss.includes("PAST")) throw new Error("feature label missing from gloss");
+
+    // Clearing the feature removes the ending again.
+    await js(
+      `const b = [...document.querySelectorAll('.feature-bar button.active')]
+         .find((x) => x.textContent.trim() === 'Past');
+       if (b) b.click();
+       return true;`,
+    );
+    await waitJs(
+      `(document.querySelector('.runner .output')?.textContent ?? '').trim() === 'velo'`,
+      { label: "ending removed" },
     );
   });
 }

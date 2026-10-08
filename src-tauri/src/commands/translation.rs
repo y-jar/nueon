@@ -1,13 +1,13 @@
 //! Translation commands: presets, execution, and inline word creation.
 
-use std::collections::HashMap;
+use std::collections::{BTreeMap, HashMap};
 use std::sync::Mutex;
 
 use tauri::{AppHandle, State};
 use uuid::Uuid;
 
 use nueon_core::model::TranslationReport;
-use nueon_core::{SyntaxGrid, TranslationOptions, WordHit};
+use nueon_core::{Morphology, SyntaxGrid, TranslationOptions, WordHit};
 
 use super::changed;
 use crate::state::AppState;
@@ -63,6 +63,7 @@ pub fn execute_translation(
     input_text: String,
     grid: SyntaxGrid,
     choices: Option<HashMap<String, String>>,
+    selections: Option<HashMap<String, String>>,
 ) -> Result<TranslationReport, String> {
     let state = state.lock().map_err(|_| "state poisoned".to_string())?;
     let workspace = state.workspace()?;
@@ -77,6 +78,7 @@ pub fn execute_translation(
             resolved.insert(index, id);
         }
     }
+    let features: BTreeMap<String, String> = selections.unwrap_or_default().into_iter().collect();
 
     let separator = workspace
         .translation
@@ -85,13 +87,15 @@ pub fn execute_translation(
         .map(String::as_str)
         .unwrap_or(" ");
 
-    Ok(nueon_core::model::translate::translate(
+    Ok(nueon_core::model::translate::translate_with(
         &workspace.dictionary,
         &grid,
         separator,
         &input_text,
         &resolved,
         &workspace.translation.affixes,
+        &workspace.translation.morphology,
+        &features,
     ))
 }
 
@@ -103,6 +107,7 @@ pub fn execute_translation_direct(
     state: State<'_, Shared>,
     input_text: String,
     choices: Option<HashMap<String, String>>,
+    selections: Option<HashMap<String, String>>,
 ) -> Result<TranslationReport, String> {
     let state = state.lock().map_err(|_| "state poisoned".to_string())?;
     let workspace = state.workspace()?;
@@ -117,6 +122,7 @@ pub fn execute_translation_direct(
             resolved.insert(index, id);
         }
     }
+    let features: BTreeMap<String, String> = selections.unwrap_or_default().into_iter().collect();
 
     let separator = workspace
         .translation
@@ -125,13 +131,39 @@ pub fn execute_translation_direct(
         .map(String::as_str)
         .unwrap_or(" ");
 
-    Ok(nueon_core::model::translate::translate_direct(
+    Ok(nueon_core::model::translate::translate_direct_with(
         &workspace.dictionary,
         separator,
         &input_text,
         &resolved,
         &workspace.translation.affixes,
+        &workspace.translation.morphology,
+        &features,
     ))
+}
+
+/// The feature paradigm definitions.
+#[tauri::command]
+pub fn translation_morphology(state: State<'_, Shared>) -> Result<Morphology, String> {
+    let state = state.lock().map_err(|_| "state poisoned".to_string())?;
+    Ok(state.workspace()?.translation.morphology.clone())
+}
+
+/// Replace the feature paradigms and persist.
+#[tauri::command]
+pub fn set_translation_morphology(
+    app: AppHandle,
+    state: State<'_, Shared>,
+    morphology: Morphology,
+) -> Result<(), String> {
+    let mut state = state.lock().map_err(|_| "state poisoned".to_string())?;
+    state
+        .workspace_mut()?
+        .set_translation_morphology(morphology)
+        .map_err(|err| err.to_string())?;
+    drop(state);
+    changed(&app, "translation");
+    Ok(())
 }
 
 /// Existing entries whose name or senses contain `token`, for the translator's

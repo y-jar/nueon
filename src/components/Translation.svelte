@@ -6,6 +6,8 @@
   import { ui, activeDoc } from "../lib/state.svelte";
   import TranslationToolbar from "./translation/TranslationToolbar.svelte";
   import MorphologyDrawer from "./translation/MorphologyDrawer.svelte";
+  import FeatureBar from "./translation/FeatureBar.svelte";
+  import ParadigmEditor from "./translation/ParadigmEditor.svelte";
   import SlotPalette from "./translation/SlotPalette.svelte";
   import ClauseCanvas from "./translation/ClauseCanvas.svelte";
   import TranslationRunner from "./translation/TranslationRunner.svelte";
@@ -21,7 +23,10 @@
   let affixes = $state<api.AffixRule[]>([]);
   let mode = $state<api.TranslationMode>("direct");
   let suggestions = $state<Record<number, api.WordHit[]>>({});
+  let morphology = $state<api.Morphology>({ features: [], paradigms: [] });
+  let selections = $state<api.FeatureSelections>({});
   let showMorphology = $state(false);
+  let showParadigms = $state(false);
   let inputText = $state("");
   let choices = $state<Record<string, string>>({});
   let report = $state<api.TranslationReport | null>(null);
@@ -56,6 +61,15 @@
     await loadPresets();
     await loadOptions();
     await loadGrammar();
+    await loadMorphology();
+  }
+
+  async function loadMorphology() {
+    try {
+      morphology = await api.translationMorphology();
+    } catch (e) {
+      error = String(e);
+    }
   }
 
   async function loadGrammar() {
@@ -126,6 +140,34 @@
 
   function toggleMorphology() {
     showMorphology = !showMorphology;
+  }
+
+  function toggleParadigms() {
+    showParadigms = !showParadigms;
+  }
+
+  /** Select / clear one feature value, then re-run. */
+  function toggleFeature(featureId: string, valueId: string) {
+    if (selections[featureId] === valueId) {
+      const next = { ...selections };
+      delete next[featureId];
+      selections = next;
+    } else {
+      selections = { ...selections, [featureId]: valueId };
+    }
+    void run();
+  }
+
+  let morphologyTimer: ReturnType<typeof setTimeout> | undefined;
+  function updateMorphology(next: api.Morphology) {
+    morphology = next;
+    if (morphologyTimer) clearTimeout(morphologyTimer);
+    morphologyTimer = setTimeout(() => {
+      void api.setTranslationMorphology(morphology).catch((e) => {
+        error = String(e);
+      });
+      void run();
+    }, 400);
   }
 
   async function exportPresets() {
@@ -219,8 +261,8 @@
     try {
       report =
         mode === "direct"
-          ? await api.executeTranslationDirect(inputText, choices)
-          : await api.executeTranslation(inputText, grid(), choices);
+          ? await api.executeTranslationDirect(inputText, choices, selections)
+          : await api.executeTranslation(inputText, grid(), choices, selections);
       error = "";
       await loadSuggestions();
     } catch (e) {
@@ -370,6 +412,7 @@
     bind:draftName
     {hasPreset}
     {showMorphology}
+    {showParadigms}
     {mode}
     onLoad={loadPreset}
     onLoadGrammar={loadGrammarRule}
@@ -378,6 +421,7 @@
     onExport={exportPresets}
     onImport={importPresets}
     onToggleMorphology={toggleMorphology}
+    onToggleParadigms={toggleParadigms}
     onSetMode={setMode}
   />
 
@@ -387,6 +431,12 @@
     onAdd={addAffix}
     onRemove={removeAffix}
   />
+
+  <FeatureBar features={morphology.features} {selections} onToggle={toggleFeature} />
+
+  {#if showParadigms}
+    <ParadigmEditor {morphology} onChange={updateMorphology} />
+  {/if}
 
   {#if mode === "grid"}
     <SlotPalette

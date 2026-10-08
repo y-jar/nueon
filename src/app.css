@@ -1127,6 +1127,85 @@ button.link {
   margin-top: 4px;
 }
 
+.feature-bar {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+  padding: 6px 8px;
+  background: var(--panel);
+  border: 1px solid var(--border);
+  border-radius: 6px;
+}
+
+.feature-group {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.feature-label {
+  font-size: 12px;
+  color: var(--muted);
+}
+
+.feature-values {
+  display: inline-flex;
+  overflow: hidden;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+}
+
+.feature-values button {
+  padding: 2px 8px;
+  border: none;
+  border-radius: 0;
+  font-size: 12px;
+}
+
+.feature-values button + button {
+  border-left: 1px solid var(--border);
+}
+
+.feature-values button.active {
+  background: var(--accent);
+  color: var(--bg);
+}
+
+.paradigm-editor {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding: 6px 8px;
+  background: var(--panel);
+  border: 1px solid var(--border);
+  border-radius: 6px;
+}
+
+.paradigm-editor .paradigm-head {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.paradigm-editor .paradigm-row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px;
+  padding: 2px 0;
+}
+
+.paradigm-editor .when {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  font-size: 12px;
+}
+
+.paradigm-editor .when select {
+  font-size: 12px;
+}
+
 .translation-toolbar button.active {
   color: var(--accent);
   border-color: var(--accent);

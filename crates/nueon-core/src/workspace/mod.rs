@@ -20,8 +20,8 @@ use uuid::Uuid;
 use self::table_files::TableFiles;
 
 use crate::config::{
-    GrammarConfig, GridViewState, LanguageConfig, LayoutState, PhonologyConfig, TilingLayout,
-    TranslationConfig, TranslationMode, TranslationOptions, UiLayout, WindowGeometry,
+    GrammarConfig, GridViewState, LanguageConfig, LayoutState, Morphology, PhonologyConfig,
+    TilingLayout, TranslationConfig, TranslationMode, TranslationOptions, UiLayout, WindowGeometry,
     WorkspaceSettings,
 };
 use crate::export_table::TableFormat;
@@ -1146,6 +1146,15 @@ impl Workspace {
         self.translation
             .settings
             .insert("mode".to_string(), mode.to_string());
+        self.save_translation()
+    }
+
+    /// Replace the feature paradigms, then persist.
+    pub fn set_translation_morphology(
+        &mut self,
+        morphology: Morphology,
+    ) -> Result<(), StorageError> {
+        self.translation.morphology = morphology;
         self.save_translation()
     }
 

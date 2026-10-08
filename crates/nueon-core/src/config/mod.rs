@@ -3,6 +3,7 @@
 mod grammar;
 mod language;
 mod layout;
+mod morphology;
 mod phonology;
 mod settings;
 mod translation;
@@ -13,6 +14,7 @@ pub use layout::{
     GroupLayout, LayoutState, SecondaryWindow, SplitDirection, SplitLayout, TabKind, TabLayout,
     TilingLayout, WindowGeometry,
 };
+pub use morphology::{Feature, FeatureValue, Morphology, Paradigm, ParadigmRow, POS_TAG};
 pub use phonology::{check_word, Phoneme, PhonemeKind, PhonologyConfig, Violation};
 pub use settings::{GridViewState, SortSpec, UiLayout, WorkspaceSettings};
 pub use translation::{
