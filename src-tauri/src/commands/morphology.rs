@@ -39,7 +39,10 @@ pub struct LexiconWord {
     pub id: String,
     pub wordname: String,
     pub class: Option<String>,
+    /// The first definition sense (for display).
     pub gloss: String,
+    /// Every definition sense (for searching).
+    pub senses: Vec<String>,
 }
 
 /// A word's class, from the first sense of its `pos` tag.
@@ -91,16 +94,14 @@ pub fn lexicon(state: State<'_, Shared>) -> Result<Vec<LexiconWord>, String> {
             continue;
         }
         for entry in &table.entries {
+            let senses: Vec<String> = entry.definition().unwrap_or(&[]).to_vec();
             words.push(LexiconWord {
                 table: table.name.clone(),
                 id: entry.id.to_string(),
                 wordname: entry.wordname.clone(),
                 class: class_of(entry),
-                gloss: entry
-                    .definition()
-                    .and_then(<[String]>::first)
-                    .cloned()
-                    .unwrap_or_default(),
+                gloss: senses.first().cloned().unwrap_or_default(),
+                senses,
             });
         }
     }

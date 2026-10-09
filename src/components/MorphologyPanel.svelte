@@ -22,7 +22,9 @@
   );
   const words = $derived(
     store.lexicon.filter((word) =>
-      word.wordname.toLowerCase().includes(wordFilter.trim().toLowerCase()),
+      `${word.wordname} ${word.senses.join(" ")} ${word.class ?? ""} ${word.table}`
+        .toLowerCase()
+        .includes(wordFilter.trim().toLowerCase()),
     ),
   );
 

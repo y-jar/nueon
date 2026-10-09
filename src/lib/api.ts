@@ -713,6 +713,8 @@ export interface LexiconWord {
   wordname: string;
   class: string | null;
   gloss: string;
+  /** Every definition sense, for searching. */
+  senses: string[];
 }
 export const lexicon = (): Promise<LexiconWord[]> => invoke("lexicon");
 

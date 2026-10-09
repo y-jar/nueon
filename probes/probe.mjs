@@ -4041,6 +4041,31 @@ async function main() {
       { label: "escape cleared the search" },
     );
   });
+
+  // -- probe 68: the lexicon search matches a word's gloss -------------------
+  await probe("68-lexicon-gloss-search", async () => {
+    await js(
+      `const b = document.querySelector('.activity[title="Morphology"]');
+       if (b) b.click();
+       return !!b;`,
+    );
+    await waitJs(`!!document.querySelector('.morphology-sidebar .word-search input')`, {
+      label: "lexicon search",
+    });
+    await js(
+      `const i = document.querySelector('.morphology-sidebar .word-search input');
+       i.focus();
+       i.value = 'run';
+       i.dispatchEvent(new Event('input', { bubbles: true }));
+       return true;`,
+    );
+    // "velo" has the definition "to run": a gloss hit, not a wordname hit.
+    await waitJs(
+      `[...document.querySelectorAll('.morphology-sidebar .word-row .grow')]
+         .some((x) => x.textContent.trim() === 'velo')`,
+      { label: "gloss search finds velo" },
+    );
+  });
 }
 
 try {
