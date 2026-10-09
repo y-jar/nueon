@@ -562,6 +562,30 @@ function seedWorkspace() {
       2,
     ),
   );
+  // A big table so the grid's row virtualization can be checked (probe 31).
+  const bigEntries = Array.from({ length: 2000 }, (_, i) => {
+    const n = String(i).padStart(4, "0");
+    return {
+      id: `90000000-0000-4000-8000-${String(i).padStart(12, "0")}`,
+      wordname: `w${n}`,
+      values: { definition: { type: "tag_list", value: [`zzword${n}`] } },
+    };
+  });
+  fs.writeFileSync(
+    path.join(WORKSPACE, "dictionary", "big"),
+    JSON.stringify({
+      name: "big",
+      tags: [
+        {
+          name: "wordname",
+          description: "The base conlang spelling.",
+          kind: "text",
+          builtin: true,
+        },
+      ],
+      entries: bigEntries,
+    }),
+  );
   const lines = Array.from(
     { length: 120 },
     (_, i) => `line ${String(i + 1).padStart(3, "0")}`,
@@ -1868,10 +1892,22 @@ async function main() {
     await openSearch();
     await waitJs(`!!document.querySelector('.grid-search input')`, { label: "search box" });
     await typeInto("kaka");
-    await waitJs(
-      `document.querySelectorAll('.dict-grid tbody tr:not(.ghost)').length < ${before}`,
-      { label: "grid filtered" },
+    await new Promise((resolve) => setTimeout(resolve, 300));
+    const afterFilter = await rows();
+    const filterValue = await js(
+      `return document.querySelector('.grid-search input')?.value ?? null;`,
     );
+    if (!(afterFilter < before)) {
+      const names = await js(
+        `return [...document.querySelectorAll('.dict-grid td.wordname-col input')].map((i) => i.value);`,
+      );
+      const indexes = await js(
+        `return [...document.querySelectorAll('.dict-grid tbody tr[data-index]')].map((r) => r.getAttribute('data-index'));`,
+      );
+      throw new Error(
+        `grid filtered: before=${before} after=${afterFilter} input=${JSON.stringify(filterValue)} names=${JSON.stringify(names)} indexes=${JSON.stringify(indexes)}`,
+      );
+    }
 
     // Closing the icon cancels the filter: every row is back and the box is gone.
     await openSearch();
@@ -1993,6 +2029,49 @@ async function main() {
       `(document.querySelector('.runner .output')?.textContent ?? '').trim() === 'kakai'`,
       { label: "fixes-table affix applied" },
     );
+  });
+
+  // -- probe 31: the grid virtualizes rows --------------------------------
+  await probe("31-grid-row-virtualization", async () => {
+    await openActivity("Dictionary");
+    await waitJs(`!!document.querySelector('.table-list')`, { label: "tables panel" });
+    const opened = await js(
+      `const b = [...document.querySelectorAll('.table-list .table-row .tree-name')]
+         .find((x) => x.textContent.trim().startsWith('big'));
+       if (b) b.click();
+       return !!b;`,
+    );
+    if (!opened) throw new Error("no 'big' table in the panel");
+    await waitJs(`!!document.querySelector('.dict-grid')`, { label: "big grid" });
+    await waitJs(
+      `document.querySelectorAll('.dict-grid tbody tr[data-index]').length > 0`,
+      { label: "rows rendered" },
+    );
+
+    // Only a window of the 2000 rows is in the DOM.
+    const rendered = await js(
+      `return document.querySelectorAll('.dict-grid tbody tr[data-index]').length;`,
+    );
+    if (rendered >= 2000 || rendered > 300) {
+      throw new Error(`expected a small window, rendered ${rendered}`);
+    }
+
+    // Scrolling to the end brings the last row into the DOM.
+    await js(`const s = document.querySelector('.grid-scroll');
+       s.scrollTop = s.scrollHeight;
+       s.dispatchEvent(new Event('scroll', { bubbles: true }));
+       return true;`);
+    await waitJs(
+      `[...document.querySelectorAll('.dict-grid td.wordname-col input')]
+         .some((i) => i.value === 'w1999')`,
+      { label: "last row after scroll" },
+    );
+    // The ghost (add-word) row is still the last row of the body.
+    const lastIsGhost = await js(
+      `const rows = [...document.querySelectorAll('.dict-grid tbody tr')];
+       return rows[rows.length - 1]?.classList.contains('ghost') === true;`,
+    );
+    if (!lastIsGhost) throw new Error("ghost row is not last after virtualization");
   });
 }
 

@@ -1,6 +1,8 @@
 <script lang="ts">
   import { onDestroy } from "svelte";
+  import { get } from "svelte/store";
   import { save } from "@tauri-apps/plugin-dialog";
+  import { createVirtualizer } from "@tanstack/svelte-virtual";
   import { autofocus } from "../lib/actions";
   import { t } from "svelte-i18n";
   import {
@@ -74,6 +76,12 @@
 
   let searchOpen = $state(false);
   let addWordOpen = $state(false);
+
+  // Row virtualization: only the visible window of rows is in the DOM.
+  let gridScroll = $state<HTMLDivElement | null>(null);
+  let tbodyRef = $state<HTMLTableSectionElement | null>(null);
+  /** Height of the sticky header that sits above the body. */
+  let headerHeight = $state(0);
 
   let selectedIds = $state<string[]>([]);
   let newTagName = $state("");
@@ -239,6 +247,52 @@
       ACTION_COLUMN_WIDTH +
       visibleColumns.reduce((sum, column) => sum + column.getSize(), 0),
   );
+
+  // Window the rows: a dictionary can hold thousands, and rendering every
+  // row as a live DOM node made scrolling crawl. `scrollMargin` is the sticky
+  // header's height, so the window lines up with the body.
+  const virtualizer = createVirtualizer<HTMLDivElement, HTMLElement>({
+    // The real count is pushed in by the effect below, so this avoids
+    // capturing a stale initial `rows`.
+    count: 0,
+    getScrollElement: () => gridScroll,
+    estimateSize: () => 30,
+    overscan: 12,
+    getItemKey: (index) => rows[index]?.id ?? index,
+  });
+  // Read the sticky header's height once the elements exist.
+  $effect(() => {
+    if (!gridScroll || !tbodyRef) return;
+    headerHeight =
+      tbodyRef.getBoundingClientRect().top -
+      gridScroll.getBoundingClientRect().top +
+      gridScroll.scrollTop;
+  });
+
+  // Keep the virtualizer's count and header margin current. `$effect.pre` runs
+  // before the DOM updates, so a filter that shrinks the row set is reflected
+  // in the same pass rather than one render late.
+  $effect.pre(() => {
+    const count = rows.length;
+    get(virtualizer).setOptions({ count, scrollMargin: headerHeight });
+  });
+
+  const virtualRows = $derived($virtualizer.getVirtualItems());
+  const virtualTotalSize = $derived($virtualizer.getTotalSize());
+  const paddingTop = $derived(
+    virtualRows.length ? virtualRows[0].start - headerHeight : 0,
+  );
+  const paddingBottom = $derived(
+    virtualRows.length
+      ? virtualTotalSize -
+          virtualRows[virtualRows.length - 1].end +
+          headerHeight
+      : 0,
+  );
+
+  function measureRow(node: HTMLElement) {
+    $virtualizer.measureElement(node);
+  }
 
   function tagOf(name: string): api.TagDef | undefined {
     return tagColumns.find((tag) => tag.name === name);
@@ -1070,7 +1124,7 @@
     </div>
   {/if}
 
-  <div class="grid-scroll">
+  <div class="grid-scroll" bind:this={gridScroll}>
     <table class="dict-grid" style:width="{tableWidth}px">
       <colgroup>
         <col style:width="{SELECT_COLUMN_WIDTH}px" />
@@ -1132,9 +1186,20 @@
           <th></th>
         </tr>
       </thead>
-      <tbody>
-        {#each rows as row (row.id)}
+      <tbody bind:this={tbodyRef}>
+        {#if paddingTop > 0}
+          <tr class="virtual-spacer" aria-hidden="true">
+            <td
+              colspan={visibleColumns.length + 2}
+              style="height:{paddingTop}px;padding:0;border:0"
+            ></td>
+          </tr>
+        {/if}
+        {#each virtualRows as vrow (vrow.key)}
+          {@const row = rows[vrow.index]}
           <tr
+            data-index={vrow.index}
+            use:measureRow
             class:selected={doc.selectedEntry === row.original.id}
             onclick={() => selectRow(row.original.id)}
           >
@@ -1209,6 +1274,14 @@
             </td>
           </tr>
         {/each}
+        {#if paddingBottom > 0}
+          <tr class="virtual-spacer" aria-hidden="true">
+            <td
+              colspan={visibleColumns.length + 2}
+              style="height:{paddingBottom}px;padding:0;border:0"
+            ></td>
+          </tr>
+        {/if}
         <tr class="ghost" onfocusout={onGhostFocusOut}>
           <td class="select-col"></td>
           {#each visibleColumns as column (column.id)}
