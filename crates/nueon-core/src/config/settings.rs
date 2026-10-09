@@ -100,8 +100,6 @@ pub struct WorkspaceSettings {
     pub editor_line_numbers: bool,
     /// Persisted shell layout.
     pub ui: UiLayout,
-    /// Whether legacy extensionless/`.txt` notes were converted to `.md`.
-    pub notes_migrated: bool,
     /// Whether on-disk table-filename collisions (from before filenames were
     /// resolved once and kept stable) were checked for and repaired.
     pub table_filenames_migrated: bool,
@@ -122,7 +120,6 @@ impl Default for WorkspaceSettings {
             suppressed_confirms: Vec::new(),
             editor_line_numbers: true,
             ui: UiLayout::default(),
-            notes_migrated: false,
             table_filenames_migrated: false,
             layout: LayoutState::default(),
         }

@@ -22,8 +22,23 @@ export function isAssetPath(path: string): boolean {
   return path === ASSETS_DIR || path.startsWith(`${ASSETS_DIR}/`);
 }
 
-/** Whether a tree path opens in the Markdown editor rather than the viewer. */
+/** Whether a name carries a plausible file extension (1–5 alphanumerics). */
+function hasExtension(name: string): boolean {
+  const dot = name.lastIndexOf(".");
+  if (dot <= 0) return false;
+  const ext = name.slice(dot + 1);
+  return ext.length > 0 && ext.length <= 5 && /^[A-Za-z0-9]+$/.test(ext);
+}
+
+/**
+ * Whether a tree path opens in the Markdown editor rather than the viewer.
+ * Markdown/text and extensionless notes (legacy) open in the editor; a
+ * leading-dot file goes to the viewer, never the editor.
+ */
 export function isNotePath(path: string): boolean {
+  const name = path.split("/").pop() ?? "";
+  if (name.startsWith(".")) return false;
+  if (!hasExtension(name)) return true;
   return /\.(md|markdown|txt)$/i.test(path);
 }
 

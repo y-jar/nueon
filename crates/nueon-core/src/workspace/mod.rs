@@ -192,8 +192,6 @@ impl Workspace {
             history: History::new(),
         };
         // Best effort: a failed migration retries on the next open.
-        let _ = workspace.migrate_notes_if_needed();
-        // Best effort, same reasoning: a failed migration retries next open.
         let _ = workspace.migrate_table_filenames_if_needed();
         // Expired trash is cleared on open; never a reason to fail opening.
         trash::prune(&workspace.root_path, trash::now_secs(), RETENTION_DAYS);
@@ -236,24 +234,6 @@ impl Workspace {
         self.table_files = scan.files;
         self.quarantine = scan.warnings;
         self.history = History::new();
-        Ok(())
-    }
-
-    /// One-time conversion of extensionless and `.txt` notes to `.md`.
-    fn migrate_notes_if_needed(&mut self) -> Result<(), StorageError> {
-        if self.settings.notes_migrated {
-            return Ok(());
-        }
-        let renamed = storage::migrate_to_markdown(&self.notes_dir())?;
-        self.refresh_notes()?;
-        self.settings.notes_migrated = true;
-        self.save_settings()?;
-        if !renamed.is_empty() {
-            self.mark_change(
-                Instant::now(),
-                format!("nueon: migrate {} notes to .md", renamed.len()),
-            );
-        }
         Ok(())
     }
 
@@ -1868,24 +1848,19 @@ mod tests {
     }
 
     #[test]
-    fn legacy_notes_migrate_to_markdown_once_on_load() {
+    fn loading_never_renames_files() {
         let dir = tempfile::tempdir().unwrap();
         drop(Workspace::new(dir.path()).unwrap());
         let notes = dir.path().join("notes");
-        std::fs::write(notes.join("lorum"), "hello").unwrap();
+        std::fs::write(notes.join("extensionless"), "hello").unwrap();
         std::fs::write(notes.join("old.txt"), "world").unwrap();
 
         let ws = Workspace::load(dir.path()).unwrap();
-        assert!(notes.join("lorum.md").exists());
-        assert!(notes.join("old.md").exists());
+        // Names are preserved exactly; nothing is converted to `.md`.
+        assert!(notes.join("extensionless").exists());
+        assert!(notes.join("old.txt").exists());
+        assert!(!notes.join("old.md").exists());
         assert_eq!(ws.notes.len(), 2);
-        assert!(ws.settings.notes_migrated);
-
-        // A note the user later names without an extension is left alone.
-        std::fs::write(notes.join("later"), "x").unwrap();
-        let again = Workspace::load(dir.path()).unwrap();
-        assert!(notes.join("later").exists());
-        assert!(again.settings.notes_migrated);
     }
 
     #[test]

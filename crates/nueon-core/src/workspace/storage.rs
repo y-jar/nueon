@@ -635,74 +635,6 @@ pub fn copy_into(notes_dir: &Path, folder: &Path, source: &Path) -> Result<PathB
     }
 }
 
-/// Rename extensionless and `.txt` notes to `.md`, returning `(from, to)`
-/// pairs relative to `notes_dir`. Name collisions get a numeric suffix, and
-/// files that are not valid UTF-8 text are left alone.
-pub fn migrate_to_markdown(notes_dir: &Path) -> Result<Vec<(PathBuf, PathBuf)>, StorageError> {
-    let mut renamed = Vec::new();
-    if notes_dir.exists() {
-        migrate_dir(notes_dir, notes_dir, &mut renamed)?;
-    }
-    Ok(renamed)
-}
-
-fn migrate_dir(
-    base: &Path,
-    dir: &Path,
-    renamed: &mut Vec<(PathBuf, PathBuf)>,
-) -> Result<(), StorageError> {
-    let mut entries = Vec::new();
-    for dirent in fs::read_dir(dir).map_err(|e| io_err(dir, e))? {
-        entries.push(dirent.map_err(|e| io_err(dir, e))?.path());
-    }
-    entries.sort();
-    for path in entries {
-        let hidden = path
-            .file_name()
-            .is_some_and(|name| name.to_string_lossy().starts_with('.'));
-        if hidden {
-            continue;
-        }
-        // Imported files under `notes/assets/` are not notes; never rename them.
-        if dir == base
-            && path
-                .file_name()
-                .is_some_and(|name| name.to_string_lossy() == ASSETS_DIR)
-        {
-            continue;
-        }
-        if path.is_dir() {
-            migrate_dir(base, &path, renamed)?;
-            continue;
-        }
-        let is_txt = path.extension().is_some_and(|ext| ext == "txt");
-        if !is_txt && has_extension(&path) {
-            continue;
-        }
-        let is_text = fs::read(&path).is_ok_and(|bytes| String::from_utf8(bytes).is_ok());
-        if !is_text {
-            continue;
-        }
-        let stem = if is_txt {
-            path.with_extension("")
-        } else {
-            path.clone()
-        };
-        let mut candidate = with_note_extension(&stem);
-        let mut n = 2;
-        while candidate.exists() {
-            let mut name = stem.as_os_str().to_os_string();
-            name.push(format!(" {n}.{NOTE_EXT}"));
-            candidate = PathBuf::from(name);
-            n += 1;
-        }
-        fs::rename(&path, &candidate).map_err(|e| io_err(&path, e))?;
-        let rel = |p: &Path| p.strip_prefix(base).unwrap_or(p).to_path_buf();
-        renamed.push((rel(&path), rel(&candidate)));
-    }
-    Ok(())
-}
-
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -837,36 +769,6 @@ mod tests {
     }
 
     #[test]
-    fn migration_renames_once_and_avoids_collisions() {
-        let dir = tempfile::tempdir().unwrap();
-        let notes = dir.path().join(NOTES_DIR);
-        fs::create_dir_all(notes.join("sub")).unwrap();
-        fs::write(notes.join("plain"), "a").unwrap();
-        fs::write(notes.join("old.txt"), "b").unwrap();
-        fs::write(notes.join("keep.md"), "c").unwrap();
-        fs::write(notes.join("sub/deep"), "d").unwrap();
-        // Collision: `clash` and an existing `clash.md`.
-        fs::write(notes.join("clash"), "e").unwrap();
-        fs::write(notes.join("clash.md"), "f").unwrap();
-        // Binary data and hidden files are untouched.
-        fs::write(notes.join("blob"), [0xff, 0xfe, 0x00]).unwrap();
-        fs::write(notes.join(".hidden"), "h").unwrap();
-
-        let renamed = migrate_to_markdown(&notes).unwrap();
-        assert_eq!(renamed.len(), 4);
-        assert!(notes.join("plain.md").exists());
-        assert!(notes.join("old.md").exists());
-        assert!(!notes.join("old.txt").exists());
-        assert!(notes.join("sub/deep.md").exists());
-        assert!(notes.join("clash 2.md").exists());
-        assert_eq!(fs::read_to_string(notes.join("clash.md")).unwrap(), "f");
-        assert!(notes.join("blob").exists());
-        assert!(notes.join(".hidden").exists());
-
-        assert!(migrate_to_markdown(&notes).unwrap().is_empty());
-    }
-
-    #[test]
     fn rename_keeps_file_extension_and_scan_skips_binaries() {
         let dir = tempfile::tempdir().unwrap();
         let notes = dir.path().join(NOTES_DIR);
@@ -882,47 +784,17 @@ mod tests {
     }
 
     #[test]
-    fn scan_and_migration_skip_the_assets_folder() {
+    fn scan_notes_skips_the_assets_folder() {
         let dir = tempfile::tempdir().unwrap();
         let notes = dir.path().join(NOTES_DIR);
         fs::create_dir_all(notes.join(ASSETS_DIR)).unwrap();
         write_note(&notes, &NoteFile::new("real.md", "note")).unwrap();
-        // A text asset would otherwise look like a note and be migrated.
+        // A text asset under assets/ is not a note.
         fs::write(notes.join(ASSETS_DIR).join("readme.txt"), "asset text").unwrap();
 
         let loaded = scan_notes(&notes).unwrap();
         assert_eq!(loaded.len(), 1);
         assert_eq!(loaded[0].path, PathBuf::from("real.md"));
-
-        let renamed = migrate_to_markdown(&notes).unwrap();
-        assert!(renamed.is_empty(), "assets are never migrated: {renamed:?}");
-        assert!(notes.join(ASSETS_DIR).join("readme.txt").exists());
-    }
-
-    #[test]
-    fn copy_into_keeps_the_name_and_suffixes_on_clash() {
-        let dir = tempfile::tempdir().unwrap();
-        let notes = dir.path().join(NOTES_DIR);
-        fs::create_dir_all(notes.join("lore")).unwrap();
-        let src = dir.path().join("photo.png");
-        fs::write(&src, b"bytes").unwrap();
-
-        let first = copy_into(&notes, Path::new("lore"), &src).unwrap();
-        assert_eq!(first, Path::new("lore/photo.png"));
-        assert_eq!(fs::read(notes.join(&first)).unwrap(), b"bytes");
-        // Copied, not moved: the source is untouched.
-        assert!(src.exists());
-
-        // Same name again gets a suffix; nothing is overwritten.
-        let second = copy_into(&notes, Path::new("lore"), &src).unwrap();
-        assert_eq!(second, Path::new("lore/photo 2.png"));
-
-        // A directory source and a folder escape are both refused.
-        assert!(matches!(
-            copy_into(&notes, Path::new(""), dir.path()),
-            Err(StorageError::NotAFile(_))
-        ));
-        assert!(copy_into(&notes, Path::new("../out"), &src).is_err());
     }
 
     #[test]
