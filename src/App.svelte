@@ -21,6 +21,7 @@
   import SplitView from "./components/SplitView.svelte";
   import Inspector from "./components/Inspector.svelte";
   import SettingsModal from "./components/SettingsModal.svelte";
+  import SetupWizard from "./components/SetupWizard.svelte";
   import ContextMenu from "./components/ContextMenu.svelte";
   import ConfirmDialog from "./components/ConfirmDialog.svelte";
   import Toast from "./components/Toast.svelte";
@@ -166,6 +167,7 @@
     </footer>
   </div>
   <SettingsModal />
+  <SetupWizard />
 {:else}
   <Onboarding />
 {/if}

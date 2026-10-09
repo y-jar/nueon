@@ -589,6 +589,8 @@ export interface TranslationConfig {
   settings: Record<string, string>;
   grids: SyntaxGrid[];
   affixes: AffixRule[];
+  morphology?: Morphology;
+  table_roles?: Record<string, TableRoleConfig>;
 }
 
 export const translationConfig = (): Promise<TranslationConfig> =>

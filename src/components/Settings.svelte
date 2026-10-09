@@ -2,7 +2,7 @@
   import { onMount } from "svelte";
   import { t } from "svelte-i18n";
   import * as api from "../lib/api";
-  import { ui } from "../lib/state.svelte";
+  import { ui, openSetupWizard, closeSettings } from "../lib/state.svelte";
 
   let language = $state<api.LanguageConfig>({
     name: "",
@@ -266,6 +266,13 @@
       {/if}
     </div>
   {/each}
+
+  <button
+    onclick={() => {
+      closeSettings();
+      openSetupWizard();
+    }}>{$t("settings.runSetup")}</button
+  >
 
   {#if status}<p class="muted">{status}</p>{/if}
   {#if error}<p class="error">{error}</p>{/if}

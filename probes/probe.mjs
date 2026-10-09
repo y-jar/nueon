@@ -2073,6 +2073,63 @@ async function main() {
     );
     if (!lastIsGhost) throw new Error("ghost row is not last after virtualization");
   });
+
+  // -- probe 32: the first-run setup wizard ---------------------------------
+  await probe("32-setup-wizard", async () => {
+    // Open it from Settings (auto-open only fires on a blank workspace).
+    await js(`const b = document.querySelector('.activity[title="Settings"]');
+       if (b) b.click();
+       return !!b;`);
+    await waitJs(`!!document.querySelector('.settings')`, { label: "settings" });
+    const opened = await js(
+      `const b = [...document.querySelectorAll('.settings button')]
+         .find((x) => x.textContent.trim() === 'Run setup');
+       if (b) b.click();
+       return !!b;`,
+    );
+    if (!opened) throw new Error("no 'Run setup' button");
+    await waitJs(`!!document.querySelector('.setup-wizard')`, { label: "wizard" });
+
+    // Step 1: name the language.
+    await js(`const input = document.querySelector('.setup-wizard input');
+       input.value = 'Vokala';
+       input.dispatchEvent(new Event('input', { bubbles: true }));
+       return true;`);
+    const next = () =>
+      js(`const b = [...document.querySelectorAll('.setup-wizard button')]
+         .find((x) => x.textContent.trim() === 'Next');
+       if (b) b.click();
+       return !!b;`);
+    await next(); // phonology
+    await next(); // grammar
+    await next(); // morphology
+    const finished = await js(
+      `const b = [...document.querySelectorAll('.setup-wizard button')]
+         .find((x) => x.textContent.trim() === 'Finish');
+       if (b) b.click();
+       return !!b;`,
+    );
+    if (!finished) throw new Error("no Finish button");
+    await waitJs(`!document.querySelector('.setup-wizard')`, { label: "wizard closed" });
+
+    // The language name was written through to config.
+    await js(`const b = document.querySelector('.activity[title="Settings"]');
+       if (b) b.click();
+       return !!b;`);
+    await waitJs(`!!document.querySelector('.settings')`, { label: "settings again" });
+    assertEqual(
+      await js(`return document.querySelector('.settings input')?.value;`),
+      "Vokala",
+      "language name persisted",
+    );
+    // A grammar rule for the chosen word order was created.
+    const hasRule = await js(
+      `return [...document.querySelectorAll('.settings .rule input')]
+         .some((i) => i.value === 'SVO');`,
+    );
+    if (!hasRule) throw new Error("starter grammar rule missing");
+    await js(`const b = document.querySelector('.modal-head button'); if (b) b.click(); return !!b;`);
+  });
 }
 
 try {

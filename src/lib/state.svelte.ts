@@ -134,6 +134,7 @@ export const ui = $state({
   inspectorOpen: false,
   inspectorDock: "right" as "left" | "right",
   settingsOpen: false,
+  setupWizardOpen: false,
   confirm: null as ConfirmRequest | null,
   toast: null as ToastState | null,
   trashOpen: false,
@@ -346,6 +347,14 @@ export function openSettings(): void {
 
 export function closeSettings(): void {
   ui.settingsOpen = false;
+}
+
+export function openSetupWizard(): void {
+  ui.setupWizardOpen = true;
+}
+
+export function closeSetupWizard(): void {
+  ui.setupWizardOpen = false;
 }
 
 // -- tabs ----------------------------------------------------------------

@@ -174,7 +174,28 @@
     "triggerColumn": "English trigger column",
     "surfaceColumn": "surface column",
     "wordnameDefault": "wordname (default)",
+    "runSetup": "Run setup",
     "saved": "Saved"
+  },
+  "setup": {
+    "title": "Set up your language",
+    "stepLanguage": "Language",
+    "stepPhonology": "Sound inventory",
+    "stepGrammar": "Word order",
+    "stepMorphology": "Morphology",
+    "languageHint": "Name your conlang and pick its direction. Everything here can be changed later in Settings.",
+    "phonologyHint": "Space-separated sounds. Words you type are checked against this inventory.",
+    "consonants": "consonants",
+    "vowels": "vowels",
+    "grammarHint": "A starter rule the translator loads by default. Position carries the role; noun and verb are word classes.",
+    "wordOrder": "word order",
+    "morphologyHint": "An example ending, applied to words of the noun class.",
+    "pluralEnding": "plural ending",
+    "addParadigm": "Add the example noun plural",
+    "back": "Back",
+    "next": "Next",
+    "finish": "Finish",
+    "skip": "Skip setup"
   },
   "grid": {
     "search": "search\u2026",
