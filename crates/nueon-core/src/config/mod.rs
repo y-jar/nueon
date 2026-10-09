@@ -16,7 +16,9 @@ pub use layout::{
     TilingLayout, WindowGeometry,
 };
 pub use morphology::{Feature, FeatureValue, Morphology, Paradigm, ParadigmRow, POS_TAG};
-pub use phonology::{check_word, Phoneme, PhonemeKind, PhonologyConfig, Violation};
+pub use phonology::{
+    check_word, segments, Phoneme, PhonemeKind, PhonologyConfig, Segment, Violation,
+};
 pub use profile::{Profile, PROFILE_FORMAT, PROFILE_VERSION};
 pub use settings::{GridViewState, SortSpec, UiLayout, WorkspaceSettings};
 pub use translation::{

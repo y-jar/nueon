@@ -136,7 +136,7 @@
   });
 
   function issueText(violations: api.PhonologyViolation[]): string {
-    return violations
+    const reasons = violations
       .map((violation) =>
         violation.kind === "unknown_phoneme"
           ? $t("phonology.unknownPhoneme", {
@@ -145,6 +145,7 @@
           : $t("phonology.badSyllable"),
       )
       .join("; ");
+    return $t("phonology.warning", { values: { reasons } });
   }
 
   const tagColumns = $derived(

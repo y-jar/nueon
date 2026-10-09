@@ -2860,6 +2860,60 @@ async function main() {
        if (b) b.click();
        return !!b;`);
   });
+
+  // -- probe 45: wordname warning tooltip + inspector word checks -----------
+  await probe("45-word-checks-tooltip-inspector", async () => {
+    await openActivity("Dictionary");
+    await waitJs(`!!document.querySelector('.table-list')`, { label: "tables panel" });
+    const opened = await js(
+      `const b = [...document.querySelectorAll('.table-list .table-row .tree-name')]
+         .find((x) => x.textContent.trim().startsWith('lex'));
+       if (b) b.click();
+       return !!b;`,
+    );
+    if (!opened) throw new Error("no 'lex' table in the panel");
+    await waitJs(`!!document.querySelector('.dict-grid')`, { label: "lex grid" });
+    await waitJs(
+      `document.querySelectorAll('.dict-grid td.wordname-col input').length >= 2`,
+      { label: "lex rows" },
+    );
+
+    // Select the row for a word with unknown sounds, then check its warning.
+    const row = (word) =>
+      `[...document.querySelectorAll('.dict-grid td.wordname-col input')]
+         .find((i) => i.value === ${JSON.stringify(word)})?.closest('tr')`;
+    await js(`const tr = ${row("big")}; if (tr) tr.click(); return !!tr;`);
+    await waitJs(`!!(${row("big")})?.querySelector('.word-warning')`, {
+      label: "warning icon",
+    });
+    const warning = await js(
+      `const w = (${row("big")})?.querySelector('.word-warning');
+       return w ? { title: w.getAttribute('title'), pe: getComputedStyle(w).pointerEvents } : null;`,
+    );
+    if (!warning || !warning.title || !warning.title.includes("sound inventory")) {
+      throw new Error(`warning tooltip missing: ${JSON.stringify(warning)}`);
+    }
+    if (warning.pe !== "auto") {
+      throw new Error(`warning is not hoverable (pointer-events=${warning.pe})`);
+    }
+
+    // The inspector explains it and shows the breakdown.
+    await js(`const b = document.querySelector('[title="Toggle Inspector"]');
+       if (b) b.click();
+       return !!b;`);
+    await waitJs(`!!document.querySelector('.inspector')`, { label: "inspector" });
+    await waitJs(
+      `[...document.querySelectorAll('.inspector .word-check')]
+         .some((p) => p.textContent.includes('sound inventory'))`,
+      { label: "unknown-phoneme explanation" },
+    );
+    await waitJs(`!!document.querySelector('.inspector .word-segment.unknown')`, {
+      label: "breakdown flags unknown sound",
+    });
+    if (!(await js(`return document.querySelectorAll('.inspector .phoneme-chip').length > 0;`))) {
+      throw new Error("inspector did not list the inventory");
+    }
+  });
 }
 
 try {

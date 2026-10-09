@@ -9,7 +9,7 @@
     textValue,
   } from "../lib/dictionary";
   import { misspelledWords, spellSuggestions } from "../lib/spellcheck";
-  import { ui, activeDoc, refreshTable } from "../lib/state.svelte";
+  import { ui, activeDoc, refreshTable, setActivity } from "../lib/state.svelte";
   import DerivationGraph from "./DerivationGraph.svelte";
 
   let draft = $state<api.WordEntry | null>(null);
@@ -18,6 +18,9 @@
   let misspelled = $state<string[]>([]);
   let spellOptions = $state<Record<string, string[]>>({});
   let knownTags = $state<string[]>([]);
+  let phonology = $state<api.PhonologyConfig | null>(null);
+  let wordViolations = $state<api.PhonologyViolation[]>([]);
+  let wordSegments = $state<api.PhonemeSegment[]>([]);
 
   // Rebuild the local draft only when the selected entry changes, so an
   // in-progress edit is not clobbered by a data-changed refetch.
@@ -54,6 +57,57 @@
       knownTags = [];
     }
   });
+
+  // The sound inventory drives the hints; reload when it changes elsewhere.
+  $effect(() => {
+    void ui.phonologyRevision;
+    if (!ui.root) {
+      phonology = null;
+      return;
+    }
+    api
+      .phonologyGet()
+      .then((config) => (phonology = config))
+      .catch(() => {});
+  });
+
+  // Re-check the selected wordname against the inventory.
+  $effect(() => {
+    const word = draft?.wordname ?? "";
+    if (!word || !phonology || phonology.phonemes.length === 0) {
+      wordViolations = [];
+      wordSegments = [];
+      return;
+    }
+    let cancelled = false;
+    void (async () => {
+      try {
+        const [checks, parts] = await Promise.all([
+          api.phonologyCheckWords([word]),
+          api.phonologySegments(word),
+        ]);
+        if (cancelled) return;
+        wordViolations = checks[0] ?? [];
+        wordSegments = parts;
+      } catch {
+        if (!cancelled) {
+          wordViolations = [];
+          wordSegments = [];
+        }
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  });
+
+  /** Short badge for a segment: consonant, vowel, other, or unknown. */
+  function kindBadge(kind: api.PhonemeKind | null): string {
+    if (kind === "consonant") return "C";
+    if (kind === "vowel") return "V";
+    if (kind === "other") return "•";
+    return "?";
+  }
 
   const fieldTags = $derived(
     (activeDoc().table?.tags ?? []).filter(
@@ -179,6 +233,55 @@
           </div>
         {/each}
       </div>
+    {/if}
+
+    <div class="section-title">{$t("inspector.checks")}</div>
+    {#if phonology && phonology.phonemes.length === 0}
+      <p class="muted">{$t("inspector.noInventory")}</p>
+      <button onclick={() => setActivity("phonology")}
+        >{$t("inspector.openInventory")}</button
+      >
+    {:else}
+      {#if wordSegments.length}
+        <div class="word-segments">
+          {#each wordSegments as segment, index (index)}
+            <span class="word-segment" class:unknown={segment.kind === null}>
+              <span class="symbol">{segment.symbol}</span>
+              <span class="kind">{kindBadge(segment.kind)}</span>
+            </span>
+          {/each}
+        </div>
+      {/if}
+      {#if wordViolations.length === 0}
+        <p class="muted">{$t("inspector.checksOk")}</p>
+      {:else}
+        {#each wordViolations as violation, index (index)}
+          <p class="word-check">
+            {#if violation.kind === "unknown_phoneme"}
+              {$t("inspector.unknownPhoneme", {
+                values: { symbol: violation.symbol, at: violation.at + 1 },
+              })}
+            {:else}
+              {$t("inspector.badSyllable", {
+                values: {
+                  shapes: (phonology?.syllables ?? []).join(", ") || "\u2014",
+                },
+              })}
+            {/if}
+          </p>
+        {/each}
+        <div class="section-title">{$t("inspector.inventory")}</div>
+        <div class="phoneme-chips">
+          {#each phonology?.phonemes ?? [] as phoneme (phoneme.symbol)}
+            <span class="phoneme-chip"
+              ><span class="symbol">{phoneme.symbol}</span></span
+            >
+          {/each}
+        </div>
+        <button onclick={() => setActivity("phonology")}
+          >{$t("inspector.openInventory")}</button
+        >
+      {/if}
     {/if}
 
     {#if fieldTags.length}

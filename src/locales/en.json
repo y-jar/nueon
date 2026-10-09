@@ -334,6 +334,13 @@
     "cannotAddParent": "Cannot add parent: it would create a cycle",
     "addField": "add field\u2026",
     "spelling": "Possible misspellings: {words}",
+    "checks": "Word checks",
+    "checksOk": "No phonology issues found.",
+    "noInventory": "No sound inventory configured yet.",
+    "unknownPhoneme": "\u201c{symbol}\u201d (character {at}) isn\u2019t in your sound inventory.",
+    "badSyllable": "This word doesn\u2019t match your syllable shapes ({shapes}).",
+    "inventory": "Sound inventory",
+    "openInventory": "Open sound inventory",
     "toggle": "Toggle Inspector"
   },
   "translation": {
@@ -416,8 +423,9 @@
     "remove": "Remove",
     "clear": "Clear",
     "saved": "Saved",
-    "unknownPhoneme": "unknown sound \u201c{symbol}\u201d at {at}",
-    "badSyllable": "does not match the syllable shapes"
+    "warning": "Phonology: {reasons}",
+    "unknownPhoneme": "\u201c{symbol}\u201d (character {at}) isn\u2019t in your sound inventory",
+    "badSyllable": "doesn\u2019t match your syllable shapes"
   },
   "derivation": {
     "title": "Derivation",

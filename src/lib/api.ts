@@ -685,6 +685,16 @@ export const phonologyCheckWords = (
 ): Promise<PhonologyViolation[][]> =>
   invoke("phonology_check_words", { words });
 
+/** One sound of a word; `kind` is null when the symbol is not in the inventory. */
+export interface PhonemeSegment {
+  symbol: string;
+  kind: PhonemeKind | null;
+}
+
+/** The word split into inventory phonemes, flagging unknown characters. */
+export const phonologySegments = (word: string): Promise<PhonemeSegment[]> =>
+  invoke("phonology_segments", { word });
+
 export interface UiLayout {
   activity: string;
   sidebar_open: boolean;

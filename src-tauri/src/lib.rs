@@ -241,6 +241,7 @@ pub fn run() {
             commands::table_roles_get,
             commands::set_table_role,
             commands::phonology_check_words,
+            commands::phonology_segments,
             commands::translation_options,
             commands::set_translation_options,
             commands::export_presets,

@@ -47,15 +47,18 @@ pub enum Violation {
     BadSyllable { at: usize },
 }
 
-/// Check one word against the inventory and syllable shapes. An empty
-/// inventory means "not configured", so nothing is reported.
-pub fn check_word(word: &str, config: &PhonologyConfig) -> Vec<Violation> {
-    if config.phonemes.is_empty() {
-        return Vec::new();
-    }
+/// One token of a word: a matched phoneme (`kind` is its class), or a single
+/// character the inventory does not know (`kind` is `None`). `at` is the
+/// character offset in the word.
+struct Token {
+    at: usize,
+    symbol: String,
+    kind: Option<PhonemeKind>,
+}
 
-    // Tokenize by longest matching phoneme (phonemes may be several
-    // code points, e.g. an affricate).
+/// Split a word into tokens by longest matching phoneme (phonemes may span
+/// several code points, e.g. an affricate).
+fn tokenize(word: &str, config: &PhonologyConfig) -> Vec<Token> {
     let chars: Vec<char> = word.chars().collect();
     let symbols: Vec<(Vec<char>, PhonemeKind)> = config
         .phonemes
@@ -64,8 +67,7 @@ pub fn check_word(word: &str, config: &PhonologyConfig) -> Vec<Violation> {
         .map(|phoneme| (phoneme.symbol.chars().collect(), phoneme.kind))
         .collect();
 
-    let mut kinds: Vec<PhonemeKind> = Vec::new();
-    let mut violations = Vec::new();
+    let mut tokens = Vec::new();
     let mut at = 0;
     while at < chars.len() {
         let mut best: Option<(usize, PhonemeKind)> = None;
@@ -79,16 +81,62 @@ pub fn check_word(word: &str, config: &PhonologyConfig) -> Vec<Violation> {
         }
         match best {
             Some((length, kind)) => {
-                kinds.push(kind);
+                tokens.push(Token {
+                    at,
+                    symbol: chars[at..at + length].iter().collect(),
+                    kind: Some(kind),
+                });
                 at += length;
             }
             None => {
-                violations.push(Violation::UnknownPhoneme {
+                tokens.push(Token {
                     at,
                     symbol: chars[at].to_string(),
+                    kind: None,
                 });
                 at += 1;
             }
+        }
+    }
+    tokens
+}
+
+/// One segment of a word's sound breakdown (for the inspector).
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct Segment {
+    pub symbol: String,
+    /// `None` when the symbol is not in the inventory.
+    pub kind: Option<PhonemeKind>,
+}
+
+/// The word split into inventory phonemes, marking unknown characters — the
+/// sound-by-sound breakdown shown for the selected word.
+pub fn segments(word: &str, config: &PhonologyConfig) -> Vec<Segment> {
+    tokenize(word, config)
+        .into_iter()
+        .map(|token| Segment {
+            symbol: token.symbol,
+            kind: token.kind,
+        })
+        .collect()
+}
+
+/// Check one word against the inventory and syllable shapes. An empty
+/// inventory means "not configured", so nothing is reported.
+pub fn check_word(word: &str, config: &PhonologyConfig) -> Vec<Violation> {
+    if config.phonemes.is_empty() {
+        return Vec::new();
+    }
+
+    let mut kinds: Vec<PhonemeKind> = Vec::new();
+    let mut violations = Vec::new();
+    for token in tokenize(word, config) {
+        match token.kind {
+            Some(kind) => kinds.push(kind),
+            None => violations.push(Violation::UnknownPhoneme {
+                at: token.at,
+                symbol: token.symbol,
+            }),
         }
     }
 
@@ -190,6 +238,41 @@ mod tests {
     #[test]
     fn empty_inventory_checks_nothing() {
         assert!(check_word("anything", &PhonologyConfig::default()).is_empty());
+    }
+
+    #[test]
+    fn segments_classify_and_flag_unknowns() {
+        let cfg = config(vec![consonant("k"), vowel("a")], &[]);
+        let parts = segments("kata", &cfg);
+        assert_eq!(
+            parts,
+            vec![
+                Segment {
+                    symbol: "k".into(),
+                    kind: Some(PhonemeKind::Consonant)
+                },
+                Segment {
+                    symbol: "a".into(),
+                    kind: Some(PhonemeKind::Vowel)
+                },
+                Segment {
+                    symbol: "t".into(),
+                    kind: None
+                },
+                Segment {
+                    symbol: "a".into(),
+                    kind: Some(PhonemeKind::Vowel)
+                },
+            ]
+        );
+    }
+
+    #[test]
+    fn segments_match_the_longest_phoneme() {
+        let cfg = config(vec![consonant("t"), consonant("tʃ")], &[]);
+        let parts = segments("tʃa", &cfg);
+        assert_eq!(parts[0].symbol, "tʃ");
+        assert_eq!(parts[0].kind, Some(PhonemeKind::Consonant));
     }
 
     #[test]

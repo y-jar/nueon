@@ -4,7 +4,7 @@ use std::sync::Mutex;
 
 use tauri::State;
 
-use nueon_core::config::Violation;
+use nueon_core::config::{segments, Segment, Violation};
 
 use crate::state::AppState;
 
@@ -23,4 +23,12 @@ pub fn phonology_check_words(
         .iter()
         .map(|word| nueon_core::config::check_word(word, config))
         .collect())
+}
+
+/// The word split into inventory phonemes, marking unknown characters.
+#[tauri::command]
+pub fn phonology_segments(state: State<'_, Shared>, word: String) -> Result<Vec<Segment>, String> {
+    let state = state.lock().map_err(|_| "state poisoned".to_string())?;
+    let config = &state.workspace()?.phonology;
+    Ok(segments(&word, config))
 }
