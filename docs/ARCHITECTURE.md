@@ -71,8 +71,10 @@ The authoritative domain model:
   infix (inserted after the first vowel), or suffix. A row carries an inline
   `surface` or references a `Fixes`-table morpheme (`morpheme`), so the table is
   the single source of truth for the form.
-- `Fixes` tables feed both input parsing (`dictionary_affixes`, prefix/suffix
-  english triggers) and output inflection (`dictionary_morphemes`).
+- `Fixes` tables are a conlang **morpheme inventory**: any hyphen-marked row is
+  a morpheme (`dictionary_morphemes`) with no English needed. A configured
+  trigger column *additionally* supplies english→conlang input rules
+  (`dictionary_affixes`) — English is entirely optional.
 - The **Morphology** activity (`MorphologyPanel`/`MorphologyView`) authors
   features and endings and previews a single word: `inflect_word` composes the
   feature-driven paradigm affixes with any manually picked fixes-table

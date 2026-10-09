@@ -419,6 +419,11 @@ pub struct Morpheme {
 }
 
 /// Every morpheme supplied by tables designated `Fixes`.
+///
+/// English is optional: a row yields a morpheme as soon as its surface (a
+/// configured column, else the wordname) is a hyphen-marked affix. A trigger
+/// column, when configured, only adds English keys for reference and input
+/// parsing — it is never required.
 pub fn dictionary_morphemes(
     dict: &Dictionary,
     roles: &BTreeMap<String, TableRoleConfig>,
@@ -429,9 +434,6 @@ pub fn dictionary_morphemes(
             continue;
         }
         let Some(table) = dict.table(table_name) else {
-            continue;
-        };
-        let Some(trigger_column) = config.trigger.as_deref() else {
             continue;
         };
         for entry in &table.entries {
@@ -446,10 +448,12 @@ pub fn dictionary_morphemes(
                 continue;
             };
             let mut keys = vec![entry.wordname.clone()];
-            for trigger in entry_texts(entry, trigger_column) {
-                let trigger = normalize(&trigger);
-                if !trigger.is_empty() {
-                    keys.push(trigger);
+            if let Some(trigger_column) = config.trigger.as_deref() {
+                for trigger in entry_texts(entry, trigger_column) {
+                    let trigger = normalize(&trigger);
+                    if !trigger.is_empty() {
+                        keys.push(trigger);
+                    }
                 }
             }
             let gloss = entry

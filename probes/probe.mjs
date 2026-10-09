@@ -426,6 +426,8 @@ function seedWorkspace() {
         // The fixes table supplies the "-i" suffix for the trigger "z" (probe 30).
         table_roles: {
           fixes: { role: "fixes", trigger: "english" },
+          // A fixes table with no English column: still a morpheme source (58).
+          morphs: { role: "fixes" },
         },
         // A past-tense suffix on verbs, for probe 25.
         morphology: {
@@ -597,6 +599,32 @@ function seedWorkspace() {
             id: "77777777-7777-4777-8777-777777777777",
             wordname: "-i",
             values: { english: { type: "text", value: "z" } },
+          },
+        ],
+      },
+      null,
+      2,
+    ),
+  );
+  // A fixes table with no English column: its morphemes still work (probe 58).
+  fs.writeFileSync(
+    path.join(WORKSPACE, "dictionary", "morphs"),
+    JSON.stringify(
+      {
+        name: "morphs",
+        tags: [
+          {
+            name: "wordname",
+            description: "The morpheme surface.",
+            kind: "text",
+            builtin: true,
+          },
+        ],
+        entries: [
+          {
+            id: "88888888-8888-4888-8888-888888888888",
+            wordname: "-o",
+            values: { definition: { type: "tag_list", value: ["agent"] } },
           },
         ],
       },
@@ -3239,8 +3267,10 @@ async function main() {
       `return [...document.querySelectorAll('.sidebar .morph-row.static .mono')]
          .map((x) => x.textContent.trim());`,
     );
-    if (!morphemes.includes("i")) {
-      throw new Error(`missing the '-i' morpheme: ${JSON.stringify(morphemes)}`);
+    // `-i` comes from a trigger-based fixes table, `-o` from one with no
+    // English column at all: both are morphemes.
+    if (!morphemes.includes("i") || !morphemes.includes("o")) {
+      throw new Error(`missing morphemes (-i, -o): ${JSON.stringify(morphemes)}`);
     }
 
     // The verb's seeded two-slot paradigm shows its endings in the center.
@@ -3315,7 +3345,9 @@ async function main() {
 
     // Ticking the -i morpheme attaches it manually as well.
     await js(
-      `const i = document.querySelector('.sidebar .morpheme-row input[type="checkbox"]');
+      `const row = [...document.querySelectorAll('.sidebar .morpheme-row')]
+         .find((r) => r.querySelector('.mono')?.textContent.trim() === 'i');
+       const i = row?.querySelector('input[type="checkbox"]');
        if (i) i.click();
        return !!i;`,
     );

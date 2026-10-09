@@ -3,7 +3,9 @@
 use std::collections::{BTreeMap, BTreeSet, HashMap};
 
 use nueon_core::config::POS_TAG;
-use nueon_core::model::translate::{dictionary_morphemes, inflect, translate_direct_with_scoped};
+use nueon_core::model::translate::{
+    dictionary_affixes, dictionary_morphemes, inflect, translate_direct_with_scoped,
+};
 use nueon_core::model::TranslationReport;
 use nueon_core::{
     AffixKind, Dictionary, FieldType, FieldValue, InflectionKind, Morphology, Paradigm,
@@ -268,6 +270,36 @@ fn a_slot_can_reference_a_fixes_table_morpheme() {
         gloss.iter().any(|gloss| gloss.contains("PLURAL MARKER")),
         "{gloss:?}"
     );
+}
+
+#[test]
+fn morphemes_do_not_require_english_triggers() {
+    let mut dict = Dictionary::new();
+    dict.add_table("morphs");
+    let mut suffix = WordEntry::new("-u");
+    suffix.set(
+        DEFINITION_TAG,
+        FieldValue::TagList(vec!["plural".to_string()]),
+    );
+    dict.add_entry("morphs", suffix);
+
+    // A fixes table with no trigger column still supplies its morphemes.
+    let roles = BTreeMap::from([(
+        "morphs".to_string(),
+        TableRoleConfig {
+            role: TableRole::Fixes,
+            trigger: None,
+            surface: None,
+        },
+    )]);
+    let morphemes = dictionary_morphemes(&dict, &roles);
+    assert_eq!(morphemes.len(), 1);
+    assert_eq!(morphemes[0].surface, "u");
+    assert_eq!(morphemes[0].kind, AffixKind::Suffix);
+    assert_eq!(morphemes[0].gloss, "plural");
+    assert!(morphemes[0].matches("-u"));
+    // With no English column there are no input rules, only morphemes.
+    assert!(dictionary_affixes(&dict, &roles).is_empty());
 }
 
 #[test]
