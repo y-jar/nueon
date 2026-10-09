@@ -3,6 +3,7 @@
   import { t } from "svelte-i18n";
   import * as api from "../lib/api";
   import { morphology as store } from "../lib/morphology.svelte";
+  import ComposeBuilder from "./translation/ComposeBuilder.svelte";
   import FeatureBar from "./translation/FeatureBar.svelte";
   import FeatureEditor from "./translation/FeatureEditor.svelte";
   import ParadigmEditor from "./translation/ParadigmEditor.svelte";
@@ -63,6 +64,11 @@
   <div class="morph-toolbar">
     <div class="mode-switch" role="group">
       <button
+        class:active={store.tab === "compose"}
+        onclick={() => (store.tab = "compose")}>
+        {$t("morphology.compose")}
+      </button>
+      <button
         class:active={store.tab === "inflect"}
         onclick={() => (store.tab = "inflect")}>
         {$t("morphology.inflect")}
@@ -91,7 +97,9 @@
 
   {#if store.error}<p class="error">{store.error}</p>{/if}
 
-  {#if store.tab === "inflect"}
+  {#if store.tab === "compose"}
+    <ComposeBuilder />
+  {:else if store.tab === "inflect"}
     {#if !word}
       <p class="muted">{$t("morphology.pickWord")}</p>
     {:else}

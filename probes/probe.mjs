@@ -3355,6 +3355,86 @@ async function main() {
     const final = await surface();
     if (final !== "veloii") throw new Error(`expected 'veloii', got '${final}'`);
   });
+
+  // -- probe 60: the Compose builder combines searched words ----------------
+  await probe("60-compose-builder", async () => {
+    await js(
+      `const b = document.querySelector('.activity[title="Morphology"]');
+       if (b) b.click();
+       return !!b;`,
+    );
+    await waitJs(`!!document.querySelector('.morphology-view')`, {
+      label: "morphology view",
+    });
+    const tab = (name) =>
+      js(
+        `const b = [...document.querySelectorAll('.morphology-view .mode-switch button')]
+           .find((x) => x.textContent.trim() === ${JSON.stringify(name)});
+         if (b) b.click();
+         return !!b;`,
+      );
+    if (!(await tab("Compose"))) throw new Error("no Compose tab");
+    await waitJs(`!!document.querySelector('.compose-builder')`, {
+      label: "compose builder",
+    });
+
+    // Start from an empty strip.
+    await js(
+      `const b = document.querySelector('.compose-builder .clear-strip');
+       if (b) b.click();
+       return true;`,
+    );
+
+    const search = (text) =>
+      js(
+        `const i = document.querySelector('.compose-builder .explorer-filter input');
+         i.value = ${JSON.stringify(text)};
+         i.dispatchEvent(new Event('input', { bubbles: true }));
+         return true;`,
+      );
+    const add = (label) =>
+      js(
+        `const b = [...document.querySelectorAll('.compose-builder .compose-result')]
+           .find((x) => x.querySelector('.mono')?.textContent.trim() === ${JSON.stringify(label)});
+         if (b) b.click();
+         return !!b;`,
+      );
+    // Root + root = a compound.
+    await search("velo");
+    await waitJs(
+      `[...document.querySelectorAll('.compose-builder .compose-result .mono')]
+         .some((x) => x.textContent.trim() === 'velo')`,
+      { label: "velo result" },
+    );
+    if (!(await add("velo"))) throw new Error("could not add velo");
+    await waitJs(
+      `(document.querySelector('.compose-builder .inflect-surface')?.textContent ?? '').trim() === 'velo'`,
+      { label: "velo composed" },
+    );
+
+    await search("paka");
+    await waitJs(
+      `[...document.querySelectorAll('.compose-builder .compose-result .mono')]
+         .some((x) => x.textContent.trim() === 'paka')`,
+      { label: "paka result" },
+    );
+    await add("paka");
+    await waitJs(
+      `(document.querySelector('.compose-builder .inflect-surface')?.textContent ?? '').trim() === 'velopaka'`,
+      { label: "compound composed" },
+    );
+
+    // Adding a fixes morpheme attaches it as a suffix.
+    await search("agent");
+    await waitJs(`!!document.querySelector('.compose-builder .compose-result.is-morpheme')`, {
+      label: "morpheme result",
+    });
+    await add("o");
+    await waitJs(
+      `(document.querySelector('.compose-builder .inflect-surface')?.textContent ?? '').trim() === 'velopakao'`,
+      { label: "root + morpheme composed" },
+    );
+  });
 }
 
 try {

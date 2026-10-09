@@ -722,6 +722,14 @@ export const inflectWord = (
 ): Promise<Inflection> =>
   invoke("inflect_word", { id, selections, morphemes });
 
+/** One piece of a composed word: a vocabulary word or a fixes morpheme. */
+export type ComposePiece =
+  | { kind: "word"; id: string }
+  | { kind: "morpheme"; id: string };
+/** Compose an ordered sequence of roots and morphemes into a word. */
+export const compose = (pieces: ComposePiece[]): Promise<Inflection> =>
+  invoke("compose", { pieces });
+
 export type PhonemeKind = "consonant" | "vowel" | "other";
 
 export interface Phoneme {

@@ -32,7 +32,7 @@ pub use import::{
     LinkSyntax, Preview, SuspiciousRow, TagProposal,
 };
 pub use model::{
-    Dictionary, FieldType, FieldValue, GlossMorpheme, Inflection, InflectionKind,
+    ComposePiece, Dictionary, FieldType, FieldValue, GlossMorpheme, Inflection, InflectionKind,
     InflectionMorpheme, InterlinearGloss, Morpheme, TagDef, TagFormat, TagKindChange, TagRemoval,
     WordEntry, WordHit, WordTable, DEFINITION_TAG, PARENT_TAG, WORDNAME_TAG,
 };

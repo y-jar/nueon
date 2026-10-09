@@ -1461,6 +1461,115 @@ button.link {
   font-size: 14px;
 }
 
+.morph-toolbar .mode-switch {
+  display: inline-flex;
+  gap: 2px;
+  padding: 2px;
+  background: var(--panel);
+  border: 1px solid var(--border);
+  border-radius: 6px;
+}
+
+.morph-toolbar .mode-switch button {
+  border: none;
+  background: transparent;
+  color: var(--muted);
+  padding: 3px 10px;
+  border-radius: 4px;
+}
+
+.morph-toolbar .mode-switch button.active {
+  background: var(--bg);
+  color: var(--accent);
+}
+
+.compose-builder {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.compose-results {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  max-height: 240px;
+  overflow: auto;
+}
+
+.compose-result {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  width: 100%;
+  padding: 3px 8px;
+  background: transparent;
+  border: 1px solid transparent;
+  border-radius: 4px;
+  color: inherit;
+  text-align: left;
+}
+
+.compose-result:hover {
+  background: var(--panel);
+  border-color: var(--border);
+}
+
+.compose-result.is-morpheme .mono {
+  color: var(--accent);
+}
+
+.compose-strip {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px;
+  min-height: 44px;
+  padding: 8px;
+  background: var(--panel);
+  border: 1px dashed var(--border);
+  border-radius: 6px;
+}
+
+.compose-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 3px 6px;
+  background: var(--bg);
+  border: 1px solid var(--border);
+  border-radius: 5px;
+}
+
+.compose-chip.morpheme .mono {
+  color: var(--accent);
+}
+
+.compose-chip button {
+  padding: 0 2px;
+  border: none;
+  background: transparent;
+  color: var(--muted);
+}
+
+.compose-chip button:hover {
+  color: var(--accent);
+}
+
+.clear-strip {
+  align-self: flex-start;
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  font-size: 12px;
+}
+
+.compose-save {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
 .palette-row {
   display: flex;
   flex-wrap: wrap;

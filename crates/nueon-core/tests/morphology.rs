@@ -4,12 +4,12 @@ use std::collections::{BTreeMap, BTreeSet, HashMap};
 
 use nueon_core::config::POS_TAG;
 use nueon_core::model::translate::{
-    dictionary_affixes, dictionary_morphemes, inflect, translate_direct_with_scoped,
+    compose, dictionary_affixes, dictionary_morphemes, inflect, translate_direct_with_scoped,
 };
 use nueon_core::model::TranslationReport;
 use nueon_core::{
-    AffixKind, Dictionary, FieldType, FieldValue, InflectionKind, Morphology, Paradigm,
-    ParadigmRow, TableRole, TableRoleConfig, TagDef, WordEntry, DEFINITION_TAG,
+    AffixKind, ComposePiece, Dictionary, FieldType, FieldValue, InflectionKind, Morphology,
+    Paradigm, ParadigmRow, TableRole, TableRoleConfig, TagDef, WordEntry, DEFINITION_TAG,
 };
 
 fn classed(word: &str, sense: &str, class: &str) -> WordEntry {
@@ -270,6 +270,66 @@ fn a_slot_can_reference_a_fixes_table_morpheme() {
         gloss.iter().any(|gloss| gloss.contains("PLURAL MARKER")),
         "{gloss:?}"
     );
+}
+
+#[test]
+fn compose_combines_roots_and_morphemes_left_to_right() {
+    let mut dict = noun_dict("kala");
+    let paka = dict
+        .add_entry("lex", classed("paka", "stone", "noun"))
+        .unwrap();
+    let kala = dict
+        .table("lex")
+        .unwrap()
+        .entries
+        .iter()
+        .find(|entry| entry.wordname == "kala")
+        .unwrap()
+        .id;
+
+    dict.add_table("morphs");
+    for (surface, gloss) in [("ka-", "definite"), ("-u", "plural"), ("-ta-", "focus")] {
+        let mut morpheme = WordEntry::new(surface);
+        morpheme.set(DEFINITION_TAG, FieldValue::TagList(vec![gloss.to_string()]));
+        dict.add_entry("morphs", morpheme);
+    }
+    let roles = BTreeMap::from([(
+        "morphs".to_string(),
+        TableRoleConfig {
+            role: TableRole::Fixes,
+            trigger: None,
+            surface: None,
+        },
+    )]);
+    let lexicon = dictionary_morphemes(&dict, &roles);
+
+    let compound = compose(
+        &dict,
+        &lexicon,
+        &[ComposePiece::Word(kala), ComposePiece::Word(paka)],
+    );
+    assert_eq!(compound.surface, "kalapaka");
+
+    let affixed = compose(
+        &dict,
+        &lexicon,
+        &[
+            ComposePiece::Morpheme("ka-".to_string()),
+            ComposePiece::Word(kala),
+            ComposePiece::Morpheme("-u".to_string()),
+        ],
+    );
+    assert_eq!(affixed.surface, "kakalau");
+
+    let infixed = compose(
+        &dict,
+        &lexicon,
+        &[
+            ComposePiece::Word(kala),
+            ComposePiece::Morpheme("-ta-".to_string()),
+        ],
+    );
+    assert_eq!(infixed.surface, "katala");
 }
 
 #[test]

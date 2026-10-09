@@ -242,6 +242,7 @@ pub fn run() {
             commands::list_morphemes,
             commands::lexicon,
             commands::inflect_word,
+            commands::compose,
             commands::table_roles_get,
             commands::set_table_role,
             commands::phonology_check_words,

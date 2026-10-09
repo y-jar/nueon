@@ -79,6 +79,10 @@ The authoritative domain model:
   features and endings and previews a single word: `inflect_word` composes the
   feature-driven paradigm affixes with any manually picked fixes-table
   morphemes and returns the surface plus an ordered breakdown.
+- Its **Compose** tab searches the lexicon and morphemes and combines dragged
+  pieces left to right (`compose`): roots concatenate into compounds while
+  `-x`/`x-`/`-x-` morphemes attach as suffix/prefix/infix. A composed form can
+  be saved back as a lexicon word.
 
 ### Storage rules
 
@@ -145,7 +149,7 @@ Command groups (see `src-tauri/src/commands/`):
   `execute_translation`, `create_translation_word`, `translation_options`,
   `set_translation_options`, `export_presets`, `import_presets`)
 - morphology (`translation_morphology`, `set_translation_morphology`,
-  `list_morphemes`, `lexicon`, `inflect_word`)
+  `list_morphemes`, `lexicon`, `inflect_word`, `compose`)
 - phonology (`phonology_check_words`, `phonology_segments`)
 - version control (`vcs_*` and `git_prompt_dismissed`/
   `git_prompt_dismissed_set`, `autocheckin_*`)

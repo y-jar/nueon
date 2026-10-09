@@ -8,14 +8,23 @@ import * as api from "./api";
 import { ui } from "./state.svelte";
 import { POS_CLASSES } from "./dictionary";
 
+/** A chip on the compose strip: enough to display and to rebuild a piece. */
+export interface ComposeChip {
+  key: string;
+  kind: "word" | "morpheme";
+  id: string;
+  label: string;
+  gloss: string;
+}
+
 class MorphologyStore {
   morphology = $state<api.Morphology>({ features: [], paradigms: [] });
   morphemes = $state<api.MorphemeInfo[]>([]);
   lexicon = $state<api.LexiconWord[]>([]);
   /** The class whose endings the editor is showing. */
   selectedClass = $state<string>("verb");
-  /** The center sub-tab: the inflect preview or the paradigm editor. */
-  tab = $state<"inflect" | "paradigms">("inflect");
+  /** The center sub-tab: compose, the inflect preview, or the paradigm editor. */
+  tab = $state<"compose" | "inflect" | "paradigms">("compose");
   /** The lexicon word being inflected. */
   selectedWord = $state<string | null>(null);
   /** Feature selections for the preview. */
@@ -23,6 +32,9 @@ class MorphologyStore {
   /** Manually picked fixes-table morphemes (by wordname) for the preview. */
   manual = $state<string[]>([]);
   inflection = $state<api.Inflection | null>(null);
+  /** The ordered chips being combined in the Compose builder. */
+  pieces = $state<ComposeChip[]>([]);
+  composed = $state<api.Inflection | null>(null);
   loaded = $state(false);
   error = $state("");
 
@@ -99,6 +111,100 @@ class MorphologyStore {
       this.error = "";
     } catch (e) {
       this.error = String(e);
+    }
+  }
+
+  /** Append a vocabulary word to the compose strip. */
+  addWord(word: api.LexiconWord): void {
+    this.pieces = [
+      ...this.pieces,
+      {
+        key: crypto.randomUUID(),
+        kind: "word",
+        id: word.id,
+        label: word.wordname,
+        gloss: word.gloss,
+      },
+    ];
+    void this.runCompose();
+  }
+
+  /** Append a fixes-table morpheme to the compose strip. */
+  addMorpheme(morpheme: api.MorphemeInfo): void {
+    this.pieces = [
+      ...this.pieces,
+      {
+        key: crypto.randomUUID(),
+        kind: "morpheme",
+        id: morpheme.wordname,
+        label: morpheme.surface,
+        gloss: morpheme.gloss,
+      },
+    ];
+    void this.runCompose();
+  }
+
+  removeChip(key: string): void {
+    this.pieces = this.pieces.filter((piece) => piece.key !== key);
+    void this.runCompose();
+  }
+
+  /** Move a chip one position left (`-1`) or right (`+1`). */
+  moveChip(key: string, delta: number): void {
+    const index = this.pieces.findIndex((piece) => piece.key === key);
+    const target = index + delta;
+    if (index < 0 || target < 0 || target >= this.pieces.length) return;
+    const next = [...this.pieces];
+    [next[index], next[target]] = [next[target], next[index]];
+    this.pieces = next;
+    void this.runCompose();
+  }
+
+  clearStrip(): void {
+    this.pieces = [];
+    this.composed = null;
+  }
+
+  /** Recompose the strip into a surface + breakdown. */
+  async runCompose(): Promise<void> {
+    if (this.pieces.length === 0) {
+      this.composed = null;
+      return;
+    }
+    try {
+      this.composed = await api.compose(
+        this.pieces.map((piece) =>
+          piece.kind === "word"
+            ? ({ kind: "word", id: piece.id } as const)
+            : ({ kind: "morpheme", id: piece.id } as const),
+        ),
+      );
+      this.error = "";
+    } catch (e) {
+      this.error = String(e);
+    }
+  }
+
+  /** Save the composed surface as a new lexicon word; returns its id. */
+  async saveComposed(
+    table: string,
+    definition: string,
+  ): Promise<string | null> {
+    if (!this.composed || !table) return null;
+    try {
+      const id = await api.createTranslationWord(
+        table,
+        this.composed.surface,
+        definition,
+        [],
+        null,
+      );
+      this.lexicon = await api.lexicon();
+      this.error = "";
+      return id;
+    } catch (e) {
+      this.error = String(e);
+      return null;
     }
   }
 

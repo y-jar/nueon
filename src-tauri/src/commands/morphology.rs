@@ -9,7 +9,7 @@ use tauri::State;
 use uuid::Uuid;
 
 use nueon_core::config::POS_TAG;
-use nueon_core::{AffixKind, FieldValue, Inflection, Morpheme, WordEntry};
+use nueon_core::{AffixKind, ComposePiece, FieldValue, Inflection, Morpheme, WordEntry};
 
 use crate::state::AppState;
 
@@ -134,5 +134,18 @@ pub fn inflect_word(
         &lexicon,
         &selections,
         &manual,
+    ))
+}
+
+/// Compose an ordered sequence of roots and morphemes into a word.
+#[tauri::command]
+pub fn compose(state: State<'_, Shared>, pieces: Vec<ComposePiece>) -> Result<Inflection, String> {
+    let state = state.lock().map_err(|_| "state poisoned".to_string())?;
+    let workspace = state.workspace()?;
+    let lexicon = workspace.translation_morphemes();
+    Ok(nueon_core::model::translate::compose(
+        &workspace.dictionary,
+        &lexicon,
+        &pieces,
     ))
 }
