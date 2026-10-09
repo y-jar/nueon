@@ -12,7 +12,7 @@ pub use storage::{StorageError, CONFIG_DIR, DICTIONARY_DIR, NOTES_DIR};
 pub use table_files::QuarantineWarning;
 pub use trash::{Restored, TrashKind, TrashRecord, RETENTION_DAYS, TRASH_DIR};
 
-use std::collections::BTreeMap;
+use std::collections::{BTreeMap, BTreeSet};
 use std::path::{Path, PathBuf};
 use std::time::{Duration, Instant};
 
@@ -21,11 +21,12 @@ use uuid::Uuid;
 use self::table_files::TableFiles;
 
 use crate::config::{
-    GrammarConfig, GridViewState, LanguageConfig, LayoutState, Morphology, PhonologyConfig,
-    TableRole, TableRoleConfig, TilingLayout, TranslationConfig, TranslationMode,
+    AffixRule, GrammarConfig, GridViewState, LanguageConfig, LayoutState, Morphology,
+    PhonologyConfig, TableRole, TableRoleConfig, TilingLayout, TranslationConfig, TranslationMode,
     TranslationOptions, UiLayout, WindowGeometry, WorkspaceSettings, POS_TAG,
 };
 use crate::export_table::TableFormat;
+use crate::model::translate::dictionary_affixes;
 use crate::model::{
     Dictionary, FieldType, FieldValue, TagDef, TagFormat, TagKindChange, TagRemoval, WordEntry,
     DEFINITION_TAG, WORDNAME_TAG,
@@ -1194,6 +1195,26 @@ impl Workspace {
     /// A table's designation (vocab/fixes) and its trigger/surface columns.
     pub fn table_roles(&self) -> &BTreeMap<String, TableRoleConfig> {
         &self.translation.table_roles
+    }
+
+    /// The hand-typed affix rules together with those read from fixes tables.
+    pub fn translation_affixes(&self) -> Vec<AffixRule> {
+        let mut affixes = self.translation.affixes.clone();
+        affixes.extend(dictionary_affixes(
+            &self.dictionary,
+            &self.translation.table_roles,
+        ));
+        affixes
+    }
+
+    /// Names of tables designated `Fixes`, which supply morphemes not roots.
+    pub fn fixes_tables(&self) -> BTreeSet<String> {
+        self.translation
+            .table_roles
+            .iter()
+            .filter(|(_, config)| config.role == TableRole::Fixes)
+            .map(|(name, _)| name.clone())
+            .collect()
     }
 
     /// Set a table's designation, then persist. `Vocab` with no trigger/surface

@@ -5,7 +5,7 @@
 //! morphology), assigns them to a syntax grid's slots, and reports missing
 //! words, homograph conflicts, and unfilled slots.
 
-use std::collections::{BTreeMap, HashMap};
+use std::collections::{BTreeMap, BTreeSet, HashMap};
 
 use serde::{Deserialize, Serialize};
 use uuid::Uuid;
@@ -13,7 +13,7 @@ use uuid::Uuid;
 use super::dictionary::{contains_word, Dictionary, WordHit};
 use super::entry::WordEntry;
 use super::field::FieldValue;
-use crate::config::{AffixKind, AffixRule, Morphology, POS_TAG};
+use crate::config::{AffixKind, AffixRule, Morphology, TableRole, TableRoleConfig, POS_TAG};
 use crate::translation::{ClauseSlot, SyntaxGrid};
 
 /// English function words dropped during tokenization.
@@ -218,10 +218,15 @@ struct Match<'a> {
 fn collect_for_form<'a>(
     dict: &'a Dictionary,
     form: &str,
+    skip_tables: &BTreeSet<String>,
     exact: &mut Vec<(&'a str, &'a WordEntry)>,
     partial: &mut Vec<(&'a str, &'a WordEntry)>,
 ) {
     for table in dict.tables() {
+        // Fixes tables are morpheme sources, never roots.
+        if skip_tables.contains(&table.name) {
+            continue;
+        }
         for entry in &table.entries {
             let Some(senses) = entry.definition() else {
                 continue;
@@ -245,12 +250,13 @@ fn matching_entries<'a>(
     dict: &'a Dictionary,
     token: &Token,
     affixes: &[AffixRule],
+    skip_tables: &BTreeSet<String>,
 ) -> Vec<Match<'a>> {
     let mut exact = Vec::new();
     let mut partial = Vec::new();
     let features = inferred_features(&token.normalized);
     for form in lemma_forms(&token.normalized) {
-        collect_for_form(dict, &form, &mut exact, &mut partial);
+        collect_for_form(dict, &form, skip_tables, &mut exact, &mut partial);
     }
     let direct = if exact.is_empty() { partial } else { exact };
     if !direct.is_empty() {
@@ -282,7 +288,7 @@ fn matching_entries<'a>(
         let mut ex = Vec::new();
         let mut pa = Vec::new();
         for form in lemma_forms(base) {
-            collect_for_form(dict, &form, &mut ex, &mut pa);
+            collect_for_form(dict, &form, skip_tables, &mut ex, &mut pa);
         }
         let picked = if ex.is_empty() { pa } else { ex };
         for (table, entry) in picked {
@@ -303,6 +309,87 @@ fn matching_entries<'a>(
         }
     }
     results
+}
+
+/// A conlang affix surface read from a fixes table. A leading hyphen marks a
+/// suffix (`-i`), a trailing one a prefix (`ka-`); an infix (`-ta-`) is not
+/// realised yet and is skipped.
+pub fn parse_affix_surface(surface: &str) -> Option<(AffixKind, String)> {
+    let trimmed = surface.trim();
+    let leading = trimmed.starts_with('-');
+    let trailing = trimmed.ends_with('-') && trimmed.len() > 1;
+    let conlang = trimmed.trim_matches('-');
+    if conlang.is_empty() {
+        return None;
+    }
+    match (leading, trailing) {
+        (true, false) => Some((AffixKind::Suffix, conlang.to_string())),
+        (false, true) => Some((AffixKind::Prefix, conlang.to_string())),
+        // Neither hyphen-marked, or an infix: not an applicable affix.
+        _ => None,
+    }
+}
+
+/// The first text value stored under `column`, if any.
+fn entry_text(entry: &WordEntry, column: &str) -> Option<String> {
+    match entry.values.get(column) {
+        Some(FieldValue::Text(text)) => Some(text.clone()),
+        Some(FieldValue::TagList(list)) => list.first().cloned(),
+        _ => None,
+    }
+}
+
+/// Every text value stored under `column` (a text is one, a tag list is many).
+fn entry_texts(entry: &WordEntry, column: &str) -> Vec<String> {
+    match entry.values.get(column) {
+        Some(FieldValue::Text(text)) => vec![text.clone()],
+        Some(FieldValue::TagList(list)) => list.clone(),
+        _ => Vec::new(),
+    }
+}
+
+/// Affix rules derived from tables designated `Fixes`: each entry's surface
+/// (a configured column, or its wordname) with one rule per English trigger.
+pub fn dictionary_affixes(
+    dict: &Dictionary,
+    roles: &BTreeMap<String, TableRoleConfig>,
+) -> Vec<AffixRule> {
+    let mut rules = Vec::new();
+    for (table_name, config) in roles {
+        if config.role != TableRole::Fixes {
+            continue;
+        }
+        let Some(table) = dict.table(table_name) else {
+            continue;
+        };
+        let Some(trigger_column) = config.trigger.as_deref() else {
+            continue;
+        };
+        for entry in &table.entries {
+            let surface = match config.surface.as_deref() {
+                Some(column) => entry_text(entry, column),
+                None => Some(entry.wordname.clone()),
+            };
+            let Some(surface) = surface else {
+                continue;
+            };
+            let Some((kind, conlang)) = parse_affix_surface(&surface) else {
+                continue;
+            };
+            for trigger in entry_texts(entry, trigger_column) {
+                let english = normalize(&trigger);
+                if english.is_empty() {
+                    continue;
+                }
+                rules.push(AffixRule {
+                    kind,
+                    english,
+                    conlang: conlang.clone(),
+                });
+            }
+        }
+    }
+    rules
 }
 
 /// A chosen dictionary entry plus its morphology affix.
@@ -350,10 +437,37 @@ pub fn translate_with(
     morphology: &Morphology,
     selections: &BTreeMap<String, String>,
 ) -> TranslationReport {
+    translate_with_scoped(
+        dict,
+        grid,
+        separator,
+        input,
+        choices,
+        affixes,
+        morphology,
+        selections,
+        &BTreeSet::new(),
+    )
+}
+
+/// Like [`translate_with`], but skipping `skip_tables` during root lookup. A
+/// `Fixes` table's rows are morphemes, never candidate roots.
+#[allow(clippy::too_many_arguments)]
+pub fn translate_with_scoped(
+    dict: &Dictionary,
+    grid: &SyntaxGrid,
+    separator: &str,
+    input: &str,
+    choices: &HashMap<usize, Uuid>,
+    affixes: &[AffixRule],
+    morphology: &Morphology,
+    selections: &BTreeMap<String, String>,
+    skip_tables: &BTreeSet<String>,
+) -> TranslationReport {
     let tokens = tokenize(input);
     let candidates: Vec<Vec<Match>> = tokens
         .iter()
-        .map(|token| matching_entries(dict, token, affixes))
+        .map(|token| matching_entries(dict, token, affixes, skip_tables))
         .collect();
 
     let mut chosen: Vec<Option<Picked>> = vec![None; tokens.len()];
@@ -573,6 +687,31 @@ pub fn translate_direct_with(
     morphology: &Morphology,
     selections: &BTreeMap<String, String>,
 ) -> TranslationReport {
+    translate_direct_with_scoped(
+        dict,
+        separator,
+        input,
+        choices,
+        affixes,
+        morphology,
+        selections,
+        &BTreeSet::new(),
+    )
+}
+
+/// Like [`translate_direct_with`], but skipping `skip_tables` during root
+/// lookup and pass-through.
+#[allow(clippy::too_many_arguments)]
+pub fn translate_direct_with_scoped(
+    dict: &Dictionary,
+    separator: &str,
+    input: &str,
+    choices: &HashMap<usize, Uuid>,
+    affixes: &[AffixRule],
+    morphology: &Morphology,
+    selections: &BTreeMap<String, String>,
+    skip_tables: &BTreeSet<String>,
+) -> TranslationReport {
     let tokens = tokenize(input);
     let mut slots = Vec::new();
     let mut morphemes = Vec::new();
@@ -585,6 +724,10 @@ pub fn translate_direct_with(
         if let Some(entry) = dict
             .all_entries()
             .find(|entry| entry.wordname.to_lowercase() == token.normalized)
+            .filter(|entry| {
+                dict.find_entry(entry.id)
+                    .is_none_or(|(table, _)| !skip_tables.contains(table))
+            })
         {
             let word = entry.wordname.clone();
             morphemes.push(GlossMorpheme {
@@ -599,7 +742,7 @@ pub fn translate_direct_with(
             continue;
         }
 
-        let candidates = matching_entries(dict, token, affixes);
+        let candidates = matching_entries(dict, token, affixes, skip_tables);
         let picked = match candidates.len() {
             0 => {
                 missing.push(index);
@@ -883,7 +1026,7 @@ fn render(slots: &[SlotOutcome], separator: &str) -> String {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::config::{Paradigm, ParadigmRow};
+    use crate::config::{Paradigm, ParadigmRow, TableRole, TableRoleConfig};
     use crate::model::{FieldType, FieldValue, TagDef};
     use crate::translation::ClauseSlot;
 
@@ -1049,6 +1192,94 @@ mod tests {
             &explicit,
         );
         assert_eq!(report.output, "kala");
+    }
+
+    #[test]
+    fn parses_affix_surfaces_from_hyphens() {
+        assert_eq!(
+            parse_affix_surface("-i"),
+            Some((AffixKind::Suffix, "i".to_string()))
+        );
+        assert_eq!(
+            parse_affix_surface("ka-"),
+            Some((AffixKind::Prefix, "ka".to_string()))
+        );
+        // An infix is not realised yet, and an unmarked surface is not an affix.
+        assert_eq!(parse_affix_surface("-ta-"), None);
+        assert_eq!(parse_affix_surface("i"), None);
+        assert_eq!(parse_affix_surface("-"), None);
+    }
+
+    fn fixes_setup() -> (
+        Dictionary,
+        BTreeMap<String, TableRoleConfig>,
+        BTreeSet<String>,
+    ) {
+        let mut dict = Dictionary::new();
+        dict.add_table("lex");
+        dict.add_entry("lex", classed("kala", "dog", "noun"));
+
+        dict.add_table("fixes");
+        let mut fix = WordEntry::new("-i");
+        fix.set(
+            crate::model::DEFINITION_TAG,
+            FieldValue::TagList(vec!["cat".to_string()]),
+        );
+        fix.set("english", FieldValue::Text("z".to_string()));
+        dict.add_entry("fixes", fix);
+
+        let roles = BTreeMap::from([(
+            "fixes".to_string(),
+            TableRoleConfig {
+                role: TableRole::Fixes,
+                trigger: Some("english".to_string()),
+                surface: None,
+            },
+        )]);
+        let skip = ["fixes".to_string()].into_iter().collect();
+        (dict, roles, skip)
+    }
+
+    #[test]
+    fn fixes_tables_supply_affix_rules() {
+        let (dict, roles, _) = fixes_setup();
+        let affixes = dictionary_affixes(&dict, &roles);
+        assert_eq!(affixes.len(), 1);
+        assert_eq!(affixes[0].kind, AffixKind::Suffix);
+        assert_eq!(affixes[0].english, "z");
+        assert_eq!(affixes[0].conlang, "i");
+    }
+
+    #[test]
+    fn a_fixes_affix_is_applied_and_its_table_is_not_a_root() {
+        let (dict, roles, skip) = fixes_setup();
+        let affixes = dictionary_affixes(&dict, &roles);
+
+        // "dogz" has no plural/verb lemma, so it reaches the fixes affix.
+        let report = translate_direct_with_scoped(
+            &dict,
+            " ",
+            "dogz",
+            &HashMap::new(),
+            &affixes,
+            &Morphology::default(),
+            &BTreeMap::new(),
+            &skip,
+        );
+        assert_eq!(report.output, "kalai");
+
+        // The fixes entry's own sense ("cat") is never matched as a root.
+        let report = translate_direct_with_scoped(
+            &dict,
+            " ",
+            "cat",
+            &HashMap::new(),
+            &affixes,
+            &Morphology::default(),
+            &BTreeMap::new(),
+            &skip,
+        );
+        assert_eq!(report.missing, vec![0]);
     }
 
     #[test]

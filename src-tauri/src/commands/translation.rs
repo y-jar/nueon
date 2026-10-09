@@ -116,15 +116,18 @@ pub fn execute_translation(
         .map(String::as_str)
         .unwrap_or(" ");
 
-    Ok(nueon_core::model::translate::translate_with(
+    let affixes = workspace.translation_affixes();
+    let fixes = workspace.fixes_tables();
+    Ok(nueon_core::model::translate::translate_with_scoped(
         &workspace.dictionary,
         &grid,
         separator,
         &input_text,
         &resolved,
-        &workspace.translation.affixes,
+        &affixes,
         &workspace.translation.morphology,
         &features,
+        &fixes,
     ))
 }
 
@@ -160,14 +163,17 @@ pub fn execute_translation_direct(
         .map(String::as_str)
         .unwrap_or(" ");
 
-    Ok(nueon_core::model::translate::translate_direct_with(
+    let affixes = workspace.translation_affixes();
+    let fixes = workspace.fixes_tables();
+    Ok(nueon_core::model::translate::translate_direct_with_scoped(
         &workspace.dictionary,
         separator,
         &input_text,
         &resolved,
-        &workspace.translation.affixes,
+        &affixes,
         &workspace.translation.morphology,
         &features,
+        &fixes,
     ))
 }
 

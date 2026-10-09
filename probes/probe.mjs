@@ -419,6 +419,10 @@ function seedWorkspace() {
         settings: {},
         grids: [],
         affixes: [],
+        // The fixes table supplies the "-i" suffix for the trigger "z" (probe 30).
+        table_roles: {
+          fixes: { role: "fixes", trigger: "english" },
+        },
         // A past-tense suffix on verbs, for probe 25.
         morphology: {
           features: [
@@ -519,6 +523,38 @@ function seedWorkspace() {
             id: "66666666-6666-4666-8666-666666666666",
             wordname: "feat",
             values: { definition: { type: "tag_list", value: ["feature"] } },
+          },
+        ],
+      },
+      null,
+      2,
+    ),
+  );
+  // A fixes table: wordname is the conlang surface (hyphen-marked), the
+  // `english` column the trigger. Used by probe 30.
+  fs.writeFileSync(
+    path.join(WORKSPACE, "dictionary", "fixes"),
+    JSON.stringify(
+      {
+        name: "fixes",
+        tags: [
+          {
+            name: "wordname",
+            description: "The base conlang spelling.",
+            kind: "text",
+            builtin: true,
+          },
+          {
+            name: "english",
+            description: "English trigger.",
+            kind: "text",
+          },
+        ],
+        entries: [
+          {
+            id: "77777777-7777-4777-8777-777777777777",
+            wordname: "-i",
+            values: { english: { type: "text", value: "z" } },
           },
         ],
       },
@@ -1931,6 +1967,32 @@ async function main() {
        sel.dispatchEvent(new Event('change', { bubbles: true }));
        return true;`);
     await js(`const b = document.querySelector('.modal-head button'); if (b) b.click(); return !!b;`);
+  });
+
+  // -- probe 30: a fixes table supplies an affix ---------------------------
+  await probe("30-fixes-table-affix", async () => {
+    await openActivity("Translation");
+    await waitJs(`!!document.querySelector('.translation')`, {
+      label: "translation view",
+    });
+    await js(
+      `const b = [...document.querySelectorAll('.translation-toolbar .mode-switch button')]
+         .find((x) => x.textContent.trim() === 'Word for word');
+       if (b) b.click();
+       return !!b;`,
+    );
+    await waitJs(`!!document.querySelector('.runner textarea')`, { label: "runner" });
+
+    // "dogz" finds no root directly; the fixes table's "-i" (trigger "z")
+    // attaches to the root kaka (renamed from kala in probe 21).
+    await js(`const t = document.querySelector('.runner textarea');
+      t.value = 'dogz';
+      t.dispatchEvent(new Event('input', { bubbles: true }));
+      return true;`);
+    await waitJs(
+      `(document.querySelector('.runner .output')?.textContent ?? '').trim() === 'kakai'`,
+      { label: "fixes-table affix applied" },
+    );
   });
 }
 
