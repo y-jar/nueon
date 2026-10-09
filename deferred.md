@@ -82,7 +82,15 @@ stage that completed them: `R0`–`R8` were done during the Tauri migration,
 ## Quality-of-life add-ons
 
 - ~~Quick-add "Draft Word" stubs from the translation builder.~~
-- Rule-Based Affix & Declension Engine (full morphemic structure engine; the
-  D3 affix rules are the minimal precursor).
+- ~~Rule-Based Affix & Declension Engine (ordered multi-slot affixes, fixes-table
+  morphemes, feature/slot authoring, and an Inflect preview).~~ (Morphology)
 - Interactive Phonology & IPA Chart with Sound Change Engine (SCA).
 - ~~Automatic Interlinear Gloss Generator (Leipzig rules) + clipboard exports.~~
+
+## Morphology (next)
+
+- Agreement: let one word's feature values follow another's (e.g. adjective ↔
+  noun number/case).
+- Allomorphy / conditioning: pick an affix variant by the stem's shape or the
+  surrounding features (e.g. `-i` after a consonant, `-y` after a vowel).
+- A declension/conjugation reference table per class in the Inspector.

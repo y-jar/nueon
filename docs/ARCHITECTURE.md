@@ -73,6 +73,10 @@ The authoritative domain model:
   the single source of truth for the form.
 - `Fixes` tables feed both input parsing (`dictionary_affixes`, prefix/suffix
   english triggers) and output inflection (`dictionary_morphemes`).
+- The **Morphology** activity (`MorphologyPanel`/`MorphologyView`) authors
+  features and endings and previews a single word: `inflect_word` composes the
+  feature-driven paradigm affixes with any manually picked fixes-table
+  morphemes and returns the surface plus an ordered breakdown.
 
 ### Storage rules
 
@@ -139,7 +143,7 @@ Command groups (see `src-tauri/src/commands/`):
   `execute_translation`, `create_translation_word`, `translation_options`,
   `set_translation_options`, `export_presets`, `import_presets`)
 - morphology (`translation_morphology`, `set_translation_morphology`,
-  `list_morphemes`, `lexicon`)
+  `list_morphemes`, `lexicon`, `inflect_word`)
 - phonology (`phonology_check_words`, `phonology_segments`)
 - version control (`vcs_*` and `git_prompt_dismissed`/
   `git_prompt_dismissed_set`, `autocheckin_*`)

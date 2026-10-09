@@ -1423,6 +1423,44 @@ button.link {
   border-color: #d6785a;
 }
 
+.small {
+  font-size: 12px;
+}
+
+.inflect-surface {
+  padding: 10px 14px;
+  background: var(--panel);
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  font-size: 22px;
+  font-weight: 600;
+}
+
+.inflect-pieces {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.inflect-pieces .piece {
+  display: inline-flex;
+  flex-direction: column;
+  gap: 1px;
+  padding: 3px 8px;
+  background: var(--panel);
+  border: 1px solid var(--border);
+  border-radius: 5px;
+  font-size: 12px;
+}
+
+.inflect-pieces .piece.root {
+  border-color: var(--accent);
+}
+
+.inflect-pieces .piece .mono {
+  font-size: 14px;
+}
+
 .palette-row {
   display: flex;
   flex-wrap: wrap;

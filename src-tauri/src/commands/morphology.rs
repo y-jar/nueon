@@ -1,13 +1,15 @@
 //! Morphology commands: the fixes-table morpheme inventory and the lexicon
 //! picker. Both are read-only views over the current workspace.
 
+use std::collections::{BTreeMap, HashMap};
 use std::sync::Mutex;
 
 use serde::Serialize;
 use tauri::State;
+use uuid::Uuid;
 
 use nueon_core::config::POS_TAG;
-use nueon_core::{AffixKind, FieldValue, WordEntry};
+use nueon_core::{AffixKind, FieldValue, Inflection, Morpheme, WordEntry};
 
 use crate::state::AppState;
 
@@ -97,4 +99,40 @@ pub fn lexicon(state: State<'_, Shared>) -> Result<Vec<LexiconWord>, String> {
         }
     }
     Ok(words)
+}
+
+/// Inflect one word: its root with feature-driven paradigm affixes and any
+/// manually selected fixes-table morphemes, composed and broken down.
+#[tauri::command]
+pub fn inflect_word(
+    state: State<'_, Shared>,
+    id: String,
+    selections: Option<HashMap<String, String>>,
+    morphemes: Option<Vec<String>>,
+) -> Result<Inflection, String> {
+    let state = state.lock().map_err(|_| "state poisoned".to_string())?;
+    let workspace = state.workspace()?;
+    let id = Uuid::parse_str(&id).map_err(|err| format!("bad uuid: {err}"))?;
+    let selections: BTreeMap<String, String> = selections.unwrap_or_default().into_iter().collect();
+
+    let lexicon = workspace.translation_morphemes();
+    let manual: Vec<Morpheme> = morphemes
+        .unwrap_or_default()
+        .iter()
+        .filter_map(|reference| {
+            lexicon
+                .iter()
+                .find(|morpheme| morpheme.matches(reference))
+                .cloned()
+        })
+        .collect();
+
+    Ok(nueon_core::model::translate::inflect(
+        &workspace.dictionary,
+        id,
+        &workspace.translation.morphology,
+        &lexicon,
+        &selections,
+        &manual,
+    ))
 }

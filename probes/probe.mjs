@@ -3270,6 +3270,59 @@ async function main() {
       { label: "ending added" },
     );
   });
+
+  // -- probe 59: the Inflect preview composes affixes -----------------------
+  await probe("59-inflect-preview", async () => {
+    await js(
+      `const b = document.querySelector('.activity[title="Morphology"]');
+       if (b) b.click();
+       return !!b;`,
+    );
+    await waitJs(`!!document.querySelector('.morphology-view')`, {
+      label: "morphology view",
+    });
+
+    // Pick the verb "velo" from the lexicon.
+    const picked = await js(
+      `const b = [...document.querySelectorAll('.sidebar .word-row')]
+         .find((x) => x.querySelector('.grow')?.textContent.trim() === 'velo');
+       if (b) b.click();
+       return !!b;`,
+    );
+    if (!picked) throw new Error("no 'velo' in the lexicon");
+    await waitJs(`!!document.querySelector('.inflect-surface')`, {
+      label: "inflect result",
+    });
+    const surface = () =>
+      js(
+        `return (document.querySelector('.inflect-surface')?.textContent ?? '').trim();`,
+      );
+    if ((await surface()) !== "velo") {
+      throw new Error(`expected 'velo', got '${await surface()}'`);
+    }
+
+    // Selecting Past applies the verb's tense suffix.
+    await js(
+      `const b = [...document.querySelectorAll('.morphology-view .feature-bar button')]
+         .find((x) => x.textContent.trim() === 'Past');
+       if (b) b.click();
+       return !!b;`,
+    );
+    await new Promise((resolve) => setTimeout(resolve, 600));
+    if ((await surface()) !== "veloi") {
+      throw new Error(`expected 'veloi', got '${await surface()}'`);
+    }
+
+    // Ticking the -i morpheme attaches it manually as well.
+    await js(
+      `const i = document.querySelector('.sidebar .morpheme-row input[type="checkbox"]');
+       if (i) i.click();
+       return !!i;`,
+    );
+    await new Promise((resolve) => setTimeout(resolve, 600));
+    const final = await surface();
+    if (final !== "veloii") throw new Error(`expected 'veloii', got '${final}'`);
+  });
 }
 
 try {

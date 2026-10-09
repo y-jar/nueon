@@ -470,14 +470,23 @@ pub fn dictionary_morphemes(
     morphemes
 }
 
+impl Morpheme {
+    /// Whether this morpheme answers to `reference`: its wordname or any
+    /// trigger, compared case-insensitively.
+    pub fn matches(&self, reference: &str) -> bool {
+        if self.wordname == reference || self.keys.iter().any(|key| key == reference) {
+            return true;
+        }
+        let wanted = normalize(reference);
+        !wanted.is_empty() && self.keys.contains(&wanted)
+    }
+}
+
 /// The morpheme a paradigm row references, matched by wordname or trigger.
 fn find_morpheme<'a>(morphemes: &'a [Morpheme], reference: &str) -> Option<&'a Morpheme> {
-    let wanted = normalize(reference);
-    morphemes.iter().find(|morpheme| {
-        morpheme.wordname == reference
-            || morpheme.keys.iter().any(|key| key == reference)
-            || (!wanted.is_empty() && morpheme.keys.contains(&wanted))
-    })
+    morphemes
+        .iter()
+        .find(|morpheme| morpheme.matches(reference))
 }
 
 /// A chosen dictionary entry plus its morphology affix.
@@ -1080,6 +1089,108 @@ fn render_gloss(
         }
     }
     Some(morpheme)
+}
+
+/// Where one piece of an inflected word sits relative to its root.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum InflectionKind {
+    Root,
+    Prefix,
+    Infix,
+    Suffix,
+}
+
+/// One piece of an inflected word: its surface and gloss.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct InflectionMorpheme {
+    pub surface: String,
+    pub gloss: String,
+    pub kind: InflectionKind,
+}
+
+/// A single word inflected: the composed surface and an ordered breakdown.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct Inflection {
+    pub surface: String,
+    pub morphemes: Vec<InflectionMorpheme>,
+}
+
+impl From<AffixKind> for InflectionKind {
+    fn from(kind: AffixKind) -> Self {
+        match kind {
+            AffixKind::Prefix => InflectionKind::Prefix,
+            AffixKind::Infix => InflectionKind::Infix,
+            AffixKind::Suffix => InflectionKind::Suffix,
+        }
+    }
+}
+
+fn piece(affix: &ResolvedAffix) -> InflectionMorpheme {
+    InflectionMorpheme {
+        surface: affix.surface.clone(),
+        gloss: affix.gloss.clone(),
+        kind: affix.kind.into(),
+    }
+}
+
+/// Inflect one word: its root with the feature-driven paradigm affixes and any
+/// `manual` morphemes the user picked, composed and broken down in order.
+pub fn inflect(
+    dict: &Dictionary,
+    id: Uuid,
+    morphology: &Morphology,
+    lexicon: &[Morpheme],
+    selections: &BTreeMap<String, String>,
+    manual: &[Morpheme],
+) -> Inflection {
+    let Some((_, entry)) = dict.find_entry(id) else {
+        return Inflection {
+            surface: "?".to_string(),
+            morphemes: Vec::new(),
+        };
+    };
+    let root = entry.wordname.clone();
+    let root_gloss = entry
+        .definition()
+        .and_then(<[String]>::first)
+        .cloned()
+        .unwrap_or_else(|| root.clone());
+
+    let mut affixes = resolve_affixes(dict, id, morphology, lexicon, selections);
+    affixes.extend(manual.iter().map(|morpheme| ResolvedAffix {
+        surface: morpheme.surface.clone(),
+        kind: morpheme.kind,
+        gloss: morpheme.gloss.to_uppercase(),
+    }));
+
+    let surface = compose_word(&root, &affixes);
+    let mut morphemes: Vec<InflectionMorpheme> = Vec::with_capacity(affixes.len() + 1);
+    morphemes.extend(
+        affixes
+            .iter()
+            .filter(|a| a.kind == AffixKind::Prefix)
+            .map(piece),
+    );
+    morphemes.push(InflectionMorpheme {
+        surface: root,
+        gloss: root_gloss,
+        kind: InflectionKind::Root,
+    });
+    morphemes.extend(
+        affixes
+            .iter()
+            .filter(|a| a.kind == AffixKind::Infix)
+            .map(piece),
+    );
+    morphemes.extend(
+        affixes
+            .iter()
+            .filter(|a| a.kind == AffixKind::Suffix)
+            .map(piece),
+    );
+
+    Inflection { surface, morphemes }
 }
 
 fn gloss_for(dict: &Dictionary, picked: Option<&Picked>) -> Option<GlossMorpheme> {

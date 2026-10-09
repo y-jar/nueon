@@ -704,6 +704,24 @@ export interface LexiconWord {
 }
 export const lexicon = (): Promise<LexiconWord[]> => invoke("lexicon");
 
+export type InflectionKind = "root" | "prefix" | "infix" | "suffix";
+export interface InflectionMorpheme {
+  surface: string;
+  gloss: string;
+  kind: InflectionKind;
+}
+export interface Inflection {
+  surface: string;
+  morphemes: InflectionMorpheme[];
+}
+/** Inflect a word: paradigm affixes for `selections` plus picked morphemes. */
+export const inflectWord = (
+  id: string,
+  selections: FeatureSelections,
+  morphemes: string[],
+): Promise<Inflection> =>
+  invoke("inflect_word", { id, selections, morphemes });
+
 export type PhonemeKind = "consonant" | "vowel" | "other";
 
 export interface Phoneme {

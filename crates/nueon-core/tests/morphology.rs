@@ -3,11 +3,11 @@
 use std::collections::{BTreeMap, BTreeSet, HashMap};
 
 use nueon_core::config::POS_TAG;
-use nueon_core::model::translate::{dictionary_morphemes, translate_direct_with_scoped};
+use nueon_core::model::translate::{dictionary_morphemes, inflect, translate_direct_with_scoped};
 use nueon_core::model::TranslationReport;
 use nueon_core::{
-    AffixKind, Dictionary, FieldType, FieldValue, Morphology, Paradigm, ParadigmRow, TableRole,
-    TableRoleConfig, TagDef, WordEntry, DEFINITION_TAG,
+    AffixKind, Dictionary, FieldType, FieldValue, InflectionKind, Morphology, Paradigm,
+    ParadigmRow, TableRole, TableRoleConfig, TagDef, WordEntry, DEFINITION_TAG,
 };
 
 fn classed(word: &str, sense: &str, class: &str) -> WordEntry {
@@ -267,5 +267,62 @@ fn a_slot_can_reference_a_fixes_table_morpheme() {
     assert!(
         gloss.iter().any(|gloss| gloss.contains("PLURAL MARKER")),
         "{gloss:?}"
+    );
+}
+
+#[test]
+fn inflect_stacks_paradigm_and_manual_morphemes() {
+    let mut dict = noun_dict("kala");
+    dict.add_table("fixes");
+    dict.add_tag("fixes", TagDef::new("english", FieldType::Text));
+    let mut plural = WordEntry::new("-u");
+    plural.set(
+        DEFINITION_TAG,
+        FieldValue::TagList(vec!["plural".to_string()]),
+    );
+    plural.set("english", FieldValue::Text("plural".to_string()));
+    dict.add_entry("fixes", plural);
+
+    let roles = BTreeMap::from([(
+        "fixes".to_string(),
+        TableRoleConfig {
+            role: TableRole::Fixes,
+            trigger: Some("english".to_string()),
+            surface: None,
+        },
+    )]);
+    let lexicon = dictionary_morphemes(&dict, &roles);
+
+    // Feature-driven case suffix (accusative -> "m") plus a manually picked -u.
+    let morphology = morphology(vec![row(
+        &[("case", "accusative")],
+        "m",
+        AffixKind::Suffix,
+        Some("case"),
+        1,
+    )]);
+    let id = dict.table("lex").unwrap().entries[0].id;
+    let inflection = inflect(
+        &dict,
+        id,
+        &morphology,
+        &lexicon,
+        &selections(&[("case", "accusative")]),
+        &lexicon,
+    );
+
+    assert_eq!(inflection.surface, "kalamu");
+    let pieces: Vec<(&str, InflectionKind)> = inflection
+        .morphemes
+        .iter()
+        .map(|piece| (piece.surface.as_str(), piece.kind))
+        .collect();
+    assert_eq!(
+        pieces,
+        vec![
+            ("kala", InflectionKind::Root),
+            ("m", InflectionKind::Suffix),
+            ("u", InflectionKind::Suffix),
+        ]
     );
 }
