@@ -69,6 +69,7 @@
     "taskList": "Task list",
     "codeBlock": "Code block",
     "image": "Insert image",
+    "moreActions": "Editor actions",
     "export": "Export",
     "exportPdf": "PDF\u2026",
     "exportOdt": "OpenDocument (.odt)\u2026",
@@ -77,7 +78,13 @@
       "blockquote": "Blockquote",
       "taskList": "Task list",
       "rule": "Horizontal rule",
-      "link": "Link"
+      "link": "Link",
+      "copyPath": "Copy path",
+      "openDefault": "Open in default app",
+      "reveal": "Reveal in file explorer",
+      "showLineNumbers": "Show line numbers",
+      "hideLineNumbers": "Hide line numbers",
+      "deleteFile": "Delete file"
     },
     "table": {
       "rows": "Rows",

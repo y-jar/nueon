@@ -9,6 +9,11 @@ use super::layout::LayoutState;
 /// Default auto-check-in interval, in seconds.
 pub const DEFAULT_AUTO_CHECKIN_SECS: u64 = 60;
 
+/// `true` for a bool field whose absence means "on".
+fn default_true() -> bool {
+    true
+}
+
 /// A single sort key applied to the dictionary grid.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct SortSpec {
@@ -90,6 +95,9 @@ pub struct WorkspaceSettings {
     /// Confirm-dialog kinds the user asked not to see again.
     #[serde(skip_serializing_if = "Vec::is_empty")]
     pub suppressed_confirms: Vec<String>,
+    /// Whether the Markdown editor shows line numbers.
+    #[serde(default = "default_true")]
+    pub editor_line_numbers: bool,
     /// Persisted shell layout.
     pub ui: UiLayout,
     /// Whether legacy extensionless/`.txt` notes were converted to `.md`.
@@ -112,6 +120,7 @@ impl Default for WorkspaceSettings {
             git_prompt_dismissed: false,
             dismissed_warnings: Vec::new(),
             suppressed_confirms: Vec::new(),
+            editor_line_numbers: true,
             ui: UiLayout::default(),
             notes_migrated: false,
             table_filenames_migrated: false,
@@ -131,6 +140,7 @@ mod tests {
         assert_eq!(settings.auto_checkin_secs, DEFAULT_AUTO_CHECKIN_SECS);
         assert!(settings.grid_views.is_empty());
         assert!(settings.suppressed_confirms.is_empty());
+        assert!(settings.editor_line_numbers);
     }
 
     #[test]

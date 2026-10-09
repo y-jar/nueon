@@ -3,7 +3,7 @@ import { defaultKeymap, history, historyKeymap, indentWithTab } from "@codemirro
 import { markdown } from "@codemirror/lang-markdown";
 import { bracketMatching } from "@codemirror/language";
 import { highlightSelectionMatches, search, searchKeymap } from "@codemirror/search";
-import { EditorState, Prec, Transaction } from "@codemirror/state";
+import { Compartment, EditorState, Prec, Transaction } from "@codemirror/state";
 import {
   EditorView,
   crosshairCursor,
@@ -67,7 +67,12 @@ export interface EditorParams {
   onContextMenu?: (x: number, y: number, view: EditorView) => void;
   /** Open the image picker (the toolbar's insert-image action). */
   onImage?: () => void;
+  /** Whether to show the line-number gutter (default true). */
+  showLineNumbers?: boolean;
 }
+
+/** Lets the line-number gutter be toggled without rebuilding the editor. */
+const lineNumberCompartment = new Compartment();
 
 const AUTOSAVE_MS = 400;
 
@@ -155,7 +160,9 @@ export const codemirror: Action<HTMLElement, EditorParams> = (node, params) => {
         ? { selection: { anchor: restored.anchor, head: restored.head } }
         : {}),
       extensions: [
-        lineNumbers(),
+        lineNumberCompartment.of(
+          params.showLineNumbers === false ? [] : lineNumbers(),
+        ),
         history(),
         drawSelection(),
         highlightActiveLine(),
@@ -365,6 +372,13 @@ export const codemirror: Action<HTMLElement, EditorParams> = (node, params) => {
       if (next.assetBase !== current.assetBase) {
         setAssetBase(next.assetBase, next.path);
         view.dispatch({});
+      }
+      if (next.showLineNumbers !== current.showLineNumbers) {
+        view.dispatch({
+          effects: lineNumberCompartment.reconfigure(
+            next.showLineNumbers === false ? [] : lineNumbers(),
+          ),
+        });
       }
       current = next;
 

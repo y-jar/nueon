@@ -435,3 +435,20 @@ pub fn clear_suppressed_confirms(state: State<'_, Shared>) -> Result<(), String>
         .unsuppress_confirm(None)
         .map_err(|err| err.to_string())
 }
+
+/// Whether the Markdown editor shows line numbers.
+#[tauri::command]
+pub fn editor_line_numbers(state: State<'_, Shared>) -> Result<bool, String> {
+    let state = state.lock().map_err(|_| "state poisoned".to_string())?;
+    Ok(state.workspace()?.editor_line_numbers())
+}
+
+/// Persist the editor's line-number preference.
+#[tauri::command]
+pub fn set_editor_line_numbers(state: State<'_, Shared>, show: bool) -> Result<(), String> {
+    let mut state = state.lock().map_err(|_| "state poisoned".to_string())?;
+    state
+        .workspace_mut()?
+        .set_editor_line_numbers(show)
+        .map_err(|err| err.to_string())
+}

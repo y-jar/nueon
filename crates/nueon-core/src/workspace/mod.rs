@@ -1624,6 +1624,17 @@ impl Workspace {
         self.save_settings()
     }
 
+    /// Whether the Markdown editor shows line numbers.
+    pub fn editor_line_numbers(&self) -> bool {
+        self.settings.editor_line_numbers
+    }
+
+    /// Persist the editor's line-number preference.
+    pub fn set_editor_line_numbers(&mut self, show: bool) -> Result<(), StorageError> {
+        self.settings.editor_line_numbers = show;
+        self.save_settings()
+    }
+
     /// Commit the pending auto-check-in if the workspace has been idle long
     /// enough. Intended to be called from the UI event loop.
     pub fn pump_auto_checkin(&mut self, now: Instant) -> Result<Option<String>, VcsError> {
@@ -2464,6 +2475,17 @@ mod tests {
         assert!(!ws
             .set_table_role("missing", TableRole::Fixes, None, None)
             .unwrap());
+    }
+
+    #[test]
+    fn editor_line_numbers_round_trip() {
+        let dir = tempfile::tempdir().unwrap();
+        let mut ws = Workspace::new(dir.path()).unwrap();
+        assert!(ws.editor_line_numbers());
+        ws.set_editor_line_numbers(false).unwrap();
+        assert!(!ws.editor_line_numbers());
+        ws.set_editor_line_numbers(true).unwrap();
+        assert!(ws.editor_line_numbers());
     }
 
     #[test]

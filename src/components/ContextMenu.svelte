@@ -1,6 +1,6 @@
 <script lang="ts">
   import { t } from "svelte-i18n";
-  import { revealItemInDir } from "@tauri-apps/plugin-opener";
+  import { revealInFileExplorer } from "../lib/fileActions";
   import { COLUMN_TYPES } from "../lib/dictionary";
   import {
     ui,
@@ -85,7 +85,7 @@
     const target = menu.path
       ? `${ui.root}/notes/${menu.path}`
       : `${ui.root}/notes`;
-    revealItemInDir(target).catch(() => {});
+    revealInFileExplorer(target);
     closeContextMenu();
   }
 

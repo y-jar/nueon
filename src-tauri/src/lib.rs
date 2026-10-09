@@ -215,6 +215,8 @@ pub fn run() {
             commands::suppressed_confirms,
             commands::suppress_confirm,
             commands::clear_suppressed_confirms,
+            commands::editor_line_numbers,
+            commands::set_editor_line_numbers,
             commands::set_parent,
             commands::remove_parent,
             commands::reparent_word,

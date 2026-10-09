@@ -139,6 +139,8 @@ export const ui = $state({
   setupWizardOpen: false,
   /** Confirm-dialog kinds the user has silenced ("don't ask again"). */
   suppressedConfirms: [] as string[],
+  /** Whether the Markdown editor shows line numbers (workspace preference). */
+  showLineNumbers: true,
   confirm: null as ConfirmRequest | null,
   toast: null as ToastState | null,
   trashOpen: false,
@@ -1210,6 +1212,7 @@ export async function init(): Promise<void> {
   await refreshTables();
   try {
     ui.suppressedConfirms = await api.suppressedConfirms();
+    ui.showLineNumbers = await api.editorLineNumbers();
   } catch {
     // Best-effort; suppression just won't apply across reloads.
   }
@@ -1461,6 +1464,21 @@ export async function clearSuppressedConfirms(): Promise<void> {
   } catch {
     // Best-effort.
   }
+}
+
+/** Show or hide the editor's line-number gutter and persist the choice. */
+export async function setEditorLineNumbers(show: boolean): Promise<void> {
+  ui.showLineNumbers = show;
+  try {
+    await api.setEditorLineNumbers(show);
+  } catch {
+    // Best-effort.
+  }
+}
+
+/** The absolute path of a workspace-relative note. */
+export function noteFilePath(path: string): string {
+  return ui.root ? `${ui.root}/notes/${path}` : "";
 }
 
 let toastCounter = 0;

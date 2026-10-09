@@ -5,8 +5,16 @@
     ui,
     openEditorContextMenu,
     resolveConflict,
+    requestDeleteNote,
+    setEditorLineNumbers,
+    noteFilePath,
     type DocState,
   } from "../lib/state.svelte";
+  import {
+    revealInFileExplorer,
+    openInDefaultApp,
+    copyText,
+  } from "../lib/fileActions";
   import type { EditorView } from "@codemirror/view";
   import EditorToolbar from "./EditorToolbar.svelte";
   import {
@@ -18,7 +26,7 @@
   import { invalidateReads } from "../lib/editor/freshness";
   import { shouldApplySave } from "../lib/editor/session";
   import { open, save } from "@tauri-apps/plugin-dialog";
-  import { Upload } from "@lucide/svelte";
+  import { EllipsisVertical, Upload } from "@lucide/svelte";
   import Popover from "./Popover.svelte";
   import { assetLink, linkLabel } from "../lib/assets";
   import { stripMd } from "../lib/explorer";
@@ -129,6 +137,49 @@
           </div>
         {/snippet}
       </Popover>
+      <Popover align="right">
+        {#snippet label()}<span title={$t("editor.moreActions")}
+            ><EllipsisVertical size={15} /></span
+          >{/snippet}
+        {#snippet children(close)}
+          <div class="picker-body">
+            <button
+              onclick={() => {
+                close();
+                void copyText(noteFilePath(doc.selected ?? ""));
+              }}>{$t("editor.menu.copyPath")}</button
+            >
+            <button
+              onclick={() => {
+                close();
+                openInDefaultApp(noteFilePath(doc.selected ?? ""));
+              }}>{$t("editor.menu.openDefault")}</button
+            >
+            <button
+              onclick={() => {
+                close();
+                revealInFileExplorer(noteFilePath(doc.selected ?? ""));
+              }}>{$t("editor.menu.reveal")}</button
+            >
+            <button
+              onclick={() => {
+                close();
+                void setEditorLineNumbers(!ui.showLineNumbers);
+              }}>{ui.showLineNumbers
+                ? $t("editor.menu.hideLineNumbers")
+                : $t("editor.menu.showLineNumbers")}</button
+            >
+            <button
+              class="danger"
+              onclick={() => {
+                const path = doc.selected;
+                close();
+                if (path) void requestDeleteNote(path, false);
+              }}>{$t("editor.menu.deleteFile")}</button
+            >
+          </div>
+        {/snippet}
+      </Popover>
     </EditorToolbar>
     <div class="editor-inner">
       <div class="editor-head">
@@ -165,6 +216,7 @@
           onFormat: (next: FormatState) => (format = next),
           onContextMenu: openEditorContextMenu,
           onImage: insertImage,
+          showLineNumbers: ui.showLineNumbers,
         }}
       ></div>
     </div>

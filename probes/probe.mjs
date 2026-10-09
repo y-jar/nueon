@@ -2506,6 +2506,55 @@ async function main() {
       label: "second note deleted",
     });
   });
+
+  // -- probe 39: editor overflow menu + line-number toggle ------------------
+  await probe("39-editor-overflow-menu", async () => {
+    await openActivity("Notes");
+    await waitJs(`!!document.querySelector('.explorer-actions')`, { label: "notes sidebar" });
+    await waitJs(
+      `!!document.querySelector('.tree-row[data-path="beta.md"] .tree-name')`,
+      { label: "notes tree" },
+    );
+    await openNote("beta.md");
+    await waitJs(`!!document.querySelector('.cm-lineNumbers')`, { label: "line numbers on" });
+
+    const openMenu = () =>
+      js(`const t = document.querySelector('.editor-toolbar [title="Editor actions"]');
+         if (t) { t.click(); return true; }
+         return false;`);
+    if (!(await openMenu())) throw new Error("no editor overflow trigger");
+    await waitJs(`!!document.querySelector('.popover-panel')`, { label: "overflow menu" });
+    const items = await js(
+      `return [...document.querySelectorAll('.popover-panel .picker-body button')]
+         .map((b) => b.textContent.trim());`,
+    );
+    for (const want of [
+      "Copy path",
+      "Open in default app",
+      "Reveal in file explorer",
+      "Hide line numbers",
+      "Delete file",
+    ]) {
+      if (!items.includes(want)) {
+        throw new Error(`menu missing ${want}: ${JSON.stringify(items)}`);
+      }
+    }
+
+    // Hide, then show, the line-number gutter.
+    await js(`const b = [...document.querySelectorAll('.popover-panel button')]
+       .find((x) => x.textContent.trim() === 'Hide line numbers');
+       if (b) b.click();
+       return !!b;`);
+    await waitJs(`!document.querySelector('.cm-lineNumbers')`, { label: "line numbers hidden" });
+
+    await openMenu();
+    await waitJs(`!!document.querySelector('.popover-panel')`, { label: "menu again" });
+    await js(`const b = [...document.querySelectorAll('.popover-panel button')]
+       .find((x) => x.textContent.trim() === 'Show line numbers');
+       if (b) b.click();
+       return !!b;`);
+    await waitJs(`!!document.querySelector('.cm-lineNumbers')`, { label: "line numbers shown" });
+  });
 }
 
 try {

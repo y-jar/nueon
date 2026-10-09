@@ -387,6 +387,10 @@ export const suppressConfirm = (kind: string): Promise<void> =>
   invoke("suppress_confirm", { kind });
 export const clearSuppressedConfirms = (): Promise<void> =>
   invoke("clear_suppressed_confirms");
+export const editorLineNumbers = (): Promise<boolean> =>
+  invoke("editor_line_numbers");
+export const setEditorLineNumbers = (show: boolean): Promise<void> =>
+  invoke("set_editor_line_numbers", { show });
 export const knownTagNames = (): Promise<string[]> =>
   invoke("known_tag_names");
 export const gridViewGet = (table: string): Promise<GridViewState> =>
