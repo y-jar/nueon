@@ -3611,6 +3611,64 @@ async function main() {
       label: "duplicate warning",
     });
   });
+
+  // -- probe 63: Inflect picker + class-relevant features --------------------
+  await probe("63-inflect-picker-features", async () => {
+    await js(
+      `const b = document.querySelector('.activity[title="Morphology"]');
+       if (b) b.click();
+       return !!b;`,
+    );
+    await waitJs(`!!document.querySelector('.morphology-view')`, {
+      label: "morphology view",
+    });
+    await js(
+      `const b = [...document.querySelectorAll('.morphology-view .mode-switch button')]
+         .find((x) => x.textContent.trim() === 'Inflect');
+       if (b) b.click();
+       return !!b;`,
+    );
+    await waitJs(`!!document.querySelector('.word-picker input')`, {
+      label: "word picker",
+    });
+
+    // Choose the verb "velo" from the picker.
+    await js(
+      `const i = document.querySelector('.word-picker input');
+       i.value = 'velo';
+       i.dispatchEvent(new Event('input', { bubbles: true }));
+       i.focus();
+       return true;`,
+    );
+    await waitJs(
+      `[...document.querySelectorAll('.word-picker-list button .mono')]
+         .some((x) => x.textContent.trim() === 'velo')`,
+      { label: "velo option" },
+    );
+    await js(
+      `const b = [...document.querySelectorAll('.word-picker-list button')]
+         .find((x) => x.querySelector('.mono')?.textContent.trim() === 'velo');
+       if (b) b.click();
+       return !!b;`,
+    );
+    await waitJs(`!!document.querySelector('.inflect-surface')`, {
+      label: "inflect result",
+    });
+    await waitJs(`!!document.querySelector('.morphology-view .feature-bar')`, {
+      label: "feature bar",
+    });
+
+    const labels = await js(
+      `return [...document.querySelectorAll('.morphology-view .feature-bar .feature-label')]
+         .map((x) => x.textContent.trim());`,
+    );
+    if (!labels.includes("Tense") || !labels.includes("Aspect")) {
+      throw new Error(`verb features missing: ${JSON.stringify(labels)}`);
+    }
+    if (labels.includes("Number")) {
+      throw new Error(`non-verb feature shown: ${JSON.stringify(labels)}`);
+    }
+  });
 }
 
 try {

@@ -9,6 +9,7 @@
   import ParadigmEditor from "./translation/ParadigmEditor.svelte";
   import MorphologyDrawer from "./translation/MorphologyDrawer.svelte";
   import SaveWordForm from "./translation/SaveWordForm.svelte";
+  import WordPicker from "./translation/WordPicker.svelte";
 
   onMount(() => void store.load());
 
@@ -37,6 +38,19 @@
   const word = $derived(
     store.lexicon.find((entry) => entry.id === store.selectedWord) ?? null,
   );
+
+  // Only features the picked class's paradigm rules actually condition on.
+  const relevantFeatures = $derived.by(() => {
+    if (!word?.class) return [];
+    const paradigm = store.morphology.paradigms.find(
+      (entry) => entry.class === word.class,
+    );
+    if (!paradigm) return [];
+    const ids = new Set(
+      paradigm.rows.flatMap((row) => Object.keys(row.when)),
+    );
+    return store.morphology.features.filter((feature) => ids.has(feature.id));
+  });
 
   async function persistRules() {
     try {
@@ -88,6 +102,9 @@
   {#if store.tab === "compose"}
     <ComposeBuilder />
   {:else if store.tab === "inflect"}
+    <section class="morph-section">
+      <WordPicker />
+    </section>
     {#if !word}
       <p class="muted">{$t("morphology.pickWord")}</p>
     {:else}
@@ -98,7 +115,7 @@
           <span class="muted">— {word.gloss}</span>
         </div>
         <FeatureBar
-          features={store.morphology.features}
+          features={relevantFeatures}
           selections={store.selections}
           onToggle={(feature, value) => store.toggleFeature(feature, value)}
         />
