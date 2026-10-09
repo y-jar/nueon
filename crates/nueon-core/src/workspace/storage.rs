@@ -16,6 +16,8 @@ use serde::Serialize;
 use crate::model::WordTable;
 use crate::workspace::NoteFile;
 
+use super::assets::ASSETS_DIR;
+
 /// Directory holding raw Markdown notes.
 pub const NOTES_DIR: &str = "notes";
 /// Directory holding one JSON file per word table.
@@ -413,6 +415,10 @@ fn collect_notes(base: &Path, dir: &Path, out: &mut Vec<NoteFile>) -> Result<(),
         if dirent.file_name().to_string_lossy().starts_with('.') {
             continue;
         }
+        // `notes/assets/` holds imported files, never notes.
+        if dir == base && dirent.file_name() == ASSETS_DIR {
+            continue;
+        }
         let path = dirent.path();
         if path.is_dir() {
             collect_notes(base, &path, out)?;
@@ -585,6 +591,14 @@ fn migrate_dir(
             .file_name()
             .is_some_and(|name| name.to_string_lossy().starts_with('.'));
         if hidden {
+            continue;
+        }
+        // Imported files under `notes/assets/` are not notes; never rename them.
+        if dir == base
+            && path
+                .file_name()
+                .is_some_and(|name| name.to_string_lossy() == ASSETS_DIR)
+        {
             continue;
         }
         if path.is_dir() {
@@ -795,6 +809,24 @@ mod tests {
 
         let loaded = scan_notes(&notes).unwrap();
         assert_eq!(loaded.len(), 1);
+    }
+
+    #[test]
+    fn scan_and_migration_skip_the_assets_folder() {
+        let dir = tempfile::tempdir().unwrap();
+        let notes = dir.path().join(NOTES_DIR);
+        fs::create_dir_all(notes.join(ASSETS_DIR)).unwrap();
+        write_note(&notes, &NoteFile::new("real.md", "note")).unwrap();
+        // A text asset would otherwise look like a note and be migrated.
+        fs::write(notes.join(ASSETS_DIR).join("readme.txt"), "asset text").unwrap();
+
+        let loaded = scan_notes(&notes).unwrap();
+        assert_eq!(loaded.len(), 1);
+        assert_eq!(loaded[0].path, PathBuf::from("real.md"));
+
+        let renamed = migrate_to_markdown(&notes).unwrap();
+        assert!(renamed.is_empty(), "assets are never migrated: {renamed:?}");
+        assert!(notes.join(ASSETS_DIR).join("readme.txt").exists());
     }
 
     #[test]

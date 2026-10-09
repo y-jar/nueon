@@ -917,12 +917,12 @@ impl Workspace {
         storage::read_note_snapshot(&self.notes_dir(), relative.as_ref())
     }
 
-    /// Copy an external file into `assets/` under a short content hash.
+    /// Copy an external file into `notes/assets/` under a readable name.
     pub fn import_asset(
         &mut self,
         source: impl AsRef<Path>,
     ) -> Result<ImportedAsset, StorageError> {
-        let imported = assets::import_asset(&self.root_path, source.as_ref())?;
+        let imported = assets::import_asset(&self.notes_dir(), source.as_ref())?;
         if !imported.existed {
             self.mark_change(
                 Instant::now(),

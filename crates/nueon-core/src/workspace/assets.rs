@@ -1,28 +1,28 @@
 //! Importing external files into a workspace.
 //!
-//! Dropped images and other files are copied into `<workspace>/assets/` under
-//! a short content hash (`ab12cd34ef.png`), which keeps names simple and
-//! filesystem-safe and de-duplicates identical files. Dropped text/Markdown
-//! files can instead be imported as notes.
+//! Dropped images and other files are copied into `<workspace>/notes/assets/`
+//! under their own (sanitized) name — `My-Photo.png`, `My-Photo 2.png` on a
+//! clash — so the folder is recognizable in the notes tree. Dropped
+//! text/Markdown files can instead be imported as notes.
 
+use std::ffi::OsStr;
 use std::fs::{self, File};
 use std::io::Read;
 use std::path::{Path, PathBuf};
 
 use serde::Serialize;
-use sha2::{Digest, Sha256};
 
 use super::storage::{io_err, rename_noreplace, safe_join, temp_path, StorageError};
 
-/// Directory (at the workspace root) holding imported files.
+/// Directory (inside `notes/`) holding imported files.
 pub const ASSETS_DIR: &str = "assets";
 /// Largest file accepted as an asset.
 pub const MAX_ASSET_BYTES: u64 = 50 * 1024 * 1024;
 /// Largest text file accepted as a note.
 pub const MAX_NOTE_BYTES: u64 = 5 * 1024 * 1024;
 
-/// Hex characters of the content hash used as a file name.
-const HASH_CHARS: usize = 10;
+/// Longest sanitized asset file name, before the extension.
+const MAX_STEM_CHARS: usize = 64;
 
 /// How the editor should reference an imported file.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize)]
@@ -33,12 +33,12 @@ pub enum AssetKind {
     Other,
 }
 
-/// The result of importing a file into `assets/`.
+/// The result of importing a file into `notes/assets/`.
 #[derive(Debug, Clone, Serialize)]
 pub struct ImportedAsset {
-    /// File name inside `assets/` (`ab12cd34ef.png`).
+    /// File name inside `notes/assets/` (`My-Photo.png`).
     pub name: String,
-    /// Path relative to the workspace root (`assets/ab12cd34ef.png`).
+    /// Path relative to the `notes/` directory (`assets/My-Photo.png`).
     pub relative: String,
     pub kind: AssetKind,
     /// The original file name, for link text.
@@ -82,72 +82,127 @@ fn check_regular_file(source: &Path, limit: u64) -> Result<u64, StorageError> {
     Ok(meta.len())
 }
 
-fn short_hash(source: &Path) -> Result<String, StorageError> {
-    let mut file = File::open(source).map_err(|e| io_err(source, e))?;
-    let mut hasher = Sha256::new();
-    let mut buffer = [0u8; 64 * 1024];
-    loop {
-        let read = file.read(&mut buffer).map_err(|e| io_err(source, e))?;
-        if read == 0 {
-            break;
+/// A filesystem- and Markdown-safe stem: letters, digits, `_`, `.` and `-`
+/// kept, everything else collapsed to `-`, leading/trailing separators trimmed.
+fn sanitize_stem(stem: Option<&OsStr>) -> String {
+    let raw = stem
+        .map(|s| s.to_string_lossy().into_owned())
+        .unwrap_or_default();
+    let mut out = String::new();
+    let mut last_dash = false;
+    for ch in raw.chars() {
+        if ch.is_ascii_alphanumeric() || ch == '_' || ch == '.' {
+            out.push(ch);
+            last_dash = false;
+        } else if !last_dash {
+            out.push('-');
+            last_dash = true;
         }
-        hasher.update(&buffer[..read]);
     }
-    let digest = hasher.finalize();
-    let mut hex = String::with_capacity(HASH_CHARS);
-    for byte in digest.iter().take(HASH_CHARS.div_ceil(2)) {
-        hex.push_str(&format!("{byte:02x}"));
+    let trimmed = out.trim_matches(|c| c == '-' || c == '.');
+    let limited: String = trimmed.chars().take(MAX_STEM_CHARS).collect();
+    if limited.is_empty() {
+        "file".to_string()
+    } else {
+        limited
     }
-    hex.truncate(HASH_CHARS);
-    Ok(hex)
 }
 
-/// Copy `source` into `<root>/assets/` under its content hash.
-pub fn import_asset(root: &Path, source: &Path) -> Result<ImportedAsset, StorageError> {
-    check_regular_file(source, MAX_ASSET_BYTES)?;
-    let hash = short_hash(source)?;
-    let extension = safe_extension(source);
-    let name = if extension.is_empty() {
-        hash
-    } else {
-        format!("{hash}.{extension}")
-    };
+/// Whether two files hold identical bytes.
+fn files_equal(a: &Path, b: &Path) -> Result<bool, StorageError> {
+    let size_a = fs::metadata(a).map_err(|e| io_err(a, e))?.len();
+    let size_b = fs::metadata(b).map_err(|e| io_err(b, e))?.len();
+    if size_a != size_b {
+        return Ok(false);
+    }
+    let mut file_a = File::open(a).map_err(|e| io_err(a, e))?;
+    let mut file_b = File::open(b).map_err(|e| io_err(b, e))?;
+    let mut buf_a = [0u8; 64 * 1024];
+    let mut buf_b = [0u8; 64 * 1024];
+    loop {
+        let read_a = file_a.read(&mut buf_a).map_err(|e| io_err(a, e))?;
+        let read_b = file_b.read(&mut buf_b).map_err(|e| io_err(b, e))?;
+        if read_a != read_b || buf_a[..read_a] != buf_b[..read_b] {
+            return Ok(false);
+        }
+        if read_a == 0 {
+            return Ok(true);
+        }
+    }
+}
 
-    let dir = root.join(ASSETS_DIR);
+/// Copy `source` into `<notes>/assets/` under a readable name derived from it.
+pub fn import_asset(notes_dir: &Path, source: &Path) -> Result<ImportedAsset, StorageError> {
+    check_regular_file(source, MAX_ASSET_BYTES)?;
+
+    let extension = safe_extension(source);
+    let ext_part = if extension.is_empty() {
+        String::new()
+    } else {
+        format!(".{extension}")
+    };
+    let stem = sanitize_stem(source.file_stem());
+    let original_name = source
+        .file_name()
+        .map(|n| n.to_string_lossy().into_owned())
+        .unwrap_or_else(|| format!("{stem}{ext_part}"));
+
+    let dir = notes_dir.join(ASSETS_DIR);
     fs::create_dir_all(&dir).map_err(|e| io_err(&dir, e))?;
-    let destination = dir.join(&name);
-    let mut existed = destination.exists();
-    if !existed {
-        // Copy to a unique temp file beside the target, then move it into
-        // place without replacing anything: a crash never leaves a
-        // half-written asset under its final name, and two imports of the
-        // same bytes at once cannot trample each other's temp file.
-        let temp = temp_path(&destination);
-        fs::copy(source, &temp).map_err(|e| io_err(source, e))?;
-        match rename_noreplace(&temp, &destination) {
-            Ok(()) => {}
-            Err(err) if err.kind() == std::io::ErrorKind::AlreadyExists => {
-                // Same name means same content hash: the other import won.
+
+    // Copy to a unique temp file beside the target, then move it into place
+    // without replacing anything: a crash never leaves a half-written asset
+    // under its final name, and two imports of the same bytes at once cannot
+    // trample each other's temp file.
+    let temp = temp_path(&dir.join("asset"));
+    fs::copy(source, &temp).map_err(|e| io_err(source, e))?;
+
+    let mut n = 1;
+    loop {
+        let name = if n == 1 {
+            format!("{stem}{ext_part}")
+        } else {
+            format!("{stem} {n}{ext_part}")
+        };
+        let destination = dir.join(&name);
+        if destination.exists() {
+            // Same name and bytes: reuse the existing asset.
+            if files_equal(&destination, &temp)? {
                 let _ = fs::remove_file(&temp);
-                existed = true;
+                return Ok(ImportedAsset {
+                    relative: format!("{ASSETS_DIR}/{name}"),
+                    kind: classify(source),
+                    original_name,
+                    name,
+                    existed: true,
+                });
             }
+            if n < 10_000 {
+                n += 1;
+                continue;
+            }
+            let _ = fs::remove_file(&temp);
+            return Err(StorageError::AlreadyExists(destination));
+        }
+        match rename_noreplace(&temp, &destination) {
+            Ok(()) => {
+                return Ok(ImportedAsset {
+                    relative: format!("{ASSETS_DIR}/{name}"),
+                    kind: classify(source),
+                    original_name,
+                    name,
+                    existed: false,
+                })
+            }
+            // Lost a race to create this name: re-check it on the next pass,
+            // so an identical concurrent import shares the file.
+            Err(err) if err.kind() == std::io::ErrorKind::AlreadyExists => continue,
             Err(err) => {
                 let _ = fs::remove_file(&temp);
                 return Err(io_err(&destination, err));
             }
         }
     }
-
-    Ok(ImportedAsset {
-        relative: format!("{ASSETS_DIR}/{name}"),
-        kind: classify(source),
-        original_name: source
-            .file_name()
-            .map(|n| n.to_string_lossy().into_owned())
-            .unwrap_or_else(|| name.clone()),
-        name,
-        existed,
-    })
 }
 
 /// Import a text file as a Markdown note inside `folder` (relative to
@@ -219,65 +274,61 @@ pub fn import_note(
 mod tests {
     use super::*;
 
-    #[test]
-    fn imports_with_short_hash_name_and_dedupes() {
-        let dir = tempfile::tempdir().unwrap();
-        let src = dir.path().join("My Photo (1).PNG");
-        fs::write(&src, b"image-bytes").unwrap();
-        let root = dir.path().join("ws");
-
-        let first = import_asset(&root, &src).unwrap();
-        assert_eq!(first.kind, AssetKind::Image);
-        assert!(!first.existed);
-        assert!(first.name.ends_with(".png"));
-        assert_eq!(first.name.len(), HASH_CHARS + ".png".len());
-        assert!(root.join(&first.relative).exists());
-        assert_eq!(first.original_name, "My Photo (1).PNG");
-
-        // Same bytes under another name land on the same asset.
-        let twin = dir.path().join("copy.png");
-        fs::write(&twin, b"image-bytes").unwrap();
-        let second = import_asset(&root, &twin).unwrap();
-        assert!(second.existed);
-        assert_eq!(second.name, first.name);
-
-        // Different bytes get a different name.
-        let other = dir.path().join("other.png");
-        fs::write(&other, b"different").unwrap();
-        assert_ne!(import_asset(&root, &other).unwrap().name, first.name);
-
-        // No temp files remain.
-        let leftovers = fs::read_dir(root.join(ASSETS_DIR))
+    fn asset_files(notes: &Path) -> Vec<String> {
+        let mut names: Vec<String> = fs::read_dir(notes.join(ASSETS_DIR))
             .unwrap()
-            .filter(|e| {
-                e.as_ref()
-                    .unwrap()
-                    .file_name()
-                    .to_string_lossy()
-                    .ends_with(".tmp")
-            })
-            .count();
-        assert_eq!(leftovers, 0);
+            .map(|entry| entry.unwrap().file_name().to_string_lossy().into_owned())
+            .collect();
+        names.sort();
+        names
     }
 
     #[test]
-    fn rejects_directories_and_odd_extensions_are_dropped() {
+    fn imports_with_readable_names_and_dedupes() {
         let dir = tempfile::tempdir().unwrap();
-        let root = dir.path().join("ws");
+        let notes = dir.path().join("notes");
+        let src = dir.path().join("My Photo.PNG");
+        fs::write(&src, b"image-bytes").unwrap();
+
+        let first = import_asset(&notes, &src).unwrap();
+        assert_eq!(first.kind, AssetKind::Image);
+        assert!(!first.existed);
+        assert_eq!(first.name, "My-Photo.png");
+        assert_eq!(first.relative, "assets/My-Photo.png");
+        assert!(notes.join(&first.relative).exists());
+        assert_eq!(first.original_name, "My Photo.PNG");
+
+        // Same bytes under the same name are reused.
+        let second = import_asset(&notes, &src).unwrap();
+        assert!(second.existed);
+        assert_eq!(second.name, "My-Photo.png");
+        assert_eq!(asset_files(&notes), ["My-Photo.png"]);
+
+        // Different bytes with the same name take the next free name.
+        fs::write(&src, b"different").unwrap();
+        let third = import_asset(&notes, &src).unwrap();
+        assert!(!third.existed);
+        assert_eq!(third.name, "My-Photo 2.png");
+    }
+
+    #[test]
+    fn rejects_directories_and_sanitizes_odd_names() {
+        let dir = tempfile::tempdir().unwrap();
+        let notes = dir.path().join("notes");
         assert!(matches!(
-            import_asset(&root, dir.path()),
+            import_asset(&notes, dir.path()),
             Err(StorageError::NotAFile(_))
         ));
         assert!(matches!(
-            import_asset(&root, &dir.path().join("missing.png")),
+            import_asset(&notes, &dir.path().join("missing.png")),
             Err(StorageError::Io { .. })
         ));
 
-        let weird = dir.path().join("data.a b!");
+        let weird = dir.path().join("..weird name!.txt");
         fs::write(&weird, b"x").unwrap();
-        let imported = import_asset(&root, &weird).unwrap();
-        assert_eq!(imported.name.len(), HASH_CHARS);
-        assert_eq!(imported.kind, AssetKind::Other);
+        let imported = import_asset(&notes, &weird).unwrap();
+        assert_eq!(imported.name, "weird-name.txt");
+        assert_eq!(imported.kind, AssetKind::Text);
     }
 
     #[test]
@@ -347,24 +398,23 @@ mod tests {
     fn concurrent_imports_of_the_same_asset_share_one_file() {
         use std::sync::{Arc, Barrier};
         let dir = tempfile::tempdir().unwrap();
-        let root = Arc::new(dir.path().join("ws"));
+        let notes = Arc::new(dir.path().join("notes"));
         let src = dir.path().join("pic.png");
         fs::write(&src, b"same-bytes").unwrap();
         let barrier = Arc::new(Barrier::new(10));
         let handles: Vec<_> = (0..10)
             .map(|_| {
-                let (root, src, barrier) = (Arc::clone(&root), src.clone(), Arc::clone(&barrier));
+                let (notes, src, barrier) = (Arc::clone(&notes), src.clone(), Arc::clone(&barrier));
                 std::thread::spawn(move || {
                     barrier.wait();
-                    import_asset(&root, &src).unwrap().name
+                    import_asset(&notes, &src).unwrap().name
                 })
             })
             .collect();
         let names: std::collections::BTreeSet<_> =
             handles.into_iter().map(|h| h.join().unwrap()).collect();
-        assert_eq!(names.len(), 1);
-        let files: Vec<_> = fs::read_dir(root.join(ASSETS_DIR)).unwrap().collect();
-        assert_eq!(files.len(), 1, "one asset and no leftover temp files");
+        assert_eq!(names, ["pic.png".to_string()].into_iter().collect());
+        assert_eq!(asset_files(&notes), ["pic.png"], "one asset, no temp files");
     }
 
     #[test]
