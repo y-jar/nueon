@@ -141,6 +141,8 @@ export const ui = $state({
   suppressedConfirms: [] as string[],
   /** Whether the Markdown editor shows line numbers (workspace preference). */
   showLineNumbers: true,
+  /** Keybind overrides (command id → CodeMirror combo); missing = default. */
+  keybinds: {} as Record<string, string>,
   confirm: null as ConfirmRequest | null,
   toast: null as ToastState | null,
   trashOpen: false,
@@ -1232,6 +1234,7 @@ export async function init(): Promise<void> {
   try {
     ui.suppressedConfirms = await api.suppressedConfirms();
     ui.showLineNumbers = await api.editorLineNumbers();
+    ui.keybinds = await api.keybindsGet();
   } catch {
     // Best-effort; suppression just won't apply across reloads.
   }
@@ -1498,6 +1501,29 @@ export async function setEditorLineNumbers(show: boolean): Promise<void> {
 /** The absolute path of a workspace-relative note. */
 export function noteFilePath(path: string): string {
   return ui.root ? `${ui.root}/notes/${path}` : "";
+}
+
+/** Set (or clear when `null`) a keybind override and persist it. */
+export async function setKeybind(id: string, key: string | null): Promise<void> {
+  const next = { ...ui.keybinds };
+  if (key === null) delete next[id];
+  else next[id] = key;
+  ui.keybinds = next;
+  try {
+    await api.setKeybind(id, key);
+  } catch {
+    // Best-effort; the in-memory override still applies this session.
+  }
+}
+
+/** Clear every keybind override, restoring the defaults. */
+export async function resetKeybinds(): Promise<void> {
+  ui.keybinds = {};
+  try {
+    await api.resetKeybinds();
+  } catch {
+    // Best-effort.
+  }
 }
 
 let toastCounter = 0;

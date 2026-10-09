@@ -1,5 +1,6 @@
 //! App-global configuration: the registry of known workspaces.
 
+use std::collections::BTreeMap;
 use std::fs;
 use std::path::{Path, PathBuf};
 
@@ -46,6 +47,11 @@ pub struct GlobalConfig {
     pub workspaces: Vec<WorkspaceEntry>,
     /// Window geometry and dock layout.
     pub window: WindowLayout,
+    /// Keybind overrides shared across every workspace: command id → CodeMirror
+    /// key combo. A missing id uses its built-in default; an empty value
+    /// unbinds it.
+    #[serde(default, skip_serializing_if = "BTreeMap::is_empty")]
+    pub keybinds: BTreeMap<String, String>,
 }
 
 /// Result type for global configuration operations.
@@ -187,6 +193,25 @@ mod tests {
         let loaded = GlobalConfig::load_from(&path).unwrap();
         assert_eq!(loaded, config);
         assert_eq!(GlobalConfig::display_name(&loaded.workspaces[1]), "two");
+    }
+
+    #[test]
+    fn keybinds_round_trip_and_default_empty() {
+        let dir = tempfile::tempdir().unwrap();
+        let path = dir.path().join("config.toml");
+
+        let mut config = GlobalConfig::default();
+        assert!(config.keybinds.is_empty());
+        config.keybinds.insert("bold".into(), "Mod-Alt-b".into());
+        config.keybinds.insert("italic".into(), String::new());
+        config.save_to(&path).unwrap();
+
+        let loaded = GlobalConfig::load_from(&path).unwrap();
+        assert_eq!(
+            loaded.keybinds.get("bold").map(String::as_str),
+            Some("Mod-Alt-b")
+        );
+        assert_eq!(loaded.keybinds.get("italic").map(String::as_str), Some(""));
     }
 
     #[test]
