@@ -81,6 +81,9 @@ The authoritative domain model:
   reference tag). Empty cells write no tag; cycles are rejected.
 - `export_table.rs` — `export_table(table, Csv|Tsv|Json)`: delimited output is
   the inverse of the importer (round-trip tested), JSON is a lossless snapshot.
+  `export_anki(table, &AnkiExportOptions)` writes an Anki-importable text file
+  (file headers for separator/notetype/deck/columns, a tags column from boolean
+  flags, and a stable GUID column for update-in-place re-imports).
 - `export.rs` — Markdown → HTML (for PDF printing) and a hand-built ODT writer.
 
 ## Tier 2 — Tauri IPC (`nueon-tauri`)
@@ -116,7 +119,8 @@ Command groups (see `src-tauri/src/commands/`):
   `parent_candidates`, `derivation_tree`, `derivation_graph`)
 - grid view state (`grid_view_get`, `grid_view_set`)
 - import/export (`import_detect`, `import_preview`, `import_apply`,
-  `export_table`, `export_document`, `import_asset`, `import_drop`)
+  `export_table`, `export_anki`, `export_document`, `import_asset`,
+  `import_drop`)
 - translation (`list_presets`, `save_preset`, `delete_preset`,
   `execute_translation`, `create_translation_word`, `translation_options`,
   `set_translation_options`, `export_presets`, `import_presets`)

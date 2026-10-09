@@ -167,6 +167,7 @@ pub fn run() {
             commands::import_preview,
             commands::import_apply,
             commands::export_table,
+            commands::export_anki,
             commands::import_asset,
             commands::copy_into_notes,
             commands::window_spawn,

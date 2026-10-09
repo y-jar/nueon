@@ -333,7 +333,8 @@
     "export": "Export",
     "exportCsv": "CSV (.csv)",
     "exportTsv": "TSV (.tsv)",
-    "exportJson": "JSON backup (.json)"
+    "exportJson": "JSON backup (.json)",
+    "exportAnki": "Anki (.txt)"
   },
   "inspector": {
     "title": "Inspector",

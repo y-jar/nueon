@@ -910,3 +910,30 @@ export const exportTable = (
   format: TableFormat,
   destination: string,
 ): Promise<string> => invoke("export_table", { name, format, destination });
+
+// -- Anki export ---------------------------------------------------------
+export type AnkiSeparator =
+  | "tab"
+  | "comma"
+  | "semicolon"
+  | "space"
+  | "pipe"
+  | "colon";
+
+/** Options for an Anki text-file export (all optional; server defaults). */
+export interface AnkiExportOptions {
+  separator?: AnkiSeparator;
+  html?: boolean;
+  deck?: string;
+  notetype?: string;
+  include_parent?: boolean;
+  include_tags?: boolean;
+  include_guid?: boolean;
+}
+
+/** Export a table as an Anki-importable text file. */
+export const exportAnki = (
+  name: string,
+  options: AnkiExportOptions,
+  destination: string,
+): Promise<string> => invoke("export_anki", { name, options, destination });

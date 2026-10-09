@@ -11,7 +11,7 @@ use std::sync::Mutex;
 use tauri::{AppHandle, State};
 
 use nueon_core::import as core;
-use nueon_core::{Detection, ImportOptions, ImportPlan, ImportReport, Preview};
+use nueon_core::{AnkiExportOptions, Detection, ImportOptions, ImportPlan, ImportReport, Preview};
 
 use super::changed;
 use crate::state::AppState;
@@ -68,6 +68,22 @@ pub fn export_table(
     state
         .workspace()?
         .export_table(&name, format, Path::new(&destination))
+        .map_err(|err| err.to_string())?;
+    Ok(destination)
+}
+
+/// Export a table as an Anki-importable text file.
+#[tauri::command]
+pub fn export_anki(
+    state: State<'_, Shared>,
+    name: String,
+    options: AnkiExportOptions,
+    destination: String,
+) -> Result<String, String> {
+    let state = state.lock().map_err(|_| "state poisoned".to_string())?;
+    state
+        .workspace()?
+        .export_anki(&name, &options, Path::new(&destination))
         .map_err(|err| err.to_string())?;
     Ok(destination)
 }

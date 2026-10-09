@@ -21,7 +21,10 @@ pub use config::{
     TableRoleConfig, TextDirection, TilingLayout, TranslationConfig, TranslationOptions, UiLayout,
     WindowGeometry, WorkspaceSettings,
 };
-pub use export_table::{export_columns, export_delimited, export_table, ExportColumn, TableFormat};
+pub use export_table::{
+    export_anki, export_columns, export_delimited, export_table, AnkiExportOptions, AnkiSeparator,
+    ExportColumn, TableFormat,
+};
 pub use global::{GlobalConfig, WindowLayout, WorkspaceEntry};
 pub use import::{
     detect, import_apply, import_preview, ColumnProposal, ColumnRole, Detection, DuplicateConflict,

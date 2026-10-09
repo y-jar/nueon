@@ -3111,6 +3111,39 @@ async function main() {
       label: "paka re-parented to velo",
     });
   });
+
+  // -- probe 56: grid Anki export option ------------------------------------
+  await probe("56-grid-anki-export", async () => {
+    await openActivity("Dictionary");
+    await waitJs(`!!document.querySelector('.table-list')`, { label: "tables panel" });
+    const opened = await js(
+      `const b = [...document.querySelectorAll('.table-list .table-row .tree-name')]
+         .find((x) => x.textContent.trim().startsWith('lex'));
+       if (b) b.click();
+       return !!b;`,
+    );
+    if (!opened) throw new Error("no 'lex' table in the panel");
+    await waitJs(`!!document.querySelector('.dict-grid')`, { label: "lex grid" });
+
+    const openedMenu = await js(
+      `const b = [...document.querySelectorAll('.grid-toolbar .popover-trigger')]
+         .find((x) => x.textContent.trim() === 'Export');
+       if (b) b.click();
+       return !!b;`,
+    );
+    if (!openedMenu) throw new Error("no export trigger in the grid toolbar");
+    await waitJs(`!!document.querySelector('.popover-panel .picker-body')`, {
+      label: "grid export menu",
+    });
+    const items = await js(
+      `return [...document.querySelectorAll('.popover-panel .picker-body button')]
+         .map((b) => b.textContent.trim());`,
+    );
+    if (!items.includes("Anki (.txt)")) {
+      throw new Error(`missing Anki export: ${JSON.stringify(items)}`);
+    }
+    await js(`document.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape' })); return true;`);
+  });
 }
 
 try {

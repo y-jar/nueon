@@ -414,6 +414,21 @@ impl Workspace {
         storage::atomic_write(destination, text.as_bytes())
     }
 
+    /// Export a table as an Anki-importable text file (atomic write).
+    pub fn export_anki(
+        &self,
+        name: &str,
+        options: &crate::export_table::AnkiExportOptions,
+        destination: &Path,
+    ) -> Result<(), StorageError> {
+        let table = self
+            .dictionary
+            .table(name)
+            .ok_or_else(|| StorageError::TableMissing(name.to_string()))?;
+        let text = crate::export_table::export_anki(table, options);
+        storage::atomic_write(destination, text.as_bytes())
+    }
+
     /// Write a table to its already-resolved file.
     pub fn save_table(&mut self, name: &str) -> Result<(), StorageError> {
         let table = self

@@ -1013,6 +1013,24 @@
     }
   }
 
+  /** Save the active table as an Anki-importable text file (`.txt`). */
+  async function exportAnki() {
+    const name = doc.currentTable;
+    if (!name) return;
+    try {
+      const destination = await save({
+        defaultPath: `${name}.txt`,
+        filters: [{ name: "Anki text", extensions: ["txt"] }],
+      });
+      if (!destination) return;
+      ui.status = $t("status.exporting", { values: { name } });
+      ui.status = await api.exportAnki(name, { deck: name }, destination);
+      ui.status = $t("status.exported", { values: { name, path: destination } });
+    } catch (e) {
+      ui.status = $t("status.exportFailed", { values: { error: String(e) } });
+    }
+  }
+
   async function doUndo() {
     await api.undo();
     onRefresh();
@@ -1100,6 +1118,7 @@
         <button onclick={() => exportAs("csv")}>{$t("grid.exportCsv")}</button>
         <button onclick={() => exportAs("tsv")}>{$t("grid.exportTsv")}</button>
         <button onclick={() => exportAs("json")}>{$t("grid.exportJson")}</button>
+        <button onclick={exportAnki}>{$t("grid.exportAnki")}</button>
       </div>
     </Popover>
 
