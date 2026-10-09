@@ -445,6 +445,10 @@ function seedWorkspace() {
               class: "verb",
               rows: [{ when: { tense: "past" }, surface: "i", kind: "suffix" }],
             },
+            {
+              class: "noun",
+              rows: [{ when: { number: "plural" }, surface: "u", kind: "suffix" }],
+            },
           ],
         },
       },
@@ -465,12 +469,20 @@ function seedWorkspace() {
             kind: "text",
             builtin: true,
           },
+          {
+            name: "pos",
+            description: "Part of speech.",
+            kind: "tag_list",
+          },
         ],
         entries: [
           {
             id: "11111111-1111-4111-8111-111111111111",
             wordname: "kala",
-            values: { definition: { type: "tag_list", value: ["dog"] } },
+            values: {
+              definition: { type: "tag_list", value: ["dog"] },
+              pos: { type: "tag_list", value: ["noun"] },
+            },
           },
           {
             id: "22222222-2222-4222-8222-222222222222",
@@ -1736,6 +1748,46 @@ async function main() {
     if (!(await js(`return !!document.querySelector('.runner .status-badge.ok')`))) {
       throw new Error("class-slot translation did not report complete");
     }
+  });
+
+  // -- probe 27: an inflected input selects its feature by default ---------
+  await probe("27-inferred-plural-inflection", async () => {
+    await openActivity("Translation");
+    await waitJs(`!!document.querySelector('.translation')`, {
+      label: "translation view",
+    });
+    await js(
+      `const b = [...document.querySelectorAll('.translation-toolbar .mode-switch button')]
+         .find((x) => x.textContent.trim() === 'Word for word');
+       if (b) b.click();
+       return !!b;`,
+    );
+    await waitJs(`!!document.querySelector('.feature-bar')`, { label: "feature bar" });
+
+    const type = (text) =>
+      js(`const t = document.querySelector('.runner textarea');
+        t.value = ${JSON.stringify(text)};
+        t.dispatchEvent(new Event('input', { bubbles: true }));
+        return true;`);
+    const pick = (label) =>
+      js(`const b = [...document.querySelectorAll('.feature-bar button')]
+         .find((x) => x.textContent.trim() === ${JSON.stringify(label)});
+       if (b) b.click();
+       return !!b;`);
+
+    // "dogs" implies plural, so the noun paradigm appends "u".
+    await type("dogs");
+    await waitJs(
+      `(document.querySelector('.runner .output')?.textContent ?? '').trim() === 'kakau'`,
+      { label: "inferred plural inflected" },
+    );
+
+    // The feature bar can still override it back to singular.
+    if (!(await pick("Singular"))) throw new Error("no Singular button");
+    await waitJs(
+      `(document.querySelector('.runner .output')?.textContent ?? '').trim() === 'kaka'`,
+      { label: "explicit singular overrides" },
+    );
   });
 }
 

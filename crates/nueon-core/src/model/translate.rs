@@ -158,6 +158,20 @@ pub fn lemma_forms(word: &str) -> Vec<String> {
     forms
 }
 
+/// Feature selections implied by an English surface form, used as defaults a
+/// user's feature-bar choice can still override. A trailing plural `-s`/`-es`/
+/// `-ies` (the same shapes [`lemma_forms`] strips) implies `number = plural`.
+pub fn inferred_features(word: &str) -> BTreeMap<String, String> {
+    let mut features = BTreeMap::new();
+    let plural = (word.ends_with("ies") && word.len() > 3)
+        || (word.ends_with("es") && word.len() > 2)
+        || (word.ends_with('s') && !word.ends_with("ss") && word.len() > 1);
+    if plural {
+        features.insert("number".to_string(), "plural".to_string());
+    }
+    features
+}
+
 /// Add the stem with a doubled final consonant reduced (`runn` → `run`).
 fn add_degeminated(forms: &mut Vec<String>, stem: &str) {
     let bytes = stem.as_bytes();
@@ -196,6 +210,9 @@ struct Match<'a> {
     affix_gloss: String,
     /// Whether the affix attaches before the root.
     prefix: bool,
+    /// Default feature selections the token's surface implies (e.g. a plural
+    /// ending), which explicit selections may override.
+    features: BTreeMap<String, String>,
 }
 
 fn collect_for_form<'a>(
@@ -231,6 +248,7 @@ fn matching_entries<'a>(
 ) -> Vec<Match<'a>> {
     let mut exact = Vec::new();
     let mut partial = Vec::new();
+    let features = inferred_features(&token.normalized);
     for form in lemma_forms(&token.normalized) {
         collect_for_form(dict, &form, &mut exact, &mut partial);
     }
@@ -244,6 +262,7 @@ fn matching_entries<'a>(
                 affix: String::new(),
                 affix_gloss: String::new(),
                 prefix: false,
+                features: features.clone(),
             })
             .collect();
     }
@@ -279,6 +298,7 @@ fn matching_entries<'a>(
                 affix: rule.conlang.clone(),
                 affix_gloss: rule.english.to_uppercase(),
                 prefix: rule.kind == AffixKind::Prefix,
+                features: features.clone(),
             });
         }
     }
@@ -292,6 +312,8 @@ struct Picked {
     affix: String,
     affix_gloss: String,
     prefix: bool,
+    /// Default feature selections implied by the token's surface.
+    features: BTreeMap<String, String>,
 }
 
 /// Translate `input` using `grid`, without any feature morphology.
@@ -347,6 +369,7 @@ pub fn translate_with(
                     affix: matched.affix.clone(),
                     affix_gloss: matched.affix_gloss.clone(),
                     prefix: matched.prefix,
+                    features: matched.features.clone(),
                 });
             }
             _ => {
@@ -362,6 +385,7 @@ pub fn translate_with(
                             affix: matched.affix.clone(),
                             affix_gloss: matched.affix_gloss.clone(),
                             prefix: matched.prefix,
+                            features: matched.features.clone(),
                         })
                     }
                     None => conflicts.push(index),
@@ -586,6 +610,7 @@ pub fn translate_direct_with(
                 affix: candidates[0].affix.clone(),
                 affix_gloss: candidates[0].affix_gloss.clone(),
                 prefix: candidates[0].prefix,
+                features: candidates[0].features.clone(),
             }),
             _ => {
                 let picked = choices
@@ -596,6 +621,7 @@ pub fn translate_direct_with(
                         affix: matched.affix.clone(),
                         affix_gloss: matched.affix_gloss.clone(),
                         prefix: matched.prefix,
+                        features: matched.features.clone(),
                     });
                 if picked.is_none() {
                     conflicts.push(index);
@@ -672,6 +698,19 @@ fn word_class(entry: &WordEntry) -> Option<&str> {
     }
 }
 
+/// Merge a token's inferred feature defaults with the caller's explicit
+/// selections; an explicit selection wins over the inferred default.
+fn effective_selections(
+    explicit: &BTreeMap<String, String>,
+    inferred: &BTreeMap<String, String>,
+) -> BTreeMap<String, String> {
+    let mut selections = inferred.clone();
+    for (feature, value) in explicit {
+        selections.insert(feature.clone(), value.clone());
+    }
+    selections
+}
+
 /// The paradigm ending for `id`'s class given the selected features:
 /// `(surface, is_prefix, labels)`.
 fn entry_morphology(
@@ -701,7 +740,8 @@ fn render_word(
     let Some(picked) = picked else {
         return base;
     };
-    match entry_morphology(dict, picked.id, morphology, selections) {
+    let selections = effective_selections(selections, &picked.features);
+    match entry_morphology(dict, picked.id, morphology, &selections) {
         Some((surface, true, _)) => format!("{surface}{base}"),
         Some((surface, false, _)) => format!("{base}{surface}"),
         None => base,
@@ -718,8 +758,9 @@ fn render_gloss(
 ) -> Option<GlossMorpheme> {
     let mut morpheme = gloss_for(dict, picked)?;
     let picked = picked?;
+    let selections = effective_selections(selections, &picked.features);
     if let Some((surface, prefix, labels)) =
-        entry_morphology(dict, picked.id, morphology, selections)
+        entry_morphology(dict, picked.id, morphology, &selections)
     {
         morpheme.surface = if prefix {
             format!("{surface}-{}", morpheme.surface)
@@ -842,6 +883,7 @@ fn render(slots: &[SlotOutcome], separator: &str) -> String {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::config::{Paradigm, ParadigmRow};
     use crate::model::{FieldType, FieldValue, TagDef};
     use crate::translation::ClauseSlot;
 
@@ -938,6 +980,89 @@ mod tests {
         let grid = grid(vec![tag("Subject")]);
         let report = translate(&dict, &grid, " ", "dogz", &HashMap::new(), &rules);
         assert!(report.complete);
+        assert_eq!(report.output, "kalai");
+    }
+
+    #[test]
+    fn inferred_features_detect_plural() {
+        let plural = |word: &str| inferred_features(word).get("number").cloned();
+        assert_eq!(plural("dogs"), Some("plural".to_string()));
+        assert_eq!(plural("boxes"), Some("plural".to_string()));
+        assert_eq!(plural("cities"), Some("plural".to_string()));
+        assert!(inferred_features("dog").is_empty());
+        // A word ending in a doubled `s` is not a plural.
+        assert!(inferred_features("glass").is_empty());
+    }
+
+    fn noun_plural() -> Morphology {
+        Morphology {
+            features: Morphology::default().features,
+            paradigms: vec![Paradigm {
+                class: "noun".into(),
+                rows: vec![ParadigmRow {
+                    when: BTreeMap::from([("number".to_string(), "plural".to_string())]),
+                    surface: "i".into(),
+                    kind: AffixKind::Suffix,
+                }],
+            }],
+        }
+    }
+
+    fn noun_dict() -> Dictionary {
+        let mut dict = Dictionary::new();
+        dict.add_table("t");
+        dict.add_tag("t", TagDef::new(POS_TAG, FieldType::TagList));
+        dict.add_entry("t", classed("kala", "dog", "noun"));
+        dict
+    }
+
+    #[test]
+    fn a_plural_input_selects_the_plural_feature() {
+        let dict = noun_dict();
+        let grid = grid(vec![ClauseSlot::Wildcard]);
+        let report = translate_with(
+            &dict,
+            &grid,
+            " ",
+            "dogs",
+            &HashMap::new(),
+            &no_affixes(),
+            &noun_plural(),
+            &BTreeMap::new(),
+        );
+        assert_eq!(report.output, "kalai");
+    }
+
+    #[test]
+    fn an_explicit_selection_overrides_the_inferred_plural() {
+        let dict = noun_dict();
+        let grid = grid(vec![ClauseSlot::Wildcard]);
+        let explicit = BTreeMap::from([("number".to_string(), "singular".to_string())]);
+        let report = translate_with(
+            &dict,
+            &grid,
+            " ",
+            "dogs",
+            &HashMap::new(),
+            &no_affixes(),
+            &noun_plural(),
+            &explicit,
+        );
+        assert_eq!(report.output, "kala");
+    }
+
+    #[test]
+    fn a_plural_input_inflects_in_direct_mode() {
+        let dict = noun_dict();
+        let report = translate_direct_with(
+            &dict,
+            " ",
+            "dogs",
+            &HashMap::new(),
+            &no_affixes(),
+            &noun_plural(),
+            &BTreeMap::new(),
+        );
         assert_eq!(report.output, "kalai");
     }
 
