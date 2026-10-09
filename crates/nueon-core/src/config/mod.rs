@@ -18,5 +18,6 @@ pub use morphology::{Feature, FeatureValue, Morphology, Paradigm, ParadigmRow, P
 pub use phonology::{check_word, Phoneme, PhonemeKind, PhonologyConfig, Violation};
 pub use settings::{GridViewState, SortSpec, UiLayout, WorkspaceSettings};
 pub use translation::{
-    AffixKind, AffixRule, TranslationConfig, TranslationMode, TranslationOptions,
+    AffixKind, AffixRule, TableRole, TableRoleConfig, TranslationConfig, TranslationMode,
+    TranslationOptions,
 };

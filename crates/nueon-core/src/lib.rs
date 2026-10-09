@@ -16,8 +16,9 @@ pub mod workspace;
 pub use config::{
     AffixKind, AffixRule, Feature, FeatureValue, GrammarConfig, GrammarRule, GridViewState,
     GroupLayout, LanguageConfig, LayoutState, Morphology, Paradigm, ParadigmRow, SecondaryWindow,
-    SortSpec, SplitDirection, SplitLayout, TabKind, TabLayout, TextDirection, TilingLayout,
-    TranslationConfig, TranslationOptions, UiLayout, WindowGeometry, WorkspaceSettings,
+    SortSpec, SplitDirection, SplitLayout, TabKind, TabLayout, TableRole, TableRoleConfig,
+    TextDirection, TilingLayout, TranslationConfig, TranslationOptions, UiLayout, WindowGeometry,
+    WorkspaceSettings,
 };
 pub use export_table::{export_columns, export_delimited, export_table, ExportColumn, TableFormat};
 pub use global::{GlobalConfig, WindowLayout, WorkspaceEntry};

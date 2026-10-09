@@ -7,7 +7,7 @@ use tauri::{AppHandle, State};
 use uuid::Uuid;
 
 use nueon_core::model::TranslationReport;
-use nueon_core::{Morphology, SyntaxGrid, TranslationOptions, WordHit};
+use nueon_core::{Morphology, SyntaxGrid, TableRole, TableRoleConfig, TranslationOptions, WordHit};
 
 use super::changed;
 use crate::state::AppState;
@@ -53,6 +53,35 @@ pub fn delete_preset(
     drop(state);
     changed(&app, "translation");
     Ok(removed)
+}
+
+/// Every table's designation (vocab vs fixes) and its trigger/surface columns.
+#[tauri::command]
+pub fn table_roles_get(
+    state: State<'_, Shared>,
+) -> Result<std::collections::BTreeMap<String, TableRoleConfig>, String> {
+    let state = state.lock().map_err(|_| "state poisoned".to_string())?;
+    Ok(state.workspace()?.table_roles().clone())
+}
+
+/// Set one table's designation, then persist.
+#[tauri::command]
+pub fn set_table_role(
+    app: AppHandle,
+    state: State<'_, Shared>,
+    table: String,
+    role: TableRole,
+    trigger: Option<String>,
+    surface: Option<String>,
+) -> Result<bool, String> {
+    let mut state = state.lock().map_err(|_| "state poisoned".to_string())?;
+    let saved = state
+        .workspace_mut()?
+        .set_table_role(&table, role, trigger, surface)
+        .map_err(|err| err.to_string())?;
+    drop(state);
+    changed(&app, "config");
+    Ok(saved)
 }
 
 /// Execute the translation engine. `choices` maps token index → entry UUID to

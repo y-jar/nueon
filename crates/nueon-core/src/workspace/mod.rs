@@ -12,6 +12,7 @@ pub use storage::{StorageError, CONFIG_DIR, DICTIONARY_DIR, NOTES_DIR};
 pub use table_files::QuarantineWarning;
 pub use trash::{Restored, TrashKind, TrashRecord, RETENTION_DAYS, TRASH_DIR};
 
+use std::collections::BTreeMap;
 use std::path::{Path, PathBuf};
 use std::time::{Duration, Instant};
 
@@ -21,8 +22,8 @@ use self::table_files::TableFiles;
 
 use crate::config::{
     GrammarConfig, GridViewState, LanguageConfig, LayoutState, Morphology, PhonologyConfig,
-    TilingLayout, TranslationConfig, TranslationMode, TranslationOptions, UiLayout, WindowGeometry,
-    WorkspaceSettings, POS_TAG,
+    TableRole, TableRoleConfig, TilingLayout, TranslationConfig, TranslationMode,
+    TranslationOptions, UiLayout, WindowGeometry, WorkspaceSettings, POS_TAG,
 };
 use crate::export_table::TableFormat;
 use crate::model::{
@@ -1190,6 +1191,39 @@ impl Workspace {
         self.save_translation()
     }
 
+    /// A table's designation (vocab/fixes) and its trigger/surface columns.
+    pub fn table_roles(&self) -> &BTreeMap<String, TableRoleConfig> {
+        &self.translation.table_roles
+    }
+
+    /// Set a table's designation, then persist. `Vocab` with no trigger/surface
+    /// removes the entry (vocab is the default).
+    pub fn set_table_role(
+        &mut self,
+        table: &str,
+        role: TableRole,
+        trigger: Option<String>,
+        surface: Option<String>,
+    ) -> Result<bool, StorageError> {
+        if self.dictionary.table(table).is_none() {
+            return Ok(false);
+        }
+        if role == TableRole::Vocab && trigger.is_none() && surface.is_none() {
+            self.translation.table_roles.remove(table);
+        } else {
+            self.translation.table_roles.insert(
+                table.to_string(),
+                TableRoleConfig {
+                    role,
+                    trigger,
+                    surface,
+                },
+            );
+        }
+        self.save_translation()?;
+        Ok(true)
+    }
+
     /// Insert or replace a translation preset by name, then persist.
     pub fn save_preset(&mut self, grid: SyntaxGrid) -> Result<(), StorageError> {
         match self
@@ -1547,7 +1581,7 @@ impl Workspace {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::config::POS_TAG;
+    use crate::config::{TableRole, POS_TAG};
     use crate::model::{FieldType, FieldValue};
     use crate::vcs::git_available;
     use crate::WORDNAME_TAG;
@@ -2330,6 +2364,31 @@ mod tests {
 
         let missing = Uuid::new_v4();
         assert!(!ws.set_class("verbs", missing, Some("verb")).unwrap());
+    }
+
+    #[test]
+    fn set_table_role_records_and_clears_the_designation() {
+        let dir = tempfile::tempdir().unwrap();
+        let mut ws = Workspace::new(dir.path()).unwrap();
+        ws.create_table("fixes").unwrap();
+
+        assert!(ws.table_roles().is_empty());
+        assert!(ws
+            .set_table_role("fixes", TableRole::Fixes, Some("english".into()), None)
+            .unwrap());
+        let saved = ws.table_roles().get("fixes").unwrap();
+        assert_eq!(saved.role, TableRole::Fixes);
+        assert_eq!(saved.trigger.as_deref(), Some("english"));
+
+        // Vocab with no columns removes the entry: vocab is the default.
+        assert!(ws
+            .set_table_role("fixes", TableRole::Vocab, None, None)
+            .unwrap());
+        assert!(ws.table_roles().is_empty());
+
+        assert!(!ws
+            .set_table_role("missing", TableRole::Fixes, None, None)
+            .unwrap());
     }
 
     #[test]

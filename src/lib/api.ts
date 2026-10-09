@@ -510,6 +510,21 @@ export const createTranslationWord = (
   pos?: string | null,
 ): Promise<string | null> =>
   invoke("create_translation_word", { table, wordname, definition, tags, pos });
+export type TableRole = "vocab" | "fixes";
+export interface TableRoleConfig {
+  role: TableRole;
+  trigger?: string | null;
+  surface?: string | null;
+}
+export const tableRolesGet = (): Promise<Record<string, TableRoleConfig>> =>
+  invoke("table_roles_get");
+export const setTableRole = (
+  table: string,
+  role: TableRole,
+  trigger: string | null,
+  surface: string | null,
+): Promise<boolean> =>
+  invoke("set_table_role", { table, role, trigger, surface });
 export const translationOptions = (): Promise<TranslationOptions> =>
   invoke("translation_options");
 export const setTranslationOptions = (

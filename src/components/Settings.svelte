@@ -2,6 +2,7 @@
   import { onMount } from "svelte";
   import { t } from "svelte-i18n";
   import * as api from "../lib/api";
+  import { ui } from "../lib/state.svelte";
 
   let language = $state<api.LanguageConfig>({
     name: "",
@@ -11,6 +12,7 @@
     direction: "ltr",
   });
   let rules = $state<api.GrammarRule[]>([]);
+  let tableRoles = $state<Record<string, api.TableRoleConfig>>({});
   let status = $state("");
   let error = $state("");
 
@@ -20,7 +22,33 @@
     try {
       language = await api.languageGet();
       rules = (await api.grammarGet()).rules;
+      tableRoles = await api.tableRolesGet();
       applyDirection();
+      error = "";
+    } catch (e) {
+      error = String(e);
+    }
+  }
+
+  function roleOf(table: string): api.TableRoleConfig {
+    return (
+      tableRoles[table] ?? { role: "vocab", trigger: null, surface: null }
+    );
+  }
+
+  async function setRole(
+    table: string,
+    role: api.TableRole,
+    trigger: string | null = null,
+    surface: string | null = null,
+  ) {
+    try {
+      await api.setTableRole(table, role, trigger, surface);
+      tableRoles = {
+        ...tableRoles,
+        [table]: { role, trigger, surface },
+      };
+      status = $t("settings.saved");
       error = "";
     } catch (e) {
       error = String(e);
@@ -179,6 +207,65 @@
     </div>
   {/each}
   <button onclick={addRule}>{$t("settings.addRule")}</button>
+
+  <div class="pane-title">{$t("settings.tables")}</div>
+  <p class="muted">{$t("settings.tablesHint")}</p>
+  {#each ui.tables as table (table.name)}
+    {@const config = roleOf(table.name)}
+    {@const textColumns = table.tags
+      .filter((tag) => tag.kind === "text")
+      .map((tag) => tag.name)}
+    <div class="rule">
+      <div class="row">
+        <span class="grow">{table.name}</span>
+        <select
+          value={config.role}
+          onchange={(e) => setRole(table.name, e.currentTarget.value as api.TableRole)}
+        >
+          <option value="vocab">{$t("settings.roleVocab")}</option>
+          <option value="fixes">{$t("settings.roleFixes")}</option>
+        </select>
+      </div>
+      {#if config.role === "fixes"}
+        <label class="field"
+          >{$t("settings.triggerColumn")}
+          <select
+            value={config.trigger ?? ""}
+            onchange={(e) =>
+              setRole(
+                table.name,
+                "fixes",
+                e.currentTarget.value || null,
+                config.surface ?? null,
+              )}
+          >
+            <option value="">—</option>
+            {#each textColumns as name (name)}
+              <option value={name}>{name}</option>
+            {/each}
+          </select>
+        </label>
+        <label class="field"
+          >{$t("settings.surfaceColumn")}
+          <select
+            value={config.surface ?? ""}
+            onchange={(e) =>
+              setRole(
+                table.name,
+                "fixes",
+                config.trigger ?? null,
+                e.currentTarget.value || null,
+              )}
+          >
+            <option value="">{$t("settings.wordnameDefault")}</option>
+            {#each textColumns as name (name)}
+              <option value={name}>{name}</option>
+            {/each}
+          </select>
+        </label>
+      {/if}
+    </div>
+  {/each}
 
   {#if status}<p class="muted">{status}</p>{/if}
   {#if error}<p class="error">{error}</p>{/if}

@@ -30,6 +30,42 @@ pub struct AffixRule {
     pub conlang: String,
 }
 
+/// What a table is for. `Vocab` tables supply roots; `Fixes` tables supply
+/// morphemes (their `wordname` is the surface, a configured column the English
+/// trigger).
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum TableRole {
+    #[default]
+    Vocab,
+    Fixes,
+}
+
+/// A table's designation and, for `Fixes` tables, which columns hold the
+/// surface and the English trigger.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(default)]
+pub struct TableRoleConfig {
+    pub role: TableRole,
+    /// Column holding the English trigger (e.g. `s`, `ing`).
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub trigger: Option<String>,
+    /// Column holding the conlang surface with hyphen markers (e.g. `-i`);
+    /// defaults to the wordname when omitted.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub surface: Option<String>,
+}
+
+impl Default for TableRoleConfig {
+    fn default() -> Self {
+        Self {
+            role: TableRole::Vocab,
+            trigger: None,
+            surface: None,
+        }
+    }
+}
+
 /// How the translator assembles output.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default, Serialize, Deserialize)]
 #[serde(rename_all = "snake_case")]
@@ -80,6 +116,9 @@ pub struct TranslationConfig {
     /// Feature-based paradigms (tense/number/… realised on a word class).
     #[serde(default)]
     pub morphology: Morphology,
+    /// Per-table designations (vocab vs fixes), keyed by table name.
+    #[serde(default, skip_serializing_if = "BTreeMap::is_empty")]
+    pub table_roles: BTreeMap<String, TableRoleConfig>,
 }
 
 #[cfg(test)]
@@ -92,6 +131,27 @@ mod tests {
         assert!(config.default_rule.is_none());
         assert!(config.grids.is_empty());
         assert!(config.affixes.is_empty());
+    }
+
+    #[test]
+    fn table_roles_default_empty_and_round_trip() {
+        let config: TranslationConfig = serde_json::from_str("{}").unwrap();
+        assert!(config.table_roles.is_empty());
+
+        let mut config = TranslationConfig::default();
+        config.table_roles.insert(
+            "fixes".into(),
+            TableRoleConfig {
+                role: TableRole::Fixes,
+                trigger: Some("english".into()),
+                surface: None,
+            },
+        );
+        let json = serde_json::to_string(&config).unwrap();
+        let back: TranslationConfig = serde_json::from_str(&json).unwrap();
+        let entry = back.table_roles.get("fixes").unwrap();
+        assert_eq!(entry.role, TableRole::Fixes);
+        assert_eq!(entry.trigger.as_deref(), Some("english"));
     }
 
     #[test]

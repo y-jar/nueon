@@ -474,6 +474,11 @@ function seedWorkspace() {
             description: "Part of speech.",
             kind: "tag_list",
           },
+          {
+            name: "english",
+            description: "English trigger for a fixes table.",
+            kind: "text",
+          },
         ],
         entries: [
           {
@@ -1864,6 +1869,68 @@ async function main() {
       false,
       "search box hidden after Escape",
     );
+  });
+
+  // -- probe 29: table designations in Settings ----------------------------
+  await probe("29-table-roles-settings", async () => {
+    const openSettings = () =>
+      js(`const b = document.querySelector('.activity[title="Settings"]');
+         if (b) b.click();
+         return !!b;`);
+
+    await openSettings();
+    await waitJs(`!!document.querySelector('.settings')`, { label: "settings modal" });
+    await waitJs(
+      `[...document.querySelectorAll('.settings .rule .grow')]
+         .some((x) => x.textContent.trim() === 'lex')`,
+      { label: "lex row in Tables" },
+    );
+
+    const lexRow = `[...document.querySelectorAll('.settings .rule')]
+       .find((r) => r.querySelector('.grow')?.textContent.trim() === 'lex')`;
+
+    // Designate lex as a fixes table.
+    await js(`const row = ${lexRow};
+       const sel = row.querySelector('select');
+       sel.value = 'fixes';
+       sel.dispatchEvent(new Event('change', { bubbles: true }));
+       return true;`);
+    await waitJs(
+      `(() => { const row = ${lexRow}; return !!row && row.querySelectorAll('select').length === 3; })()`,
+      { label: "fixes controls shown" },
+    );
+
+    // Point the trigger at the english text column.
+    await js(`const row = ${lexRow};
+       const trigger = row.querySelectorAll('select')[1];
+       const option = [...trigger.options].find((o) => o.value === 'english');
+       if (!option) throw new Error('no english column option');
+       trigger.value = 'english';
+       trigger.dispatchEvent(new Event('change', { bubbles: true }));
+       return true;`);
+
+    // Close and reopen: the designation is reloaded from disk.
+    await js(`const b = document.querySelector('.modal-head button'); if (b) b.click(); return !!b;`);
+    await waitJs(`!document.querySelector('.settings')`, { label: "settings closed" });
+    await openSettings();
+    await waitJs(
+      `(() => { const row = ${lexRow}; return !!row && row.querySelector('select').value === 'fixes'; })()`,
+      { label: "role persisted" },
+    );
+    assertEqual(
+      await js(`const row = ${lexRow};
+         return row.querySelectorAll('select')[1].value;`),
+      "english",
+      "trigger persisted",
+    );
+
+    // Leave the workspace as the earlier probes expect it.
+    await js(`const row = ${lexRow};
+       const sel = row.querySelector('select');
+       sel.value = 'vocab';
+       sel.dispatchEvent(new Event('change', { bubbles: true }));
+       return true;`);
+    await js(`const b = document.querySelector('.modal-head button'); if (b) b.click(); return !!b;`);
   });
 }
 
