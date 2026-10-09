@@ -3,6 +3,7 @@
   import { t } from "svelte-i18n";
   import { Plus, X, Trash2 } from "@lucide/svelte";
   import * as api from "../lib/api";
+  import { ui } from "../lib/state.svelte";
   import { BACKNESS, CONSONANTS, PLACES, VOWELS } from "../lib/ipa";
 
   let phonemes = $state<api.Phoneme[]>([]);
@@ -25,6 +26,15 @@
   const SYLLABLE_PRESETS = ["V", "CV", "VC", "CVC", "CCV", "CCVC", "CVCC"];
 
   onMount(load);
+
+  // Reload when another editor (Settings' sound-class fields) writes the
+  // phonology config, so this view's local copy cannot clobber it.
+  let revisionSeen = ui.phonologyRevision;
+  $effect(() => {
+    if (ui.phonologyRevision === revisionSeen) return;
+    revisionSeen = ui.phonologyRevision;
+    void load();
+  });
 
   async function load() {
     try {

@@ -2145,6 +2145,98 @@ async function main() {
     }
     await js(`const b = document.querySelector('.modal-head button'); if (b) b.click(); return !!b;`);
   });
+
+  // -- probe 34: Settings linting & translator panel -----------------------
+  await probe("34-settings-linting-translator", async () => {
+    // A syllable shape to display comes from the Phonology tab.
+    await openActivity("Phonology");
+    await waitJs(`!!document.querySelector('.phonology')`, { label: "phonology view" });
+    await waitJs(`!!document.querySelector('.preset-row .preset')`, { label: "shape presets" });
+    const added = await js(
+      `const b = [...document.querySelectorAll('.preset-row .preset')]
+         .find((x) => x.textContent.trim() === 'CVC');
+       if (b && !b.disabled) b.click();
+       return !!b;`,
+    );
+    if (!added) throw new Error("no CVC preset");
+    await new Promise((resolve) => setTimeout(resolve, 500));
+
+    const openSettings = () =>
+      js(`const b = document.querySelector('.activity[title="Settings"]');
+         if (b) b.click();
+         return !!b;`);
+    const groupInputs = () =>
+      js(`return [...document.querySelectorAll('.settings .group input')].map((i) => i.value);`);
+
+    await openSettings();
+    await waitJs(`!!document.querySelector('.settings .group')`, { label: "linting group" });
+    // Settings loads the inventory asynchronously; wait for it to fill in.
+    await waitJs(
+      `(document.querySelectorAll('.settings .group input')[0]?.value ?? '').length > 0`,
+      { label: "inventory loaded" },
+    );
+    const inputs = await groupInputs();
+    assertEqual(inputs[0], "p t k m n s l", "consonants pulled from inventory");
+    assertEqual(inputs[1], "a i u", "vowels pulled from inventory");
+    const shapes = await js(
+      `return [...document.querySelectorAll('.settings .group .phoneme-chip .symbol')]
+         .map((s) => s.textContent.trim());`,
+    );
+    if (!shapes.includes("CVC")) {
+      throw new Error(`syllable shape missing: ${JSON.stringify(shapes)}`);
+    }
+
+    // Editing the vowel list persists (and reaches the inventory).
+    await js(`const inputs = [...document.querySelectorAll('.settings .group input')];
+       const i = inputs[1];
+       i.value = 'a i u o';
+       i.dispatchEvent(new Event('input', { bubbles: true }));
+       return true;`);
+    await new Promise((resolve) => setTimeout(resolve, 600));
+    await js(`const b = document.querySelector('.modal-head button'); if (b) b.click(); return !!b;`);
+    await waitJs(`!document.querySelector('.settings')`, { label: "settings closed" });
+    await openSettings();
+    await waitJs(`!!document.querySelector('.settings .group')`, { label: "linting group again" });
+    await waitJs(
+      `[...document.querySelectorAll('.settings .group input')][1]?.value === 'a i u o'`,
+      { label: "vowel edit persisted" },
+    );
+
+    // The plural ending is editable from here too.
+    await js(`const inputs = [...document.querySelectorAll('.settings .group input')];
+       const i = inputs[2];
+       i.value = 'es';
+       i.dispatchEvent(new Event('input', { bubbles: true }));
+       return true;`);
+    await new Promise((resolve) => setTimeout(resolve, 600));
+    await js(`const b = document.querySelector('.modal-head button'); if (b) b.click(); return !!b;`);
+    await waitJs(`!document.querySelector('.settings')`, { label: "settings closed again" });
+
+    // The translator now uses the new plural ending.
+    await openActivity("Translation");
+    await waitJs(`!!document.querySelector('.translation')`, { label: "translation" });
+    await js(
+      `const b = [...document.querySelectorAll('.translation-toolbar .mode-switch button')]
+         .find((x) => x.textContent.trim() === 'Word for word');
+       if (b) b.click();
+       return !!b;`,
+    );
+    await waitJs(`!!document.querySelector('.runner textarea')`, { label: "runner" });
+    // Drop any feature selection left by earlier probes so the incoming
+    // English plural is inferred, not overridden.
+    await js(
+      `document.querySelectorAll('.feature-bar button.active').forEach((b) => b.click());
+       return true;`,
+    );
+    await js(`const t = document.querySelector('.runner textarea');
+      t.value = 'dogs';
+      t.dispatchEvent(new Event('input', { bubbles: true }));
+      return true;`);
+    await waitJs(
+      `(document.querySelector('.runner .output')?.textContent ?? '').trim() === 'kakaes'`,
+      { label: "plural ending applied" },
+    );
+  });
 }
 
 try {

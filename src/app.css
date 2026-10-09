@@ -1798,6 +1798,17 @@ sup.cm-footnote {
   gap: 4px;
 }
 
+.settings .group {
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  padding: 10px 12px;
+  margin: 10px 0;
+}
+
+.settings .group .pane-title {
+  margin: 0 0 4px;
+}
+
 /* -- grid extras --------------------------------------------------------- */
 
 table.dict-grid td textarea {

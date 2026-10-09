@@ -159,6 +159,8 @@ export const ui = $state({
   wordIndex: {} as api.WordIndex,
   nameById: {} as Record<string, string>,
   vcsRevision: 0,
+  /** Bumped when the phonology config is written elsewhere (Settings). */
+  phonologyRevision: 0,
 
   // Notes drag/context-menu plumbing.
   dragPath: null as string | null,

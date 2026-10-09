@@ -3,7 +3,13 @@
   import { t } from "svelte-i18n";
   import { open, save } from "@tauri-apps/plugin-dialog";
   import * as api from "../lib/api";
-  import { ui, openSetupWizard, closeSettings } from "../lib/state.svelte";
+  import { ui, openSetupWizard, closeSettings, setActivity } from "../lib/state.svelte";
+  import {
+    pluralEnding,
+    rebuildPhonemes,
+    setPluralEnding,
+    splitSoundClasses,
+  } from "../lib/configEdit";
 
   let language = $state<api.LanguageConfig>({
     name: "",
@@ -14,6 +20,12 @@
   });
   let rules = $state<api.GrammarRule[]>([]);
   let tableRoles = $state<Record<string, api.TableRoleConfig>>({});
+  let phonology = $state<api.PhonologyConfig>({ phonemes: [], syllables: [] });
+  let morphology = $state<api.Morphology>({ features: [], paradigms: [] });
+  let consonants = $state("");
+  let vowels = $state("");
+  let pluralSurface = $state("");
+  let pluralKind = $state<api.AffixKind>("suffix");
   let status = $state("");
   let error = $state("");
 
@@ -24,7 +36,63 @@
       language = await api.languageGet();
       rules = (await api.grammarGet()).rules;
       tableRoles = await api.tableRolesGet();
+      phonology = await api.phonologyGet();
+      morphology = await api.translationMorphology();
+      const split = splitSoundClasses(phonology.phonemes);
+      consonants = split.consonants;
+      vowels = split.vowels;
+      const row = pluralEnding(morphology);
+      pluralSurface = row?.surface ?? "";
+      pluralKind = row?.kind ?? "suffix";
       applyDirection();
+      error = "";
+    } catch (e) {
+      error = String(e);
+    }
+  }
+
+  // -- linting & translator ------------------------------------------------
+
+  let soundTimer: ReturnType<typeof setTimeout> | undefined;
+  let pluralTimer: ReturnType<typeof setTimeout> | undefined;
+
+  function scheduleSaveSounds() {
+    if (soundTimer) clearTimeout(soundTimer);
+    soundTimer = setTimeout(() => void saveSounds(), 400);
+  }
+
+  async function saveSounds() {
+    const phonemes = rebuildPhonemes(
+      consonants,
+      vowels,
+      phonology.phonemes.filter((phoneme) => phoneme.kind === "other"),
+    );
+    try {
+      await api.phonologySet({
+        phonemes,
+        syllables: phonology.syllables,
+      });
+      phonology = { phonemes, syllables: phonology.syllables };
+      // Let the Phonology tab reload from the new config.
+      ui.phonologyRevision += 1;
+      status = $t("settings.saved");
+      error = "";
+    } catch (e) {
+      error = String(e);
+    }
+  }
+
+  function scheduleSavePlural() {
+    if (pluralTimer) clearTimeout(pluralTimer);
+    pluralTimer = setTimeout(() => void savePlural(), 400);
+  }
+
+  async function savePlural() {
+    const next = setPluralEnding(morphology, pluralSurface, pluralKind);
+    try {
+      await api.setTranslationMorphology(next);
+      morphology = next;
+      status = $t("settings.saved");
       error = "";
     } catch (e) {
       error = String(e);
@@ -238,6 +306,73 @@
     </div>
   {/each}
   <button onclick={addRule}>{$t("settings.addRule")}</button>
+
+  <section class="group">
+    <div class="pane-title">{$t("settings.lintingTranslator")}</div>
+    <p class="muted">{$t("settings.lintingHint")}</p>
+
+    <p class="muted">{$t("settings.soundClassesHint")}</p>
+    <div class="row">
+      <label class="field grow"
+        >{$t("settings.consonants")}
+        <input
+          value={consonants}
+          oninput={(e) => {
+            consonants = e.currentTarget.value;
+            scheduleSaveSounds();
+          }}
+        />
+      </label>
+      <label class="field grow"
+        >{$t("settings.vowels")}
+        <input
+          value={vowels}
+          oninput={(e) => {
+            vowels = e.currentTarget.value;
+            scheduleSaveSounds();
+          }}
+        />
+      </label>
+    </div>
+
+    <div class="field">
+      {$t("settings.shapes")}
+      <div class="phoneme-chips">
+        {#each phonology.syllables as shape (shape)}
+          <span class="phoneme-chip"><span class="symbol">{shape}</span></span>
+        {:else}
+          <span class="muted">{$t("phonology.empty")}</span>
+        {/each}
+      </div>
+    </div>
+    <p class="muted">{$t("settings.shapesHint")}</p>
+    <button
+      onclick={() => {
+        closeSettings();
+        setActivity("phonology");
+      }}>{$t("settings.openInventory")}</button
+    >
+
+    <div class="field">
+      {$t("settings.pluralEnding")}
+      <div class="row">
+        <select bind:value={pluralKind} onchange={savePlural}>
+          <option value="suffix">{$t("translation.suffix")}</option>
+          <option value="prefix">{$t("translation.prefix")}</option>
+        </select>
+        <input
+          class="grow"
+          placeholder={$t("translation.ending")}
+          value={pluralSurface}
+          oninput={(e) => {
+            pluralSurface = e.currentTarget.value;
+            scheduleSavePlural();
+          }}
+        />
+      </div>
+    </div>
+    <p class="muted">{$t("settings.pluralHint")}</p>
+  </section>
 
   <div class="pane-title">{$t("settings.tables")}</div>
   <p class="muted">{$t("settings.tablesHint")}</p>
