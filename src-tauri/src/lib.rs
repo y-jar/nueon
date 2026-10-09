@@ -168,7 +168,7 @@ pub fn run() {
             commands::import_apply,
             commands::export_table,
             commands::import_asset,
-            commands::import_drop,
+            commands::copy_into_notes,
             commands::window_spawn,
             commands::window_close_self,
             commands::windows_restore,

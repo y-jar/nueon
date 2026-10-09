@@ -932,24 +932,20 @@ impl Workspace {
         Ok(imported)
     }
 
-    /// Import a text/Markdown file as a note inside `folder` of `notes/`.
-    pub fn import_note_file(
+    /// Copy an external file into `folder` of `notes/`, keeping its own name.
+    /// Returns the new path relative to `notes/`.
+    pub fn copy_file_into(
         &mut self,
         folder: impl AsRef<Path>,
         source: impl AsRef<Path>,
     ) -> Result<PathBuf, StorageError> {
-        let relative = assets::import_note(&self.notes_dir(), folder.as_ref(), source.as_ref())?;
+        let relative = storage::copy_into(&self.notes_dir(), folder.as_ref(), source.as_ref())?;
         self.refresh_notes()?;
         self.mark_change(
             Instant::now(),
-            format!("nueon: import note \"{}\"", relative.display()),
+            format!("nueon: add file \"{}\"", relative.display()),
         );
         Ok(relative)
-    }
-
-    /// Whether a dropped file should be imported as a note.
-    pub fn is_note_source(source: impl AsRef<Path>) -> bool {
-        assets::is_note_source(source.as_ref())
     }
 
     /// Read a note's raw content from `notes/<relative>`.

@@ -10,8 +10,9 @@ import { tr, ui } from "./state.svelte";
  * as native events carrying filesystem paths and a physical pixel position.
  * This routes them by the element under the pointer:
  *
- * - editor: import to `assets/` and insert an image/link reference;
- * - explorer: text/Markdown files become notes, other files go to `assets/`.
+ * - editor: import to `notes/assets/` and insert an image/link reference;
+ * - explorer: copy each file into the folder under the pointer, keeping its
+ *   own name (nothing is renamed or converted).
  */
 
 type Position = { x: number; y: number };
@@ -80,21 +81,16 @@ async function dropOnEditor(
 }
 
 async function dropOnFolder(folder: string, paths: string[]): Promise<void> {
-  let notes = 0;
-  let assets = 0;
+  let imported = 0;
   for (const path of paths) {
     try {
-      const result = await api.importDrop(folder, path);
-      if (result.type === "note") notes += 1;
-      else assets += 1;
+      await api.copyIntoNotes(folder, path);
+      imported += 1;
     } catch (error) {
       ui.status = tr("status.couldNotImport", { path, error: String(error) });
     }
   }
-  const parts: string[] = [];
-  if (notes) parts.push(`${notes} note${notes === 1 ? "" : "s"}`);
-  if (assets) parts.push(`${assets} file${assets === 1 ? "" : "s"} to assets`);
-  if (parts.length) ui.status = tr("status.imported", { names: parts.join(", ") });
+  if (imported) ui.status = tr("status.importedFiles", { count: imported });
 }
 
 /** Listen for OS file drops on this window's webview. */

@@ -1,25 +1,23 @@
-//! Importing external files into a workspace.
+//! Importing editor-inserted files into a workspace.
 //!
-//! Dropped images and other files are copied into `<workspace>/notes/assets/`
-//! under their own (sanitized) name — `My-Photo.png`, `My-Photo 2.png` on a
-//! clash — so the folder is recognizable in the notes tree. Dropped
-//! text/Markdown files can instead be imported as notes.
+//! Images inserted from the editor (toolbar, paste, or drop on the editor) are
+//! copied into `<workspace>/notes/assets/` under a sanitized, link-safe name —
+//! `My-Photo.png`, `My-Photo 2.png` on a clash. Files dropped on the notes tree
+//! are handled separately by `storage::copy_into`, which keeps their own name.
 
 use std::ffi::OsStr;
 use std::fs::{self, File};
 use std::io::Read;
-use std::path::{Path, PathBuf};
+use std::path::Path;
 
 use serde::Serialize;
 
-use super::storage::{io_err, rename_noreplace, safe_join, temp_path, StorageError};
+use super::storage::{io_err, rename_noreplace, temp_path, StorageError};
 
 /// Directory (inside `notes/`) holding imported files.
 pub const ASSETS_DIR: &str = "assets";
 /// Largest file accepted as an asset.
 pub const MAX_ASSET_BYTES: u64 = 50 * 1024 * 1024;
-/// Largest text file accepted as a note.
-pub const MAX_NOTE_BYTES: u64 = 5 * 1024 * 1024;
 
 /// Longest sanitized asset file name, before the extension.
 const MAX_STEM_CHARS: usize = 64;
@@ -63,11 +61,6 @@ pub fn classify(path: &Path) -> AssetKind {
         "txt" | "md" | "markdown" | "csv" | "tsv" | "json" | "log" => AssetKind::Text,
         _ => AssetKind::Other,
     }
-}
-
-/// Whether a dropped file should become a note when dropped on the explorer.
-pub fn is_note_source(path: &Path) -> bool {
-    matches!(safe_extension(path).as_str(), "md" | "markdown" | "txt")
 }
 
 fn check_regular_file(source: &Path, limit: u64) -> Result<u64, StorageError> {
@@ -205,71 +198,6 @@ pub fn import_asset(notes_dir: &Path, source: &Path) -> Result<ImportedAsset, St
     }
 }
 
-/// Import a text file as a Markdown note inside `folder` (relative to
-/// `notes_dir`). Returns the new note's path relative to `notes_dir`.
-pub fn import_note(
-    notes_dir: &Path,
-    folder: &Path,
-    source: &Path,
-) -> Result<PathBuf, StorageError> {
-    check_regular_file(source, MAX_NOTE_BYTES)?;
-    let text = fs::read_to_string(source).map_err(|e| io_err(source, e))?;
-
-    let stem: String = source
-        .file_stem()
-        .map(|s| s.to_string_lossy().into_owned())
-        .unwrap_or_default()
-        .chars()
-        .map(|c| {
-            if c == '/' || c == '\\' || c.is_control() {
-                '-'
-            } else {
-                c
-            }
-        })
-        .collect();
-    let stem = if stem.trim().is_empty() {
-        "imported".to_string()
-    } else {
-        stem.trim().to_string()
-    };
-
-    // Write once to a unique temp file in the destination folder, then try
-    // each candidate name with a no-replace move. Two imports (or an import and
-    // a new note) racing for one name can never overwrite each other: the loser
-    // simply takes the next name.
-    let first = safe_join(notes_dir, &folder.join(format!("{stem}.md")))?;
-    let parent = first.parent().map(Path::to_path_buf).unwrap_or_default();
-    fs::create_dir_all(&parent).map_err(|e| io_err(&parent, e))?;
-    let temp = temp_path(&first);
-    {
-        let mut file = fs::OpenOptions::new()
-            .write(true)
-            .create_new(true)
-            .open(&temp)
-            .map_err(|e| io_err(&temp, e))?;
-        std::io::Write::write_all(&mut file, text.as_bytes()).map_err(|e| io_err(&temp, e))?;
-        file.sync_all().map_err(|e| io_err(&temp, e))?;
-    }
-
-    let mut relative = folder.join(format!("{stem}.md"));
-    let mut n = 2;
-    loop {
-        let target = safe_join(notes_dir, &relative)?;
-        match rename_noreplace(&temp, &target) {
-            Ok(()) => return Ok(relative),
-            Err(err) if err.kind() == std::io::ErrorKind::AlreadyExists && n < 10_000 => {
-                relative = folder.join(format!("{stem} {n}.md"));
-                n += 1;
-            }
-            Err(err) => {
-                let _ = fs::remove_file(&temp);
-                return Err(io_err(&target, err));
-            }
-        }
-    }
-}
-
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -332,66 +260,10 @@ mod tests {
     }
 
     #[test]
-    fn classifies_and_detects_note_sources() {
+    fn classifies_files_by_extension() {
         assert_eq!(classify(Path::new("a.JPG")), AssetKind::Image);
         assert_eq!(classify(Path::new("a.csv")), AssetKind::Text);
         assert_eq!(classify(Path::new("a.zip")), AssetKind::Other);
-        assert!(is_note_source(Path::new("n.MD")));
-        assert!(is_note_source(Path::new("n.txt")));
-        assert!(!is_note_source(Path::new("n.png")));
-    }
-
-    #[test]
-    fn concurrent_note_imports_never_overwrite_each_other() {
-        use std::sync::{Arc, Barrier};
-        let dir = tempfile::tempdir().unwrap();
-        let notes = Arc::new(dir.path().join("notes"));
-        fs::create_dir_all(notes.join("lore")).unwrap();
-        let n = 12;
-        let mut sources = Vec::new();
-        for i in 0..n {
-            let dir_i = dir.path().join(format!("src{i}"));
-            fs::create_dir_all(&dir_i).unwrap();
-            let src = dir_i.join("story.txt");
-            fs::write(&src, format!("story {i}")).unwrap();
-            sources.push(src);
-        }
-        let barrier = Arc::new(Barrier::new(n));
-        let handles: Vec<_> = sources
-            .into_iter()
-            .map(|src| {
-                let (notes, barrier) = (Arc::clone(&notes), Arc::clone(&barrier));
-                std::thread::spawn(move || {
-                    barrier.wait();
-                    import_note(&notes, Path::new("lore"), &src).unwrap()
-                })
-            })
-            .collect();
-        let mut paths: Vec<_> = handles.into_iter().map(|h| h.join().unwrap()).collect();
-        paths.sort();
-        paths.dedup();
-        assert_eq!(paths.len(), n, "every import got its own note");
-
-        let mut contents: Vec<String> = paths
-            .iter()
-            .map(|p| fs::read_to_string(notes.join(p)).unwrap())
-            .collect();
-        contents.sort();
-        let mut expected: Vec<String> = (0..n).map(|i| format!("story {i}")).collect();
-        expected.sort();
-        assert_eq!(contents, expected, "no import lost or overwrote another");
-        // No temp files left behind.
-        let leftovers = fs::read_dir(notes.join("lore"))
-            .unwrap()
-            .filter(|e| {
-                e.as_ref()
-                    .unwrap()
-                    .file_name()
-                    .to_string_lossy()
-                    .ends_with(".tmp")
-            })
-            .count();
-        assert_eq!(leftovers, 0);
     }
 
     #[test]
@@ -415,24 +287,5 @@ mod tests {
             handles.into_iter().map(|h| h.join().unwrap()).collect();
         assert_eq!(names, ["pic.png".to_string()].into_iter().collect());
         assert_eq!(asset_files(&notes), ["pic.png"], "one asset, no temp files");
-    }
-
-    #[test]
-    fn imports_text_as_unique_markdown_notes() {
-        let dir = tempfile::tempdir().unwrap();
-        let notes = dir.path().join("notes");
-        fs::create_dir_all(notes.join("lore")).unwrap();
-        let src = dir.path().join("story.txt");
-        fs::write(&src, "once upon").unwrap();
-
-        let first = import_note(&notes, Path::new("lore"), &src).unwrap();
-        assert_eq!(first, Path::new("lore/story.md"));
-        assert_eq!(fs::read_to_string(notes.join(&first)).unwrap(), "once upon");
-
-        let second = import_note(&notes, Path::new("lore"), &src).unwrap();
-        assert_eq!(second, Path::new("lore/story 2.md"));
-
-        // Folders cannot escape the notes directory.
-        assert!(import_note(&notes, Path::new("../out"), &src).is_err());
     }
 }

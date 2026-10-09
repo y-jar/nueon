@@ -16,7 +16,7 @@ use serde::Serialize;
 use crate::model::WordTable;
 use crate::workspace::NoteFile;
 
-use super::assets::ASSETS_DIR;
+use super::assets::{ASSETS_DIR, MAX_ASSET_BYTES};
 
 /// Directory holding raw Markdown notes.
 pub const NOTES_DIR: &str = "notes";
@@ -565,6 +565,76 @@ pub fn rename_path(notes_dir: &Path, from: &Path, to: &Path) -> Result<PathBuf, 
     }
 }
 
+/// Split `name` into `(stem, extension)` — the extension only when its tail
+/// looks like one, so `archive.tar.gz` → `("archive.tar", ".gz")` but
+/// `.gitignore` stays whole.
+fn split_name(name: &str) -> (&str, &str) {
+    match name.rfind('.') {
+        Some(index) if index > 0 && looks_like_extension(&name[index + 1..]) => {
+            (&name[..index], &name[index..])
+        }
+        _ => (name, ""),
+    }
+}
+
+/// Copy a regular file into `notes/<folder>` under its **own name**, suffixing
+/// ` 2`, ` 3`, … when that name is taken. Nothing is overwritten; the source is
+/// left untouched. Returns the new path relative to `notes_dir`.
+pub fn copy_into(notes_dir: &Path, folder: &Path, source: &Path) -> Result<PathBuf, StorageError> {
+    // `metadata` follows symlinks, so a link to a directory is rejected too.
+    let meta = fs::metadata(source).map_err(|e| io_err(source, e))?;
+    if !meta.is_file() {
+        return Err(StorageError::NotAFile(source.to_path_buf()));
+    }
+    if meta.len() > MAX_ASSET_BYTES {
+        return Err(StorageError::TooLarge(source.to_path_buf()));
+    }
+
+    let name = source
+        .file_name()
+        .map(|n| n.to_string_lossy().into_owned())
+        .filter(|n| !n.is_empty())
+        .unwrap_or_else(|| "file".to_string());
+    let dir = safe_join(notes_dir, folder)?;
+    fs::create_dir_all(&dir).map_err(|e| io_err(&dir, e))?;
+
+    // Copy once to a unique temp file beside the target, then move it into
+    // place without replacing anything.
+    let temp = temp_path(&dir.join("copy"));
+    fs::copy(source, &temp).map_err(|e| io_err(source, e))?;
+
+    let (stem, extension) = split_name(&name);
+    let mut n = 1;
+    loop {
+        let candidate = if n == 1 {
+            name.clone()
+        } else {
+            format!("{stem} {n}{extension}")
+        };
+        let target = dir.join(&candidate);
+        if target.exists() {
+            if n < 10_000 {
+                n += 1;
+                continue;
+            }
+            let _ = fs::remove_file(&temp);
+            return Err(StorageError::AlreadyExists(folder.join(&candidate)));
+        }
+        match rename_noreplace(&temp, &target) {
+            Ok(()) => return Ok(folder.join(&candidate)),
+            // Lost a race to claim this name; try the next suffix.
+            Err(err) if err.kind() == std::io::ErrorKind::AlreadyExists => {
+                n += 1;
+                continue;
+            }
+            Err(err) => {
+                let _ = fs::remove_file(&temp);
+                return Err(io_err(&target, err));
+            }
+        }
+    }
+}
+
 /// Rename extensionless and `.txt` notes to `.md`, returning `(from, to)`
 /// pairs relative to `notes_dir`. Name collisions get a numeric suffix, and
 /// files that are not valid UTF-8 text are left alone.
@@ -827,6 +897,32 @@ mod tests {
         let renamed = migrate_to_markdown(&notes).unwrap();
         assert!(renamed.is_empty(), "assets are never migrated: {renamed:?}");
         assert!(notes.join(ASSETS_DIR).join("readme.txt").exists());
+    }
+
+    #[test]
+    fn copy_into_keeps_the_name_and_suffixes_on_clash() {
+        let dir = tempfile::tempdir().unwrap();
+        let notes = dir.path().join(NOTES_DIR);
+        fs::create_dir_all(notes.join("lore")).unwrap();
+        let src = dir.path().join("photo.png");
+        fs::write(&src, b"bytes").unwrap();
+
+        let first = copy_into(&notes, Path::new("lore"), &src).unwrap();
+        assert_eq!(first, Path::new("lore/photo.png"));
+        assert_eq!(fs::read(notes.join(&first)).unwrap(), b"bytes");
+        // Copied, not moved: the source is untouched.
+        assert!(src.exists());
+
+        // Same name again gets a suffix; nothing is overwritten.
+        let second = copy_into(&notes, Path::new("lore"), &src).unwrap();
+        assert_eq!(second, Path::new("lore/photo 2.png"));
+
+        // A directory source and a folder escape are both refused.
+        assert!(matches!(
+            copy_into(&notes, Path::new(""), dir.path()),
+            Err(StorageError::NotAFile(_))
+        ));
+        assert!(copy_into(&notes, Path::new("../out"), &src).is_err());
     }
 
     #[test]
