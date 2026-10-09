@@ -132,7 +132,7 @@
   {#if !grid || grid.rows.length === 0}
     <p class="muted">{$t("morphology.noEndings")}</p>
   {:else}
-    <div class="grid-scroll">
+    <div class="paradigm-grid-scroll">
       <table class="paradigm-table">
         <thead>
           <tr>

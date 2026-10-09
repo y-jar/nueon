@@ -900,6 +900,7 @@ table.dict-grid th > button.sort {
 table.dict-grid th {
   position: sticky;
   top: 0;
+  z-index: 3;
   background: var(--panel);
   text-align: left;
   padding: 5px 6px;
@@ -928,12 +929,6 @@ table.dict-grid td input:not([type="checkbox"]) {
 table.dict-grid td input:focus {
   border-color: var(--accent);
   background: var(--bg);
-}
-
-table.dict-grid th.select-col,
-table.dict-grid td.select-col {
-  width: 28px;
-  text-align: center;
 }
 
 table.dict-grid th button.sort {
@@ -1534,7 +1529,7 @@ button.link {
   font-size: 12px;
 }
 
-.grid-scroll {
+.paradigm-grid-scroll {
   max-width: 100%;
   overflow: auto;
 }
@@ -2815,11 +2810,20 @@ tr.ghost input {
   font-style: italic;
 }
 
+/* Sticky-column layering: body sticky cells (2) < normal headers (3) < the
+   corner headers (4). Without this the body's wordname/select cells share the
+   headers' z-index and, painting later, scroll over them. */
+table.dict-grid td.select-col,
+table.dict-grid td.wordname-col {
+  z-index: 2;
+}
+
 table.dict-grid th.select-col,
 table.dict-grid td.select-col {
   position: sticky;
   left: 0;
-  z-index: 4;
+  width: 28px;
+  text-align: center;
   background: var(--panel);
 }
 
@@ -2831,13 +2835,17 @@ table.dict-grid th.wordname-col,
 table.dict-grid td.wordname-col {
   position: sticky;
   left: 28px;
-  z-index: 4;
   background: var(--panel);
   border-right: 1px solid var(--border);
 }
 
 table.dict-grid td.wordname-col {
   background: var(--bg);
+}
+
+table.dict-grid th.select-col,
+table.dict-grid th.wordname-col {
+  z-index: 4;
 }
 
 /* Non-blocking phonotactic warning on a word name. */

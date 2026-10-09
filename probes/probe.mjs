@@ -4146,6 +4146,52 @@ async function main() {
     );
     await waitJs(`!document.querySelector('.settings')`, { label: "settings closed" });
   });
+
+  // -- probe 71: the wordname header stays above the scrolling body ----------
+  await probe("71-grid-wordname-header-sticky", async () => {
+    await openActivity("Dictionary");
+    await waitJs(`!!document.querySelector('.table-list')`, { label: "tables panel" });
+    const opened = await js(
+      `const b = [...document.querySelectorAll('.table-list .table-row .tree-name')]
+         .find((x) => x.textContent.trim().startsWith('big'));
+       if (b) b.click();
+       return !!b;`,
+    );
+    if (!opened) throw new Error("no 'big' table in the panel");
+    await waitJs(`!!document.querySelector('.dict-grid')`, { label: "big grid" });
+    await waitJs(
+      `document.querySelectorAll('.dict-grid tbody tr[data-index]').length > 0`,
+      { label: "rows rendered" },
+    );
+
+    // Scroll so body rows pass under the sticky headers.
+    await js(
+      `const s = document.querySelector('.grid-scroll');
+       s.scrollTop = 600;
+       s.dispatchEvent(new Event('scroll', { bubbles: true }));
+       return true;`,
+    );
+    await new Promise((resolve) => setTimeout(resolve, 300));
+
+    const topmost = (selector) =>
+      js(
+        `const th = document.querySelector(${JSON.stringify(selector)});
+         if (!th) return 'none';
+         const r = th.getBoundingClientRect();
+         const el = document.elementFromPoint(r.left + 8, r.top + r.height / 2);
+         const cell = el?.closest('th, td');
+         return cell ? cell.tagName + '|' + cell.className : 'none';`,
+      );
+
+    const word = await topmost(".dict-grid th.wordname-col");
+    if (!word.startsWith("TH|") || !word.includes("wordname-col")) {
+      throw new Error(`wordname header not topmost (hit: ${word})`);
+    }
+    const select = await topmost(".dict-grid th.select-col");
+    if (!select.startsWith("TH|") || !select.includes("select-col")) {
+      throw new Error(`select header not topmost (hit: ${select})`);
+    }
+  });
 }
 
 try {
