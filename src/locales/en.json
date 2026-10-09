@@ -66,6 +66,7 @@
     "normalText": "Normal text",
     "bulletList": "Bullet list",
     "numberedList": "Numbered list",
+    "taskList": "Task list",
     "codeBlock": "Code block",
     "image": "Insert image",
     "export": "Export",

@@ -2237,6 +2237,33 @@ async function main() {
       { label: "plural ending applied" },
     );
   });
+
+  // -- probe 35: task/table keybinds + toolbar task button ------------------
+  await probe("35-editor-task-and-table-keybinds", async () => {
+    await openActivity("Notes");
+    await openNote("fmt.md");
+    await waitEditorText("fmt.md", FMT);
+    await focusEditor("fmt.md");
+    await placeCursor("fmt.md", 2);
+
+    const hasTaskButton = await js(
+      `return !!document.querySelector('.editor-toolbar button[aria-label="Task list"]');`,
+    );
+    if (!hasTaskButton) throw new Error("toolbar has no task-list button");
+
+    // Ctrl+Shift+L toggles a task item, matching the TaskWidget rendering.
+    await pressKey("l", [CTRL, SHIFT]);
+    assertEqual(await editorText("fmt.md"), "- [ ] plain line\n", "Ctrl+Shift+L on");
+    await pressKey("l", [CTRL, SHIFT]);
+    assertEqual(await editorText("fmt.md"), "plain line\n", "Ctrl+Shift+L off");
+
+    // Ctrl+Shift+T inserts a table.
+    await pressKey("t", [CTRL, SHIFT]);
+    const table = await editorText("fmt.md");
+    if (!table.includes("|") || !table.includes("---")) {
+      throw new Error(`Ctrl+Shift+T did not insert a table: ${JSON.stringify(table)}`);
+    }
+  });
 }
 
 try {

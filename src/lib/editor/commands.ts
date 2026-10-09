@@ -465,22 +465,47 @@ export function insertTextAt(view: EditorView, text: string, pos?: number): void
   });
 }
 
-/** Standard Markdown keybinds; must take precedence over the default keymap. */
-export const markdownKeymap: readonly KeyBinding[] = [
-  { key: "Mod-b", run: toggleBold, preventDefault: true },
-  { key: "Mod-i", run: toggleItalic, preventDefault: true },
-  { key: "Mod-u", run: toggleUnderline, preventDefault: true },
-  { key: "Mod-k", run: insertLink, preventDefault: true },
-  { key: "Mod-Shift-8", run: toggleBulletList, preventDefault: true },
-  { key: "Mod-Shift-7", run: toggleNumberedList, preventDefault: true },
-  { key: "Mod-Shift-9", run: toggleBlockquote, preventDefault: true },
-  { key: "Mod-Shift-c", run: toggleCodeBlock, preventDefault: true },
-  { key: "Mod-1", run: setHeading(1), preventDefault: true },
-  { key: "Mod-2", run: setHeading(2), preventDefault: true },
-  { key: "Mod-3", run: setHeading(3), preventDefault: true },
-  { key: "Mod-4", run: setHeading(4), preventDefault: true },
-  { key: "Mod-5", run: setHeading(5), preventDefault: true },
-  { key: "Mod-6", run: setHeading(6), preventDefault: true },
-  { key: "Mod-0", run: clearHeading, preventDefault: true },
-  { key: "Mod-Shift-x", run: toggleStrikethrough, preventDefault: true },
-];
+/** Non-command handlers the Markdown keymap needs. */
+export interface MarkdownKeymapHandlers {
+  /** Open the image picker (the toolbar's insert-image action). */
+  onImage?: () => void;
+}
+
+/**
+ * Standard Markdown keybinds; must take precedence over the default keymap.
+ * The image keybind needs the picker the component owns, so it is supplied
+ * through `handlers`.
+ */
+export function buildMarkdownKeymap(
+  handlers: MarkdownKeymapHandlers = {},
+): readonly KeyBinding[] {
+  return [
+    { key: "Mod-b", run: toggleBold, preventDefault: true },
+    { key: "Mod-i", run: toggleItalic, preventDefault: true },
+    { key: "Mod-u", run: toggleUnderline, preventDefault: true },
+    { key: "Mod-k", run: insertLink, preventDefault: true },
+    { key: "Mod-Shift-8", run: toggleBulletList, preventDefault: true },
+    { key: "Mod-Shift-7", run: toggleNumberedList, preventDefault: true },
+    { key: "Mod-Shift-9", run: toggleBlockquote, preventDefault: true },
+    // Mod-Shift-l toggles a task list item; Mod-Shift-t inserts a table.
+    { key: "Mod-Shift-l", run: toggleTaskList, preventDefault: true },
+    { key: "Mod-Shift-t", run: insertTable, preventDefault: true },
+    { key: "Mod-Shift-c", run: toggleCodeBlock, preventDefault: true },
+    { key: "Mod-1", run: setHeading(1), preventDefault: true },
+    { key: "Mod-2", run: setHeading(2), preventDefault: true },
+    { key: "Mod-3", run: setHeading(3), preventDefault: true },
+    { key: "Mod-4", run: setHeading(4), preventDefault: true },
+    { key: "Mod-5", run: setHeading(5), preventDefault: true },
+    { key: "Mod-6", run: setHeading(6), preventDefault: true },
+    { key: "Mod-0", run: clearHeading, preventDefault: true },
+    { key: "Mod-Shift-x", run: toggleStrikethrough, preventDefault: true },
+    {
+      key: "Mod-Shift-p",
+      run: () => {
+        if (!handlers.onImage) return false;
+        handlers.onImage();
+        return true;
+      },
+    },
+  ];
+}

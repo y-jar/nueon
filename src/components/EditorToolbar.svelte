@@ -6,6 +6,7 @@
     Underline,
     List,
     ListOrdered,
+    SquareCheck,
     SquareCode,
     Image,
     Table,
@@ -20,6 +21,7 @@
     toggleUnderline,
     toggleBulletList,
     toggleNumberedList,
+    toggleTaskList,
     toggleCodeBlock,
     toggleStrikethrough,
     setHeading,
@@ -99,6 +101,14 @@
     onclick={() => run(toggleNumberedList)}
   >
     <ListOrdered size={15} />
+  </button>
+  <button
+    class:active={format.task}
+    title="{$t('editor.taskList')} (Ctrl+Shift+L)"
+    aria-label={$t("editor.taskList")}
+    onclick={() => run(toggleTaskList)}
+  >
+    <SquareCheck size={15} />
   </button>
   <button
     class:active={format.code}

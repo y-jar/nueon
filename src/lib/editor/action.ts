@@ -25,8 +25,8 @@ import {
 } from "./dictionary";
 import {
   EMPTY_FORMAT,
+  buildMarkdownKeymap,
   formatAt,
-  markdownKeymap,
   type FormatState,
 } from "./commands";
 import { bracketAutoClose } from "./brackets";
@@ -65,6 +65,8 @@ export interface EditorParams {
   onFormat?: (format: FormatState) => void;
   /** Right-click inside the editor. */
   onContextMenu?: (x: number, y: number, view: EditorView) => void;
+  /** Open the image picker (the toolbar's insert-image action). */
+  onImage?: () => void;
 }
 
 const AUTOSAVE_MS = 400;
@@ -175,7 +177,11 @@ export const codemirror: Action<HTMLElement, EditorParams> = (node, params) => {
         search({ top: true }),
         highlightSelectionMatches(),
         // Ahead of the default keymap, which binds Mod-i to "select parent".
-        Prec.high(keymap.of(markdownKeymap)),
+        Prec.high(
+          keymap.of(
+            buildMarkdownKeymap({ onImage: () => current.onImage?.() }),
+          ),
+        ),
         keymap.of([
           // Backspace deletes a bracket pair before plain char deletion.
           ...closeBracketsKeymap,

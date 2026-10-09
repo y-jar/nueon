@@ -164,6 +164,7 @@
           onView: (next: EditorView | null) => (view = next),
           onFormat: (next: FormatState) => (format = next),
           onContextMenu: openEditorContextMenu,
+          onImage: insertImage,
         }}
       ></div>
     </div>
