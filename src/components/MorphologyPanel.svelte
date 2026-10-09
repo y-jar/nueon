@@ -1,7 +1,7 @@
 <script lang="ts">
   import { onMount } from "svelte";
   import { t } from "svelte-i18n";
-  import { Puzzle, RefreshCw, Search } from "@lucide/svelte";
+  import { Puzzle, RefreshCw, Search, X } from "@lucide/svelte";
   import {
     PIECE_DRAG_TYPE,
     morphology as store,
@@ -47,17 +47,34 @@
   const morphemeActive = (wordname: string) =>
     store.tab === "inflect" && store.manual.includes(wordname);
 
-  /** Enter in a search adds its top match: to the strip, or the selection. */
+  /** Enter adds the top match; Escape clears the search. */
   function enterWord(event: KeyboardEvent) {
+    if (event.key === "Escape") {
+      event.preventDefault();
+      wordFilter = "";
+      return;
+    }
     if (event.key !== "Enter" || !words.length) return;
     event.preventDefault();
     addWord(words[0]);
   }
 
   function enterMorpheme(event: KeyboardEvent) {
+    if (event.key === "Escape") {
+      event.preventDefault();
+      morphFilter = "";
+      return;
+    }
     if (event.key !== "Enter" || !morphemes.length) return;
     event.preventDefault();
     addMorpheme(morphemes[0]);
+  }
+
+  function clearFilter(event: MouseEvent, clear: () => void) {
+    // Keep the wrapping <label> from focusing the input.
+    event.preventDefault();
+    event.stopPropagation();
+    clear();
   }
 </script>
 
@@ -103,6 +120,17 @@
           bind:value={morphFilter}
           onkeydown={enterMorpheme}
         />
+        {#if morphFilter}
+          <button
+            class="clear-search"
+            type="button"
+            title={$t("morphology.clear")}
+            aria-label={$t("morphology.clear")}
+            onclick={(event) => clearFilter(event, () => (morphFilter = ""))}
+          >
+            <X size={12} />
+          </button>
+        {/if}
       </label>
       <div class="morph-list">
         {#each morphemes as morpheme (`${morpheme.table}/${morpheme.wordname}`)}
@@ -141,6 +169,17 @@
           bind:value={wordFilter}
           onkeydown={enterWord}
         />
+        {#if wordFilter}
+          <button
+            class="clear-search"
+            type="button"
+            title={$t("morphology.clear")}
+            aria-label={$t("morphology.clear")}
+            onclick={(event) => clearFilter(event, () => (wordFilter = ""))}
+          >
+            <X size={12} />
+          </button>
+        {/if}
       </label>
       <div class="morph-list">
         {#each words as word (word.id)}

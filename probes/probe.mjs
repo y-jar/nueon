@@ -3984,6 +3984,63 @@ async function main() {
       throw new Error(`expected 'demo2yu', got '${await surface()}'`);
     }
   });
+
+  // -- probe 67: the sidebar searches clear with an X or Escape ---------------
+  await probe("67-sidebar-search-clear", async () => {
+    await js(
+      `const b = document.querySelector('.activity[title="Morphology"]');
+       if (b) b.click();
+       return !!b;`,
+    );
+    await waitJs(`!!document.querySelector('.morphology-sidebar .word-search input')`, {
+      label: "lexicon search",
+    });
+
+    const type = (selector, text) =>
+      js(
+        `const i = document.querySelector(${JSON.stringify(selector)});
+         i.focus();
+         i.value = ${JSON.stringify(text)};
+         i.dispatchEvent(new Event('input', { bubbles: true }));
+         return true;`,
+      );
+
+    // The clear X appears with a query, and clears it.
+    await type(".morphology-sidebar .word-search input", "velo");
+    await waitJs(`!!document.querySelector('.morphology-sidebar .word-search .clear-search')`, {
+      label: "clear button",
+    });
+    await js(
+      `document.querySelector('.morphology-sidebar .word-search .clear-search').click();
+       return true;`,
+    );
+    await waitJs(
+      `document.querySelector('.morphology-sidebar .word-search input').value === ''`,
+      { label: "click cleared the search" },
+    );
+    if (
+      await js(
+        `return !!document.querySelector('.morphology-sidebar .word-search .clear-search');`,
+      )
+    ) {
+      throw new Error("clear button lingered after clearing");
+    }
+
+    // Escape clears too.
+    await type(".morphology-sidebar .morph-search input", "agent");
+    await waitJs(`!!document.querySelector('.morphology-sidebar .morph-search .clear-search')`, {
+      label: "morph clear button",
+    });
+    await js(
+      `const i = document.querySelector('.morphology-sidebar .morph-search input');
+       i.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true }));
+       return true;`,
+    );
+    await waitJs(
+      `document.querySelector('.morphology-sidebar .morph-search input').value === ''`,
+      { label: "escape cleared the search" },
+    );
+  });
 }
 
 try {
