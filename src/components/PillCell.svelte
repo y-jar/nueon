@@ -1,5 +1,7 @@
 <script lang="ts">
   import { X } from "@lucide/svelte";
+  import { filterSuggestions } from "../lib/suggest";
+  import SuggestionList from "./SuggestionList.svelte";
 
   interface Pill {
     id: string;
@@ -9,7 +11,7 @@
   interface Props {
     pills: Pill[];
     placeholder: string;
-    /** Values offered by the autocomplete (relation columns). */
+    /** Values offered by the autocomplete (relations, or suggested tag values). */
     options?: { id: string; label: string }[];
     onAdd: (input: string) => void;
     onRemove: (id: string) => void;
@@ -17,17 +19,55 @@
 
   let { pills, placeholder, options = [], onAdd, onRemove }: Props = $props();
 
-  const listId = `pill-options-${crypto.randomUUID()}`;
+  let inputEl = $state<HTMLInputElement | null>(null);
   let draft = $state("");
-  // Only the focused cell mounts its datalist: one per cell would otherwise
-  // multiply the dictionary size by the row count.
   let active = $state(false);
+  let highlight = $state(0);
 
-  function commit() {
-    const value = draft.trim();
-    if (!value) return;
-    onAdd(value);
+  const labels = $derived(options.map((option) => option.label));
+  const matches = $derived(filterSuggestions(labels, draft));
+  const open = $derived(active && matches.length > 0);
+
+  function commit(value: string) {
+    const text = value.trim();
+    if (!text) return;
+    onAdd(text);
     draft = "";
+    highlight = 0;
+  }
+
+  function pick(value: string) {
+    commit(value);
+    inputEl?.focus();
+  }
+
+  function onKeydown(event: KeyboardEvent) {
+    if (open) {
+      if (event.key === "ArrowDown") {
+        event.preventDefault();
+        highlight = Math.min(highlight + 1, matches.length - 1);
+        return;
+      }
+      if (event.key === "ArrowUp") {
+        event.preventDefault();
+        highlight = Math.max(highlight - 1, 0);
+        return;
+      }
+      if (event.key === "Tab" || event.key === "Enter") {
+        event.preventDefault();
+        pick(matches[highlight]);
+        return;
+      }
+      if (event.key === "Escape") {
+        event.preventDefault();
+        active = false;
+        return;
+      }
+    }
+    if (event.key === "Enter") {
+      event.preventDefault();
+      commit(draft);
+    }
   }
 </script>
 
@@ -46,25 +86,22 @@
   <input
     class="pill-input"
     {placeholder}
+    bind:this={inputEl}
     bind:value={draft}
-    list={options.length && active ? listId : undefined}
     onfocus={() => (active = true)}
     oninput={(e) => {
       // Picking a suggestion fills the exact label; commit it right away.
+      highlight = 0;
       const typed = e.currentTarget.value;
-      if (options.some((option) => option.label === typed)) commit();
+      if (labels.includes(typed)) commit(typed);
     }}
-    onkeydown={(e) => e.key === "Enter" && commit()}
+    onkeydown={onKeydown}
     onblur={() => {
       active = false;
-      commit();
+      commit(draft);
     }}
   />
-  {#if options.length && active}
-    <datalist id={listId}>
-      {#each options as option (option.id)}
-        <option value={option.label}></option>
-      {/each}
-    </datalist>
+  {#if open}
+    <SuggestionList anchor={inputEl} items={matches} {highlight} onPick={pick} />
   {/if}
 </div>

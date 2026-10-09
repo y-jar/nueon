@@ -58,6 +58,13 @@ pub struct TagDef {
     /// Optional widget/formatting hint for the UI.
     #[serde(default, skip_serializing_if = "is_default_format")]
     pub format: TagFormat,
+    /// Whether cells for this column suggest values already present elsewhere.
+    #[serde(default, skip_serializing_if = "is_false")]
+    pub suggest: bool,
+}
+
+fn is_false(value: &bool) -> bool {
+    !*value
 }
 
 fn is_default_format(format: &TagFormat) -> bool {
@@ -76,6 +83,7 @@ impl TagDef {
             color: None,
             kind,
             format: TagFormat::Default,
+            suggest: false,
         }
     }
 
@@ -88,6 +96,7 @@ impl TagDef {
             kind: FieldType::Text,
             builtin: true,
             format: TagFormat::Default,
+            suggest: false,
         }
     }
 
@@ -112,6 +121,20 @@ mod tests {
         let custom = TagDef::new("part of speech", FieldType::TagList);
         assert_eq!(custom.kind, FieldType::TagList);
         assert!(!custom.is_reserved());
+    }
+
+    #[test]
+    fn suggest_defaults_off_and_round_trips() {
+        let tag = TagDef::new("type", FieldType::TagList);
+        assert!(!tag.suggest);
+        // Omitted from JSON while false.
+        assert!(!serde_json::to_string(&tag).unwrap().contains("suggest"));
+
+        let mut tag = tag;
+        tag.suggest = true;
+        let json = serde_json::to_string(&tag).unwrap();
+        let back: TagDef = serde_json::from_str(&json).unwrap();
+        assert!(back.suggest);
     }
 
     #[test]

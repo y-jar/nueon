@@ -872,6 +872,31 @@ impl Workspace {
         Ok(true)
     }
 
+    /// Set a tag's value-suggestion hint (whether its cells offer existing
+    /// values). Returns `false` for an unknown table/tag.
+    pub fn set_tag_suggest(
+        &mut self,
+        table: &str,
+        tag: &str,
+        suggest: bool,
+    ) -> Result<bool, StorageError> {
+        let exists = self.dictionary.table(table).is_some_and(|t| t.has_tag(tag));
+        if !exists {
+            return Ok(false);
+        }
+        self.record();
+        self.dictionary
+            .table_mut(table)
+            .expect("checked above")
+            .set_tag_suggest(tag, suggest);
+        self.save_table(table)?;
+        self.mark_change(
+            Instant::now(),
+            format!("nueon: change suggestions of tag \"{tag}\" in table \"{table}\""),
+        );
+        Ok(true)
+    }
+
     /// Remove a column, strip its values, and force a revertible check-in.
     ///
     /// The check-in is committed immediately (regardless of the auto-check-in
@@ -2961,6 +2986,27 @@ mod tests {
         let reloaded = Workspace::load(dir.path()).unwrap();
         assert_eq!(reloaded.grid_view("roots").column_widths, widened);
         assert_eq!(reloaded.grid_view("verbs").column_widths, verbs_widths);
+    }
+
+    #[test]
+    fn set_tag_suggest_persists() {
+        let dir = tempfile::tempdir().unwrap();
+        let mut ws = Workspace::new(dir.path()).unwrap();
+        ws.create_table("verbs").unwrap();
+        ws.add_tag("verbs", TagDef::new("type", FieldType::TagList))
+            .unwrap();
+
+        assert!(ws.set_tag_suggest("verbs", "type", true).unwrap());
+        assert!(!ws.set_tag_suggest("verbs", "missing", true).unwrap());
+
+        let reloaded = Workspace::load(dir.path()).unwrap();
+        let tag = reloaded
+            .dictionary
+            .table("verbs")
+            .unwrap()
+            .tag("type")
+            .unwrap();
+        assert!(tag.suggest);
     }
 
     #[test]

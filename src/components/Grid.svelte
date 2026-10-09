@@ -51,6 +51,7 @@
   import { createWordWithValues } from "../lib/words";
   import { normalizeView } from "../lib/gridView";
   import PillCell from "./PillCell.svelte";
+  import SuggestInput from "./SuggestInput.svelte";
   import AddWordModal from "./AddWordModal.svelte";
   import Popover from "./Popover.svelte";
 
@@ -154,6 +155,25 @@
         tag.name !== "definition",
     ),
   );
+
+  /** Existing values per suggest-enabled column, for cell autocomplete. */
+  const suggestionsByTag = $derived.by(() => {
+    const map: Record<string, string[]> = {};
+    for (const tag of doc.table?.tags ?? []) {
+      if (!tag.suggest) continue;
+      const values = new Set<string>();
+      for (const entry of doc.table?.entries ?? []) {
+        const value = entry.values[tag.name];
+        if (value?.type === "tag_list") {
+          for (const item of value.value) values.add(item);
+        } else if (value?.type === "text" && value.value) {
+          values.add(value.value);
+        }
+      }
+      map[tag.name] = [...values];
+    }
+    return map;
+  });
 
   /** Columns a bulk edit can target: the dedicated ones plus user tags. */
   const bulkColumns = $derived([
@@ -932,6 +952,12 @@
     onRefresh();
   }
 
+  async function changeSuggest(name: string, suggest: boolean) {
+    if (!doc.currentTable) return;
+    await api.setTagSuggest(doc.currentTable, name, suggest);
+    onRefresh();
+  }
+
   /** Save the active table to a file (CSV/TSV, or a lossless JSON backup). */
   async function exportAs(format: api.TableFormat) {
     const name = doc.currentTable;
@@ -1102,6 +1128,17 @@
                   <option value={format}>{format}</option>
                 {/each}
               </select>
+              {#if tag.kind === "text" || tag.kind === "tag_list"}
+                <label class="suggest-toggle" title={$t("grid.suggestValues")}>
+                  <input
+                    type="checkbox"
+                    checked={tag.suggest ?? false}
+                    onchange={(e) =>
+                      changeSuggest(tag.name, e.currentTarget.checked)}
+                  />
+                  {$t("grid.suggest")}
+                </label>
+              {/if}
               <button title={$t("grid.removeTag")} onclick={() => removeTag(tag.name)}>
                 <X size={13} />
               </button>
@@ -1460,6 +1497,18 @@
         onkeydown={(e) => onCellKey(e, textValue(entry.values[tag.name]))}
         onblur={(e) => commitText(entry, tag.name, e.currentTarget.value)}
       ></textarea>
+    {:else if tag.suggest}
+      <SuggestInput
+        type={tag.format === "date"
+          ? "date"
+          : tag.format === "measurement"
+            ? "number"
+            : "text"}
+        placeholder="—"
+        value={textValue(entry.values[tag.name])}
+        suggestions={suggestionsByTag[tag.name] ?? []}
+        onCommit={(value) => commitText(entry, tag.name, value)}
+      />
     {:else}
       <input
         type={tag.format === "date"
@@ -1489,6 +1538,12 @@
         label: value,
       }))}
       placeholder={$t("grid.addPill")}
+      options={tag.suggest
+        ? (suggestionsByTag[tag.name] ?? []).map((value) => ({
+            id: value,
+            label: value,
+          }))
+        : []}
       onAdd={(text) => addToList(entry, tag.name, text)}
       onRemove={(id) => removeFromList(entry, tag.name, id)}
     />
@@ -1583,6 +1638,7 @@
     tags={doc.table?.tags ?? []}
     options={relationOptions}
     nameById={ui.nameById}
+    suggestions={suggestionsByTag}
     onClose={() => (addWordOpen = false)}
     onCreated={onRefresh}
   />

@@ -481,11 +481,15 @@ function seedWorkspace() {
             name: "pos",
             description: "Part of speech.",
             kind: "tag_list",
+            // Value suggestions for tag_list cells (probe 44).
+            suggest: true,
           },
           {
             name: "english",
             description: "English trigger for a fixes table.",
             kind: "text",
+            // Value suggestions for text cells (probe 44).
+            suggest: true,
           },
         ],
         entries: [
@@ -495,6 +499,7 @@ function seedWorkspace() {
             values: {
               definition: { type: "tag_list", value: ["dog"] },
               pos: { type: "tag_list", value: ["noun"] },
+              english: { type: "text", value: "dog" },
             },
           },
           {
@@ -504,6 +509,7 @@ function seedWorkspace() {
               definition: { type: "tag_list", value: ["to run"] },
               // A word class, so the paradigm can inflect it (probe 25).
               pos: { type: "tag_list", value: ["verb"] },
+              english: { type: "text", value: "run" },
             },
           },
           // Two entries for one sense => a real conflict (probe 24).
@@ -2794,6 +2800,65 @@ async function main() {
     if (await js(rowHas("velo", "noun"))) {
       throw new Error("one undo did not revert the whole batch");
     }
+  });
+
+  // -- probe 44: per-column value suggestions -------------------------------
+  await probe("44-column-value-suggestions", async () => {
+    await openActivity("Dictionary");
+    await waitJs(`!!document.querySelector('.table-list')`, { label: "tables panel" });
+    const opened = await js(
+      `const b = [...document.querySelectorAll('.table-list .table-row .tree-name')]
+         .find((x) => x.textContent.trim().startsWith('lex'));
+       if (b) b.click();
+       return !!b;`,
+    );
+    if (!opened) throw new Error("no 'lex' table in the panel");
+    await waitJs(`!!document.querySelector('.dict-grid')`, { label: "lex grid" });
+
+    // Open the add-word wizard (it uses the same cell editors).
+    await js(`const b = document.querySelector('.grid-toolbar button.primary');
+       b.click();
+       return !!b;`);
+    await waitJs(`!!document.querySelector('.add-word-modal')`, { label: "add word modal" });
+
+    const propInput = (name) =>
+      `[...document.querySelectorAll('.add-word-modal .prop-row')]
+         .find((r) => r.querySelector('.prop-name')?.textContent.trim().endsWith(${JSON.stringify(name)}))
+         ?.querySelector('input')`;
+
+    // A tag_list column (pos) suggests existing values; Tab accepts.
+    await js(`const i = ${propInput("pos")}; if (i) i.focus(); return !!i;`);
+    await js(`const i = document.activeElement;
+       i.value = 'no';
+       i.dispatchEvent(new Event('input', { bubbles: true }));
+       return true;`);
+    await waitJs(`!!document.querySelector('.suggestions')`, { label: "pos suggestions" });
+    await pressKey(TAB);
+    await waitJs(
+      `(() => {
+         const row = [...document.querySelectorAll('.add-word-modal .prop-row')]
+           .find((r) => r.querySelector('.prop-name')?.textContent.trim().endsWith('pos'));
+         return !!row && [...row.querySelectorAll('.pill')]
+           .some((p) => p.textContent.trim() === 'noun');
+       })()`,
+      { label: "pos suggestion accepted" },
+    );
+
+    // A text column (english) suggests too.
+    await js(`const i = ${propInput("english")}; if (i) i.focus(); return !!i;`);
+    await js(`const i = document.activeElement;
+       i.value = 'do';
+       i.dispatchEvent(new Event('input', { bubbles: true }));
+       return true;`);
+    await waitJs(`!!document.querySelector('.suggestions')`, { label: "english suggestions" });
+    await pressKey(TAB);
+    await waitJs(`(${propInput("english")})?.value === 'dog'`, {
+      label: "english suggestion accepted",
+    });
+
+    await js(`const b = document.querySelector('.add-word-modal .modal-head button');
+       if (b) b.click();
+       return !!b;`);
   });
 }
 

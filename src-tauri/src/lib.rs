@@ -205,6 +205,7 @@ pub fn run() {
             commands::remove_tag,
             commands::set_tag_kind,
             commands::set_tag_format,
+            commands::set_tag_suggest,
             commands::known_tag_names,
             commands::grid_view_get,
             commands::grid_view_set,

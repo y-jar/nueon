@@ -162,6 +162,17 @@ impl WordTable {
         }
     }
 
+    /// Set a tag's value-suggestion hint. Returns `false` for unknown tags.
+    pub fn set_tag_suggest(&mut self, name: &str, suggest: bool) -> bool {
+        match self.tags.iter_mut().find(|tag| tag.name == name) {
+            Some(tag) => {
+                tag.suggest = suggest;
+                true
+            }
+            None => false,
+        }
+    }
+
     /// Insert an entry.
     pub fn add_entry(&mut self, entry: WordEntry) {
         self.entries.push(entry);

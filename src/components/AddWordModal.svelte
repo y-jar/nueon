@@ -15,6 +15,7 @@
   import { boolValue, textValue } from "../lib/dictionary";
   import { createWordWithValues } from "../lib/words";
   import PillCell from "./PillCell.svelte";
+  import SuggestInput from "./SuggestInput.svelte";
 
   interface Option {
     id: string;
@@ -28,11 +29,21 @@
     /** Existing words offered by relation / parent pickers. */
     options: Option[];
     nameById: Record<string, string>;
+    /** Existing values per suggest-enabled column. */
+    suggestions: Record<string, string[]>;
     onClose: () => void;
     onCreated: () => void | Promise<void>;
   }
 
-  let { table, tags, options, nameById, onClose, onCreated }: Props = $props();
+  let {
+    table,
+    tags,
+    options,
+    nameById,
+    suggestions,
+    onClose,
+    onCreated,
+  }: Props = $props();
 
   const properties = $derived(
     tags.filter((tag) => tag.name !== "wordname" && tag.name !== "parent"),
@@ -194,6 +205,23 @@
                         : null,
                     )}
                 ></textarea>
+              {:else if tag.suggest}
+                <SuggestInput
+                  type={inputType(tag)}
+                  value={textValue(values[tag.name])}
+                  suggestions={suggestions[tag.name] ?? []}
+                  onInput={(value) =>
+                    setValue(
+                      tag.name,
+                      value ? { type: "text", value } : null,
+                    )}
+                  onCommit={(value) =>
+                    setValue(
+                      tag.name,
+                      value ? { type: "text", value } : null,
+                    )}
+                  onEnter={submit}
+                />
               {:else}
                 <input
                   type={inputType(tag)}
@@ -229,6 +257,12 @@
               <PillCell
                 pills={listOf(tag.name).map((v) => ({ id: v, label: v }))}
                 placeholder={$t("grid.addPill")}
+                options={tag.suggest
+                  ? (suggestions[tag.name] ?? []).map((value) => ({
+                      id: value,
+                      label: value,
+                    }))
+                  : []}
                 onAdd={(text) => {
                   const items = listOf(tag.name);
                   if (!items.includes(text))

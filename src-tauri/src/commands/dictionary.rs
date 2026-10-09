@@ -368,6 +368,25 @@ pub fn set_tag_format(
     Ok(changed_ok)
 }
 
+/// Set whether a tag's cells suggest values already present elsewhere.
+#[tauri::command]
+pub fn set_tag_suggest(
+    app: AppHandle,
+    state: State<'_, Shared>,
+    table: String,
+    tag: String,
+    suggest: bool,
+) -> Result<bool, String> {
+    let mut state = state.lock().map_err(|_| "state poisoned".to_string())?;
+    let changed_ok = state
+        .workspace_mut()?
+        .set_tag_suggest(&table, &tag, suggest)
+        .map_err(|err| err.to_string())?;
+    drop(state);
+    changed(&app, "dictionary");
+    Ok(changed_ok)
+}
+
 /// Every non-builtin tag name used across all tables, for suggestions.
 #[tauri::command]
 pub fn known_tag_names(state: State<'_, Shared>) -> Result<Vec<String>, String> {

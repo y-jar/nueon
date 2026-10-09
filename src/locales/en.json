@@ -278,6 +278,8 @@
     "newTag": "new tag",
     "add": "Add",
     "tagExists": "That tag already exists",
+    "suggest": "suggest",
+    "suggestValues": "Suggest values already used in this column",
     "removeTag": "Remove tag",
     "removeTagConfirm": "Remove tag \"{tag}\" and its values from {count} word(s)?",
     "selected": "{count} selected",

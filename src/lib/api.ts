@@ -161,6 +161,7 @@ export interface TagDef {
   kind: FieldType;
   builtin: boolean;
   format: TagFormat;
+  suggest?: boolean;
 }
 
 export type TagFormat = "default" | "multiline" | "date" | "measurement";
@@ -379,6 +380,11 @@ export const setTagFormat = (
   tag: string,
   format: TagFormat,
 ): Promise<boolean> => invoke("set_tag_format", { table, tag, format });
+export const setTagSuggest = (
+  table: string,
+  tag: string,
+  suggest: boolean,
+): Promise<boolean> => invoke("set_tag_suggest", { table, tag, suggest });
 export const undo = (): Promise<boolean> => invoke("undo");
 export const redo = (): Promise<boolean> => invoke("redo");
 export const warningDismissed = (key: string): Promise<boolean> =>
