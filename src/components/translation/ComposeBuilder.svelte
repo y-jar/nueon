@@ -1,24 +1,21 @@
 <script lang="ts">
   import { t } from "svelte-i18n";
-  import { ArrowLeft, ArrowRight, Save, Trash2, X } from "@lucide/svelte";
-  import { ui } from "../../lib/state.svelte";
+  import { ArrowLeft, ArrowRight, Trash2, X } from "@lucide/svelte";
   import {
     PIECE_DRAG_TYPE,
     morphology as store,
   } from "../../lib/morphology.svelte";
+  import SaveWordForm from "./SaveWordForm.svelte";
 
-  let definition = $state("");
-  let saveTable = $state("");
-  let saved = $state(false);
-
-  const morphemeTables = $derived(
-    new Set(store.morphemes.map((morpheme) => morpheme.table)),
+  const firstRoot = $derived(
+    store.pieces.find((piece) => piece.kind === "word") ?? null,
   );
-  const tables = $derived(
-    ui.tables
-      .filter((table) => !morphemeTables.has(table.name))
-      .map((table) => table.name),
+  const rootWord = $derived(
+    firstRoot
+      ? (store.lexicon.find((word) => word.id === firstRoot.id) ?? null)
+      : null,
   );
+  const gloss = $derived(store.pieces.map((piece) => piece.gloss).join(" "));
 
   function onDragOver(event: DragEvent) {
     if (Array.from(event.dataTransfer?.types ?? []).includes(PIECE_DRAG_TYPE)) {
@@ -36,29 +33,11 @@
       id: string;
     };
     store.addPieceRef(kind, id);
-    saved = false;
-  }
-
-  async function save() {
-    if (!saveTable || !store.composed) return;
-    const id = await store.saveComposed(saveTable, definition.trim());
-    if (id) {
-      saved = true;
-      definition = "";
-      ui.status = $t("morphology.savedStatus", {
-        values: { word: store.composed.surface },
-      });
-    }
   }
 </script>
 
 <div class="compose-builder">
-  <div
-    class="compose-strip"
-    ondragover={onDragOver}
-    ondrop={onDrop}
-    role="list"
-  >
+  <div class="compose-strip" ondragover={onDragOver} ondrop={onDrop} role="list">
     {#each store.pieces as piece (piece.key)}
       <span class="compose-chip {piece.kind}">
         <button
@@ -101,22 +80,11 @@
       {/each}
     </div>
 
-    <div class="compose-save">
-      <select bind:value={saveTable}>
-        <option value="">{$t("morphology.table")}</option>
-        {#each tables as name (name)}
-          <option value={name}>{name}</option>
-        {/each}
-      </select>
-      <input
-        class="grow"
-        placeholder={$t("morphology.definition")}
-        bind:value={definition}
-      />
-      <button class="primary" onclick={save} disabled={!saveTable}>
-        <Save size={13} /> {$t("morphology.saveWord")}
-      </button>
-      {#if saved}<span class="muted">{$t("morphology.saved")}</span>{/if}
-    </div>
+    <SaveWordForm
+      surface={store.composed.surface}
+      {gloss}
+      wordClass={rootWord?.class ?? null}
+      lemma={rootWord ? { table: rootWord.table, id: rootWord.id } : null}
+    />
   {/if}
 </div>

@@ -186,6 +186,8 @@ export const ui = $state({
   phonologyRevision: 0,
   /** Bumped when the morphology config is written elsewhere (Morphology). */
   morphologyRevision: 0,
+  /** The table last used by the Morphology "Save as word" form (session). */
+  morphologySaveTable: "",
 
   // Notes drag/context-menu plumbing.
   dragPath: null as string | null,

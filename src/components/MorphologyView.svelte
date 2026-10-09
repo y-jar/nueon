@@ -8,6 +8,7 @@
   import FeatureEditor from "./translation/FeatureEditor.svelte";
   import ParadigmEditor from "./translation/ParadigmEditor.svelte";
   import MorphologyDrawer from "./translation/MorphologyDrawer.svelte";
+  import SaveWordForm from "./translation/SaveWordForm.svelte";
 
   onMount(() => void store.load());
 
@@ -117,6 +118,14 @@
               </span>
             {/each}
           </div>
+          <SaveWordForm
+            surface={store.inflection.surface}
+            gloss={store.inflection.morphemes
+              .map((morpheme) => morpheme.gloss)
+              .join(" ")}
+            wordClass={word.class}
+            lemma={{ table: word.table, id: word.id }}
+          />
         </section>
       {/if}
     {/if}

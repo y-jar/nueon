@@ -3520,6 +3520,97 @@ async function main() {
     );
     assertEqual(wrap, "wrap", "classes wrap");
   });
+
+  // -- probe 62: the shared "Save as word" form -----------------------------
+  await probe("62-save-word-form", async () => {
+    await js(
+      `const b = document.querySelector('.activity[title="Morphology"]');
+       if (b) b.click();
+       return !!b;`,
+    );
+    await waitJs(`!!document.querySelector('.morphology-view')`, {
+      label: "morphology view",
+    });
+    await js(
+      `const b = [...document.querySelectorAll('.morphology-view .mode-switch button')]
+         .find((x) => x.textContent.trim() === 'Compose');
+       if (b) b.click();
+       return !!b;`,
+    );
+    await waitJs(`!!document.querySelector('.compose-builder')`, {
+      label: "compose builder",
+    });
+    await js(
+      `const b = document.querySelector('.compose-builder .clear-strip');
+       if (b) b.click();
+       return true;`,
+    );
+
+    const typeIn = (selector, text) =>
+      js(
+        `const i = document.querySelector(${JSON.stringify(selector)});
+         i.value = ${JSON.stringify(text)};
+         i.dispatchEvent(new Event('input', { bubbles: true }));
+         return true;`,
+      );
+    const clickIn = (selector, read, match) =>
+      js(
+        `const b = [...document.querySelectorAll(${JSON.stringify(selector)})]
+           .find((x) => (${read})?.textContent.trim() === ${JSON.stringify(match)});
+         if (b) b.click();
+         return !!b;`,
+      );
+
+    // Build a fresh form: velo + the -o agent morpheme = veloo.
+    await typeIn(".morphology-sidebar .word-search input", "velo");
+    await waitJs(
+      `[...document.querySelectorAll('.morphology-sidebar .word-row .grow')]
+         .some((x) => x.textContent.trim() === 'velo')`,
+      { label: "velo row" },
+    );
+    await clickIn(".morphology-sidebar .word-row", "x.querySelector('.grow')", "velo");
+    await typeIn(".morphology-sidebar .morph-search input", "agent");
+    await waitJs(
+      `[...document.querySelectorAll('.morphology-sidebar .morpheme-row .mono')]
+         .some((x) => x.textContent.trim() === 'o')`,
+      { label: "morpheme row" },
+    );
+    await clickIn(".morphology-sidebar .morpheme-row", "x.querySelector('.mono')", "o");
+    await waitJs(
+      `(document.querySelector('.compose-builder .inflect-surface')?.textContent ?? '').trim() === 'veloo'`,
+      { label: "veloo composed" },
+    );
+
+    // Save it: the form defaults to the lemma's table, so Save is enabled.
+    const saved = await js(
+      `const b = [...document.querySelectorAll('.compose-builder .save-word button')]
+         .find((x) => x.textContent.includes('Save as word'));
+       if (b) b.click();
+       return !!b;`,
+    );
+    if (!saved) throw new Error("no Save as word button");
+    await waitJs(
+      `document.querySelector('.compose-builder .save-word .muted')?.textContent.trim() === 'Saved'`,
+      { label: "saved" },
+    );
+
+    // Re-composing an existing word warns about the duplicate.
+    await js(
+      `const b = document.querySelector('.compose-builder .clear-strip');
+       if (b) b.click();
+       return true;`,
+    );
+    await typeIn(".morphology-sidebar .word-search input", "velo");
+    await waitJs(
+      `[...document.querySelectorAll('.morphology-sidebar .word-row .grow')]
+         .some((x) => x.textContent.trim() === 'velo')`,
+      { label: "velo row again" },
+    );
+    await clickIn(".morphology-sidebar .word-row", "x.querySelector('.grow')", "velo");
+    await waitJs(`!!document.querySelector('.compose-builder .save-word .warn-inline')`, {
+      label: "duplicate warning",
+    });
+  });
 }
 
 try {

@@ -199,29 +199,6 @@ class MorphologyStore {
     }
   }
 
-  /** Save the composed surface as a new lexicon word; returns its id. */
-  async saveComposed(
-    table: string,
-    definition: string,
-  ): Promise<string | null> {
-    if (!this.composed || !table) return null;
-    try {
-      const id = await api.createTranslationWord(
-        table,
-        this.composed.surface,
-        definition,
-        [],
-        null,
-      );
-      this.lexicon = await api.lexicon();
-      this.error = "";
-      return id;
-    } catch (e) {
-      this.error = String(e);
-      return null;
-    }
-  }
-
   /** The built-in word classes plus any class that already has a paradigm. */
   classNames(): string[] {
     return [

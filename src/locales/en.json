@@ -436,6 +436,8 @@
     "saveWord": "Save as word",
     "saved": "Saved",
     "savedStatus": "Added {word}",
+    "duplicate": "“{word}” already exists — saving adds a homograph.",
+    "phonotactic": "This form breaks your syllable shapes.",
     "classes": "Classes",
     "class": "Class",
     "morphemes": "Morphemes",

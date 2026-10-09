@@ -1583,6 +1583,18 @@ button.link {
   gap: 8px;
 }
 
+.save-word {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.warn-inline {
+  margin: 0;
+  color: #d6785a;
+  font-size: 12px;
+}
+
 .palette-row {
   display: flex;
   flex-wrap: wrap;
