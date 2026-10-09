@@ -2,6 +2,7 @@
   import Editor from "./Editor.svelte";
   import Grid from "./Grid.svelte";
   import Translation from "./Translation.svelte";
+  import MorphologyView from "./MorphologyView.svelte";
   import PhonologyView from "./PhonologyView.svelte";
   import FileViewer from "./FileViewer.svelte";
   import EmptyState from "./EmptyState.svelte";
@@ -25,6 +26,8 @@
   {#key group.id + (group.doc.currentTable ?? "")}
     <Grid doc={group.doc} onRefresh={() => reloadGroupTable(groupId)} />
   {/key}
+{:else if group.doc.view === "morphology"}
+  <MorphologyView />
 {:else if group.doc.view === "phonology"}
   <PhonologyView />
 {:else if group.doc.view === "file"}

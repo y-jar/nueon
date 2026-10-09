@@ -219,7 +219,7 @@ export interface GridViewState {
 
 // -- tiling layout -------------------------------------------------------
 export interface TabLayout {
-  kind: "note" | "file" | "table" | "translation" | "phonology";
+  kind: "note" | "file" | "table" | "translation" | "morphology" | "phonology";
   ref?: string | null;
   title: string;
 }
@@ -478,7 +478,7 @@ export type Symbol =
   | { kind: "separator"; value: string | null }
   | { kind: "placeholder"; value: string };
 
-export type AffixKind = "prefix" | "suffix";
+export type AffixKind = "prefix" | "infix" | "suffix";
 
 export interface AffixRule {
   kind: AffixKind;
@@ -658,6 +658,12 @@ export interface ParadigmRow {
   when: Record<string, string>;
   surface: string;
   kind: AffixKind;
+  /** Ordered slot this ending occupies (omitted = one implicit slot). */
+  slot?: string | null;
+  /** Sort key among slots, ascending. */
+  order?: number;
+  /** A fixes-table morpheme (by wordname/trigger) supplying surface + gloss. */
+  morpheme?: string | null;
 }
 export interface Paradigm {
   class: string;
@@ -675,6 +681,28 @@ export const translationMorphology = (): Promise<Morphology> =>
 export const setTranslationMorphology = (
   morphology: Morphology,
 ): Promise<void> => invoke("set_translation_morphology", { morphology });
+
+/** One morpheme from a fixes table. */
+export interface MorphemeInfo {
+  table: string;
+  wordname: string;
+  surface: string;
+  kind: AffixKind;
+  gloss: string;
+  triggers: string[];
+}
+export const listMorphemes = (): Promise<MorphemeInfo[]> =>
+  invoke("list_morphemes");
+
+/** One vocab-table word, for the lexicon picker. */
+export interface LexiconWord {
+  table: string;
+  id: string;
+  wordname: string;
+  class: string | null;
+  gloss: string;
+}
+export const lexicon = (): Promise<LexiconWord[]> => invoke("lexicon");
 
 export type PhonemeKind = "consonant" | "vowel" | "other";
 

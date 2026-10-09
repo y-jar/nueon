@@ -239,6 +239,8 @@ pub fn run() {
             commands::translation_suggest,
             commands::translation_morphology,
             commands::set_translation_morphology,
+            commands::list_morphemes,
+            commands::lexicon,
             commands::table_roles_get,
             commands::set_table_role,
             commands::phonology_check_words,

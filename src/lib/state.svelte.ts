@@ -15,11 +15,18 @@ export type Activity =
   | "notes"
   | "dictionary"
   | "translation"
+  | "morphology"
   | "phonology"
   | "git";
 
 /** The kind of document a center tab represents. */
-export type TabKind = "note" | "file" | "table" | "translation" | "phonology";
+export type TabKind =
+  | "note"
+  | "file"
+  | "table"
+  | "translation"
+  | "morphology"
+  | "phonology";
 
 /** A center workspace tab. */
 export interface Tab {
@@ -31,7 +38,13 @@ export interface Tab {
 }
 
 /** Which panel a group's center pane is rendering. */
-export type View = "notes" | "file" | "dictionary" | "translation" | "phonology";
+export type View =
+  | "notes"
+  | "file"
+  | "dictionary"
+  | "translation"
+  | "morphology"
+  | "phonology";
 
 /** The loaded document for one tab group. */
 export interface DocState {
@@ -171,6 +184,8 @@ export const ui = $state({
   vcsRevision: 0,
   /** Bumped when the phonology config is written elsewhere (Settings). */
   phonologyRevision: 0,
+  /** Bumped when the morphology config is written elsewhere (Morphology). */
+  morphologyRevision: 0,
 
   // Notes drag/context-menu plumbing.
   dragPath: null as string | null,
@@ -328,6 +343,7 @@ export function setActivity(activity: Activity): void {
   ui.activity = activity;
   ui.sidebarOpen = true;
   if (activity === "translation") openTranslation();
+  if (activity === "morphology") openMorphology();
   if (activity === "phonology") openPhonology();
 }
 
@@ -400,6 +416,8 @@ export async function activateTab(
     group.doc.currentTable = tab.ref;
     group.doc.selectedEntry = null;
     await syncGroupTable(group.id);
+  } else if (tab.kind === "morphology") {
+    group.doc.view = "morphology";
   } else if (tab.kind === "phonology") {
     group.doc.view = "phonology";
   } else if (tab.kind === "file" && tab.ref) {
@@ -453,6 +471,21 @@ export async function openTranslation(): Promise<void> {
       kind: "translation",
       ref: null,
       title: "Translation",
+    };
+    group.tabs = [...group.tabs, tab];
+  }
+  await activateTab(group.id, tab.id);
+}
+
+export async function openMorphology(): Promise<void> {
+  const group = activeGroup();
+  let tab = group.tabs.find((t) => t.kind === "morphology");
+  if (!tab) {
+    tab = {
+      id: newId(),
+      kind: "morphology",
+      ref: null,
+      title: "Morphology",
     };
     group.tabs = [...group.tabs, tab];
   }
@@ -991,6 +1024,7 @@ export async function restoreTiling(layout: api.TilingLayout): Promise<void> {
   const notes = notePaths(ui.tree);
   const exists = (tab: api.TabLayout): boolean =>
     tab.kind === "translation" ||
+    tab.kind === "morphology" ||
     tab.kind === "phonology" ||
     (tab.ref != null &&
       (tab.kind === "table" ? tables.has(tab.ref) : notes.has(tab.ref)));

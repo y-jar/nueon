@@ -13,6 +13,7 @@ pub enum TabKind {
     File,
     Table,
     Translation,
+    Morphology,
     Phonology,
 }
 

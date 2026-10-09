@@ -3211,6 +3211,65 @@ async function main() {
     );
     if (output !== "veloia") throw new Error(`expected 'veloia', got '${output}'`);
   });
+
+  // -- probe 58: the Morphology activity edits classes and morphemes --------
+  await probe("58-morphology-section", async () => {
+    const opened = await js(
+      `const b = document.querySelector('.activity[title="Morphology"]');
+       if (b) b.click();
+       return !!b;`,
+    );
+    if (!opened) throw new Error("no Morphology activity button");
+    await waitJs(`!!document.querySelector('.morphology-view')`, {
+      label: "morphology view",
+    });
+    await waitJs(`!!document.querySelector('.sidebar .morph-list')`, {
+      label: "morphology panel",
+    });
+
+    // The panel lists the built-in classes and the fixes-table morpheme.
+    const classes = await js(
+      `return [...document.querySelectorAll('.sidebar .morph-row:not(.static) .grow')]
+         .map((x) => x.textContent.trim());`,
+    );
+    if (!classes.includes("verb") || !classes.includes("noun")) {
+      throw new Error(`missing classes: ${JSON.stringify(classes)}`);
+    }
+    const morphemes = await js(
+      `return [...document.querySelectorAll('.sidebar .morph-row.static .mono')]
+         .map((x) => x.textContent.trim());`,
+    );
+    if (!morphemes.includes("i")) {
+      throw new Error(`missing the '-i' morpheme: ${JSON.stringify(morphemes)}`);
+    }
+
+    // The verb's seeded two-slot paradigm shows its endings in the center.
+    await js(
+      `const b = [...document.querySelectorAll('.sidebar .morph-row')]
+         .find((x) => x.textContent.trim() === 'verb');
+       if (b) b.click();
+       return !!b;`,
+    );
+    await waitJs(
+      `document.querySelectorAll('.morphology-view .paradigm-row').length >= 2`,
+      { label: "verb endings shown" },
+    );
+
+    // Adding an ending appends a row immediately.
+    const before = await js(
+      `return document.querySelectorAll('.morphology-view .paradigm-row').length;`,
+    );
+    await js(
+      `const b = [...document.querySelectorAll('.morphology-view .paradigm-editor button')]
+         .find((x) => x.textContent.includes('Add ending'));
+       if (b) b.click();
+       return !!b;`,
+    );
+    await waitJs(
+      `document.querySelectorAll('.morphology-view .paradigm-row').length === ${before + 1}`,
+      { label: "ending added" },
+    );
+  });
 }
 
 try {

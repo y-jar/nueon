@@ -6,40 +6,13 @@
  * inserted without disturbing other paradigms — can be unit-tested directly.
  */
 
+import type { AffixKind, Morphology, ParadigmRow } from "./api";
+
 export type PhonemeKind = "consonant" | "vowel" | "other";
 
 export interface Phoneme {
   symbol: string;
   kind: PhonemeKind;
-}
-
-export type AffixKind = "prefix" | "suffix";
-
-export interface FeatureValue {
-  id: string;
-  label: string;
-}
-
-export interface Feature {
-  id: string;
-  label: string;
-  values: FeatureValue[];
-}
-
-export interface ParadigmRow {
-  when: Record<string, string>;
-  surface: string;
-  kind: AffixKind;
-}
-
-export interface Paradigm {
-  class: string;
-  rows: ParadigmRow[];
-}
-
-export interface Morphology {
-  features: Feature[];
-  paradigms: Paradigm[];
 }
 
 /** Split a space/comma separated symbol list, dropping blanks and duplicates. */
@@ -130,11 +103,9 @@ export function setPluralEnding(
     paradigms.push(noun);
   }
   const index = noun.rows.findIndex((row) => row.when.number === "plural");
-  const when =
-    index >= 0
-      ? { ...noun.rows[index].when, number: "plural" }
-      : { number: "plural" };
-  const row: ParadigmRow = { when, surface, kind };
+  const existing = index >= 0 ? noun.rows[index] : undefined;
+  // Keep any slot/order/morpheme the plural row already carried.
+  const row: ParadigmRow = { ...existing, when: { ...existing?.when, number: "plural" }, surface, kind };
   if (index >= 0) noun.rows[index] = row;
   else noun.rows.push(row);
   return { ...morphology, paradigms };

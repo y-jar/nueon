@@ -138,6 +138,9 @@ Command groups (see `src-tauri/src/commands/`):
 - translation (`list_presets`, `save_preset`, `delete_preset`,
   `execute_translation`, `create_translation_word`, `translation_options`,
   `set_translation_options`, `export_presets`, `import_presets`)
+- morphology (`translation_morphology`, `set_translation_morphology`,
+  `list_morphemes`, `lexicon`)
+- phonology (`phonology_check_words`, `phonology_segments`)
 - version control (`vcs_*` and `git_prompt_dismissed`/
   `git_prompt_dismissed_set`, `autocheckin_*`)
 - windows (`window_spawn`, `window_close_self`, `windows_restore`)

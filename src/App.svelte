@@ -6,6 +6,7 @@
     init,
     closeTab,
     openTranslation,
+    openMorphology,
     activeGroup,
     serializeTiling,
     restoreMainTiling,
@@ -28,7 +29,14 @@
   import TrashModal from "./components/TrashModal.svelte";
   import ImportWizardModal from "./components/import/ImportWizardModal.svelte";
 
-  const ACTIVITIES: Activity[] = ["notes", "dictionary", "translation", "git"];
+  const ACTIVITIES: Activity[] = [
+    "notes",
+    "dictionary",
+    "translation",
+    "morphology",
+    "phonology",
+    "git",
+  ];
   let layoutLoaded = $state(false);
   let teardown: (() => void)[] = [];
 
@@ -55,8 +63,9 @@
         // Layout is best-effort.
       }
       await restoreMainTiling();
-      // Restore the translation tool as a tab when it was the active activity.
+      // Restore tool tabs when they were the active activity.
       if (ui.activity === "translation") await openTranslation();
+      if (ui.activity === "morphology") await openMorphology();
       layoutLoaded = true;
     })();
   });

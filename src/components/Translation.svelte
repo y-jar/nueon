@@ -5,9 +5,7 @@
   import * as api from "../lib/api";
   import { ui, activeDoc } from "../lib/state.svelte";
   import TranslationToolbar from "./translation/TranslationToolbar.svelte";
-  import MorphologyDrawer from "./translation/MorphologyDrawer.svelte";
   import FeatureBar from "./translation/FeatureBar.svelte";
-  import ParadigmEditor from "./translation/ParadigmEditor.svelte";
   import SlotPalette from "./translation/SlotPalette.svelte";
   import ClauseCanvas from "./translation/ClauseCanvas.svelte";
   import TranslationRunner from "./translation/TranslationRunner.svelte";
@@ -26,8 +24,6 @@
   let suggestions = $state<Record<number, api.WordHit[]>>({});
   let morphology = $state<api.Morphology>({ features: [], paradigms: [] });
   let selections = $state<api.FeatureSelections>({});
-  let showMorphology = $state(false);
-  let showParadigms = $state(false);
   let inputText = $state("");
   let choices = $state<Record<string, string>>({});
   let report = $state<api.TranslationReport | null>(null);
@@ -136,27 +132,9 @@
     persistOptions();
   }
 
-  function addAffix(rule: api.AffixRule) {
-    affixes = [...affixes, rule];
-    persistOptions();
-  }
-
-  function removeAffix(index: number) {
-    affixes = affixes.filter((_, i) => i !== index);
-    persistOptions();
-  }
-
   function onSeparatorCommit() {
     persistOptions();
     run();
-  }
-
-  function toggleMorphology() {
-    showMorphology = !showMorphology;
-  }
-
-  function toggleParadigms() {
-    showParadigms = !showParadigms;
   }
 
   /** Select / clear one feature value, then re-run. */
@@ -171,17 +149,16 @@
     void run();
   }
 
-  let morphologyTimer: ReturnType<typeof setTimeout> | undefined;
-  function updateMorphology(next: api.Morphology) {
-    morphology = next;
-    if (morphologyTimer) clearTimeout(morphologyTimer);
-    morphologyTimer = setTimeout(() => {
-      void api.setTranslationMorphology(morphology).catch((e) => {
-        error = String(e);
-      });
-      void run();
-    }, 400);
-  }
+  // Reload features and re-run when the Morphology activity edits the config.
+  let seenRevision = ui.morphologyRevision;
+  $effect(() => {
+    if (ui.morphologyRevision === seenRevision) return;
+    seenRevision = ui.morphologyRevision;
+    void (async () => {
+      await loadMorphology();
+      await run();
+    })();
+  });
 
   async function exportPresets() {
     const path = await save({
@@ -427,8 +404,6 @@
     grammarRules={grammarRules.map((rule) => rule.name)}
     bind:draftName
     {hasPreset}
-    {showMorphology}
-    {showParadigms}
     {mode}
     onLoad={loadPreset}
     onLoadGrammar={loadGrammarRule}
@@ -436,23 +411,10 @@
     onDelete={() => deletePreset(draftName)}
     onExport={exportPresets}
     onImport={importPresets}
-    onToggleMorphology={toggleMorphology}
-    onToggleParadigms={toggleParadigms}
     onSetMode={setMode}
   />
 
-  <MorphologyDrawer
-    open={showMorphology}
-    {affixes}
-    onAdd={addAffix}
-    onRemove={removeAffix}
-  />
-
   <FeatureBar features={morphology.features} {selections} onToggle={toggleFeature} />
-
-  {#if showParadigms}
-    <ParadigmEditor {morphology} onChange={updateMorphology} />
-  {/if}
 
   {#if mode === "grid"}
     <SlotPalette
