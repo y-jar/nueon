@@ -10,14 +10,21 @@
     closeSettings,
     setActivity,
     clearSuppressedConfirms,
+    setKeybind,
+    resetKeybinds,
   } from "../lib/state.svelte";
+  import KeybindCaptureModal from "./KeybindCaptureModal.svelte";
   import {
     pluralEnding,
     rebuildPhonemes,
     setPluralEnding,
     splitSoundClasses,
   } from "../lib/configEdit";
-  import { KEYBIND_GROUPS, formatKeys } from "../lib/keybindings";
+  import {
+    KEYBIND_GROUPS,
+    formatKeys,
+    resolveKeybinds,
+  } from "../lib/keybindings";
 
   const TABS = [
     { id: "language", labelKey: "settings.language" },
@@ -29,6 +36,9 @@
   ] as const;
 
   let tab = $state<(typeof TABS)[number]["id"]>("language");
+  /** Command id whose shortcut is being captured, if any. */
+  let captureId = $state<string | null>(null);
+  const resolved = $derived(resolveKeybinds(ui.keybinds));
 
   let language = $state<api.LanguageConfig>({
     name: "",
@@ -470,19 +480,36 @@
       {#each KEYBIND_GROUPS as group (group.titleKey)}
         <div class="section-title">{$t(group.titleKey)}</div>
         <ul class="keybind-list">
-          {#each group.bindings as binding (binding.id)}
+          {#each group.bindings as def (def.id)}
             <li>
-              <span class="keys mono">{formatKeys(binding.defaultKey)}</span>
-              <span
+              <span class="keys mono"
+                >{resolved[def.id]
+                  ? formatKeys(resolved[def.id]!)
+                  : $t("keybinds.unbound")}</span
+              >
+              <span class="grow"
                 >{$t(
-                  binding.labelKey,
-                  binding.values ? { values: binding.values } : undefined,
+                  def.labelKey,
+                  def.values ? { values: def.values } : undefined,
                 )}</span
               >
+              <button onclick={() => (captureId = def.id)}
+                >{$t("keybinds.edit")}</button
+              >
+              {#if def.id in ui.keybinds}
+                <button onclick={() => void setKeybind(def.id, null)}
+                  >{$t("keybinds.reset")}</button
+                >
+              {/if}
             </li>
           {/each}
         </ul>
       {/each}
+      <p class="muted">{$t("keybinds.fixed")}</p>
+      <button
+        disabled={Object.keys(ui.keybinds).length === 0}
+        onclick={() => void resetKeybinds()}>{$t("keybinds.resetAll")}</button
+      >
     {:else}
       <div class="pane-title">{$t("settings.profile")}</div>
       <p class="muted">{$t("settings.profileHint")}</p>
@@ -502,4 +529,21 @@
     {#if status}<p class="muted">{status}</p>{/if}
     {#if error}<p class="error">{error}</p>{/if}
   </div>
+
+  {#if captureId}
+    <KeybindCaptureModal
+      id={captureId}
+      current={resolved[captureId] ?? null}
+      {resolved}
+      onSave={(key) => {
+        void setKeybind(captureId!, key);
+        captureId = null;
+      }}
+      onReset={() => {
+        void setKeybind(captureId!, null);
+        captureId = null;
+      }}
+      onClose={() => (captureId = null)}
+    />
+  {/if}
 </div>

@@ -3067,3 +3067,24 @@ button.danger:hover:not(:disabled) {
   gap: 10px;
   color: var(--muted);
 }
+
+/* -- keybind capture ----------------------------------------------------- */
+
+.keybind-capture .capture-keys {
+  text-align: center;
+  font-size: 20px;
+  padding: 18px;
+  margin: 4px 0 10px;
+  border: 1px dashed var(--border);
+  border-radius: 6px;
+  color: var(--text);
+}
+
+.keybind-capture .capture-keys.unbound {
+  color: var(--muted);
+  font-size: 14px;
+}
+
+.capture-actions {
+  margin-top: 10px;
+}

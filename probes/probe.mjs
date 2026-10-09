@@ -186,6 +186,7 @@ const ENTER = "\uE007";
 const BACKSPACE = "\uE003";
 const SHIFT = "\uE008";
 const CTRL = "\uE009";
+const ALT = "\uE00A";
 const ARROW_DOWN = "\uE015";
 
 /** Press a key, optionally held with modifiers (e.g. `pressKey("z", [CTRL])`). */
@@ -2352,7 +2353,7 @@ async function main() {
     const rows = await js(
       `return [...document.querySelectorAll('.keybind-list li')].map((li) => ({
          keys: li.querySelector('.keys')?.textContent.trim(),
-         label: li.querySelector('span:last-child')?.textContent.trim(),
+         label: li.querySelector('.grow')?.textContent.trim(),
        }));`,
     );
     const has = (keys, label) =>
@@ -2640,6 +2641,87 @@ async function main() {
          .some((b) => b.textContent.includes('Open in default app'));`,
     );
     if (!hasOpen) throw new Error("no open-in-default button");
+  });
+
+  // -- probe 42: editable keybinds ------------------------------------------
+  await probe("42-editable-keybinds", async () => {
+    // Keep a note open so the remap must reconfigure the live editor.
+    await openActivity("Notes");
+    await openNote("beta.md");
+    await focusEditor("beta.md");
+    await placeCursor("beta.md", 2);
+
+    const openSettings = () =>
+      js(`document.querySelector('.activity[title="Settings"]').click(); return true;`);
+    const openKeybinds = () =>
+      js(`const b = [...document.querySelectorAll('.settings-nav button')]
+         .find((x) => x.textContent.trim() === 'Keybinds');
+       if (b) b.click();
+       return !!b;`);
+    const boldRow = `[...document.querySelectorAll('.keybind-list li')]
+       .find((li) => li.querySelector('.grow')?.textContent.trim() === 'Bold')`;
+
+    await openSettings();
+    await waitJs(`!!document.querySelector('.settings-nav')`, { label: "settings" });
+    await openKeybinds();
+    await waitJs(`!!document.querySelector('.keybind-list')`, { label: "keybind list" });
+
+    // Edit Bold.
+    await js(`const li = ${boldRow}; const b = li?.querySelector('button');
+       if (b) b.click();
+       return !!b;`);
+    await waitJs(`!!document.querySelector('.keybind-capture')`, { label: "capture modal" });
+
+    // A reserved combo is refused.
+    await pressKey("c", [CTRL]);
+    await waitJs(`!!document.querySelector('.keybind-capture .error')`, {
+      label: "reserved error",
+    });
+    if (!(await js(`return document.querySelector('.keybind-capture button.primary')?.disabled === true;`))) {
+      throw new Error("reserved combo should disable Save");
+    }
+
+    // A free combo is captured and saved.
+    await pressKey("b", [CTRL, ALT]);
+    await waitJs(
+      `document.querySelector('.keybind-capture .capture-keys')?.textContent.trim() === 'Ctrl+Alt+B'`,
+      { label: "captured combo" },
+    );
+    await js(`const b = document.querySelector('.keybind-capture button.primary');
+       if (b) b.click();
+       return !!b;`);
+    await waitJs(`!document.querySelector('.keybind-capture')`, { label: "capture closed" });
+    await waitJs(
+      `(${boldRow})?.querySelector('.keys')?.textContent.trim() === 'Ctrl+Alt+B'`,
+      { label: "row shows the override" },
+    );
+    await js(`const b = document.querySelector('.modal-head button'); if (b) b.click(); return !!b;`);
+    await waitJs(`!document.querySelector('.settings-nav')`, { label: "settings closed" });
+
+    // The custom combo bolds in the (still mounted) editor.
+    await focusEditor("beta.md");
+    await placeCursor("beta.md", 2);
+    await pressKey("b", [CTRL, ALT]);
+    await new Promise((resolve) => setTimeout(resolve, 200));
+    const doc = await editorText("beta.md");
+    if (!doc.includes("**")) {
+      throw new Error(`custom keybind did not bold: ${JSON.stringify(doc)}`);
+    }
+
+    // Reset restores the default.
+    await openSettings();
+    await waitJs(`!!document.querySelector('.settings-nav')`, { label: "settings again" });
+    await openKeybinds();
+    await waitJs(`!!document.querySelector('.keybind-list')`, { label: "keybind list again" });
+    await js(`const li = ${boldRow};
+       const b = [...li.querySelectorAll('button')].find((x) => x.textContent.trim() === 'Reset');
+       if (b) b.click();
+       return !!b;`);
+    await waitJs(
+      `(${boldRow})?.querySelector('.keys')?.textContent.trim() === 'Ctrl+B'`,
+      { label: "reset to default" },
+    );
+    await js(`const b = document.querySelector('.modal-head button'); if (b) b.click(); return !!b;`);
   });
 }
 
