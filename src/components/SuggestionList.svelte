@@ -57,6 +57,7 @@
     <li>
       <button
         type="button"
+        tabindex="-1"
         class:active={index === highlight}
         onmousedown={(event) => {
           // Keep focus in the input so its blur handler never fires first.

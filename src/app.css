@@ -2261,9 +2261,27 @@ button.primary {
   color: #d6785a;
 }
 
+.pill-add {
+  display: grid;
+  place-items: center;
+  flex: none;
+  width: 18px;
+  height: 18px;
+  padding: 0;
+  background: transparent;
+  border: none;
+  color: var(--muted);
+  cursor: pointer;
+}
+
+.pill-add:hover {
+  color: var(--accent);
+}
+
 .pill-input {
-  flex: 1;
-  min-width: 70px;
+  /* Prefer wrapping to a new line over squeezing into a sliver. */
+  flex: 1 1 8em;
+  min-width: 8em;
   padding: 2px 4px;
   background: transparent;
   border: 1px solid transparent;

@@ -2833,7 +2833,9 @@ async function main() {
        i.dispatchEvent(new Event('input', { bubbles: true }));
        return true;`);
     await waitJs(`!!document.querySelector('.suggestions')`, { label: "pos suggestions" });
-    await pressKey(TAB);
+    // Browse to the suggestion, then Enter accepts it.
+    await pressKey(ARROW_DOWN);
+    await pressKey(ENTER);
     await waitJs(
       `(() => {
          const row = [...document.querySelectorAll('.add-word-modal .prop-row')]
@@ -2851,7 +2853,8 @@ async function main() {
        i.dispatchEvent(new Event('input', { bubbles: true }));
        return true;`);
     await waitJs(`!!document.querySelector('.suggestions')`, { label: "english suggestions" });
-    await pressKey(TAB);
+    await pressKey(ARROW_DOWN);
+    await pressKey(ENTER);
     await waitJs(`(${propInput("english")})?.value === 'dog'`, {
       label: "english suggestion accepted",
     });
@@ -2957,6 +2960,79 @@ async function main() {
     );
 
     await js(`window.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape' })); return true;`);
+  });
+
+  // -- probe 47: list cells add on Enter, wrap, and browse ---------------
+  await probe("47-list-cell-enter-and-browse", async () => {
+    await openActivity("Dictionary");
+    await waitJs(`!!document.querySelector('.table-list')`, { label: "tables panel" });
+    const opened = await js(
+      `const b = [...document.querySelectorAll('.table-list .table-row .tree-name')]
+         .find((x) => x.textContent.trim().startsWith('lex'));
+       if (b) b.click();
+       return !!b;`,
+    );
+    if (!opened) throw new Error("no 'lex' table in the panel");
+    await waitJs(`!!document.querySelector('.dict-grid')`, { label: "lex grid" });
+    await js(`const b = document.querySelector('.grid-toolbar button.primary');
+       b.click();
+       return !!b;`);
+    await waitJs(`!!document.querySelector('.add-word-modal')`, { label: "add word modal" });
+
+    const posRow = `[...document.querySelectorAll('.add-word-modal .prop-row')]
+       .find((r) => r.querySelector('.prop-name')?.textContent.trim().endsWith('pos'))`;
+    const posInput = `(${posRow})?.querySelector('input.pill-input')`;
+    const pillExists = (value) =>
+      `(() => { const row = ${posRow}; return !!row && [...row.querySelectorAll('.pill')]
+         .some((p) => p.textContent.trim() === ${JSON.stringify(value)}); })()`;
+
+    // Focusing an empty cell shows no dropdown.
+    await js(`const i = ${posInput}; if (i) i.focus(); return !!i;`);
+    await new Promise((resolve) => setTimeout(resolve, 150));
+    if (await js(`return !!document.querySelector('.suggestions');`)) {
+      throw new Error("dropdown opened on an empty focus");
+    }
+
+    // A novel value + Enter adds the entry and keeps focus.
+    await js(`const i = ${posInput}; i.value = 'zzz';
+       i.dispatchEvent(new Event('input', { bubbles: true })); return true;`);
+    await pressKey(ENTER);
+    await waitJs(pillExists("zzz"), { label: "Enter added the pill" });
+    if (!(await js(`return document.activeElement === (${posInput});`))) {
+      throw new Error("focus left the cell after Enter");
+    }
+
+    // A second value + Tab adds it and moves on.
+    await js(`const i = ${posInput}; i.value = 'qqq';
+       i.dispatchEvent(new Event('input', { bubbles: true })); return true;`);
+    await pressKey(TAB);
+    await waitJs(pillExists("qqq"), { label: "Tab added the pill" });
+    if (await js(`return document.activeElement === (${posInput});`)) {
+      throw new Error("Tab did not move focus on");
+    }
+
+    // ↓ from an empty cell browses every value.
+    await js(`const i = ${posInput}; i.focus();
+       i.value = '';
+       i.dispatchEvent(new Event('input', { bubbles: true })); return true;`);
+    await pressKey(ARROW_DOWN);
+    await waitJs(`!!document.querySelector('.suggestions')`, { label: "Down browses all" });
+
+    // The leading + focuses the input and opens the list.
+    await js(`const i = ${posInput}; i.blur(); return true;`);
+    await new Promise((resolve) => setTimeout(resolve, 100));
+    if (await js(`return !!document.querySelector('.suggestions');`)) {
+      throw new Error("dropdown did not close on blur");
+    }
+    await js(`const b = (${posRow})?.querySelector('.pill-add'); if (b) b.click(); return !!b;`);
+    await waitJs(`!!document.querySelector('.suggestions')`, { label: "+ opens the list" });
+    if (!(await js(`return document.activeElement === (${posInput});`))) {
+      throw new Error("+ did not focus the input");
+    }
+
+    await js(`const b = document.querySelector('.add-word-modal .modal-head button');
+       if (b) b.click();
+       return !!b;`);
   });
 }
 

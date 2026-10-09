@@ -29,7 +29,9 @@
   let inputEl = $state<HTMLInputElement | null>(null);
   let draft = $state("");
   let active = $state(false);
-  let highlight = $state(0);
+  let highlight = $state(-1);
+  let browsing = $state(false);
+  let closed = $state(false);
 
   // Show the stored value, and follow it while the field is not being edited.
   $effect(() => {
@@ -37,45 +39,48 @@
   });
 
   const matches = $derived(filterSuggestions(suggestions, draft));
-  const open = $derived(active && matches.length > 0);
+  const open = $derived(
+    active && !closed && matches.length > 0 && (browsing || draft.trim() !== ""),
+  );
 
   function accept(next: string) {
     draft = next;
     onInput?.(next);
     onCommit(next);
-    active = false;
+    browsing = false;
+    closed = false;
+    highlight = -1;
   }
 
   function onKeydown(event: KeyboardEvent) {
-    if (open) {
-      if (event.key === "ArrowDown") {
-        event.preventDefault();
-        highlight = Math.min(highlight + 1, matches.length - 1);
+    if (event.key === "ArrowDown" || event.key === "ArrowUp") {
+      event.preventDefault();
+      closed = false;
+      if (!browsing) {
+        browsing = true;
+        highlight = event.key === "ArrowDown" ? 0 : matches.length - 1;
         return;
       }
-      if (event.key === "ArrowUp") {
-        event.preventDefault();
-        highlight = Math.max(highlight - 1, 0);
-        return;
-      }
-      if (event.key === "Tab" || event.key === "Enter") {
-        event.preventDefault();
-        accept(matches[highlight]);
-        return;
-      }
-      if (event.key === "Escape") {
-        event.preventDefault();
-        active = false;
-        return;
-      }
+      const delta = event.key === "ArrowDown" ? 1 : -1;
+      highlight = Math.min(Math.max(highlight + delta, 0), matches.length - 1);
+      return;
     }
     if (event.key === "Enter") {
-      if (onEnter) {
-        event.preventDefault();
+      event.preventDefault();
+      if (open && browsing && highlight >= 0) {
+        accept(matches[highlight]);
+      } else if (onEnter) {
         onEnter();
       } else {
         inputEl?.blur();
       }
+      return;
+    }
+    if (event.key === "Escape" && open) {
+      event.preventDefault();
+      closed = true;
+      browsing = false;
+      highlight = -1;
     }
   }
 </script>
@@ -88,12 +93,16 @@
     bind:value={draft}
     onfocus={() => (active = true)}
     oninput={(e) => {
-      highlight = 0;
+      closed = false;
+      browsing = false;
+      highlight = -1;
       onInput?.(e.currentTarget.value);
     }}
     onkeydown={onKeydown}
     onblur={() => {
       active = false;
+      browsing = false;
+      closed = false;
       onCommit(draft);
     }}
   />
