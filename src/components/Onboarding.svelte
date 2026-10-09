@@ -3,7 +3,7 @@
   import { t } from "svelte-i18n";
   import { open } from "@tauri-apps/plugin-dialog";
   import { ui, openWorkspace, createWorkspace } from "../lib/state.svelte";
-  import logo from "../../assets/branding/nueon-logo-dark.svg";
+  import logo from "../../assets/branding/nueon-logo-bright.svg";
 
   let name = $state("");
   let destination = $state("");

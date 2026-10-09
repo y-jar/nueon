@@ -57,11 +57,11 @@ done
 
 # The in-app mark is the SVG source (ActivityBar / Onboarding import it
 # directly); make sure it is present and actually an SVG.
-svg="$root/assets/branding/nueon-logo-dark.svg"
+svg="$root/assets/branding/nueon-logo-bright.svg"
 if [ -s "$svg" ] && head -c 400 "$svg" | grep -q '<svg'; then
-  echo "ok   assets/branding/nueon-logo-dark.svg: present"
+  echo "ok   assets/branding/nueon-logo-bright.svg: present"
 else
-  echo "FAIL assets/branding/nueon-logo-dark.svg: missing or not an SVG"
+  echo "FAIL assets/branding/nueon-logo-bright.svg: missing or not an SVG"
   failed=1
 fi
 
