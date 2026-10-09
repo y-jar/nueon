@@ -236,6 +236,55 @@ class MorphologyStore {
     }
   }
 
+  /**
+   * Set the ending for one grid cell: replace (or create) the rule whose `slot`
+   * and `when` exactly match, then persist.
+   */
+  async setCell(
+    classId: string,
+    slot: string | null,
+    when: api.FeatureSelections,
+    source: {
+      zero?: boolean;
+      morpheme?: api.MorphemeRef | null;
+      surface?: string;
+      kind?: api.AffixKind;
+    },
+  ): Promise<void> {
+    const key = (w: api.FeatureSelections) =>
+      JSON.stringify(Object.entries(w).sort(([a], [b]) => a.localeCompare(b)));
+    const next: api.Morphology = {
+      ...this.morphology,
+      paradigms: this.morphology.paradigms.map((paradigm) => ({
+        ...paradigm,
+        rows: [...paradigm.rows],
+      })),
+    };
+    let paradigm = next.paradigms.find((entry) => entry.class === classId);
+    if (!paradigm) {
+      paradigm = { class: classId, rows: [] };
+      next.paradigms.push(paradigm);
+    }
+    const index = paradigm.rows.findIndex(
+      (row) =>
+        (row.slot ?? null) === (slot ?? null) && key(row.when) === key(when),
+    );
+    const order =
+      index >= 0
+        ? (paradigm.rows[index].order ?? 0)
+        : paradigm.rows.reduce((max, row) => Math.max(max, row.order ?? 0), 0) + 1;
+    paradigm.rows[index >= 0 ? index : paradigm.rows.length] = {
+      when,
+      slot,
+      order,
+      surface: source.surface ?? "",
+      kind: source.kind ?? "suffix",
+      morpheme: source.morpheme ?? null,
+      zero: source.zero ?? false,
+    };
+    await this.save(next);
+  }
+
   /** The built-in word classes plus any class that already has a paradigm. */
   classNames(): string[] {
     return [

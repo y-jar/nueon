@@ -481,7 +481,15 @@
     "morphemeGloss": "gloss",
     "addMorpheme": "Add",
     "cancel": "Cancel",
-    "noEnding": "No ending defined — set one in Endings."
+    "noEnding": "No ending defined — set one in Endings.",
+    "inherent": "Reads from",
+    "inflectional": "Chosen when used",
+    "unset": "(unset)",
+    "filterBy": "Filter by",
+    "all": "All",
+    "defaultSlot": "Ending",
+    "ambiguous": "Two endings of equal specificity both match — make one more specific.",
+    "moreCombinations": "{count} more combinations — narrow by feature."
   },
   "phonology": {
     "title": "Phonology",

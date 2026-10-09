@@ -420,6 +420,13 @@ impl Workspace {
                 }
             }
         }
+        for feature in &mut self.translation.morphology.features {
+            if let Some(column) = &mut feature.column {
+                if column.table == from {
+                    column.table = to.to_string();
+                }
+            }
+        }
     }
 
     /// Export a table to `destination` in the requested format (atomic write).

@@ -6,7 +6,7 @@
   import ComposeBuilder from "./translation/ComposeBuilder.svelte";
   import FeatureBar from "./translation/FeatureBar.svelte";
   import FeatureEditor from "./translation/FeatureEditor.svelte";
-  import ParadigmEditor from "./translation/ParadigmEditor.svelte";
+  import ParadigmGrid from "./translation/ParadigmGrid.svelte";
   import MorphologyDrawer from "./translation/MorphologyDrawer.svelte";
   import SaveWordForm from "./translation/SaveWordForm.svelte";
   import WordPicker from "./translation/WordPicker.svelte";
@@ -48,15 +48,17 @@
       : null,
   );
 
-  // With rules: only the features they condition on. With none: every feature,
-  // so the user can see what still needs defining.
+  // Inherent (column-bound) features never appear in the bar; only the
+  // inflectional ones. With rules: those they condition on. With none: all of
+  // them, so the user can see what still needs defining.
   const relevantFeatures = $derived.by(() => {
     if (!word?.class) return [];
-    if (!paradigm || paradigm.rows.length === 0) {
-      return store.morphology.features;
-    }
+    const inflectional = store.morphology.features.filter(
+      (feature) => !feature.column,
+    );
+    if (!paradigm || paradigm.rows.length === 0) return inflectional;
     const ids = new Set(paradigm.rows.flatMap((row) => Object.keys(row.when)));
-    return store.morphology.features.filter((feature) => ids.has(feature.id));
+    return inflectional.filter((feature) => ids.has(feature.id));
   });
 
   /** The (feature, value) pairs that have a matching ending. */
@@ -186,11 +188,7 @@
       <div class="section-title">
         {$t("morphology.endings")} — <span class="badge tag">{store.selectedClass}</span>
       </div>
-      <ParadigmEditor
-        morphology={store.morphology}
-        classId={store.selectedClass}
-        onChange={onMorphology}
-      />
+      <ParadigmGrid classId={store.selectedClass} />
     </section>
   {/if}
 </div>

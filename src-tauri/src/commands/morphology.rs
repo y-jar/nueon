@@ -9,7 +9,10 @@ use tauri::State;
 use uuid::Uuid;
 
 use nueon_core::config::POS_TAG;
-use nueon_core::{AffixKind, ComposePiece, FieldValue, Inflection, Morpheme, WordEntry};
+use nueon_core::model::translate::inherent_values;
+use nueon_core::{
+    AffixKind, ComposePiece, FieldValue, Inflection, Morpheme, ParadigmGrid, WordEntry,
+};
 
 use crate::state::AppState;
 
@@ -137,6 +140,32 @@ pub fn inflect_word(
         &lexicon,
         &selections,
         &manual,
+    ))
+}
+
+/// The distinct values in a table column, for an inherent feature's options.
+#[tauri::command]
+pub fn feature_values(
+    state: State<'_, Shared>,
+    table: String,
+    column: String,
+) -> Result<Vec<String>, String> {
+    let state = state.lock().map_err(|_| "state poisoned".to_string())?;
+    let workspace = state.workspace()?;
+    Ok(inherent_values(&workspace.dictionary, &table, &column))
+}
+
+/// The endings coverage grid for a word class.
+#[tauri::command]
+pub fn paradigm_grid(state: State<'_, Shared>, class: String) -> Result<ParadigmGrid, String> {
+    let state = state.lock().map_err(|_| "state poisoned".to_string())?;
+    let workspace = state.workspace()?;
+    let morphemes = workspace.translation_morphemes();
+    Ok(nueon_core::model::translate::paradigm_grid(
+        &workspace.dictionary,
+        &workspace.translation.morphology,
+        &morphemes,
+        &class,
     ))
 }
 

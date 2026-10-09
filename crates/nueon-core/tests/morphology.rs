@@ -4,13 +4,14 @@ use std::collections::{BTreeMap, BTreeSet, HashMap};
 
 use nueon_core::config::POS_TAG;
 use nueon_core::model::translate::{
-    compose, dictionary_affixes, dictionary_morphemes, inflect, translate_direct_with_scoped,
+    compose, dictionary_affixes, dictionary_morphemes, inflect, inherent_values, paradigm_grid,
+    translate_direct_with_scoped,
 };
 use nueon_core::model::TranslationReport;
 use nueon_core::{
-    AffixKind, ComposePiece, Dictionary, FieldType, FieldValue, InflectionKind, MorphemeRef,
-    Morphology, Paradigm, ParadigmRow, TableRole, TableRoleConfig, TagDef, WordEntry,
-    DEFINITION_TAG,
+    AffixKind, ComposePiece, Dictionary, Feature, FeatureColumn, FieldType, FieldValue,
+    InflectionKind, MorphemeRef, Morphology, Paradigm, ParadigmRow, TableRole, TableRoleConfig,
+    TagDef, WordEntry, DEFINITION_TAG,
 };
 
 fn classed(word: &str, sense: &str, class: &str) -> WordEntry {
@@ -586,4 +587,134 @@ fn surface_only_paradigms_still_inflect() {
     )]);
     let report = run(&dict, &morphology, &selections(&[("number", "plural")]));
     assert_eq!(report.output, "kalau");
+}
+
+/// A noun class with an inherent `decl` feature read from the `decl` column,
+/// where plural takes `-u` for decl 1 and `-yu` for decl 2.
+fn declension_setup() -> (Dictionary, Morphology) {
+    let mut dict = Dictionary::new();
+    dict.add_table("lex");
+    dict.add_tag("lex", TagDef::new(POS_TAG, FieldType::TagList));
+    dict.add_tag("lex", TagDef::new("decl", FieldType::Text));
+    let mut first = classed("uene", "person", "noun");
+    first.set("decl", FieldValue::Text("1".to_string()));
+    dict.add_entry("lex", first);
+    let mut second = classed("kala", "dog", "noun");
+    second.set("decl", FieldValue::Text("2".to_string()));
+    dict.add_entry("lex", second);
+
+    let mut morphology = Morphology::default();
+    morphology.features.push(Feature {
+        id: "decl".to_string(),
+        label: "Declension".to_string(),
+        values: Vec::new(),
+        column: Some(FeatureColumn {
+            table: "lex".to_string(),
+            column: "decl".to_string(),
+        }),
+    });
+    morphology.paradigms.push(Paradigm {
+        class: "noun".to_string(),
+        rows: vec![
+            row(
+                &[("number", "plural"), ("decl", "1")],
+                "u",
+                AffixKind::Suffix,
+                Some("num"),
+                0,
+            ),
+            row(
+                &[("number", "plural"), ("decl", "2")],
+                "yu",
+                AffixKind::Suffix,
+                Some("num"),
+                0,
+            ),
+        ],
+    });
+    (dict, morphology)
+}
+
+#[test]
+fn an_inherent_feature_selects_the_ending() {
+    let (dict, morphology) = declension_setup();
+    let ids: Vec<uuid::Uuid> = dict
+        .table("lex")
+        .unwrap()
+        .entries
+        .iter()
+        .map(|entry| entry.id)
+        .collect();
+
+    let inflection = |id| {
+        inflect(
+            &dict,
+            id,
+            &morphology,
+            &[],
+            &selections(&[("number", "plural")]),
+            &[],
+        )
+    };
+    assert_eq!(inflection(ids[0]).surface, "ueneu");
+    assert_eq!(inflection(ids[1]).surface, "kalayu");
+
+    assert_eq!(
+        inherent_values(&dict, "lex", "decl"),
+        vec!["1".to_string(), "2".to_string()]
+    );
+}
+
+#[test]
+fn equal_specificity_rows_are_flagged_ambiguous() {
+    let morphology = morphology(vec![
+        row(
+            &[("number", "plural")],
+            "u",
+            AffixKind::Suffix,
+            Some("num"),
+            0,
+        ),
+        row(
+            &[("number", "plural")],
+            "yu",
+            AffixKind::Suffix,
+            Some("num"),
+            0,
+        ),
+    ]);
+    let sel = selections(&[("number", "plural")]);
+    let slots = morphology.resolve_slots("noun", &sel);
+    assert_eq!(slots.len(), 1);
+    assert_eq!(slots[0].winner.surface, "u");
+    assert_eq!(slots[0].ambiguous.len(), 1);
+    assert_eq!(slots[0].ambiguous[0].surface, "yu");
+    // Resolution still picks the first-declared winner.
+    assert_eq!(morphology.rows_for("noun", &sel)[0].surface, "u");
+}
+
+#[test]
+fn the_grid_reports_coverage_and_gaps() {
+    let (dict, morphology) = declension_setup();
+    let grid = paradigm_grid(&dict, &morphology, &[], "noun");
+    assert_eq!(grid.slots, vec![Some("num".to_string())]);
+    // number (2 values) x decl ("" + 2 values) = 6 combinations.
+    assert_eq!(grid.total, 6);
+
+    let cell = |number: &str, decl: &str| {
+        grid.rows
+            .iter()
+            .find(|row| {
+                row.when.get("number").map(String::as_str) == Some(number)
+                    && row.when.get("decl").map(String::as_str) == Some(decl)
+            })
+            .and_then(|row| row.cells.first())
+            .cloned()
+            .expect("no grid row")
+    };
+    assert!(cell("plural", "1").defined);
+    assert_eq!(cell("plural", "1").preview, "u");
+    assert_eq!(cell("plural", "2").preview, "yu");
+    // A combination with no rule is a coverage gap.
+    assert!(!cell("singular", "1").defined);
 }

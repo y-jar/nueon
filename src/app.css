@@ -1496,6 +1496,79 @@ button.link {
   border-color: #d6785a;
 }
 
+.feature-editor .bind {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  font-size: 12px;
+}
+
+.value-chip.read-only {
+  padding: 1px 8px;
+  font-size: 12px;
+}
+
+.paradigm-grid {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.grid-filter {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 12px;
+}
+
+.grid-scroll {
+  max-width: 100%;
+  overflow: auto;
+}
+
+.paradigm-table {
+  border-collapse: collapse;
+  font-size: 12px;
+}
+
+.paradigm-table th,
+.paradigm-table td {
+  padding: 3px 6px;
+  border: 1px solid var(--border);
+  text-align: left;
+  vertical-align: middle;
+}
+
+.paradigm-table th.row-label {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+  border: none;
+  font-weight: 400;
+}
+
+.paradigm-table td.gap {
+  background: color-mix(in srgb, #d6785a 14%, transparent);
+}
+
+.paradigm-table td.ambiguous {
+  box-shadow: inset 0 0 0 1px #d6785a;
+}
+
+.paradigm-table .cell-select {
+  font-size: 12px;
+}
+
+.paradigm-table .cell-surface {
+  width: 6em;
+  margin-left: 4px;
+}
+
+.paradigm-table .ambiguous-mark {
+  margin-left: 4px;
+  color: #d6785a;
+}
+
 .small {
   font-size: 12px;
 }

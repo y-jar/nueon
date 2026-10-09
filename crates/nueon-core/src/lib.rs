@@ -15,11 +15,11 @@ pub mod vcs;
 pub mod workspace;
 
 pub use config::{
-    AffixKind, AffixRule, Feature, FeatureValue, GrammarConfig, GrammarRule, GridViewState,
-    GroupLayout, LanguageConfig, LayoutState, MorphemeRef, Morphology, Paradigm, ParadigmRow,
-    Profile, SecondaryWindow, SortSpec, SplitDirection, SplitLayout, TabKind, TabLayout, TableRole,
-    TableRoleConfig, TextDirection, TilingLayout, TranslationConfig, TranslationOptions, UiLayout,
-    WindowGeometry, WorkspaceSettings,
+    AffixKind, AffixRule, Feature, FeatureColumn, FeatureValue, GrammarConfig, GrammarRule,
+    GridViewState, GroupLayout, LanguageConfig, LayoutState, MorphemeRef, Morphology, Paradigm,
+    ParadigmRow, Profile, SecondaryWindow, SortSpec, SplitDirection, SplitLayout, TabKind,
+    TabLayout, TableRole, TableRoleConfig, TextDirection, TilingLayout, TranslationConfig,
+    TranslationOptions, UiLayout, WindowGeometry, WorkspaceSettings,
 };
 pub use export_table::{
     export_anki, export_columns, export_delimited, export_table, AnkiExportOptions, AnkiSeparator,
@@ -32,9 +32,10 @@ pub use import::{
     LinkSyntax, Preview, SuspiciousRow, TagProposal,
 };
 pub use model::{
-    ComposePiece, Dictionary, FieldType, FieldValue, GlossMorpheme, Inflection, InflectionKind,
-    InflectionMorpheme, InterlinearGloss, Morpheme, TagDef, TagFormat, TagKindChange, TagRemoval,
-    WordEntry, WordHit, WordTable, DEFINITION_TAG, PARENT_TAG, WORDNAME_TAG,
+    ComposePiece, Dictionary, FieldType, FieldValue, GlossMorpheme, GridCell, GridRow, Inflection,
+    InflectionKind, InflectionMorpheme, InterlinearGloss, Morpheme, ParadigmGrid, TagDef,
+    TagFormat, TagKindChange, TagRemoval, WordEntry, WordHit, WordTable, DEFINITION_TAG,
+    PARENT_TAG, WORDNAME_TAG,
 };
 pub use translation::{ClauseSlot, SyntaxGrid};
 pub use vcs::{AutoCheckin, Commit, GitRepo, GitStatus, StatusEntry, VcsError};

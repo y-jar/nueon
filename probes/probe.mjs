@@ -457,6 +457,13 @@ function seedWorkspace() {
                 { id: "plural", label: "Plural" },
               ],
             },
+            // An inherent feature: read from each word's `decl` column (probe 66).
+            {
+              id: "decl",
+              label: "Declension",
+              values: [],
+              column: { table: "lex", column: "decl" },
+            },
           ],
           // The verb's tense and aspect are ordered slots that stack (probe 57);
           // each is a lone ending when the other is unselected (probe 25).
@@ -483,6 +490,22 @@ function seedWorkspace() {
             {
               class: "noun",
               rows: [{ when: { number: "plural" }, surface: "u", kind: "suffix" }],
+            },
+            // A class whose plural depends on its inherent declension (probe 66).
+            {
+              class: "root",
+              rows: [
+                {
+                  when: { number: "plural", decl: "1" },
+                  surface: "a",
+                  kind: "suffix",
+                },
+                {
+                  when: { number: "plural", decl: "2" },
+                  surface: "yu",
+                  kind: "suffix",
+                },
+              ],
             },
           ],
         },
@@ -517,6 +540,11 @@ function seedWorkspace() {
             kind: "text",
             // Value suggestions for text cells (probe 44).
             suggest: true,
+          },
+          {
+            name: "decl",
+            description: "Inherent declension group.",
+            kind: "text",
           },
         ],
         entries: [
@@ -575,6 +603,25 @@ function seedWorkspace() {
             values: {
               definition: { type: "tag_list", value: ["person"] },
               pos: { type: "tag_list", value: ["noun"] },
+            },
+          },
+          // Inherent-declension roots: plural depends on the decl group (66).
+          {
+            id: "cccccccc-cccc-4ccc-8ccc-cccccccccccc",
+            wordname: "demo1",
+            values: {
+              definition: { type: "tag_list", value: ["one"] },
+              pos: { type: "tag_list", value: ["root"] },
+              decl: { type: "text", value: "1" },
+            },
+          },
+          {
+            id: "dddddddd-dddd-4ddd-8ddd-dddddddddddd",
+            wordname: "demo2",
+            values: {
+              definition: { type: "tag_list", value: ["two"] },
+              pos: { type: "tag_list", value: ["root"] },
+              decl: { type: "text", value: "2" },
             },
           },
         ],
@@ -3301,32 +3348,20 @@ async function main() {
       throw new Error(`missing classes: ${JSON.stringify(classes)}`);
     }
 
-    // The verb's seeded two-slot paradigm shows its endings in the center.
+    // The verb's seeded tense+aspect paradigm shows in the coverage grid.
     await js(
       `const b = [...document.querySelectorAll('.morphology-sidebar .class-row')]
          .find((x) => x.textContent.trim() === 'verb');
        if (b) b.click();
        return !!b;`,
     );
-    await waitJs(
-      `document.querySelectorAll('.morphology-view .paradigm-row').length >= 2`,
-      { label: "verb endings shown" },
+    await waitJs(`!!document.querySelector('.paradigm-table tbody tr')`, {
+      label: "verb grid",
+    });
+    const cells = await js(
+      `return document.querySelectorAll('.paradigm-table .cell-select').length;`,
     );
-
-    // Adding an ending appends a row immediately.
-    const before = await js(
-      `return document.querySelectorAll('.morphology-view .paradigm-row').length;`,
-    );
-    await js(
-      `const b = [...document.querySelectorAll('.morphology-view .paradigm-editor button')]
-         .find((x) => x.textContent.includes('Add ending'));
-       if (b) b.click();
-       return !!b;`,
-    );
-    await waitJs(
-      `document.querySelectorAll('.morphology-view .paradigm-row').length === ${before + 1}`,
-      { label: "ending added" },
-    );
+    if (cells < 1) throw new Error("no grid cells for the verb");
   });
 
   // -- probe 59: the Inflect preview composes affixes -----------------------
@@ -3780,18 +3815,17 @@ async function main() {
        if (b) b.click();
        return !!b;`,
     );
-    await waitJs(`document.querySelectorAll('.morphology-view .paradigm-row').length >= 1`, {
-      label: "noun endings",
+    await waitJs(`!!document.querySelector('.paradigm-table tbody tr')`, {
+      label: "noun grid",
     });
 
-    // Point the number=plural row at the -yu morpheme instead of free text.
+    // In the Plural row's cell, point the ending at the -yu morpheme.
     const referenced = await js(
-      `const row = [...document.querySelectorAll('.morphology-view .paradigm-row')]
-         .find((r) => [...r.querySelectorAll('.rule-when select')]
-           .some((s) => s.value === 'plural'));
+      `const row = [...document.querySelectorAll('.paradigm-table tbody tr')]
+         .find((r) => r.querySelector('.row-label')?.textContent.includes('Plural'));
        if (!row) return false;
-       const select = row.querySelector('.morpheme-select');
-       const option = [...select.options].find((o) => o.textContent.includes('yu'));
+       const select = row.querySelector('.cell-select');
+       const option = [...select.options].find((o) => o.textContent.trim() === 'yu');
        if (!option) return false;
        select.value = option.value;
        select.dispatchEvent(new Event('change', { bubbles: true }));
@@ -3847,6 +3881,108 @@ async function main() {
     await new Promise((resolve) => setTimeout(resolve, 600));
     const final = await surface();
     if (final !== "ueneyu") throw new Error(`expected 'ueneyu', got '${final}'`);
+  });
+
+  // -- probe 66: inherent declension drives the grid and inflection ----------
+  await probe("66-inherent-declension", async () => {
+    await js(
+      `const b = document.querySelector('.activity[title="Morphology"]');
+       if (b) b.click();
+       return !!b;`,
+    );
+    await waitJs(`!!document.querySelector('.morphology-view')`, {
+      label: "morphology view",
+    });
+    await js(
+      `const b = [...document.querySelectorAll('.morphology-view .mode-switch button')]
+         .find((x) => x.textContent.trim() === 'Endings');
+       if (b) b.click();
+       return !!b;`,
+    );
+    await waitJs(`!!document.querySelector('.morphology-sidebar .class-row')`, {
+      label: "class chips",
+    });
+    await js(
+      `const b = [...document.querySelectorAll('.morphology-sidebar .class-row')]
+         .find((x) => x.textContent.trim() === 'root');
+       if (b) b.click();
+       return !!b;`,
+    );
+    await waitJs(`!!document.querySelector('.paradigm-table tbody tr')`, {
+      label: "root grid",
+    });
+
+    // Coverage: a gap is flagged and the decl rows carry their endings.
+    if (!(await js(`return !!document.querySelector('.paradigm-table td.gap');`))) {
+      throw new Error("no coverage gap flagged in the root grid");
+    }
+    const surfaces = await js(
+      `return [...document.querySelectorAll('.paradigm-table .cell-surface')]
+         .map((input) => input.value);`,
+    );
+    if (!surfaces.includes("a") || !surfaces.includes("yu")) {
+      throw new Error(`grid endings missing: ${JSON.stringify(surfaces)}`);
+    }
+
+    // Inflect by inherent declension: demo1 -> demo1a, demo2 -> demo2yu.
+    await js(
+      `const b = [...document.querySelectorAll('.morphology-view .mode-switch button')]
+         .find((x) => x.textContent.trim() === 'Inflect');
+       if (b) b.click();
+       return !!b;`,
+    );
+    await waitJs(`!!document.querySelector('.word-picker input')`, {
+      label: "word picker",
+    });
+
+    const pick = async (name) => {
+      await js(
+        `const i = document.querySelector('.word-picker input');
+         i.value = ${JSON.stringify(name)};
+         i.dispatchEvent(new Event('input', { bubbles: true }));
+         i.focus();
+         return true;`,
+      );
+      await waitJs(
+        `[...document.querySelectorAll('.word-picker-list button .mono')]
+           .some((x) => x.textContent.trim() === ${JSON.stringify(name)})`,
+        { label: `${name} option` },
+      );
+      await js(
+        `const b = [...document.querySelectorAll('.word-picker-list button')]
+           .find((x) => x.querySelector('.mono')?.textContent.trim() === ${JSON.stringify(name)});
+         if (b) b.click();
+         return !!b;`,
+      );
+      await waitJs(`!!document.querySelector('.inflect-surface')`, {
+        label: "inflect result",
+      });
+    };
+    const surface = () =>
+      js(
+        `return (document.querySelector('.inflect-surface')?.textContent ?? '').trim();`,
+      );
+    const plural = async () => {
+      await js(
+        `const b = [...document.querySelectorAll('.morphology-view .feature-bar button')]
+           .find((x) => x.textContent.trim() === 'Plural');
+         if (b) b.click();
+         return !!b;`,
+      );
+      await new Promise((resolve) => setTimeout(resolve, 500));
+    };
+
+    await pick("demo1");
+    await plural();
+    if ((await surface()) !== "demo1a") {
+      throw new Error(`expected 'demo1a', got '${await surface()}'`);
+    }
+
+    await pick("demo2");
+    await plural();
+    if ((await surface()) !== "demo2yu") {
+      throw new Error(`expected 'demo2yu', got '${await surface()}'`);
+    }
   });
 }
 

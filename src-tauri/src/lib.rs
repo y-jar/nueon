@@ -243,6 +243,8 @@ pub fn run() {
             commands::lexicon,
             commands::inflect_word,
             commands::compose,
+            commands::feature_values,
+            commands::paradigm_grid,
             commands::table_roles_get,
             commands::set_table_role,
             commands::phonology_check_words,

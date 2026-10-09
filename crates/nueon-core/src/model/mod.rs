@@ -18,6 +18,7 @@ pub use field::{FieldType, FieldValue};
 pub use table::{TagKindChange, TagRemoval, WordTable};
 pub use tag::{TagDef, TagFormat, DEFINITION_TAG, PARENT_TAG, WORDNAME_TAG};
 pub use translate::{
-    compose, inflect, tokenize, translate, ComposePiece, GlossMorpheme, Inflection, InflectionKind,
-    InflectionMorpheme, InterlinearGloss, Morpheme, SlotOutcome, Symbol, Token, TranslationReport,
+    compose, inflect, paradigm_grid, tokenize, translate, ComposePiece, GlossMorpheme, GridCell,
+    GridRow, Inflection, InflectionKind, InflectionMorpheme, InterlinearGloss, Morpheme,
+    ParadigmGrid, SlotOutcome, Symbol, Token, TranslationReport,
 };

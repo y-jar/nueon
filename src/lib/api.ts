@@ -649,10 +649,16 @@ export interface FeatureValue {
   id: string;
   label: string;
 }
+/** A binding of a feature to a table column, making it inherent. */
+export interface FeatureColumn {
+  table: string;
+  column: string;
+}
 export interface Feature {
   id: string;
   label: string;
   values: FeatureValue[];
+  column?: FeatureColumn | null;
 }
 /** A morpheme reference: the stable `{ table, id }` form or a legacy key. */
 export type MorphemeRef = { table: string; id: string } | string;
@@ -709,6 +715,33 @@ export interface LexiconWord {
   gloss: string;
 }
 export const lexicon = (): Promise<LexiconWord[]> => invoke("lexicon");
+
+/** One cell of the endings coverage grid. */
+export interface GridCell {
+  slot: string | null;
+  defined: boolean;
+  ambiguous: boolean;
+  zero: boolean;
+  kind: AffixKind;
+  surface: string;
+  morpheme: MorphemeRef | null;
+  preview: string;
+}
+export interface GridRow {
+  when: Record<string, string>;
+  cells: GridCell[];
+}
+export interface ParadigmGrid {
+  slots: (string | null)[];
+  rows: GridRow[];
+  total: number;
+}
+/** Distinct values in a table column, for an inherent feature's options. */
+export const featureValues = (table: string, column: string): Promise<string[]> =>
+  invoke("feature_values", { table, column });
+/** The endings coverage grid for a word class. */
+export const paradigmGrid = (className: string): Promise<ParadigmGrid> =>
+  invoke("paradigm_grid", { class: className });
 
 export type InflectionKind = "root" | "prefix" | "infix" | "suffix";
 export interface InflectionMorpheme {

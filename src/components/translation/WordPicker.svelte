@@ -32,6 +32,7 @@
       placeholder={$t("morphology.pickWordSearch")}
       bind:value={query}
       onfocus={() => (open = true)}
+      oninput={() => (open = true)}
       onblur={() => setTimeout(() => (open = false), 150)}
     />
   </label>

@@ -16,7 +16,7 @@ pub use layout::{
     TilingLayout, WindowGeometry,
 };
 pub use morphology::{
-    Feature, FeatureValue, MorphemeRef, Morphology, Paradigm, ParadigmRow, POS_TAG,
+    Feature, FeatureColumn, FeatureValue, MorphemeRef, Morphology, Paradigm, ParadigmRow, POS_TAG,
 };
 pub use phonology::{
     check_word, segments, Phoneme, PhonemeKind, PhonologyConfig, Segment, Violation,

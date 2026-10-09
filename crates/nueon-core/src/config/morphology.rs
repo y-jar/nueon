@@ -23,12 +23,27 @@ pub struct FeatureValue {
     pub label: String,
 }
 
+/// A binding of a feature to a table column, making it **inherent**: its
+/// value belongs to the word (read from the column), rather than being chosen
+/// when the word is used.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct FeatureColumn {
+    pub table: String,
+    pub column: String,
+}
+
 /// A grammatical feature, e.g. `tense` with present/past/future.
+///
+/// An *inflectional* feature is chosen when a word is used. A feature with a
+/// [`FeatureColumn`] is *inherent*: its values come from a table column and are
+/// read from each word's row.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct Feature {
     pub id: String,
     pub label: String,
     pub values: Vec<FeatureValue>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub column: Option<FeatureColumn>,
 }
 
 /// A reference to a morpheme in a `Fixes` table.
@@ -107,6 +122,7 @@ fn feature(id: &str, label: &str, values: &[&str]) -> Feature {
                 label: titlecase(value),
             })
             .collect(),
+        column: None,
     }
 }
 
@@ -129,6 +145,14 @@ impl Default for Morphology {
             paradigms: Vec::new(),
         }
     }
+}
+
+/// One slot's resolution: the winning row and any equal-specificity ties.
+#[derive(Debug)]
+pub struct SlotResolution<'a> {
+    pub slot: Option<&'a str>,
+    pub winner: &'a ParadigmRow,
+    pub ambiguous: Vec<&'a ParadigmRow>,
 }
 
 impl Morphology {
@@ -165,10 +189,25 @@ impl Morphology {
         class: &str,
         selections: &BTreeMap<String, String>,
     ) -> Vec<&'a ParadigmRow> {
+        self.resolve_slots(class, selections)
+            .into_iter()
+            .map(|resolution| resolution.winner)
+            .collect()
+    }
+
+    /// The winning row per slot, plus any equal-specificity ties that could
+    /// also match (an "ambiguous" cell). `affix_for`/`rows_for` keep the
+    /// most-specific-wins, first-declared behavior; this exposes the ties for
+    /// the editor to flag.
+    pub fn resolve_slots<'a>(
+        &'a self,
+        class: &str,
+        selections: &BTreeMap<String, String>,
+    ) -> Vec<SlotResolution<'a>> {
         let Some(paradigm) = self.paradigms.iter().find(|p| p.class == class) else {
             return Vec::new();
         };
-        let mut groups: Vec<(Option<&str>, &ParadigmRow)> = Vec::new();
+        let mut groups: Vec<(Option<&str>, Vec<&ParadigmRow>)> = Vec::new();
         for row in &paradigm.rows {
             if row.when.is_empty() {
                 continue;
@@ -182,17 +221,29 @@ impl Morphology {
             }
             let slot = row.slot.as_deref();
             match groups.iter_mut().find(|(existing, _)| *existing == slot) {
-                Some((_, current)) => {
-                    if row.when.len() > current.when.len() {
-                        *current = row;
-                    }
-                }
-                None => groups.push((slot, row)),
+                Some((_, rows)) => rows.push(row),
+                None => groups.push((slot, vec![row])),
             }
         }
+        let mut out: Vec<SlotResolution> = groups
+            .into_iter()
+            .map(|(slot, rows)| {
+                let max = rows.iter().map(|row| row.when.len()).max().unwrap_or(0);
+                let mut top: Vec<&ParadigmRow> = rows
+                    .into_iter()
+                    .filter(|row| row.when.len() == max)
+                    .collect();
+                let winner = top.remove(0);
+                SlotResolution {
+                    slot,
+                    winner,
+                    ambiguous: top,
+                }
+            })
+            .collect();
         // A stable sort keeps first-declared order among equal `order`s.
-        groups.sort_by_key(|(_, row)| row.order);
-        groups.into_iter().map(|(_, row)| row).collect()
+        out.sort_by_key(|resolution| resolution.winner.order);
+        out
     }
 
     /// Upper-cased labels for a row's conditions (for the interlinear gloss).
