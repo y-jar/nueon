@@ -40,6 +40,7 @@
       message: $t("trash.purgeMessage", { values: { name: item.name } }),
       confirmLabel: $t("trash.deleteForever"),
       danger: true,
+      kind: "trash-purge",
     });
     if (!ok) return;
     try {
@@ -56,6 +57,7 @@
       message: $t("trash.emptyMessage", { values: { count: items.length } }),
       confirmLabel: $t("trash.empty"),
       danger: true,
+      kind: "trash-empty",
     });
     if (!ok) return;
     try {

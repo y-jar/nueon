@@ -2363,18 +2363,23 @@ async function main() {
 
   // -- probe 37: git history rows are not hyperlinks ------------------------
   await probe("37-git-history-rows", async () => {
-    // Make a change so there is something to check in.
+    // Create a note so there is guaranteed something to check in.
     await openActivity("Notes");
+    await waitJs(`!!document.querySelector('.explorer-actions')`, { label: "notes sidebar" });
+    await js(`document.querySelector('.explorer-actions button:nth-of-type(1)').click();
+       return true;`);
+    await waitJs(`!!document.querySelector('.sidebar input.new-input')`, {
+      label: "new note input",
+    });
+    await js(`const i = document.querySelector('.sidebar input.new-input');
+       i.value = 'zz-git-note';
+       i.dispatchEvent(new Event('input', { bubbles: true }));
+       i.dispatchEvent(new KeyboardEvent('keydown', { key: 'Enter', bubbles: true }));
+       return true;`);
     await waitJs(
-      `!!document.querySelector('.tree-row[data-path="beta.md"] .tree-name')`,
-      { label: "notes tree" },
+      `!!document.querySelector('.tree-row[data-path="zz-git-note.md"]')`,
+      { label: "new note row" },
     );
-    await openNote("beta.md");
-    await focusEditor("beta.md");
-    const before = await editorText("beta.md");
-    await placeCursor("beta.md", before.length);
-    await pressKey(ENTER);
-    await new Promise((resolve) => setTimeout(resolve, 700));
 
     await openActivity("Source Control");
     await waitJs(`!!document.querySelector('.git-panel')`, { label: "git panel" });
@@ -2391,7 +2396,11 @@ async function main() {
        .find((x) => x.textContent.trim() === 'Check in');
        if (b) b.click();
        return !!b;`);
-    await waitJs(`!!document.querySelector('.vcs-log .log-row')`, { label: "history row" });
+    await waitJs(
+      `[...document.querySelectorAll('.vcs-log .summary')]
+         .some((s) => s.textContent.trim() === 'nueon: history probe')`,
+      { label: "committed summary in history" },
+    );
 
     const rows = await js(
       `return [...document.querySelectorAll('.vcs-log .log-row')].map((r) => ({
@@ -2410,6 +2419,92 @@ async function main() {
       `return document.querySelectorAll('.vcs-log button.link').length;`,
     );
     if (links !== 0) throw new Error("history still uses link styling");
+  });
+
+  // -- probe 38: per-kind "don't ask again" on confirmations ----------------
+  await probe("38-confirm-suppression", async () => {
+    const newNote = async (name) => {
+      await js(`document.querySelector('.explorer-actions button:nth-of-type(1)').click();
+         return true;`);
+      await waitJs(`!!document.querySelector('.sidebar input.new-input')`, {
+        label: "new note input",
+      });
+      await js(`const i = document.querySelector('.sidebar input.new-input');
+         i.value = ${JSON.stringify(name)};
+         i.dispatchEvent(new Event('input', { bubbles: true }));
+         i.dispatchEvent(new KeyboardEvent('keydown', { key: 'Enter', bubbles: true }));
+         return true;`);
+      await waitJs(
+        `!!document.querySelector('.tree-row[data-path=${JSON.stringify(name + ".md")}]')`,
+        { label: `new note ${name}` },
+      );
+    };
+    const deleteViaMenu = async (path) => {
+      await js(`const row = document.querySelector('.tree-row[data-path=${JSON.stringify(path)}]');
+         row.dispatchEvent(new MouseEvent('contextmenu', { bubbles: true, clientX: 120, clientY: 120 }));
+         return true;`);
+      await waitJs(`!!document.querySelector('.ctx-menu')`, { label: "context menu" });
+      await js(`const b = [...document.querySelectorAll('.ctx-menu button')]
+         .find((x) => x.textContent.trim() === 'Delete');
+         if (b) b.click();
+         return !!b;`);
+    };
+
+    await openActivity("Notes");
+    await waitJs(`!!document.querySelector('.explorer-actions')`, { label: "notes sidebar" });
+
+    // First delete shows the dialog with a "don't ask again" checkbox.
+    await newNote("zz-del-a");
+    await deleteViaMenu("zz-del-a.md");
+    await waitJs(`!!document.querySelector('.confirm-dialog')`, { label: "confirm dialog" });
+    const box = await js(
+      `return !!document.querySelector('.confirm-dialog .confirm-dont-ask input[type="checkbox"]');`,
+    );
+    if (!box) throw new Error("no 'don't ask again' checkbox");
+    await js(`const c = document.querySelector('.confirm-dialog .confirm-dont-ask input');
+       c.checked = true;
+       c.dispatchEvent(new Event('change', { bubbles: true }));
+       return true;`);
+    await js(`const b = document.querySelector('.confirm-dialog .confirm-ok');
+       if (b) b.click();
+       return !!b;`);
+    await waitJs(`!document.querySelector('.confirm-dialog')`, { label: "dialog closed" });
+    await waitJs(`!document.querySelector('.tree-row[data-path="zz-del-a.md"]')`, {
+      label: "note deleted",
+    });
+
+    // Settings reports the suppression and can reset it.
+    await js(`document.querySelector('.activity[title="Settings"]').click(); return true;`);
+    await waitJs(`!!document.querySelector('.settings-nav')`, { label: "settings" });
+    await js(`const b = [...document.querySelectorAll('.settings-nav button')]
+       .find((x) => x.textContent.trim() === 'Profile');
+       if (b) b.click();
+       return !!b;`);
+    await waitJs(
+      `[...document.querySelectorAll('.settings-content button')]
+         .some((b) => b.textContent.includes('Reset suppressed confirmations'))`,
+      { label: "reset control" },
+    );
+    const resetLabel = await js(
+      `return [...document.querySelectorAll('.settings-content button')]
+         .find((b) => b.textContent.includes('Reset suppressed confirmations'))?.textContent.trim();`,
+    );
+    if (!resetLabel.includes("(1)")) {
+      throw new Error(`suppression count not shown: ${JSON.stringify(resetLabel)}`);
+    }
+    await js(`const b = document.querySelector('.modal-head button'); if (b) b.click(); return !!b;`);
+
+    // A second delete of the same kind no longer asks.
+    await openActivity("Notes");
+    await newNote("zz-del-b");
+    await deleteViaMenu("zz-del-b.md");
+    await new Promise((resolve) => setTimeout(resolve, 300));
+    if (await js(`return !!document.querySelector('.confirm-dialog');`)) {
+      throw new Error("confirm shown despite suppression");
+    }
+    await waitJs(`!document.querySelector('.tree-row[data-path="zz-del-b.md"]')`, {
+      label: "second note deleted",
+    });
   });
 }
 

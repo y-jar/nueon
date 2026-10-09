@@ -408,3 +408,30 @@ pub fn dismiss_warning(state: State<'_, Shared>, key: String) -> Result<(), Stri
         .dismiss_warning(&key)
         .map_err(|err| err.to_string())
 }
+
+/// Confirm-dialog kinds the user has silenced.
+#[tauri::command]
+pub fn suppressed_confirms(state: State<'_, Shared>) -> Result<Vec<String>, String> {
+    let state = state.lock().map_err(|_| "state poisoned".to_string())?;
+    Ok(state.workspace()?.suppressed_confirms())
+}
+
+/// Silence one confirm-dialog kind.
+#[tauri::command]
+pub fn suppress_confirm(state: State<'_, Shared>, kind: String) -> Result<(), String> {
+    let mut state = state.lock().map_err(|_| "state poisoned".to_string())?;
+    state
+        .workspace_mut()?
+        .suppress_confirm(&kind)
+        .map_err(|err| err.to_string())
+}
+
+/// Clear every silenced confirm kind.
+#[tauri::command]
+pub fn clear_suppressed_confirms(state: State<'_, Shared>) -> Result<(), String> {
+    let mut state = state.lock().map_err(|_| "state poisoned".to_string())?;
+    state
+        .workspace_mut()?
+        .unsuppress_confirm(None)
+        .map_err(|err| err.to_string())
+}

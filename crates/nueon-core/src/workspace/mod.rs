@@ -1591,6 +1591,39 @@ impl Workspace {
         self.save_settings()
     }
 
+    /// Confirm-dialog kinds the user asked not to see again.
+    pub fn suppressed_confirms(&self) -> Vec<String> {
+        self.settings.suppressed_confirms.clone()
+    }
+
+    /// Whether a confirm kind has been silenced.
+    pub fn is_confirm_suppressed(&self, kind: &str) -> bool {
+        self.settings
+            .suppressed_confirms
+            .iter()
+            .any(|item| item == kind)
+    }
+
+    /// Silence a confirm kind and persist the preference.
+    pub fn suppress_confirm(&mut self, kind: &str) -> Result<(), StorageError> {
+        if !self.is_confirm_suppressed(kind) {
+            self.settings.suppressed_confirms.push(kind.to_string());
+        }
+        self.save_settings()
+    }
+
+    /// Un-silence one confirm kind, or every kind when `kind` is `None`.
+    pub fn unsuppress_confirm(&mut self, kind: Option<&str>) -> Result<(), StorageError> {
+        match kind {
+            Some(kind) => self
+                .settings
+                .suppressed_confirms
+                .retain(|item| item != kind),
+            None => self.settings.suppressed_confirms.clear(),
+        }
+        self.save_settings()
+    }
+
     /// Commit the pending auto-check-in if the workspace has been idle long
     /// enough. Intended to be called from the UI event loop.
     pub fn pump_auto_checkin(&mut self, now: Instant) -> Result<Option<String>, VcsError> {
@@ -2431,6 +2464,29 @@ mod tests {
         assert!(!ws
             .set_table_role("missing", TableRole::Fixes, None, None)
             .unwrap());
+    }
+
+    #[test]
+    fn suppressed_confirms_silence_and_clear() {
+        let dir = tempfile::tempdir().unwrap();
+        let mut ws = Workspace::new(dir.path()).unwrap();
+        assert!(ws.suppressed_confirms().is_empty());
+        assert!(!ws.is_confirm_suppressed("delete-note"));
+
+        ws.suppress_confirm("delete-note").unwrap();
+        ws.suppress_confirm("delete-table").unwrap();
+        ws.suppress_confirm("delete-note").unwrap(); // idempotent
+        assert_eq!(
+            ws.suppressed_confirms(),
+            vec!["delete-note".to_string(), "delete-table".to_string()]
+        );
+
+        ws.unsuppress_confirm(Some("delete-note")).unwrap();
+        assert!(!ws.is_confirm_suppressed("delete-note"));
+        assert!(ws.is_confirm_suppressed("delete-table"));
+
+        ws.unsuppress_confirm(None).unwrap();
+        assert!(ws.suppressed_confirms().is_empty());
     }
 
     #[test]

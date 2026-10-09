@@ -3,7 +3,13 @@
   import { t } from "svelte-i18n";
   import { open, save } from "@tauri-apps/plugin-dialog";
   import * as api from "../lib/api";
-  import { ui, openSetupWizard, closeSettings, setActivity } from "../lib/state.svelte";
+  import {
+    ui,
+    openSetupWizard,
+    closeSettings,
+    setActivity,
+    clearSuppressedConfirms,
+  } from "../lib/state.svelte";
   import {
     pluralEnding,
     rebuildPhonemes,
@@ -488,6 +494,13 @@
         <button onclick={exportProfile}>{$t("settings.exportProfile")}</button>
         <button onclick={importProfile}>{$t("settings.importProfile")}</button>
       </div>
+      <button
+        disabled={ui.suppressedConfirms.length === 0}
+        onclick={() => clearSuppressedConfirms()}
+        >{$t("settings.resetConfirms")}{ui.suppressedConfirms.length
+          ? ` (${ui.suppressedConfirms.length})`
+          : ""}</button
+      >
     {/if}
 
     {#if status}<p class="muted">{status}</p>{/if}

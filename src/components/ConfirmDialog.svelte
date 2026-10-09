@@ -1,11 +1,16 @@
 <script lang="ts">
-  import { ui } from "../lib/state.svelte";
+  import { t } from "svelte-i18n";
+  import { ui, suppressConfirm } from "../lib/state.svelte";
 
   let cancelButton = $state<HTMLButtonElement | null>(null);
+  let dontAsk = $state(false);
 
   // Cancel is the default focus so a stray Enter never confirms a delete.
   $effect(() => {
-    if (ui.confirm) cancelButton?.focus();
+    if (ui.confirm) {
+      cancelButton?.focus();
+      dontAsk = false;
+    }
   });
 
   function onKey(event: KeyboardEvent) {
@@ -13,6 +18,13 @@
       event.stopPropagation();
       ui.confirm.resolve(false);
     }
+  }
+
+  function confirm() {
+    const request = ui.confirm;
+    if (!request) return;
+    if (dontAsk && request.kind) void suppressConfirm(request.kind);
+    request.resolve(true);
   }
 </script>
 
@@ -39,6 +51,12 @@
       </div>
       <div class="confirm-body">
         <p id="confirm-message">{ui.confirm.message}</p>
+        {#if ui.confirm.kind}
+          <label class="confirm-dont-ask">
+            <input type="checkbox" bind:checked={dontAsk} />
+            {$t("confirm.dontAskAgain")}
+          </label>
+        {/if}
       </div>
       <div class="modal-foot">
         <span class="grow"></span>
@@ -52,7 +70,7 @@
         <button
           class="confirm-ok"
           class:danger={ui.confirm.danger}
-          onclick={() => ui.confirm?.resolve(true)}
+          onclick={confirm}
         >
           {ui.confirm.confirmLabel}
         </button>

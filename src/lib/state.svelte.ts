@@ -97,6 +97,8 @@ export interface ConfirmRequest {
   confirmLabel: string;
   cancelLabel: string;
   danger: boolean;
+  /** When set, the dialog offers a "don't ask again" that silences this kind. */
+  kind?: string;
   resolve: (confirmed: boolean) => void;
 }
 
@@ -135,6 +137,8 @@ export const ui = $state({
   inspectorDock: "right" as "left" | "right",
   settingsOpen: false,
   setupWizardOpen: false,
+  /** Confirm-dialog kinds the user has silenced ("don't ask again"). */
+  suppressedConfirms: [] as string[],
   confirm: null as ConfirmRequest | null,
   toast: null as ToastState | null,
   trashOpen: false,
@@ -1204,6 +1208,11 @@ export async function init(): Promise<void> {
   await refreshTree();
   await loadWordIndex();
   await refreshTables();
+  try {
+    ui.suppressedConfirms = await api.suppressedConfirms();
+  } catch {
+    // Best-effort; suppression just won't apply across reloads.
+  }
   await listen("data-changed", async (event) => {
     const scope = (event.payload as { scope?: string }).scope;
     if (scope === "workspace") {
@@ -1407,7 +1416,13 @@ export function confirmDialog(options: {
   message: string;
   confirmLabel: string;
   danger?: boolean;
+  /** Lets the dialog offer "don't ask again" for this kind. */
+  kind?: string;
 }): Promise<boolean> {
+  // A silenced kind answers "yes" without showing anything.
+  if (options.kind && ui.suppressedConfirms.includes(options.kind)) {
+    return Promise.resolve(true);
+  }
   // Only one question at a time: a new one answers the old one "no".
   ui.confirm?.resolve(false);
   return new Promise((resolve) => {
@@ -1417,12 +1432,35 @@ export function confirmDialog(options: {
       confirmLabel: options.confirmLabel,
       cancelLabel: tr("grid.cancel"),
       danger: options.danger ?? false,
+      kind: options.kind,
       resolve: (confirmed) => {
         ui.confirm = null;
         resolve(confirmed);
       },
     };
   });
+}
+
+/** Persist a "don't ask again" choice for a confirm kind. */
+export async function suppressConfirm(kind: string): Promise<void> {
+  if (!ui.suppressedConfirms.includes(kind)) {
+    ui.suppressedConfirms = [...ui.suppressedConfirms, kind];
+  }
+  try {
+    await api.suppressConfirm(kind);
+  } catch {
+    // Best-effort: the in-memory list still suppresses this session.
+  }
+}
+
+/** Clear every silenced confirm kind. */
+export async function clearSuppressedConfirms(): Promise<void> {
+  ui.suppressedConfirms = [];
+  try {
+    await api.clearSuppressedConfirms();
+  } catch {
+    // Best-effort.
+  }
 }
 
 let toastCounter = 0;
@@ -1490,6 +1528,7 @@ export async function requestDeleteNote(
     message,
     confirmLabel: tr("contextMenu.delete"),
     danger: true,
+    kind: "delete-note",
   });
   if (!confirmed) return;
   try {
@@ -1507,6 +1546,7 @@ export async function requestDeleteTable(name: string): Promise<void> {
     message: tr("trash.confirmTable", { name, count: words }),
     confirmLabel: tr("tables.delete"),
     danger: true,
+    kind: "delete-table",
   });
   if (!confirmed) return;
   try {

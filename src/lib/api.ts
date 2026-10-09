@@ -381,6 +381,12 @@ export const warningDismissed = (key: string): Promise<boolean> =>
   invoke("warning_dismissed", { key });
 export const dismissWarning = (key: string): Promise<void> =>
   invoke("dismiss_warning", { key });
+export const suppressedConfirms = (): Promise<string[]> =>
+  invoke("suppressed_confirms");
+export const suppressConfirm = (kind: string): Promise<void> =>
+  invoke("suppress_confirm", { kind });
+export const clearSuppressedConfirms = (): Promise<void> =>
+  invoke("clear_suppressed_confirms");
 export const knownTagNames = (): Promise<string[]> =>
   invoke("known_tag_names");
 export const gridViewGet = (table: string): Promise<GridViewState> =>

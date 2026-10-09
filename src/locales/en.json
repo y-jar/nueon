@@ -187,6 +187,7 @@
     "pluralHint": "When an English word looks plural (dogs), the translator attaches this to noun-class words.",
     "profile": "Profile",
     "profileHint": "Export the language, sound inventory, grammar and translation setup as one file, or import one.",
+    "resetConfirms": "Reset suppressed confirmations",
     "exportProfile": "Export profile",
     "importProfile": "Import profile",
     "runSetup": "Run setup",
@@ -211,6 +212,9 @@
     "next": "Next",
     "finish": "Finish",
     "skip": "Skip setup"
+  },
+  "confirm": {
+    "dontAskAgain": "Don't ask me again"
   },
   "keybinds": {
     "title": "Keybinds",
