@@ -624,6 +624,15 @@ function seedWorkspace() {
               decl: { type: "text", value: "2" },
             },
           },
+          // A class stored with a leading '#' (probe 70 cleans it).
+          {
+            id: "eeeeeeee-eeee-4eee-8eee-eeeeeeeeeeee",
+            wordname: "hashy",
+            values: {
+              definition: { type: "tag_list", value: ["hashable"] },
+              pos: { type: "tag_list", value: ["#noun"] },
+            },
+          },
         ],
       },
       null,
@@ -4099,6 +4108,38 @@ async function main() {
     if (!resolved.includes("pos")) {
       throw new Error(`resolved class column not shown: ${resolved}`);
     }
+    await js(
+      `window.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape' }));
+       return true;`,
+    );
+    await waitJs(`!document.querySelector('.settings')`, { label: "settings closed" });
+  });
+
+  // -- probe 70: cleaning a leading '#' from class values --------------------
+  await probe("70-clean-class-values", async () => {
+    await js(
+      `const b = document.querySelector('.activity[title="Settings"]');
+       if (b) b.click();
+       return !!b;`,
+    );
+    await waitJs(`!!document.querySelector('.settings')`, { label: "settings" });
+    await js(
+      `const b = [...document.querySelectorAll('.settings-nav button')]
+         .find((x) => x.textContent.trim() === 'Linting & translator');
+       if (b) b.click();
+       return !!b;`,
+    );
+    await waitJs(`!!document.querySelector('.settings .clean-class')`, {
+      label: "clean button",
+    });
+    await js(
+      `document.querySelector('.settings .clean-class').click();
+       return true;`,
+    );
+    await waitJs(
+      `(document.querySelector('.settings')?.textContent ?? '').includes('Cleaned 1')`,
+      { label: "cleaned-one status" },
+    );
     await js(
       `window.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape' }));
        return true;`,

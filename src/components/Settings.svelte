@@ -130,6 +130,18 @@
     }
   }
 
+  /** Strip a leading '#' from the class column's values across all tables. */
+  async function cleanClassValues() {
+    try {
+      const count = await api.normalizeClassValues(classInfo?.resolved ?? null);
+      status = $t("settings.cleanedClassValues", { values: { count } });
+      error = "";
+      await load();
+    } catch (e) {
+      error = String(e);
+    }
+  }
+
   /** Choose which column holds each word's class (empty = auto-detect). */
   async function setClassColumn(value: string) {
     const next: api.Morphology = {
@@ -509,6 +521,9 @@
               >{$t("settings.classColumnResolved", {
                 values: { column: classInfo?.resolved ?? "" },
               })}</span
+            >
+            <button class="clean-class" onclick={cleanClassValues}
+              >{$t("settings.cleanClassValues")}</button
             >
           </div>
         </div>

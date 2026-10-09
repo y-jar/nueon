@@ -749,6 +749,10 @@ export interface ClassColumnInfo {
 export const classColumnGet = (): Promise<ClassColumnInfo> =>
   invoke("class_column_get");
 
+/** Strip a leading `#` from the class column's values; returns how many. */
+export const normalizeClassValues = (column?: string | null): Promise<number> =>
+  invoke("normalize_class_values", { column: column ?? null });
+
 /** Distinct values in a table column, for an inherent feature's options. */
 export const featureValues = (table: string, column: string): Promise<string[]> =>
   invoke("feature_values", { table, column });

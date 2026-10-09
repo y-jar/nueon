@@ -586,6 +586,75 @@ impl Workspace {
         crate::model::translate::class_column(&self.dictionary, &self.translation.morphology)
     }
 
+    /// Strip a leading `#` from `column`'s values in every table, so a `#noun`
+    /// flag reads as the class `noun`. Undoable and git-checkpointed.
+    pub fn normalize_class_values(&mut self, column: &str) -> Result<usize, StorageError> {
+        let hashed = |value: &FieldValue| match value {
+            FieldValue::Text(text) => text.starts_with('#'),
+            FieldValue::TagList(list) => list.iter().any(|item| item.starts_with('#')),
+            _ => false,
+        };
+        let needs = self.dictionary.tables().any(|table| {
+            table
+                .entries
+                .iter()
+                .any(|entry| entry.values.get(column).is_some_and(hashed))
+        });
+        if !needs {
+            return Ok(0);
+        }
+        self.record();
+
+        let names: Vec<String> = self.dictionary.tables().map(|t| t.name.clone()).collect();
+        let mut touched: Vec<String> = Vec::new();
+        let mut changed = 0usize;
+        for name in names {
+            let mut table_changed = false;
+            if let Some(table) = self.dictionary.tables.get_mut(&name) {
+                for entry in &mut table.entries {
+                    if let Some(value) = entry.values.get_mut(column) {
+                        let stripped = match value {
+                            FieldValue::Text(text) => match text.strip_prefix('#') {
+                                Some(rest) => {
+                                    *text = rest.to_string();
+                                    true
+                                }
+                                None => false,
+                            },
+                            FieldValue::TagList(list) => {
+                                let mut any = false;
+                                for item in list.iter_mut() {
+                                    if let Some(rest) = item.strip_prefix('#') {
+                                        *item = rest.to_string();
+                                        any = true;
+                                    }
+                                }
+                                any
+                            }
+                            _ => false,
+                        };
+                        if stripped {
+                            changed += 1;
+                            table_changed = true;
+                        }
+                    }
+                }
+            }
+            if table_changed {
+                touched.push(name);
+            }
+        }
+
+        for name in &touched {
+            self.save_table(name)?;
+        }
+        self.mark_change(
+            Instant::now(),
+            format!("nueon: clean '#' from \"{column}\" ({changed})"),
+        );
+        Ok(changed)
+    }
+
     /// Persist an existing word after it has been edited.
     pub fn save_entry(&mut self, table: &str, id: Uuid) -> Result<bool, StorageError> {
         let wordname = match self.dictionary.get_entry(table, id) {
@@ -2737,6 +2806,31 @@ mod tests {
 
         let missing = Uuid::new_v4();
         assert!(!ws.set_class("verbs", missing, Some("verb")).unwrap());
+    }
+
+    #[test]
+    fn normalizing_class_values_strips_a_leading_hash() {
+        let dir = tempfile::tempdir().unwrap();
+        let mut ws = Workspace::new(dir.path()).unwrap();
+        ws.create_table("lex").unwrap();
+        ws.dictionary
+            .add_tag("lex", TagDef::new("type", FieldType::TagList));
+        let id = ws.create_entry("lex", "nau").unwrap().unwrap();
+        ws.set_value(
+            "lex",
+            id,
+            "type",
+            Some(FieldValue::TagList(vec!["#noun".into()])),
+        )
+        .unwrap();
+
+        assert_eq!(ws.normalize_class_values("type").unwrap(), 1);
+        assert_eq!(
+            ws.dictionary.get_entry("lex", id).unwrap().get("type"),
+            Some(&FieldValue::TagList(vec!["noun".into()]))
+        );
+        // Running it again is a no-op.
+        assert_eq!(ws.normalize_class_values("type").unwrap(), 0);
     }
 
     #[test]

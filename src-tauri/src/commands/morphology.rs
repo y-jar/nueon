@@ -5,7 +5,7 @@ use std::collections::{BTreeMap, BTreeSet, HashMap};
 use std::sync::Mutex;
 
 use serde::Serialize;
-use tauri::State;
+use tauri::{AppHandle, State};
 use uuid::Uuid;
 
 use nueon_core::model::translate::inherent_values;
@@ -13,6 +13,7 @@ use nueon_core::{
     AffixKind, ComposePiece, FieldValue, Inflection, Morpheme, ParadigmGrid, WordEntry,
 };
 
+use super::changed;
 use crate::state::AppState;
 
 type Shared = Mutex<AppState>;
@@ -136,6 +137,26 @@ pub fn class_column_get(state: State<'_, Shared>) -> Result<ClassColumnInfo, Str
         resolved: workspace.class_column(),
         candidates: candidates.into_iter().collect(),
     })
+}
+
+/// Strip a leading `#` from the class column's values across every table.
+#[tauri::command]
+pub fn normalize_class_values(
+    app: AppHandle,
+    state: State<'_, Shared>,
+    column: Option<String>,
+) -> Result<usize, String> {
+    let mut state = state.lock().map_err(|_| "state poisoned".to_string())?;
+    let workspace = state.workspace_mut()?;
+    let column = column.unwrap_or_else(|| workspace.class_column());
+    let changed_count = workspace
+        .normalize_class_values(&column)
+        .map_err(|err| err.to_string())?;
+    drop(state);
+    if changed_count > 0 {
+        changed(&app, "dictionary");
+    }
+    Ok(changed_count)
 }
 
 /// Inflect one word: its root with feature-driven paradigm affixes and any
