@@ -300,7 +300,9 @@
       sorting = savedSorting.length
         ? savedSorting.map((spec) => ({ id: spec.id, desc: spec.desc }))
         : [{ id: "wordname", desc: false }];
-      filter = view?.search ?? "";
+      // A search is a transient action, not saved state: never restore one
+      // (doing so used to leave a filter active with its box hidden).
+      filter = "";
       columnVisibility = Object.fromEntries(
         (view?.hidden_columns ?? []).map((id) => [id, false]),
       );
@@ -337,7 +339,7 @@
     });
     const snapshot: api.GridViewState = {
       sorting: sorting.map((spec) => ({ id: spec.id, desc: spec.desc })),
-      search: filter,
+      search: "",
       column_filters: {},
       hidden_columns: Object.entries(columnVisibility)
         .filter(([, visible]) => !visible)
@@ -889,7 +891,12 @@
       class="tool-btn"
       class:active={searchOpen}
       title={$t("grid.search")}
-      onclick={() => (searchOpen = !searchOpen)}
+      onclick={() => {
+        searchOpen = !searchOpen;
+        // Closing the box cancels the filter rather than hiding it, so a
+        // hidden filter can never silently keep narrowing the grid.
+        if (!searchOpen) filter = "";
+      }}
     >
       <Search size={14} />
     </button>
@@ -1020,7 +1027,16 @@
   {#if searchOpen}
     <div class="grid-search">
       <Search size={14} />
-      <input use:autofocus placeholder={$t("grid.search")} bind:value={filter} />
+      <input
+        use:autofocus
+        placeholder={$t("grid.search")}
+        bind:value={filter}
+        onkeydown={(e) => {
+          if (e.key !== "Escape") return;
+          filter = "";
+          searchOpen = false;
+        }}
+      />
     </div>
   {/if}
 

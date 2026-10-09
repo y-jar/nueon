@@ -1789,6 +1789,82 @@ async function main() {
       { label: "explicit singular overrides" },
     );
   });
+
+  // -- probe 28: closing search cancels the filter -------------------------
+  await probe("28-closing-search-cancels-filter", async () => {
+    await openActivity("Dictionary");
+    await waitJs(`!!document.querySelector('.table-list')`, { label: "tables panel" });
+    const opened = await js(
+      `const b = [...document.querySelectorAll('.table-list .table-row .tree-name')]
+         .find((x) => x.textContent.trim().startsWith('lex'));
+       if (b) b.click();
+       return !!b;`,
+    );
+    if (!opened) throw new Error("no 'lex' table in the panel");
+    await waitJs(`!!document.querySelector('.dict-grid')`, { label: "lex grid" });
+    await waitJs(
+      `document.querySelectorAll('.dict-grid td.wordname-col input').length >= 2`,
+      { label: "lex rows" },
+    );
+
+    const rowCount = () =>
+      js(`return document.querySelectorAll('.dict-grid tbody tr:not(.ghost)').length;`);
+    const searchButton = `.grid-toolbar button[title^="search"]`;
+    const rows = () => rowCount();
+    const before = await rows();
+
+    const openSearch = () =>
+      js(`const b = document.querySelector(${JSON.stringify(searchButton)});
+         if (b) b.click();
+         return !!b;`);
+    const typeInto = (text) =>
+      js(`const i = document.querySelector('.grid-search input');
+         i.value = ${JSON.stringify(text)};
+         i.dispatchEvent(new Event('input', { bubbles: true }));
+         return true;`);
+
+    // Narrow the grid with a needle that matches a single row.
+    await openSearch();
+    await waitJs(`!!document.querySelector('.grid-search input')`, { label: "search box" });
+    await typeInto("kaka");
+    await waitJs(
+      `document.querySelectorAll('.dict-grid tbody tr:not(.ghost)').length < ${before}`,
+      { label: "grid filtered" },
+    );
+
+    // Closing the icon cancels the filter: every row is back and the box is gone.
+    await openSearch();
+    await waitJs(
+      `document.querySelectorAll('.dict-grid tbody tr:not(.ghost)').length === ${before}`,
+      { label: "filter cancelled on close" },
+    );
+    assertEqual(
+      await js(`return !!document.querySelector('.grid-search input')`),
+      false,
+      "search box hidden after close",
+    );
+
+    // Escape clears and closes the box too.
+    await openSearch();
+    await waitJs(`!!document.querySelector('.grid-search input')`, { label: "search box again" });
+    await typeInto("kaka");
+    await waitJs(
+      `document.querySelectorAll('.dict-grid tbody tr:not(.ghost)').length < ${before}`,
+      { label: "grid filtered again" },
+    );
+    await js(`const i = document.querySelector('.grid-search input');
+       i.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true }));
+       return true;`);
+    await waitJs(
+      `document.querySelectorAll('.dict-grid tbody tr:not(.ghost)').length === ${before}`,
+      { label: "filter cancelled on Escape" },
+    );
+    assertEqual(
+      await js(`return !!document.querySelector('.grid-search input')`),
+      false,
+      "search box hidden after Escape",
+    );
+  });
 }
 
 try {
