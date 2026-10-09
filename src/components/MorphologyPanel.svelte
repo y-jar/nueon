@@ -46,6 +46,19 @@
 
   const morphemeActive = (wordname: string) =>
     store.tab === "inflect" && store.manual.includes(wordname);
+
+  /** Enter in a search adds its top match: to the strip, or the selection. */
+  function enterWord(event: KeyboardEvent) {
+    if (event.key !== "Enter" || !words.length) return;
+    event.preventDefault();
+    addWord(words[0]);
+  }
+
+  function enterMorpheme(event: KeyboardEvent) {
+    if (event.key !== "Enter" || !morphemes.length) return;
+    event.preventDefault();
+    addMorpheme(morphemes[0]);
+  }
 </script>
 
 <aside class="sidebar morphology-sidebar">
@@ -88,6 +101,7 @@
         <input
           placeholder={$t("morphology.filterMorphemes")}
           bind:value={morphFilter}
+          onkeydown={enterMorpheme}
         />
       </label>
       <div class="morph-list">
@@ -122,7 +136,11 @@
       <div class="section-title">{$t("morphology.lexicon")}</div>
       <label class="explorer-filter word-search">
         <Search size={13} />
-        <input placeholder={$t("morphology.filter")} bind:value={wordFilter} />
+        <input
+          placeholder={$t("morphology.filter")}
+          bind:value={wordFilter}
+          onkeydown={enterWord}
+        />
       </label>
       <div class="morph-list">
         {#each words as word (word.id)}

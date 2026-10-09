@@ -3669,6 +3669,76 @@ async function main() {
       throw new Error(`non-verb feature shown: ${JSON.stringify(labels)}`);
     }
   });
+
+  // -- probe 64: Enter in a sidebar search adds the top match ----------------
+  await probe("64-enter-to-add", async () => {
+    await js(
+      `const b = document.querySelector('.activity[title="Morphology"]');
+       if (b) b.click();
+       return !!b;`,
+    );
+    await waitJs(`!!document.querySelector('.morphology-view')`, {
+      label: "morphology view",
+    });
+    await js(
+      `const b = [...document.querySelectorAll('.morphology-view .mode-switch button')]
+         .find((x) => x.textContent.trim() === 'Compose');
+       if (b) b.click();
+       return !!b;`,
+    );
+    await waitJs(`!!document.querySelector('.compose-builder')`, {
+      label: "compose builder",
+    });
+    await js(
+      `const b = document.querySelector('.compose-builder .clear-strip');
+       if (b) b.click();
+       return true;`,
+    );
+
+    const type = (selector, text) =>
+      js(
+        `const i = document.querySelector(${JSON.stringify(selector)});
+         i.focus();
+         i.value = ${JSON.stringify(text)};
+         i.dispatchEvent(new Event('input', { bubbles: true }));
+         return true;`,
+      );
+    const enter = (selector) =>
+      js(
+        `const i = document.querySelector(${JSON.stringify(selector)});
+         i.dispatchEvent(new KeyboardEvent('keydown', { key: 'Enter', bubbles: true }));
+         return true;`,
+      );
+
+    await type(".morphology-sidebar .word-search input", "velo");
+    await enter(".morphology-sidebar .word-search input");
+    await waitJs(
+      `(document.querySelector('.compose-builder .inflect-surface')?.textContent ?? '').trim() === 'velo'`,
+      { label: "word via Enter" },
+    );
+
+    await type(".morphology-sidebar .morph-search input", "agent");
+    await enter(".morphology-sidebar .morph-search input");
+    await waitJs(
+      `(document.querySelector('.compose-builder .inflect-surface')?.textContent ?? '').trim() === 'veloo'`,
+      { label: "morpheme via Enter" },
+    );
+
+    // On Inflect, Enter selects the top word instead of adding to the strip.
+    await js(
+      `const b = [...document.querySelectorAll('.morphology-view .mode-switch button')]
+         .find((x) => x.textContent.trim() === 'Inflect');
+       if (b) b.click();
+       return !!b;`,
+    );
+    await waitJs(`!!document.querySelector('.word-picker')`, { label: "word picker" });
+    await type(".morphology-sidebar .word-search input", "paka");
+    await enter(".morphology-sidebar .word-search input");
+    await waitJs(
+      `(document.querySelector('.inflect-surface')?.textContent ?? '').trim() === 'paka'`,
+      { label: "inflect selection via Enter" },
+    );
+  });
 }
 
 try {
