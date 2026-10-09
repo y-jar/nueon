@@ -534,6 +534,10 @@ export const exportPresets = (
   path: string,
   grids: SyntaxGrid[],
 ): Promise<void> => invoke("export_presets", { path, grids });
+export const profileExport = (path: string): Promise<void> =>
+  invoke("profile_export", { path });
+export const profileImport = (path: string): Promise<void> =>
+  invoke("profile_import", { path });
 export const importPresets = (path: string): Promise<SyntaxGrid[]> =>
   invoke("import_presets", { path });
 

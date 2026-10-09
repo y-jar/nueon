@@ -154,6 +154,8 @@ pub fn run() {
             commands::workspace_delete_from_disk,
             commands::config_get,
             commands::config_set,
+            commands::profile_export,
+            commands::profile_import,
             commands::layout_get,
             commands::layout_set_git_panel,
             commands::ui_layout_get,

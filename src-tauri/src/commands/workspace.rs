@@ -7,8 +7,8 @@ use serde::Serialize;
 use tauri::{AppHandle, Manager, State};
 
 use nueon_core::{
-    LayoutState, StorageError, TilingLayout, UiLayout, WindowGeometry, WindowLayout, Workspace,
-    WorkspaceEntry,
+    LayoutState, Profile, StorageError, TilingLayout, UiLayout, WindowGeometry, WindowLayout,
+    Workspace, WorkspaceEntry,
 };
 
 use super::{changed, destroy_windows, secondary_labels};
@@ -232,6 +232,36 @@ pub fn config_set(
     state
         .workspace_mut()?
         .set_config_json(&section, value)
+        .map_err(|err| err.to_string())?;
+    drop(state);
+    changed(&app, "config");
+    Ok(())
+}
+
+/// Write the current conlang profile (language, phonology, grammar,
+/// translation setup) to a JSON file.
+#[tauri::command]
+pub fn profile_export(state: State<'_, Shared>, path: String) -> Result<(), String> {
+    let state = state.lock().map_err(|_| "state poisoned".to_string())?;
+    let profile = state.workspace()?.profile();
+    let json = serde_json::to_vec_pretty(&profile).map_err(|err| err.to_string())?;
+    std::fs::write(&path, json).map_err(|err| err.to_string())
+}
+
+/// Read a profile from a JSON file and apply it to the workspace config.
+#[tauri::command]
+pub fn profile_import(
+    app: AppHandle,
+    state: State<'_, Shared>,
+    path: String,
+) -> Result<(), String> {
+    let bytes = std::fs::read(&path).map_err(|err| err.to_string())?;
+    let profile: Profile = serde_json::from_slice(&bytes).map_err(|err| err.to_string())?;
+    profile.validate()?;
+    let mut state = state.lock().map_err(|_| "state poisoned".to_string())?;
+    state
+        .workspace_mut()?
+        .apply_profile(profile)
         .map_err(|err| err.to_string())?;
     drop(state);
     changed(&app, "config");

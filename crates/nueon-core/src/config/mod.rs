@@ -5,6 +5,7 @@ mod language;
 mod layout;
 mod morphology;
 mod phonology;
+mod profile;
 mod settings;
 mod translation;
 
@@ -16,6 +17,7 @@ pub use layout::{
 };
 pub use morphology::{Feature, FeatureValue, Morphology, Paradigm, ParadigmRow, POS_TAG};
 pub use phonology::{check_word, Phoneme, PhonemeKind, PhonologyConfig, Violation};
+pub use profile::{Profile, PROFILE_FORMAT, PROFILE_VERSION};
 pub use settings::{GridViewState, SortSpec, UiLayout, WorkspaceSettings};
 pub use translation::{
     AffixKind, AffixRule, TableRole, TableRoleConfig, TranslationConfig, TranslationMode,

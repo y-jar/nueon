@@ -2130,6 +2130,21 @@ async function main() {
     if (!hasRule) throw new Error("starter grammar rule missing");
     await js(`const b = document.querySelector('.modal-head button'); if (b) b.click(); return !!b;`);
   });
+
+  // -- probe 33: the Settings profile section -------------------------------
+  await probe("33-profile-settings", async () => {
+    await js(`const b = document.querySelector('.activity[title="Settings"]');
+       if (b) b.click();
+       return !!b;`);
+    await waitJs(`!!document.querySelector('.settings')`, { label: "settings" });
+    const buttons = await js(
+      `return [...document.querySelectorAll('.settings button')].map((b) => b.textContent.trim());`,
+    );
+    if (!buttons.includes("Export profile") || !buttons.includes("Import profile")) {
+      throw new Error(`profile buttons missing: ${JSON.stringify(buttons)}`);
+    }
+    await js(`const b = document.querySelector('.modal-head button'); if (b) b.click(); return !!b;`);
+  });
 }
 
 try {

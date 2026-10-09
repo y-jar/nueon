@@ -1,6 +1,7 @@
 <script lang="ts">
   import { onMount } from "svelte";
   import { t } from "svelte-i18n";
+  import { open, save } from "@tauri-apps/plugin-dialog";
   import * as api from "../lib/api";
   import { ui, openSetupWizard, closeSettings } from "../lib/state.svelte";
 
@@ -24,6 +25,36 @@
       rules = (await api.grammarGet()).rules;
       tableRoles = await api.tableRolesGet();
       applyDirection();
+      error = "";
+    } catch (e) {
+      error = String(e);
+    }
+  }
+
+  const PROFILE_FILTER = [{ name: "Nueon profile", extensions: ["json"] }];
+
+  async function exportProfile() {
+    const path = await save({
+      defaultPath: "profile.nueon.json",
+      filters: PROFILE_FILTER,
+    });
+    if (!path) return;
+    try {
+      await api.profileExport(path);
+      status = $t("settings.saved");
+      error = "";
+    } catch (e) {
+      error = String(e);
+    }
+  }
+
+  async function importProfile() {
+    const path = await open({ multiple: false, filters: PROFILE_FILTER });
+    if (!path || Array.isArray(path)) return;
+    try {
+      await api.profileImport(path);
+      await load();
+      status = $t("settings.saved");
       error = "";
     } catch (e) {
       error = String(e);
@@ -266,6 +297,13 @@
       {/if}
     </div>
   {/each}
+
+  <div class="pane-title">{$t("settings.profile")}</div>
+  <p class="muted">{$t("settings.profileHint")}</p>
+  <div class="row">
+    <button onclick={exportProfile}>{$t("settings.exportProfile")}</button>
+    <button onclick={importProfile}>{$t("settings.importProfile")}</button>
+  </div>
 
   <button
     onclick={() => {

@@ -22,8 +22,8 @@ use self::table_files::TableFiles;
 
 use crate::config::{
     AffixRule, GrammarConfig, GridViewState, LanguageConfig, LayoutState, Morphology,
-    PhonologyConfig, TableRole, TableRoleConfig, TilingLayout, TranslationConfig, TranslationMode,
-    TranslationOptions, UiLayout, WindowGeometry, WorkspaceSettings, POS_TAG,
+    PhonologyConfig, Profile, TableRole, TableRoleConfig, TilingLayout, TranslationConfig,
+    TranslationMode, TranslationOptions, UiLayout, WindowGeometry, WorkspaceSettings, POS_TAG,
 };
 use crate::export_table::TableFormat;
 use crate::model::translate::dictionary_affixes;
@@ -1272,6 +1272,27 @@ impl Workspace {
         Ok(removed)
     }
 
+    /// The portable profile: language metadata, phonology, grammar and the
+    /// translation setup, as one document.
+    pub fn profile(&self) -> Profile {
+        Profile::new(
+            self.language.clone(),
+            self.phonology.clone(),
+            self.grammar.clone(),
+            self.translation.clone(),
+        )
+    }
+
+    /// Replace the language/phonology/grammar/translation config from a
+    /// profile and persist it. Dictionary tables are left untouched.
+    pub fn apply_profile(&mut self, profile: Profile) -> Result<(), StorageError> {
+        self.language = profile.language;
+        self.phonology = profile.phonology;
+        self.grammar = profile.grammar;
+        self.translation = profile.translation;
+        self.save_config()
+    }
+
     /// Persist all configuration files.
     pub fn save_config(&mut self) -> Result<(), StorageError> {
         let dir = self.config_dir();
@@ -1602,7 +1623,7 @@ impl Workspace {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::config::{TableRole, POS_TAG};
+    use crate::config::{Phoneme, PhonemeKind, PhonologyConfig, TableRole, POS_TAG};
     use crate::model::{FieldType, FieldValue};
     use crate::vcs::git_available;
     use crate::WORDNAME_TAG;
@@ -2410,6 +2431,29 @@ mod tests {
         assert!(!ws
             .set_table_role("missing", TableRole::Fixes, None, None)
             .unwrap());
+    }
+
+    #[test]
+    fn a_profile_round_trips_through_apply() {
+        let dir = tempfile::tempdir().unwrap();
+        let mut ws = Workspace::new(dir.path()).unwrap();
+        ws.create_table("lex").unwrap();
+        let mut language = ws.language.clone();
+        language.name = "Vokala".into();
+        ws.language = language;
+        ws.phonology.phonemes.push(Phoneme {
+            symbol: "k".into(),
+            kind: PhonemeKind::Consonant,
+        });
+        let profile = ws.profile();
+        assert_eq!(profile.language.name, "Vokala");
+
+        // Wipe the live config, then restore it from the profile.
+        ws.language = LanguageConfig::default();
+        ws.phonology = PhonologyConfig::default();
+        ws.apply_profile(profile).unwrap();
+        assert_eq!(ws.profile().language.name, "Vokala");
+        assert_eq!(ws.profile().phonology.phonemes.len(), 1);
     }
 
     #[test]
