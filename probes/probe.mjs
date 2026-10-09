@@ -4066,6 +4066,45 @@ async function main() {
       { label: "gloss search finds velo" },
     );
   });
+
+  // -- probe 69: the Class-column setting ------------------------------------
+  await probe("69-class-column-setting", async () => {
+    await js(
+      `const b = document.querySelector('.activity[title="Settings"]');
+       if (b) b.click();
+       return !!b;`,
+    );
+    await waitJs(`!!document.querySelector('.settings')`, { label: "settings" });
+    const opened = await js(
+      `const b = [...document.querySelectorAll('.settings-nav button')]
+         .find((x) => x.textContent.trim() === 'Linting & translator');
+       if (b) b.click();
+       return !!b;`,
+    );
+    if (!opened) throw new Error("no Linting & translator tab");
+    await waitJs(`!!document.querySelector('.settings .class-column select')`, {
+      label: "class column field",
+    });
+
+    const options = await js(
+      `return [...document.querySelectorAll('.settings .class-column select option')]
+         .map((o) => o.textContent.trim());`,
+    );
+    if (!options.some((label) => label.startsWith("Auto"))) {
+      throw new Error(`no Auto option: ${JSON.stringify(options)}`);
+    }
+    const resolved = await js(
+      `return document.querySelector('.settings .class-column .row')?.textContent ?? '';`,
+    );
+    if (!resolved.includes("pos")) {
+      throw new Error(`resolved class column not shown: ${resolved}`);
+    }
+    await js(
+      `window.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape' }));
+       return true;`,
+    );
+    await waitJs(`!document.querySelector('.settings')`, { label: "settings closed" });
+  });
 }
 
 try {

@@ -245,6 +245,7 @@ pub fn run() {
             commands::compose,
             commands::feature_values,
             commands::paradigm_grid,
+            commands::class_column_get,
             commands::table_roles_get,
             commands::set_table_role,
             commands::phonology_check_words,

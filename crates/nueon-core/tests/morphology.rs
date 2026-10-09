@@ -4,8 +4,8 @@ use std::collections::{BTreeMap, BTreeSet, HashMap};
 
 use nueon_core::config::POS_TAG;
 use nueon_core::model::translate::{
-    compose, dictionary_affixes, dictionary_morphemes, inflect, inherent_values, paradigm_grid,
-    translate_direct_with_scoped,
+    class_column, compose, dictionary_affixes, dictionary_morphemes, inflect, inherent_values,
+    paradigm_grid, translate_direct_with_scoped,
 };
 use nueon_core::model::TranslationReport;
 use nueon_core::{
@@ -64,6 +64,7 @@ fn morphology(rows: Vec<ParadigmRow>) -> Morphology {
             class: "noun".into(),
             rows,
         }],
+        class_column: None,
     }
 }
 
@@ -663,6 +664,60 @@ fn an_inherent_feature_selects_the_ending() {
         inherent_values(&dict, "lex", "decl"),
         vec!["1".to_string(), "2".to_string()]
     );
+}
+
+#[test]
+fn auto_detected_type_column_strips_hash() {
+    let mut dict = Dictionary::new();
+    dict.add_table("lex");
+    dict.add_tag("lex", TagDef::new("type", FieldType::TagList));
+    let mut entry = WordEntry::new("nau");
+    entry.set(
+        DEFINITION_TAG,
+        FieldValue::TagList(vec!["food".to_string()]),
+    );
+    entry.set("type", FieldValue::TagList(vec!["#noun".to_string()]));
+    let id = dict.add_entry("lex", entry).unwrap();
+
+    let mut morphology = Morphology::default();
+    morphology.paradigms.push(Paradigm {
+        class: "noun".to_string(),
+        rows: vec![row(
+            &[("number", "plural")],
+            "u",
+            AffixKind::Suffix,
+            Some("num"),
+            0,
+        )],
+    });
+
+    // No `pos`/`class`, so `type` is detected; `#noun` reads as `noun`.
+    assert_eq!(class_column(&dict, &morphology), "type");
+    let inflection = inflect(
+        &dict,
+        id,
+        &morphology,
+        &[],
+        &selections(&[("number", "plural")]),
+        &[],
+    );
+    assert_eq!(inflection.surface, "nauu");
+}
+
+#[test]
+fn a_configured_class_column_wins() {
+    let mut dict = Dictionary::new();
+    dict.add_table("lex");
+    dict.add_tag("lex", TagDef::new("pos", FieldType::TagList));
+    dict.add_tag("lex", TagDef::new("class", FieldType::TagList));
+
+    let auto = Morphology::default();
+    assert_eq!(class_column(&dict, &auto), "pos");
+    let configured = Morphology {
+        class_column: Some("class".to_string()),
+        ..Morphology::default()
+    };
+    assert_eq!(class_column(&dict, &configured), "class");
 }
 
 #[test]

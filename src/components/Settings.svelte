@@ -51,6 +51,7 @@
   let tableRoles = $state<Record<string, api.TableRoleConfig>>({});
   let phonology = $state<api.PhonologyConfig>({ phonemes: [], syllables: [] });
   let morphology = $state<api.Morphology>({ features: [], paradigms: [] });
+  let classInfo = $state<api.ClassColumnInfo | null>(null);
   let consonants = $state("");
   let vowels = $state("");
   let pluralSurface = $state("");
@@ -67,6 +68,7 @@
       tableRoles = await api.tableRolesGet();
       phonology = await api.phonologyGet();
       morphology = await api.translationMorphology();
+      classInfo = await api.classColumnGet();
       const split = splitSoundClasses(phonology.phonemes);
       consonants = split.consonants;
       vowels = split.vowels;
@@ -121,6 +123,23 @@
     try {
       await api.setTranslationMorphology(next);
       morphology = next;
+      status = $t("settings.saved");
+      error = "";
+    } catch (e) {
+      error = String(e);
+    }
+  }
+
+  /** Choose which column holds each word's class (empty = auto-detect). */
+  async function setClassColumn(value: string) {
+    const next: api.Morphology = {
+      ...morphology,
+      class_column: value || null,
+    };
+    try {
+      await api.setTranslationMorphology(next);
+      morphology = next;
+      classInfo = await api.classColumnGet();
       status = $t("settings.saved");
       error = "";
     } catch (e) {
@@ -473,6 +492,27 @@
           </div>
         </div>
         <p class="muted">{$t("settings.pluralHint")}</p>
+
+        <div class="field class-column">
+          {$t("settings.classColumn")}
+          <div class="row">
+            <select
+              value={morphology.class_column ?? ""}
+              onchange={(e) => setClassColumn(e.currentTarget.value)}
+            >
+              <option value="">{$t("settings.classColumnAuto")}</option>
+              {#each classInfo?.candidates ?? [] as name (name)}
+                <option value={name}>{name}</option>
+              {/each}
+            </select>
+            <span class="muted"
+              >{$t("settings.classColumnResolved", {
+                values: { column: classInfo?.resolved ?? "" },
+              })}</span
+            >
+          </div>
+        </div>
+        <p class="muted">{$t("settings.classColumnHint")}</p>
       </section>
     {:else if tab === "keybinds"}
       <div class="pane-title">{$t("keybinds.title")}</div>

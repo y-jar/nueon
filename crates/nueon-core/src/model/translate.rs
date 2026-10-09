@@ -661,6 +661,7 @@ pub fn translate_with_scoped(
     let mut unfilled = Vec::new();
     let mut slots = Vec::new();
     let mut gloss_morphemes = Vec::new();
+    let column = class_column(dict, morphology);
 
     for (index, slot) in grid.slots.iter().enumerate() {
         let symbol = match slot {
@@ -673,7 +674,7 @@ pub fn translate_with_scoped(
             }
             ClauseSlot::Spacer { text } => Symbol::Separator(text.clone()),
             ClauseSlot::Wildcard => {
-                match pick(&candidates, &chosen, &assigned, count, None, None) {
+                match pick(&candidates, &chosen, &assigned, count, None, None, &column) {
                     Some(token) => {
                         assigned[token] = true;
                         if let Some(morpheme) = render_gloss(
@@ -703,7 +704,15 @@ pub fn translate_with_scoped(
                 }
             }
             ClauseSlot::RequiredTag { tag } => {
-                match pick(&candidates, &chosen, &assigned, count, Some(tag), None) {
+                match pick(
+                    &candidates,
+                    &chosen,
+                    &assigned,
+                    count,
+                    Some(tag),
+                    None,
+                    &column,
+                ) {
                     Some(token) => {
                         assigned[token] = true;
                         if let Some(morpheme) = render_gloss(
@@ -735,7 +744,15 @@ pub fn translate_with_scoped(
                 }
             }
             ClauseSlot::Pos { class } => {
-                match pick(&candidates, &chosen, &assigned, count, None, Some(class)) {
+                match pick(
+                    &candidates,
+                    &chosen,
+                    &assigned,
+                    count,
+                    None,
+                    Some(class),
+                    &column,
+                ) {
                     Some(token) => {
                         assigned[token] = true;
                         if let Some(morpheme) = render_gloss(
@@ -1000,13 +1017,37 @@ pub fn translate_direct_with_scoped(
 }
 
 /// Build the interlinear gloss morpheme for a chosen word (with affix).
-/// The word class of an entry (`pos` tag, first sense).
-fn word_class(entry: &WordEntry) -> Option<&str> {
-    match entry.values.get(POS_TAG) {
+/// The column holding each word's class: the configured name, else the first of
+/// `pos`/`class`/`type` a table declares, else `pos`.
+pub fn class_column(dict: &Dictionary, morphology: &Morphology) -> String {
+    if let Some(column) = morphology
+        .class_column
+        .as_deref()
+        .filter(|name| !name.is_empty())
+    {
+        return column.to_string();
+    }
+    for candidate in [POS_TAG, "class", "type"] {
+        if dict.tables().any(|table| table.has_tag(candidate)) {
+            return candidate.to_string();
+        }
+    }
+    POS_TAG.to_string()
+}
+
+/// Drop a leading `#`, so a `#noun` flag reads as the class `noun`.
+fn strip_hash(value: &str) -> &str {
+    value.strip_prefix('#').unwrap_or(value)
+}
+
+/// The word class of an entry, read from `column` (first sense), `#`-stripped.
+fn word_class<'a>(entry: &'a WordEntry, column: &str) -> Option<&'a str> {
+    match entry.values.get(column) {
         Some(FieldValue::TagList(list)) => list.first().map(String::as_str),
         Some(FieldValue::Text(text)) => Some(text.as_str()),
         _ => None,
     }
+    .map(strip_hash)
 }
 
 /// Merge a token's inferred feature defaults with the caller's explicit
@@ -1066,7 +1107,7 @@ fn resolve_affixes(
     let Some((table, entry)) = dict.find_entry(id) else {
         return Vec::new();
     };
-    let Some(class) = word_class(entry) else {
+    let Some(class) = word_class(entry, &class_column(dict, morphology)) else {
         return Vec::new();
     };
     // A word's inherent values (from bound columns) join the selection; an
@@ -1440,10 +1481,11 @@ pub fn paradigm_grid(
     }
     // An inherent feature counts as used when the class's own words carry a
     // value in its bound column (so unrelated classes don't show it).
+    let column = class_column(dict, morphology);
     let class_uses_column = |binding: &FeatureColumn| {
         dict.table(&binding.table).is_some_and(|table| {
             table.entries.iter().any(|entry| {
-                word_class(entry) == Some(class)
+                word_class(entry, &column) == Some(class)
                     && entry_text(entry, &binding.column).is_some_and(|value| !value.is_empty())
             })
         })
@@ -1583,6 +1625,7 @@ fn pick(
     count: usize,
     tag: Option<&str>,
     class: Option<&str>,
+    column: &str,
 ) -> Option<usize> {
     for index in 0..count {
         if assigned[index] {
@@ -1600,7 +1643,7 @@ fn pick(
         if tag.is_some_and(|tag| !matched.entry.has(tag)) {
             continue;
         }
-        if class.is_some_and(|class| word_class(matched.entry) != Some(class)) {
+        if class.is_some_and(|class| word_class(matched.entry, column) != Some(class)) {
             continue;
         }
         return Some(index);
@@ -1783,6 +1826,7 @@ mod tests {
                     zero: false,
                 }],
             }],
+            class_column: None,
         }
     }
 

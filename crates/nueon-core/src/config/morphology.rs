@@ -109,6 +109,10 @@ pub struct Paradigm {
 pub struct Morphology {
     pub features: Vec<Feature>,
     pub paradigms: Vec<Paradigm>,
+    /// The column holding each word's class (`pos`, `class`, `type`, …).
+    /// `None` auto-detects it from the tables.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub class_column: Option<String>,
 }
 
 fn feature(id: &str, label: &str, values: &[&str]) -> Feature {
@@ -143,6 +147,7 @@ impl Default for Morphology {
                 feature("number", "Number", &["singular", "plural"]),
             ],
             paradigms: Vec::new(),
+            class_column: None,
         }
     }
 }
@@ -299,6 +304,7 @@ mod tests {
                     row(&[("tense", "past"), ("number", "singular")], "-ai"),
                 ],
             }],
+            class_column: None,
         };
         let full = BTreeMap::from([
             ("tense".to_string(), "past".to_string()),
@@ -321,6 +327,7 @@ mod tests {
                 class: "verb".into(),
                 rows: vec![row(&[("tense", "past")], "-a")],
             }],
+            class_column: None,
         };
         assert!(morphology.affix_for("noun", &BTreeMap::new()).is_none());
         assert!(morphology

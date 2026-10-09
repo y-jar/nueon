@@ -683,6 +683,8 @@ export interface Paradigm {
 export interface Morphology {
   features: Feature[];
   paradigms: Paradigm[];
+  /** The column holding each word's class; omitted/null = auto-detect. */
+  class_column?: string | null;
 }
 /** The selected feature values for one clause, e.g. `{ tense: "past" }`. */
 export type FeatureSelections = Record<string, string>;
@@ -738,6 +740,15 @@ export interface ParadigmGrid {
   rows: GridRow[];
   total: number;
 }
+/** The configured/auto-detected class column and the columns to offer. */
+export interface ClassColumnInfo {
+  configured: string | null;
+  resolved: string;
+  candidates: string[];
+}
+export const classColumnGet = (): Promise<ClassColumnInfo> =>
+  invoke("class_column_get");
+
 /** Distinct values in a table column, for an inherent feature's options. */
 export const featureValues = (table: string, column: string): Promise<string[]> =>
   invoke("feature_values", { table, column });

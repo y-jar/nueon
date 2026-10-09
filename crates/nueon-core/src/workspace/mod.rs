@@ -23,7 +23,7 @@ use self::table_files::TableFiles;
 use crate::config::{
     AffixRule, GrammarConfig, GridViewState, LanguageConfig, LayoutState, MorphemeRef, Morphology,
     PhonologyConfig, Profile, TableRole, TableRoleConfig, TilingLayout, TranslationConfig,
-    TranslationMode, TranslationOptions, UiLayout, WindowGeometry, WorkspaceSettings, POS_TAG,
+    TranslationMode, TranslationOptions, UiLayout, WindowGeometry, WorkspaceSettings,
 };
 use crate::export_table::TableFormat;
 use crate::model::translate::{dictionary_affixes, dictionary_morphemes, Morpheme};
@@ -559,25 +559,31 @@ impl Workspace {
         if self.dictionary.get_entry(table, id).is_none() {
             return Ok(false);
         }
+        let column = self.class_column();
         match class.map(str::trim).filter(|value| !value.is_empty()) {
             Some(class) => {
                 let declared = self
                     .dictionary
                     .table(table)
-                    .is_some_and(|t| t.has_tag(POS_TAG));
+                    .is_some_and(|t| t.has_tag(&column));
                 if !declared {
                     self.dictionary
-                        .add_tag(table, TagDef::new(POS_TAG, FieldType::TagList));
+                        .add_tag(table, TagDef::new(column.clone(), FieldType::TagList));
                 }
                 self.set_value(
                     table,
                     id,
-                    POS_TAG,
+                    &column,
                     Some(FieldValue::TagList(vec![class.to_string()])),
                 )
             }
-            None => self.set_value(table, id, POS_TAG, None),
+            None => self.set_value(table, id, &column, None),
         }
+    }
+
+    /// The column holding each word's class: configured, else auto-detected.
+    pub fn class_column(&self) -> String {
+        crate::model::translate::class_column(&self.dictionary, &self.translation.morphology)
     }
 
     /// Persist an existing word after it has been edited.

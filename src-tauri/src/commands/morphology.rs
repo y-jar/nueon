@@ -1,14 +1,13 @@
 //! Morphology commands: the fixes-table morpheme inventory and the lexicon
 //! picker. Both are read-only views over the current workspace.
 
-use std::collections::{BTreeMap, HashMap};
+use std::collections::{BTreeMap, BTreeSet, HashMap};
 use std::sync::Mutex;
 
 use serde::Serialize;
 use tauri::State;
 use uuid::Uuid;
 
-use nueon_core::config::POS_TAG;
 use nueon_core::model::translate::inherent_values;
 use nueon_core::{
     AffixKind, ComposePiece, FieldValue, Inflection, Morpheme, ParadigmGrid, WordEntry,
@@ -45,13 +44,25 @@ pub struct LexiconWord {
     pub senses: Vec<String>,
 }
 
-/// A word's class, from the first sense of its `pos` tag.
-fn class_of(entry: &WordEntry) -> Option<String> {
-    match entry.values.get(POS_TAG) {
+/// The configured/auto-detected class column, and the columns to offer.
+#[derive(Debug, Clone, Serialize)]
+pub struct ClassColumnInfo {
+    /// The configured column, or `None` when auto-detected.
+    pub configured: Option<String>,
+    /// The column the engine actually reads.
+    pub resolved: String,
+    /// Every column name across the tables (for the picker).
+    pub candidates: Vec<String>,
+}
+
+/// A word's class, from the first sense of `column` (a leading `#` dropped).
+fn class_of(entry: &WordEntry, column: &str) -> Option<String> {
+    let value = match entry.values.get(column) {
         Some(FieldValue::TagList(list)) => list.first().cloned(),
         Some(FieldValue::Text(text)) => Some(text.clone()),
         _ => None,
-    }
+    }?;
+    Some(value.strip_prefix('#').unwrap_or(&value).to_string())
 }
 
 /// Every morpheme supplied by tables designated `Fixes`.
@@ -88,6 +99,7 @@ pub fn lexicon(state: State<'_, Shared>) -> Result<Vec<LexiconWord>, String> {
     let state = state.lock().map_err(|_| "state poisoned".to_string())?;
     let workspace = state.workspace()?;
     let fixes = workspace.fixes_tables();
+    let column = workspace.class_column();
     let mut words = Vec::new();
     for table in workspace.dictionary.tables() {
         if fixes.contains(&table.name) {
@@ -99,13 +111,31 @@ pub fn lexicon(state: State<'_, Shared>) -> Result<Vec<LexiconWord>, String> {
                 table: table.name.clone(),
                 id: entry.id.to_string(),
                 wordname: entry.wordname.clone(),
-                class: class_of(entry),
+                class: class_of(entry, &column),
                 gloss: senses.first().cloned().unwrap_or_default(),
                 senses,
             });
         }
     }
     Ok(words)
+}
+
+/// The current class column (configured or auto-detected) and column options.
+#[tauri::command]
+pub fn class_column_get(state: State<'_, Shared>) -> Result<ClassColumnInfo, String> {
+    let state = state.lock().map_err(|_| "state poisoned".to_string())?;
+    let workspace = state.workspace()?;
+    let mut candidates: BTreeSet<String> = BTreeSet::new();
+    for table in workspace.dictionary.tables() {
+        for tag in &table.tags {
+            candidates.insert(tag.name.clone());
+        }
+    }
+    Ok(ClassColumnInfo {
+        configured: workspace.translation.morphology.class_column.clone(),
+        resolved: workspace.class_column(),
+        candidates: candidates.into_iter().collect(),
+    })
 }
 
 /// Inflect one word: its root with feature-driven paradigm affixes and any
