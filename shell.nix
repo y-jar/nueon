@@ -91,7 +91,7 @@ nueon dev commands
   testall   cargo test --workspace
   fecheck   npm run check                (svelte-check)
   febuild   npm run build
-  icons     regenerate the app icon set from assets/branding/nueon-logo.png
+  icons     regenerate the app icon set from assets/branding/nueon-logo-dark.png
   iconcheck verify the generated icons (size + alpha)
   bump      set the app version (defaults to today's YY.M.D)
   versioncheck verify the app version is consistent and sane

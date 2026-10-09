@@ -1,4 +1,9 @@
-<p align="center"><img src="assets/branding/nueon-logo.png" width="128" alt="nueon"></p>
+<p align="center">
+  <picture>
+    <source media="(prefers-color-scheme: dark)" srcset="assets/branding/nueon-logo-bright.png">
+    <img src="assets/branding/nueon-logo-dark.png" width="128" alt="nueon">
+  </picture>
+</p>
 
 # nueon
 

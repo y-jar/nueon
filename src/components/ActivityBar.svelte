@@ -16,7 +16,7 @@
     openSettings,
     openWorkspace,
   } from "../lib/state.svelte";
-  import logo from "../assets/nueon-64.png";
+  import logo from "../../assets/branding/nueon-logo-dark.svg";
 
   let wsMenu = $state(false);
   let wsError = $state("");

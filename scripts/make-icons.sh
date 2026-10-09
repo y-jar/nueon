@@ -3,12 +3,13 @@
 #
 # Requires ImageMagick (`magick`). Downscales with Lanczos, keeps the alpha
 # channel, and never upscales: a requested size larger than the master is
-# skipped. The master is 381x381, so the largest output here is 256x256 and
-# `icon.png` stays 256 (not 512).
+# skipped. The master is 390x390, so the largest output here is 256x256 and
+# `icon.png` stays 256 (not 512). The in-app mark is the SVG source, imported
+# directly by the app, so it is not regenerated here.
 set -eu
 
 root=$(CDPATH= cd -- "$(dirname -- "$0")/.." && pwd)
-master="$root/assets/branding/nueon-logo.png"
+master="$root/assets/branding/nueon-logo-dark.png"
 
 if [ ! -f "$master" ]; then
   echo "make-icons: missing master $master" >&2
@@ -46,7 +47,7 @@ resize() {
   echo "wrote $out (${size}x${size})"
 }
 
-mkdir -p "$root/src-tauri/icons" "$root/src/assets"
+mkdir -p "$root/src-tauri/icons"
 
 resize 32 "$root/src-tauri/icons/32x32.png"
 resize 48 "$root/src-tauri/icons/48x48.png"
@@ -56,5 +57,3 @@ resize 128 "$root/src-tauri/icons/128x128.png"
 # not produced: its `@2x` suffix makes the deb bundler write an invalid
 # `hicolor/256x256@2/` directory (verified), and `icon.png` already covers 256.
 resize 256 "$root/src-tauri/icons/icon.png"
-# In-app mark (ActivityBar / Onboarding), kept small.
-resize 64 "$root/src/assets/nueon-64.png"

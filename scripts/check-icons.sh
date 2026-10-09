@@ -27,8 +27,7 @@ for entry in \
   "src-tauri/icons/48x48.png:48" \
   "src-tauri/icons/64x64.png:64" \
   "src-tauri/icons/128x128.png:128" \
-  "src-tauri/icons/icon.png:256" \
-  "src/assets/nueon-64.png:64"; do
+  "src-tauri/icons/icon.png:256"; do
   rel=${entry%:*}
   size=${entry##*:}
   file="$root/$rel"
@@ -55,6 +54,16 @@ for entry in \
   fi
   echo "ok   $rel: ${got}, corner alpha=$corner, centre alpha=$centre"
 done
+
+# The in-app mark is the SVG source (ActivityBar / Onboarding import it
+# directly); make sure it is present and actually an SVG.
+svg="$root/assets/branding/nueon-logo-dark.svg"
+if [ -s "$svg" ] && head -c 400 "$svg" | grep -q '<svg'; then
+  echo "ok   assets/branding/nueon-logo-dark.svg: present"
+else
+  echo "FAIL assets/branding/nueon-logo-dark.svg: missing or not an SVG"
+  failed=1
+fi
 
 if [ "$failed" != "0" ]; then
   echo "check-icons: FAILED"
