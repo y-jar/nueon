@@ -28,6 +28,7 @@
     Upload,
     Eye,
     Download,
+    Pencil,
     TriangleAlert,
   } from "@lucide/svelte";
   import * as api from "../lib/api";
@@ -35,6 +36,7 @@
     boolValue,
     COLUMN_TYPES,
     displayValue,
+    parseList,
     textValue,
     typeLabel,
   } from "../lib/dictionary";
@@ -84,6 +86,12 @@
   let headerHeight = $state(0);
 
   let selectedIds = $state<string[]>([]);
+  // Bulk-edit form (applies one value to every selected row).
+  let bulkTag = $state("definition");
+  let bulkText = $state("");
+  let bulkList = $state("");
+  let bulkBool = $state("true");
+  let bulkRef = $state("");
   let newTagName = $state("");
   let newTagKind = $state("text");
   let knownTags = $state<string[]>([]);
@@ -145,6 +153,16 @@
         tag.name !== "parent" &&
         tag.name !== "definition",
     ),
+  );
+
+  /** Columns a bulk edit can target: the dedicated ones plus user tags. */
+  const bulkColumns = $derived([
+    { name: "definition", kind: "tag_list" as const },
+    { name: "parent", kind: "references" as const },
+    ...tagColumns.map((tag) => ({ name: tag.name, kind: tag.kind })),
+  ]);
+  const bulkKind = $derived(
+    bulkColumns.find((column) => column.name === bulkTag)?.kind ?? "text",
   );
 
   const DEFAULT_COLUMN_WIDTH = 180;
@@ -823,6 +841,41 @@
     selectedIds = [];
   }
 
+  /** The value the bulk form would apply (null = clear the field). */
+  function buildBulkValue(): api.FieldValue | null {
+    switch (bulkKind) {
+      case "boolean":
+        return { type: "boolean", value: bulkBool === "true" };
+      case "tag_list": {
+        const values = parseList(bulkList);
+        return values.length ? { type: "tag_list", value: values } : null;
+      }
+      case "references":
+        return bulkRef ? { type: "references", value: [bulkRef] } : null;
+      case "reference":
+        return bulkRef ? { type: "reference", value: bulkRef } : null;
+      default:
+        return bulkText === "" ? null : { type: "text", value: bulkText };
+    }
+  }
+
+  async function applyBulk() {
+    if (!doc.currentTable || selectedIds.length === 0) return;
+    await api.setWordsValue(
+      doc.currentTable,
+      selectedIds,
+      bulkTag,
+      buildBulkValue(),
+    );
+    await onRefresh();
+  }
+
+  async function clearBulk() {
+    if (!doc.currentTable || selectedIds.length === 0) return;
+    await api.setWordsValue(doc.currentTable, selectedIds, bulkTag, null);
+    await onRefresh();
+  }
+
   async function addTag() {
     const name = newTagName.trim();
     if (!name || !doc.currentTable) return;
@@ -1074,6 +1127,58 @@
       <span class="muted"
         >{$t("grid.selected", { values: { count: selectedIds.length } })}</span
       >
+      <Popover align="right">
+        {#snippet label()}<Pencil size={14} /> {$t("grid.bulkEdit")}{/snippet}
+        {#snippet children(close)}
+          <div class="picker-body">
+            <label class="field"
+              >{$t("grid.column")}
+              <select bind:value={bulkTag}>
+                {#each bulkColumns as column (column.name)}
+                  <option value={column.name}>{column.name}</option>
+                {/each}
+              </select>
+            </label>
+
+            {#if bulkKind === "boolean"}
+              <select bind:value={bulkBool}>
+                <option value="true">{$t("grid.checked")}</option>
+                <option value="false">{$t("grid.unchecked")}</option>
+              </select>
+            {:else if bulkKind === "references" || bulkKind === "reference"}
+              <select bind:value={bulkRef}>
+                <option value="">—</option>
+                {#each relationOptions as option (option.id)}
+                  <option value={option.id}>{option.label}</option>
+                {/each}
+              </select>
+            {:else if bulkKind === "tag_list"}
+              <input
+                placeholder={$t("grid.commaList")}
+                bind:value={bulkList}
+              />
+            {:else}
+              <input bind:value={bulkText} />
+            {/if}
+
+            <div class="row">
+              <button
+                class="primary"
+                onclick={() => {
+                  void applyBulk();
+                  close();
+                }}>{$t("grid.apply")}</button
+              >
+              <button
+                onclick={() => {
+                  void clearBulk();
+                  close();
+                }}>{$t("grid.clearValue")}</button
+              >
+            </div>
+          </div>
+        {/snippet}
+      </Popover>
       <button onclick={deleteSelected}>{$t("grid.deleteSelected")}</button>
     {/if}
   </div>

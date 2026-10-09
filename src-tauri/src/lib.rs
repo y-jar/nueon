@@ -195,6 +195,7 @@ pub fn run() {
             commands::create_word,
             commands::save_word_entry,
             commands::set_word_value,
+            commands::set_words_value,
             commands::set_word_definition,
             commands::rename_word,
             commands::delete_word,

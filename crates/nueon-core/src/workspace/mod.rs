@@ -609,6 +609,48 @@ impl Workspace {
         self.save_entry(table, id)
     }
 
+    /// Apply one field's value to many words at once, as a **single** undo
+    /// checkpoint and a single file write. Ids not in the table are skipped;
+    /// `wordname` is rejected like [`Self::set_value`]. Returns how many words
+    /// were changed.
+    pub fn set_values(
+        &mut self,
+        table: &str,
+        ids: &[Uuid],
+        tag: &str,
+        value: Option<FieldValue>,
+    ) -> Result<usize, StorageError> {
+        if tag == WORDNAME_TAG || self.dictionary.table(table).is_none() {
+            return Ok(0);
+        }
+        let present: Vec<Uuid> = ids
+            .iter()
+            .copied()
+            .filter(|id| self.dictionary.get_entry(table, *id).is_some())
+            .collect();
+        if present.is_empty() {
+            return Ok(0);
+        }
+        self.record();
+        for id in &present {
+            if let Some(entry) = self.dictionary.get_entry_mut(table, *id) {
+                match &value {
+                    Some(value) => entry.set(tag, value.clone()),
+                    None => entry.remove(tag),
+                };
+            }
+        }
+        self.save_table(table)?;
+        self.mark_change(
+            Instant::now(),
+            format!(
+                "nueon: set \"{tag}\" on {} words in \"{table}\"",
+                present.len()
+            ),
+        );
+        Ok(present.len())
+    }
+
     /// Set (or, if empty, remove) a word's `definition` senses. Sugar over
     /// [`Self::set_value`] for the one tag editors treat specially.
     pub fn set_definition(
@@ -2393,6 +2435,56 @@ mod tests {
         assert!(!ws
             .set_definition("verbs", missing, vec!["x".into()])
             .unwrap());
+    }
+
+    #[test]
+    fn set_values_batches_and_one_undo_restores_all() {
+        let dir = tempfile::tempdir().unwrap();
+        let mut ws = Workspace::new(dir.path()).unwrap();
+        ws.create_table("verbs").unwrap();
+        let a = ws.create_entry("verbs", "a").unwrap().unwrap();
+        let b = ws.create_entry("verbs", "b").unwrap().unwrap();
+        let c = ws.create_entry("verbs", "c").unwrap().unwrap();
+        let missing = Uuid::new_v4();
+
+        let changed = ws
+            .set_values(
+                "verbs",
+                &[a, b, c, missing],
+                "pos",
+                Some(FieldValue::Text("verb".into())),
+            )
+            .unwrap();
+        assert_eq!(changed, 3);
+        for id in [a, b, c] {
+            assert_eq!(
+                ws.dictionary.get_entry("verbs", id).unwrap().get("pos"),
+                Some(&FieldValue::Text("verb".into()))
+            );
+        }
+
+        // `wordname` is rejected, like the single-value path.
+        assert_eq!(
+            ws.set_values(
+                "verbs",
+                &[a],
+                "wordname",
+                Some(FieldValue::Text("x".into()))
+            )
+            .unwrap(),
+            0
+        );
+
+        // A single undo reverts the whole batch.
+        assert!(ws.undo().unwrap());
+        for id in [a, b, c] {
+            assert!(ws
+                .dictionary
+                .get_entry("verbs", id)
+                .unwrap()
+                .get("pos")
+                .is_none());
+        }
     }
 
     #[test]

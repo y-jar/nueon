@@ -338,6 +338,12 @@ export const setWordValue = (
   tag: string,
   value: FieldValue | null,
 ): Promise<boolean> => invoke("set_word_value", { table, id, tag, value });
+export const setWordsValue = (
+  table: string,
+  ids: string[],
+  tag: string,
+  value: FieldValue | null,
+): Promise<number> => invoke("set_words_value", { table, ids, tag, value });
 export const setWordDefinition = (
   table: string,
   id: string,

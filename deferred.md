@@ -31,7 +31,7 @@ stage that completed them: `R0`–`R8` were done during the Tauri migration,
 - ~~Tag management UI: add/remove tags on a word, tag suggestion dropdown when
   adding a tag (backend `known_tag_names` exists).~~ (D1)
 - ~~Multi-select of rows with bulk delete.~~ (D1)
-- Bulk value edit: apply one value to every selected row at once. (D1+)
+- ~~Bulk value edit: apply one value to every selected row at once.~~ (bulk edit)
 - ~~Field-type editing or migration after tags are created.~~ (D1)
 - ~~Rich cell editors for `TagList`; reference cells are display-only (edit via
   the inspector parent picker).~~ (D1)

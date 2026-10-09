@@ -2723,6 +2723,78 @@ async function main() {
     );
     await js(`const b = document.querySelector('.modal-head button'); if (b) b.click(); return !!b;`);
   });
+
+  // -- probe 43: bulk value edit over selected rows -------------------------
+  await probe("43-bulk-value-edit", async () => {
+    await openActivity("Dictionary");
+    await waitJs(`!!document.querySelector('.table-list')`, { label: "tables panel" });
+    const opened = await js(
+      `const b = [...document.querySelectorAll('.table-list .table-row .tree-name')]
+         .find((x) => x.textContent.trim().startsWith('lex'));
+       if (b) b.click();
+       return !!b;`,
+    );
+    if (!opened) throw new Error("no 'lex' table in the panel");
+    await waitJs(`!!document.querySelector('.dict-grid')`, { label: "lex grid" });
+    await waitJs(
+      `document.querySelectorAll('.dict-grid td.wordname-col input').length >= 2`,
+      { label: "lex rows" },
+    );
+
+    // The row for velo, checked for a text token.
+    const rowHas = (word, needle) =>
+      `(() => {
+         const input = [...document.querySelectorAll('.dict-grid td.wordname-col input')]
+           .find((i) => i.value === ${JSON.stringify(word)});
+         const row = input?.closest('tr');
+         return !!row && row.textContent.includes(${JSON.stringify(needle)});
+       })()`;
+
+    // Select every row.
+    await js(`const c = document.querySelector('.dict-grid th.select-col input');
+       if (c && !c.checked) c.click();
+       return true;`);
+    await waitJs(
+      `[...document.querySelectorAll('.grid-toolbar button')]
+         .some((b) => b.textContent.includes('Set value'))`,
+      { label: "bulk button" },
+    );
+    await js(`const b = [...document.querySelectorAll('.grid-toolbar button')]
+       .find((x) => x.textContent.includes('Set value'));
+       b.click();
+       return !!b;`);
+    await waitJs(`!!document.querySelector('.popover-panel')`, { label: "bulk panel" });
+
+    // Target the `pos` column, value "noun".
+    await js(`const panel = document.querySelector('.popover-panel');
+       const select = panel.querySelector('select');
+       select.value = 'pos';
+       select.dispatchEvent(new Event('change', { bubbles: true }));
+       return true;`);
+    await waitJs(`!!document.querySelector('.popover-panel input')`, {
+      label: "value input",
+    });
+    await js(`const input = document.querySelector('.popover-panel input');
+       input.value = 'noun';
+       input.dispatchEvent(new Event('input', { bubbles: true }));
+       return true;`);
+    await js(`const b = [...document.querySelectorAll('.popover-panel button')]
+       .find((x) => x.textContent.trim() === 'Apply');
+       b.click();
+       return !!b;`);
+    await waitJs(`!document.querySelector('.popover-panel')`, { label: "panel closed" });
+    await waitJs(rowHas("velo", "noun"), { label: "bulk applied to velo" });
+
+    // One undo restores every row.
+    await js(`const b = [...document.querySelectorAll('.grid-toolbar button')]
+       .find((x) => x.getAttribute('title') === 'Undo');
+       b.click();
+       return !!b;`);
+    await waitJs(rowHas("velo", "verb"), { label: "velo reverted" });
+    if (await js(rowHas("velo", "noun"))) {
+      throw new Error("one undo did not revert the whole batch");
+    }
+  });
 }
 
 try {

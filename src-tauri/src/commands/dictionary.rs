@@ -194,6 +194,31 @@ pub fn set_word_value(
     Ok(applied)
 }
 
+/// Apply one field's value to many words at once, as a single undo step.
+/// `value: null` removes the tag. Returns how many words changed.
+#[tauri::command]
+pub fn set_words_value(
+    app: AppHandle,
+    state: State<'_, Shared>,
+    table: String,
+    ids: Vec<String>,
+    tag: String,
+    value: Option<FieldValue>,
+) -> Result<usize, String> {
+    let parsed: Vec<Uuid> = ids
+        .iter()
+        .map(|id| parse_id(id))
+        .collect::<Result<_, _>>()?;
+    let mut state = state.lock().map_err(|_| "state poisoned".to_string())?;
+    let count = state
+        .workspace_mut()?
+        .set_values(&table, &parsed, &tag, value)
+        .map_err(|err| err.to_string())?;
+    drop(state);
+    changed(&app, "dictionary");
+    Ok(count)
+}
+
 /// Set (or, given an empty list, remove) a word's `definition` senses.
 #[tauri::command]
 pub fn set_word_definition(
