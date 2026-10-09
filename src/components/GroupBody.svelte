@@ -3,6 +3,7 @@
   import Grid from "./Grid.svelte";
   import Translation from "./Translation.svelte";
   import PhonologyView from "./PhonologyView.svelte";
+  import FileViewer from "./FileViewer.svelte";
   import EmptyState from "./EmptyState.svelte";
   import { reloadGroupTable, type TabGroup } from "../lib/state.svelte";
 
@@ -26,6 +27,10 @@
   {/key}
 {:else if group.doc.view === "phonology"}
   <PhonologyView />
+{:else if group.doc.view === "file"}
+  {#key group.id + (group.doc.selected ?? "")}
+    <FileViewer doc={group.doc} />
+  {/key}
 {:else}
   <Translation />
 {/if}

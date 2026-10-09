@@ -226,6 +226,11 @@
   "confirm": {
     "dontAskAgain": "Don't ask me again"
   },
+  "file": {
+    "open": "Open in default app",
+    "reveal": "Reveal in file explorer",
+    "noPreview": "No preview for \"{name}\"."
+  },
   "keybinds": {
     "title": "Keybinds",
     "hint": "Read-only for now; rebinding is planned for a later update.",

@@ -608,6 +608,18 @@ function seedWorkspace() {
   fs.writeFileSync(path.join(WORKSPACE, "notes", "fmt.md"), FMT);
   fs.writeFileSync(path.join(WORKSPACE, "notes", "task.md"), TASK);
   fs.writeFileSync(path.join(WORKSPACE, "notes", "gutter.md"), GUTTER);
+  // Imported files live under notes/assets/ (probes 41).
+  const assetsDir = path.join(WORKSPACE, "notes", "assets");
+  fs.mkdirSync(assetsDir, { recursive: true });
+  fs.writeFileSync(
+    path.join(assetsDir, "pic.png"),
+    Buffer.from(
+      "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNk+M9QDwADhgGAWjR9awAAAABJRU5ErkJggg==",
+      "base64",
+    ),
+  );
+  fs.writeFileSync(path.join(assetsDir, "notes.txt"), "asset text\n");
+  fs.writeFileSync(path.join(assetsDir, "doc.pdf"), "%PDF-1.4 fake\n");
   const configDir = path.join(ROOT, "home", ".config", "nueon");
   fs.mkdirSync(configDir, { recursive: true });
   fs.writeFileSync(
@@ -2579,6 +2591,49 @@ async function main() {
     }
     // Dismiss the menu.
     await js(`document.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape' })); return true;`);
+  });
+
+  // -- probe 41: assets folder + file viewer --------------------------------
+  await probe("41-assets-folder-and-file-viewer", async () => {
+    await openActivity("Notes");
+    await waitJs(`!!document.querySelector('.explorer-actions')`, { label: "notes sidebar" });
+    await waitJs(`!!document.querySelector('.tree-row[data-path="assets"]')`, {
+      label: "assets folder",
+    });
+    await waitJs(`!!document.querySelector('.tree-row[data-path="assets/pic.png"]')`, {
+      label: "asset file in tree",
+    });
+
+    const openTreeFile = (p) =>
+      js(`const r = document.querySelector('.tree-row[data-path=${JSON.stringify(p)}] .tree-name');
+         if (r) { r.click(); return true; }
+         return false;`);
+
+    // An image opens in the viewer with a loading <img>.
+    if (!(await openTreeFile("assets/pic.png"))) throw new Error("no pic.png row");
+    await waitJs(`!!document.querySelector('.file-viewer img.file-image')`, {
+      label: "image viewer",
+    });
+    if (!(await js(`return (document.querySelector('.file-image')?.naturalWidth ?? 0) > 0;`))) {
+      throw new Error("image did not load via the asset protocol");
+    }
+
+    // A .txt asset opens in the viewer as text, not the Markdown editor.
+    if (!(await openTreeFile("assets/notes.txt"))) throw new Error("no notes.txt row");
+    await waitJs(`!!document.querySelector('.file-viewer .file-text')`, { label: "text viewer" });
+    const text = await js(`return document.querySelector('.file-text')?.textContent ?? '';`);
+    if (!text.includes("asset text")) throw new Error(`text asset not shown: ${text}`);
+
+    // An unpublishable binary offers "open in default app".
+    if (!(await openTreeFile("assets/doc.pdf"))) throw new Error("no doc.pdf row");
+    await waitJs(`!!document.querySelector('.file-viewer .file-unsupported')`, {
+      label: "unsupported panel",
+    });
+    const hasOpen = await js(
+      `return [...document.querySelectorAll('.file-viewer button')]
+         .some((b) => b.textContent.includes('Open in default app'));`,
+    );
+    if (!hasOpen) throw new Error("no open-in-default button");
   });
 }
 

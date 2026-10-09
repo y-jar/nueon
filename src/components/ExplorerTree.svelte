@@ -3,13 +3,18 @@
   import {
     ChevronDown,
     ChevronRight,
+    File,
+    FileArchive,
+    FileImage,
     FileText,
+    FileVideo,
     Folder,
     FolderOpen,
     MoreHorizontal,
+    Music,
   } from "@lucide/svelte";
   import type { NoteNode } from "../lib/api";
-  import { stripMd } from "../lib/explorer";
+  import { fileCategory, stripMd } from "../lib/explorer";
   import {
     ui,
     activeDoc,
@@ -175,6 +180,16 @@
           {:else}
             <FolderOpen size={14} class="tree-icon" />
           {/if}
+        {:else if fileCategory(node.name) === "image"}
+          <FileImage size={14} class="tree-icon" />
+        {:else if fileCategory(node.name) === "audio"}
+          <Music size={14} class="tree-icon" />
+        {:else if fileCategory(node.name) === "video"}
+          <FileVideo size={14} class="tree-icon" />
+        {:else if fileCategory(node.name) === "archive"}
+          <FileArchive size={14} class="tree-icon" />
+        {:else if fileCategory(node.name) === "other"}
+          <File size={14} class="tree-icon" />
         {:else}
           <FileText size={14} class="tree-icon" />
         {/if}

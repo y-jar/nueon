@@ -220,7 +220,7 @@ export interface GridViewState {
 
 // -- tiling layout -------------------------------------------------------
 export interface TabLayout {
-  kind: "note" | "table" | "translation" | "phonology";
+  kind: "note" | "file" | "table" | "translation" | "phonology";
   ref?: string | null;
   title: string;
 }

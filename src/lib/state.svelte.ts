@@ -4,7 +4,7 @@ import { t } from "./i18n";
 import type { EditorView } from "@codemirror/view";
 import * as api from "./api";
 import { windowLabel } from "./window";
-import { stripMd } from "./explorer";
+import { isAssetPath, isNotePath, stripMd } from "./explorer";
 import { shouldPruneGroup } from "./tabs";
 import { flushNotes, quiesceNotes, resolveNoteConflict } from "./editor/action";
 import { beginRead, isFreshest } from "./editor/freshness";
@@ -19,7 +19,7 @@ export type Activity =
   | "git";
 
 /** The kind of document a center tab represents. */
-export type TabKind = "note" | "table" | "translation" | "phonology";
+export type TabKind = "note" | "file" | "table" | "translation" | "phonology";
 
 /** A center workspace tab. */
 export interface Tab {
@@ -31,7 +31,7 @@ export interface Tab {
 }
 
 /** Which panel a group's center pane is rendering. */
-export type View = "notes" | "dictionary" | "translation" | "phonology";
+export type View = "notes" | "file" | "dictionary" | "translation" | "phonology";
 
 /** The loaded document for one tab group. */
 export interface DocState {
@@ -398,6 +398,9 @@ export async function activateTab(
     await syncGroupTable(group.id);
   } else if (tab.kind === "phonology") {
     group.doc.view = "phonology";
+  } else if (tab.kind === "file" && tab.ref) {
+    group.doc.view = "file";
+    group.doc.selected = tab.ref;
   } else {
     group.doc.view = "translation";
   }
@@ -409,6 +412,18 @@ export async function openNote(path: string): Promise<void> {
   let tab = group.tabs.find((t) => t.kind === "note" && t.ref === path);
   if (!tab) {
     tab = { id: newId(), kind: "note", ref: path, title: baseName(path) };
+    group.tabs = [...group.tabs, tab];
+  }
+  await activateTab(group.id, tab.id);
+}
+
+/** Open a non-note file (image, PDF, …) in the viewer. */
+export async function openFile(path: string): Promise<void> {
+  const group = activeGroup();
+  ui.activity = "notes";
+  let tab = group.tabs.find((t) => t.kind === "file" && t.ref === path);
+  if (!tab) {
+    tab = { id: newId(), kind: "file", ref: path, title: baseName(path) };
     group.tabs = [...group.tabs, tab];
   }
   await activateTab(group.id, tab.id);
@@ -1117,7 +1132,11 @@ export async function resolveConflict(
 // -- notes CRUD ----------------------------------------------------------
 
 export async function selectNote(path: string): Promise<void> {
-  await openNote(path);
+  // Markdown/text opens in the editor; anything else (and anything under
+  // `notes/assets/`) opens in the viewer.
+  await (isNotePath(path) && !isAssetPath(path)
+    ? openNote(path)
+    : openFile(path));
 }
 
 export async function selectTable(name: string): Promise<void> {
