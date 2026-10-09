@@ -1082,7 +1082,6 @@
       <div class="picker-body">
         <div class="tag-row">
           <input
-            use:autofocus
             placeholder={$t("grid.newTag")}
             bind:value={newTagName}
             list="known-tags"

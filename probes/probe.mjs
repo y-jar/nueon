@@ -2914,6 +2914,50 @@ async function main() {
       throw new Error("inspector did not list the inventory");
     }
   });
+
+  // -- probe 46: the Tags popover does not steal focus ----------------------
+  await probe("46-tags-popover-no-autofocus", async () => {
+    await openActivity("Dictionary");
+    await waitJs(`!!document.querySelector('.table-list')`, { label: "tables panel" });
+    const opened = await js(
+      `const b = [...document.querySelectorAll('.table-list .table-row .tree-name')]
+         .find((x) => x.textContent.trim().startsWith('lex'));
+       if (b) b.click();
+       return !!b;`,
+    );
+    if (!opened) throw new Error("no 'lex' table in the panel");
+    await waitJs(`!!document.querySelector('.dict-grid')`, { label: "lex grid" });
+
+    await js(`const b = [...document.querySelectorAll('.grid-toolbar .popover-trigger')]
+       .find((x) => x.textContent.trim() === 'Tags');
+       if (b) b.click();
+       return !!b;`);
+    await waitJs(`!!document.querySelector('.popover-panel .tag-row input')`, {
+      label: "tags popover",
+    });
+
+    // Opening the panel must not focus the new-tag box (which pops a dropdown).
+    if (
+      await js(`return document.activeElement === document.querySelector('.popover-panel .tag-row input');`)
+    ) {
+      throw new Error("the new-tag input was autofocused on open");
+    }
+
+    // It still works when the user chooses to type.
+    await js(`const i = document.querySelector('.popover-panel .tag-row input');
+       i.focus();
+       i.value = 'zztag';
+       i.dispatchEvent(new Event('input', { bubbles: true }));
+       i.dispatchEvent(new KeyboardEvent('keydown', { key: 'Enter', bubbles: true }));
+       return true;`);
+    await waitJs(
+      `[...document.querySelectorAll('.popover-panel .tag-row .grow')]
+         .some((x) => x.textContent.trim() === 'zztag')`,
+      { label: "tag added" },
+    );
+
+    await js(`window.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape' })); return true;`);
+  });
 }
 
 try {
