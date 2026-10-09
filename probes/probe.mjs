@@ -391,6 +391,9 @@ function seedWorkspace() {
   fs.mkdirSync(path.join(WORKSPACE, "dictionary"), { recursive: true });
   fs.mkdirSync(path.join(WORKSPACE, "config"), { recursive: true });
   spawnSync("git", ["init", "-q"], { cwd: WORKSPACE });
+  // A committable identity, so the Source Control panel's check-in works.
+  spawnSync("git", ["config", "user.name", "probe"], { cwd: WORKSPACE });
+  spawnSync("git", ["config", "user.email", "probe@localhost"], { cwd: WORKSPACE });
   // A grammar rule + default, so the Translator can load it (probe 22).
   fs.writeFileSync(
     path.join(WORKSPACE, "config", "grammar"),
@@ -2356,6 +2359,57 @@ async function main() {
     });
 
     await js(`const b = document.querySelector('.modal-head button'); if (b) b.click(); return !!b;`);
+  });
+
+  // -- probe 37: git history rows are not hyperlinks ------------------------
+  await probe("37-git-history-rows", async () => {
+    // Make a change so there is something to check in.
+    await openActivity("Notes");
+    await waitJs(
+      `!!document.querySelector('.tree-row[data-path="beta.md"] .tree-name')`,
+      { label: "notes tree" },
+    );
+    await openNote("beta.md");
+    await focusEditor("beta.md");
+    const before = await editorText("beta.md");
+    await placeCursor("beta.md", before.length);
+    await pressKey(ENTER);
+    await new Promise((resolve) => setTimeout(resolve, 700));
+
+    await openActivity("Source Control");
+    await waitJs(`!!document.querySelector('.git-panel')`, { label: "git panel" });
+    await waitJs(
+      `document.querySelectorAll('.git-panel .vcs-status li').length > 0`,
+      { label: "pending change" },
+    );
+    await js(`const t = document.querySelector('.git-panel textarea');
+       if (!t) return false;
+       t.value = 'nueon: history probe';
+       t.dispatchEvent(new Event('input', { bubbles: true }));
+       return true;`);
+    await js(`const b = [...document.querySelectorAll('.git-panel button')]
+       .find((x) => x.textContent.trim() === 'Check in');
+       if (b) b.click();
+       return !!b;`);
+    await waitJs(`!!document.querySelector('.vcs-log .log-row')`, { label: "history row" });
+
+    const rows = await js(
+      `return [...document.querySelectorAll('.vcs-log .log-row')].map((r) => ({
+         hash: r.querySelector('.hash')?.textContent.trim(),
+         summary: r.querySelector('.summary')?.textContent.trim(),
+       }));`,
+    );
+    if (!rows.length) throw new Error("no history rows");
+    if (!/^[0-9a-f]{7}$/.test(rows[0].hash ?? "")) {
+      throw new Error(`bad hash chip: ${JSON.stringify(rows[0])}`);
+    }
+    if (!rows.some((r) => r.summary === "nueon: history probe")) {
+      throw new Error(`committed summary missing: ${JSON.stringify(rows)}`);
+    }
+    const links = await js(
+      `return document.querySelectorAll('.vcs-log button.link').length;`,
+    );
+    if (links !== 0) throw new Error("history still uses link styling");
   });
 }
 

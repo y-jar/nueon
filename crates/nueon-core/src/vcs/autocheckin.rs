@@ -7,6 +7,10 @@
 
 use std::time::{Duration, Instant};
 
+/// How many pending messages the commit subject spells out before counting
+/// the rest as "+N more changes". The full list is kept in the commit body.
+const SUMMARY_LIMIT: usize = 3;
+
 /// Tracks pending changes and when they should be committed.
 #[derive(Debug, Clone)]
 pub struct AutoCheckin {
@@ -73,15 +77,26 @@ impl AutoCheckin {
     }
 
     /// Drain the pending check-in message, if one is due to be committed.
+    ///
+    /// The subject line stays readable: past [`SUMMARY_LIMIT`] changes it
+    /// summarizes and counts the rest, while the full list travels in the
+    /// commit body.
     pub fn take(&mut self) -> Option<String> {
         if self.pending.is_empty() {
             self.last_change = None;
             return None;
         }
-        let message = self.pending.join("; ");
-        self.pending.clear();
+        let messages = std::mem::take(&mut self.pending);
         self.last_change = None;
-        Some(message)
+        if messages.len() <= SUMMARY_LIMIT {
+            return Some(messages.join("; "));
+        }
+        let subject = format!(
+            "{}; +{} more changes",
+            messages[..SUMMARY_LIMIT].join("; "),
+            messages.len() - SUMMARY_LIMIT
+        );
+        Some(format!("{subject}\n\n{}", messages.join("\n")))
     }
 
     /// Discard pending changes.
@@ -129,6 +144,19 @@ mod tests {
         assert!(!auto.due(start + Duration::from_secs(60)));
         assert!(auto.due(start + Duration::from_secs(90)));
         assert_eq!(auto.take().unwrap(), "first; second");
+    }
+
+    #[test]
+    fn a_long_batch_is_summarized_with_the_full_list_in_the_body() {
+        let mut auto = AutoCheckin::new(true, Duration::ZERO);
+        let now = Instant::now();
+        for name in ["one", "two", "three", "four", "five"] {
+            auto.mark(now, name);
+        }
+        let message = auto.take().unwrap();
+        let (subject, body) = message.split_once("\n\n").expect("body separated");
+        assert_eq!(subject, "one; two; three; +2 more changes");
+        assert_eq!(body, "one\ntwo\nthree\nfour\nfive");
     }
 
     #[test]

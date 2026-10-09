@@ -250,10 +250,10 @@
     <ul class="vcs-log">
       {#each log as entry (entry.id)}
         <li>
-          <button class="link" onclick={() => viewCommit(entry.id)}
-            ><span class="mono">{entry.id.slice(0, 7)}</span>
-            {entry.summary}</button
-          >
+          <button class="log-row" onclick={() => viewCommit(entry.id)}>
+            <span class="hash mono">{entry.id.slice(0, 7)}</span>
+            <span class="summary">{entry.summary}</span>
+          </button>
         </li>
       {/each}
     </ul>

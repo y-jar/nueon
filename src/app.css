@@ -1529,6 +1529,41 @@ button.translate:hover {
   padding: 1px 0;
 }
 
+.git-panel .vcs-log .log-row {
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+  width: 100%;
+  background: transparent;
+  border: none;
+  padding: 2px 0;
+  text-align: left;
+  color: inherit;
+  cursor: pointer;
+}
+
+.git-panel .vcs-log .log-row:hover {
+  color: var(--text);
+}
+
+.git-panel .vcs-log .hash {
+  flex: none;
+  font-size: 11px;
+  padding: 1px 5px;
+  border: 1px solid var(--border);
+  border-radius: 3px;
+  background: var(--faint);
+  color: var(--muted);
+}
+
+.git-panel .vcs-log .summary {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
 pre.diff {
   max-height: 320px;
   overflow: auto;
