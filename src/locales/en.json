@@ -439,6 +439,7 @@
     "classes": "Classes",
     "class": "Class",
     "morphemes": "Morphemes",
+    "filterMorphemes": "Filter morphemes",
     "noMorphemes": "No morphemes yet — mark a table as fixes in Settings → Tables.",
     "lexicon": "Lexicon",
     "filter": "Filter words",

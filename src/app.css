@@ -1309,6 +1309,57 @@ button.link {
   cursor: default;
 }
 
+.morphology-sidebar {
+  height: 100%;
+  min-height: 0;
+  overflow: hidden;
+}
+
+.morph-region {
+  display: flex;
+  flex-direction: column;
+  flex: 1 1 0;
+  min-height: 0;
+  gap: 4px;
+}
+
+.morph-region > .section-title,
+.morph-region > .explorer-filter {
+  flex: none;
+}
+
+.morphology-sidebar .morph-list {
+  flex: 1 1 0;
+  min-height: 0;
+  overflow-y: auto;
+}
+
+.morph-chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+  flex: 1 1 0;
+  min-height: 0;
+  overflow-y: auto;
+}
+
+.morph-chips .morph-row {
+  width: auto;
+  padding: 2px 8px;
+  border: 1px solid var(--border);
+  border-radius: 999px;
+}
+
+.morphology-sidebar .morph-row .grow {
+  min-width: 0;
+}
+
+.morphology-sidebar .morph-row .gloss {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
 .badge {
   padding: 1px 6px;
   border-radius: 4px;

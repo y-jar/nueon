@@ -3435,6 +3435,40 @@ async function main() {
       { label: "root + morpheme composed" },
     );
   });
+
+  // -- probe 61: the Morphology sidebar is a flex column with scrolling lists
+  await probe("61-morphology-sidebar-layout", async () => {
+    await js(
+      `const b = document.querySelector('.activity[title="Morphology"]');
+       if (b) b.click();
+       return !!b;`,
+    );
+    await waitJs(`!!document.querySelector('.morphology-sidebar')`, {
+      label: "morphology sidebar",
+    });
+
+    const direction = await js(
+      `return getComputedStyle(document.querySelector('.morphology-sidebar')).flexDirection;`,
+    );
+    assertEqual(direction, "column", "sidebar flex direction");
+
+    const regions = await js(
+      `return document.querySelectorAll('.morphology-sidebar .morph-region').length;`,
+    );
+    if (regions !== 3) throw new Error(`expected 3 regions, got ${regions}`);
+
+    const overflow = await js(
+      `const l = document.querySelector('.morphology-sidebar .morph-list');
+       return l ? getComputedStyle(l).overflowY : 'none';`,
+    );
+    assertEqual(overflow, "auto", "list overflow-y");
+
+    const wrap = await js(
+      `const c = document.querySelector('.morphology-sidebar .morph-chips');
+       return c ? getComputedStyle(c).flexWrap : 'none';`,
+    );
+    assertEqual(wrap, "wrap", "classes wrap");
+  });
 }
 
 try {
