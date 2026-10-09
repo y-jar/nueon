@@ -1950,8 +1950,15 @@ async function main() {
          if (b) b.click();
          return !!b;`);
 
+    const openTablesTab = () =>
+      js(`const b = [...document.querySelectorAll('.settings-nav button')]
+         .find((x) => x.textContent.trim() === 'Tables');
+       if (b) b.click();
+       return !!b;`);
+
     await openSettings();
-    await waitJs(`!!document.querySelector('.settings')`, { label: "settings modal" });
+    await waitJs(`!!document.querySelector('.settings-nav')`, { label: "settings modal" });
+    await openTablesTab();
     await waitJs(
       `[...document.querySelectorAll('.settings .rule .grow')]
          .some((x) => x.textContent.trim() === 'lex')`,
@@ -1985,6 +1992,8 @@ async function main() {
     await js(`const b = document.querySelector('.modal-head button'); if (b) b.click(); return !!b;`);
     await waitJs(`!document.querySelector('.settings')`, { label: "settings closed" });
     await openSettings();
+    await waitJs(`!!document.querySelector('.settings-nav')`, { label: "settings reopened" });
+    await openTablesTab();
     await waitJs(
       `(() => { const row = ${lexRow}; return !!row && row.querySelector('select').value === 'fixes'; })()`,
       { label: "role persisted" },
@@ -2116,13 +2125,21 @@ async function main() {
     await js(`const b = document.querySelector('.activity[title="Settings"]');
        if (b) b.click();
        return !!b;`);
-    await waitJs(`!!document.querySelector('.settings')`, { label: "settings again" });
+    await waitJs(`!!document.querySelector('.settings-nav')`, { label: "settings again" });
     assertEqual(
-      await js(`return document.querySelector('.settings input')?.value;`),
+      await js(`return document.querySelector('.settings-content input')?.value;`),
       "Vokala",
       "language name persisted",
     );
     // A grammar rule for the chosen word order was created.
+    await js(`const b = [...document.querySelectorAll('.settings-nav button')]
+       .find((x) => x.textContent.trim() === 'Grammar rules');
+       if (b) b.click();
+       return !!b;`);
+    await waitJs(
+      `[...document.querySelectorAll('.settings .rule input')].length > 0`,
+      { label: "grammar tab" },
+    );
     const hasRule = await js(
       `return [...document.querySelectorAll('.settings .rule input')]
          .some((i) => i.value === 'SVO');`,
@@ -2136,9 +2153,18 @@ async function main() {
     await js(`const b = document.querySelector('.activity[title="Settings"]');
        if (b) b.click();
        return !!b;`);
-    await waitJs(`!!document.querySelector('.settings')`, { label: "settings" });
+    await waitJs(`!!document.querySelector('.settings-nav')`, { label: "settings" });
+    await js(`const b = [...document.querySelectorAll('.settings-nav button')]
+       .find((x) => x.textContent.trim() === 'Profile');
+       if (b) b.click();
+       return !!b;`);
+    await waitJs(
+      `[...document.querySelectorAll('.settings-content button')]
+         .some((b) => b.textContent.trim() === 'Export profile')`,
+      { label: "profile tab" },
+    );
     const buttons = await js(
-      `return [...document.querySelectorAll('.settings button')].map((b) => b.textContent.trim());`,
+      `return [...document.querySelectorAll('.settings-content button')].map((b) => b.textContent.trim());`,
     );
     if (!buttons.includes("Export profile") || !buttons.includes("Import profile")) {
       throw new Error(`profile buttons missing: ${JSON.stringify(buttons)}`);
@@ -2165,10 +2191,17 @@ async function main() {
       js(`const b = document.querySelector('.activity[title="Settings"]');
          if (b) b.click();
          return !!b;`);
+    const openLintingTab = () =>
+      js(`const b = [...document.querySelectorAll('.settings-nav button')]
+         .find((x) => x.textContent.trim() === 'Linting & translator');
+       if (b) b.click();
+       return !!b;`);
     const groupInputs = () =>
       js(`return [...document.querySelectorAll('.settings .group input')].map((i) => i.value);`);
 
     await openSettings();
+    await waitJs(`!!document.querySelector('.settings-nav')`, { label: "settings nav" });
+    await openLintingTab();
     await waitJs(`!!document.querySelector('.settings .group')`, { label: "linting group" });
     // Settings loads the inventory asynchronously; wait for it to fill in.
     await waitJs(
@@ -2196,6 +2229,8 @@ async function main() {
     await js(`const b = document.querySelector('.modal-head button'); if (b) b.click(); return !!b;`);
     await waitJs(`!document.querySelector('.settings')`, { label: "settings closed" });
     await openSettings();
+    await waitJs(`!!document.querySelector('.settings-nav')`, { label: "settings nav again" });
+    await openLintingTab();
     await waitJs(`!!document.querySelector('.settings .group')`, { label: "linting group again" });
     await waitJs(
       `[...document.querySelectorAll('.settings .group input')][1]?.value === 'a i u o'`,
@@ -2263,6 +2298,64 @@ async function main() {
     if (!table.includes("|") || !table.includes("---")) {
       throw new Error(`Ctrl+Shift+T did not insert a table: ${JSON.stringify(table)}`);
     }
+  });
+
+  // -- probe 36: Settings sidebar tabs + keybind reference ------------------
+  await probe("36-settings-tabs-and-keybinds", async () => {
+    await js(`const b = document.querySelector('.activity[title="Settings"]');
+       if (b) b.click();
+       return !!b;`);
+    await waitJs(`!!document.querySelector('.settings-nav')`, { label: "settings nav" });
+
+    const tabs = await js(
+      `return [...document.querySelectorAll('.settings-nav button')].map((b) => b.textContent.trim());`,
+    );
+    for (const name of [
+      "Language",
+      "Grammar rules",
+      "Tables",
+      "Linting & translator",
+      "Keybinds",
+      "Profile",
+    ]) {
+      if (!tabs.includes(name)) {
+        throw new Error(`missing tab ${name}: ${JSON.stringify(tabs)}`);
+      }
+    }
+
+    const openTab = (name) =>
+      js(`const b = [...document.querySelectorAll('.settings-nav button')]
+         .find((x) => x.textContent.trim() === ${JSON.stringify(name)});
+       if (b) b.click();
+       return !!b;`);
+
+    // Keybinds tab lists real bindings.
+    if (!(await openTab("Keybinds"))) throw new Error("no Keybinds tab");
+    await waitJs(`!!document.querySelector('.keybind-list')`, { label: "keybind list" });
+    const rows = await js(
+      `return [...document.querySelectorAll('.keybind-list li')].map((li) => ({
+         keys: li.querySelector('.keys')?.textContent.trim(),
+         label: li.querySelector('span:last-child')?.textContent.trim(),
+       }));`,
+    );
+    const has = (keys, label) =>
+      rows.some((row) => row.keys === keys && row.label === label);
+    if (!has("Ctrl+B", "Bold")) throw new Error("no Bold binding");
+    if (!has("Ctrl+Shift+L", "Task list")) throw new Error("no task binding");
+    if (!has("Ctrl+Shift+T", "Insert table")) throw new Error("no table binding");
+    if (!has("Ctrl+Shift+P", "Insert image")) throw new Error("no image binding");
+
+    // Other tabs still render their controls.
+    await openTab("Linting & translator");
+    await waitJs(`!!document.querySelector('.settings .group input')`, {
+      label: "linting controls",
+    });
+    await openTab("Tables");
+    await waitJs(`!!document.querySelector('.settings-content .rule select')`, {
+      label: "table role controls",
+    });
+
+    await js(`const b = document.querySelector('.modal-head button'); if (b) b.click(); return !!b;`);
   });
 }
 

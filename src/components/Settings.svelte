@@ -10,6 +10,18 @@
     setPluralEnding,
     splitSoundClasses,
   } from "../lib/configEdit";
+  import { KEYBIND_GROUPS, formatKeys } from "../lib/keybindings";
+
+  const TABS = [
+    { id: "language", labelKey: "settings.language" },
+    { id: "grammar", labelKey: "settings.grammar" },
+    { id: "tables", labelKey: "settings.tables" },
+    { id: "linting", labelKey: "settings.lintingTranslator" },
+    { id: "keybinds", labelKey: "keybinds.title" },
+    { id: "profile", labelKey: "settings.profile" },
+  ] as const;
+
+  let tab = $state<(typeof TABS)[number]["id"]>("language");
 
   let language = $state<api.LanguageConfig>({
     name: "",
@@ -246,207 +258,239 @@
 </script>
 
 <div class="settings">
-  <div class="pane-title">{$t("settings.language")}</div>
-  <label class="field"
-    >{$t("settings.name")}
-    <input bind:value={language.name} onblur={saveLanguage} />
-  </label>
-  <label class="field"
-    >{$t("settings.author")}
-    <input bind:value={language.author} onblur={saveLanguage} />
-  </label>
-  <label class="field"
-    >{$t("settings.script")}
-    <input bind:value={language.script} onblur={saveLanguage} />
-  </label>
-  <label class="field"
-    >{$t("settings.description")}
-    <input bind:value={language.description} onblur={saveLanguage} />
-  </label>
-  <label class="field"
-    >{$t("settings.direction")}
-    <select bind:value={language.direction} onchange={saveLanguage}>
-      <option value="ltr">{$t("settings.ltr")}</option>
-      <option value="rtl">{$t("settings.rtl")}</option>
-    </select>
-  </label>
-
-  <div class="pane-title">{$t("settings.grammar")}</div>
-  <p class="muted">{$t("settings.grammarHint")}</p>
-  {#each rules as rule, index (index)}
-    <div class="rule">
-      <div class="row">
-        <input
-          placeholder={$t("settings.ruleName")}
-          value={rule.name}
-          onblur={(e) => {
-            updateRule(index, { name: e.currentTarget.value });
-            saveGrammar();
-          }}
-        />
-        <button onclick={() => removeRule(index)}>✕</button>
-      </div>
-      <input
-        placeholder={$t("settings.ruleDescription")}
-        value={rule.description}
-        onblur={(e) => {
-          updateRule(index, { description: e.currentTarget.value });
-          saveGrammar();
-        }}
-      />
-      <input
-        class="mono"
-        placeholder={$t("settings.slotsPlaceholder")}
-        value={formatSlots(rule.slots)}
-        onblur={(e) => {
-          updateRule(index, { slots: parseSlots(e.currentTarget.value) });
-          saveGrammar();
-        }}
-      />
-    </div>
-  {/each}
-  <button onclick={addRule}>{$t("settings.addRule")}</button>
-
-  <section class="group">
-    <div class="pane-title">{$t("settings.lintingTranslator")}</div>
-    <p class="muted">{$t("settings.lintingHint")}</p>
-
-    <p class="muted">{$t("settings.soundClassesHint")}</p>
-    <div class="row">
-      <label class="field grow"
-        >{$t("settings.consonants")}
-        <input
-          value={consonants}
-          oninput={(e) => {
-            consonants = e.currentTarget.value;
-            scheduleSaveSounds();
-          }}
-        />
-      </label>
-      <label class="field grow"
-        >{$t("settings.vowels")}
-        <input
-          value={vowels}
-          oninput={(e) => {
-            vowels = e.currentTarget.value;
-            scheduleSaveSounds();
-          }}
-        />
-      </label>
-    </div>
-
-    <div class="field">
-      {$t("settings.shapes")}
-      <div class="phoneme-chips">
-        {#each phonology.syllables as shape (shape)}
-          <span class="phoneme-chip"><span class="symbol">{shape}</span></span>
-        {:else}
-          <span class="muted">{$t("phonology.empty")}</span>
-        {/each}
-      </div>
-    </div>
-    <p class="muted">{$t("settings.shapesHint")}</p>
+  <nav class="settings-nav">
+    {#each TABS as item (item.id)}
+      <button class:active={tab === item.id} onclick={() => (tab = item.id)}
+        >{$t(item.labelKey)}</button
+      >
+    {/each}
+    <span class="grow"></span>
     <button
       onclick={() => {
         closeSettings();
-        setActivity("phonology");
-      }}>{$t("settings.openInventory")}</button
+        openSetupWizard();
+      }}>{$t("settings.runSetup")}</button
     >
+  </nav>
 
-    <div class="field">
-      {$t("settings.pluralEnding")}
-      <div class="row">
-        <select bind:value={pluralKind} onchange={savePlural}>
-          <option value="suffix">{$t("translation.suffix")}</option>
-          <option value="prefix">{$t("translation.prefix")}</option>
+  <div class="settings-content">
+    {#if tab === "language"}
+      <div class="pane-title">{$t("settings.language")}</div>
+      <label class="field"
+        >{$t("settings.name")}
+        <input bind:value={language.name} onblur={saveLanguage} />
+      </label>
+      <label class="field"
+        >{$t("settings.author")}
+        <input bind:value={language.author} onblur={saveLanguage} />
+      </label>
+      <label class="field"
+        >{$t("settings.script")}
+        <input bind:value={language.script} onblur={saveLanguage} />
+      </label>
+      <label class="field"
+        >{$t("settings.description")}
+        <input bind:value={language.description} onblur={saveLanguage} />
+      </label>
+      <label class="field"
+        >{$t("settings.direction")}
+        <select bind:value={language.direction} onchange={saveLanguage}>
+          <option value="ltr">{$t("settings.ltr")}</option>
+          <option value="rtl">{$t("settings.rtl")}</option>
         </select>
-        <input
-          class="grow"
-          placeholder={$t("translation.ending")}
-          value={pluralSurface}
-          oninput={(e) => {
-            pluralSurface = e.currentTarget.value;
-            scheduleSavePlural();
-          }}
-        />
-      </div>
-    </div>
-    <p class="muted">{$t("settings.pluralHint")}</p>
-  </section>
+      </label>
+    {:else if tab === "grammar"}
+      <div class="pane-title">{$t("settings.grammar")}</div>
+      <p class="muted">{$t("settings.grammarHint")}</p>
+      {#each rules as rule, index (index)}
+        <div class="rule">
+          <div class="row">
+            <input
+              placeholder={$t("settings.ruleName")}
+              value={rule.name}
+              onblur={(e) => {
+                updateRule(index, { name: e.currentTarget.value });
+                saveGrammar();
+              }}
+            />
+            <button onclick={() => removeRule(index)}>✕</button>
+          </div>
+          <input
+            placeholder={$t("settings.ruleDescription")}
+            value={rule.description}
+            onblur={(e) => {
+              updateRule(index, { description: e.currentTarget.value });
+              saveGrammar();
+            }}
+          />
+          <input
+            class="mono"
+            placeholder={$t("settings.slotsPlaceholder")}
+            value={formatSlots(rule.slots)}
+            onblur={(e) => {
+              updateRule(index, { slots: parseSlots(e.currentTarget.value) });
+              saveGrammar();
+            }}
+          />
+        </div>
+      {/each}
+      <button onclick={addRule}>{$t("settings.addRule")}</button>
+    {:else if tab === "tables"}
+      <div class="pane-title">{$t("settings.tables")}</div>
+      <p class="muted">{$t("settings.tablesHint")}</p>
+      {#each ui.tables as table (table.name)}
+        {@const config = roleOf(table.name)}
+        {@const textColumns = table.tags
+          .filter((tag) => tag.kind === "text")
+          .map((tag) => tag.name)}
+        <div class="rule">
+          <div class="row">
+            <span class="grow">{table.name}</span>
+            <select
+              value={config.role}
+              onchange={(e) =>
+                setRole(table.name, e.currentTarget.value as api.TableRole)}
+            >
+              <option value="vocab">{$t("settings.roleVocab")}</option>
+              <option value="fixes">{$t("settings.roleFixes")}</option>
+            </select>
+          </div>
+          {#if config.role === "fixes"}
+            <label class="field"
+              >{$t("settings.triggerColumn")}
+              <select
+                value={config.trigger ?? ""}
+                onchange={(e) =>
+                  setRole(
+                    table.name,
+                    "fixes",
+                    e.currentTarget.value || null,
+                    config.surface ?? null,
+                  )}
+              >
+                <option value="">—</option>
+                {#each textColumns as name (name)}
+                  <option value={name}>{name}</option>
+                {/each}
+              </select>
+            </label>
+            <label class="field"
+              >{$t("settings.surfaceColumn")}
+              <select
+                value={config.surface ?? ""}
+                onchange={(e) =>
+                  setRole(
+                    table.name,
+                    "fixes",
+                    config.trigger ?? null,
+                    e.currentTarget.value || null,
+                  )}
+              >
+                <option value="">{$t("settings.wordnameDefault")}</option>
+                {#each textColumns as name (name)}
+                  <option value={name}>{name}</option>
+                {/each}
+              </select>
+            </label>
+          {/if}
+        </div>
+      {/each}
+    {:else if tab === "linting"}
+      <section class="group">
+        <div class="pane-title">{$t("settings.lintingTranslator")}</div>
+        <p class="muted">{$t("settings.lintingHint")}</p>
 
-  <div class="pane-title">{$t("settings.tables")}</div>
-  <p class="muted">{$t("settings.tablesHint")}</p>
-  {#each ui.tables as table (table.name)}
-    {@const config = roleOf(table.name)}
-    {@const textColumns = table.tags
-      .filter((tag) => tag.kind === "text")
-      .map((tag) => tag.name)}
-    <div class="rule">
-      <div class="row">
-        <span class="grow">{table.name}</span>
-        <select
-          value={config.role}
-          onchange={(e) => setRole(table.name, e.currentTarget.value as api.TableRole)}
+        <p class="muted">{$t("settings.soundClassesHint")}</p>
+        <div class="row">
+          <label class="field grow"
+            >{$t("settings.consonants")}
+            <input
+              value={consonants}
+              oninput={(e) => {
+                consonants = e.currentTarget.value;
+                scheduleSaveSounds();
+              }}
+            />
+          </label>
+          <label class="field grow"
+            >{$t("settings.vowels")}
+            <input
+              value={vowels}
+              oninput={(e) => {
+                vowels = e.currentTarget.value;
+                scheduleSaveSounds();
+              }}
+            />
+          </label>
+        </div>
+
+        <div class="field">
+          {$t("settings.shapes")}
+          <div class="phoneme-chips">
+            {#each phonology.syllables as shape (shape)}
+              <span class="phoneme-chip"><span class="symbol">{shape}</span></span>
+            {:else}
+              <span class="muted">{$t("phonology.empty")}</span>
+            {/each}
+          </div>
+        </div>
+        <p class="muted">{$t("settings.shapesHint")}</p>
+        <button
+          onclick={() => {
+            closeSettings();
+            setActivity("phonology");
+          }}>{$t("settings.openInventory")}</button
         >
-          <option value="vocab">{$t("settings.roleVocab")}</option>
-          <option value="fixes">{$t("settings.roleFixes")}</option>
-        </select>
+
+        <div class="field">
+          {$t("settings.pluralEnding")}
+          <div class="row">
+            <select bind:value={pluralKind} onchange={savePlural}>
+              <option value="suffix">{$t("translation.suffix")}</option>
+              <option value="prefix">{$t("translation.prefix")}</option>
+            </select>
+            <input
+              class="grow"
+              placeholder={$t("translation.ending")}
+              value={pluralSurface}
+              oninput={(e) => {
+                pluralSurface = e.currentTarget.value;
+                scheduleSavePlural();
+              }}
+            />
+          </div>
+        </div>
+        <p class="muted">{$t("settings.pluralHint")}</p>
+      </section>
+    {:else if tab === "keybinds"}
+      <div class="pane-title">{$t("keybinds.title")}</div>
+      <p class="muted">{$t("keybinds.hint")}</p>
+      {#each KEYBIND_GROUPS as group (group.titleKey)}
+        <div class="section-title">{$t(group.titleKey)}</div>
+        <ul class="keybind-list">
+          {#each group.bindings as binding (binding.keys)}
+            <li>
+              <span class="keys mono">{formatKeys(binding.keys)}</span>
+              <span
+                >{$t(
+                  binding.labelKey,
+                  binding.values ? { values: binding.values } : undefined,
+                )}</span
+              >
+            </li>
+          {/each}
+        </ul>
+      {/each}
+    {:else}
+      <div class="pane-title">{$t("settings.profile")}</div>
+      <p class="muted">{$t("settings.profileHint")}</p>
+      <div class="row">
+        <button onclick={exportProfile}>{$t("settings.exportProfile")}</button>
+        <button onclick={importProfile}>{$t("settings.importProfile")}</button>
       </div>
-      {#if config.role === "fixes"}
-        <label class="field"
-          >{$t("settings.triggerColumn")}
-          <select
-            value={config.trigger ?? ""}
-            onchange={(e) =>
-              setRole(
-                table.name,
-                "fixes",
-                e.currentTarget.value || null,
-                config.surface ?? null,
-              )}
-          >
-            <option value="">—</option>
-            {#each textColumns as name (name)}
-              <option value={name}>{name}</option>
-            {/each}
-          </select>
-        </label>
-        <label class="field"
-          >{$t("settings.surfaceColumn")}
-          <select
-            value={config.surface ?? ""}
-            onchange={(e) =>
-              setRole(
-                table.name,
-                "fixes",
-                config.trigger ?? null,
-                e.currentTarget.value || null,
-              )}
-          >
-            <option value="">{$t("settings.wordnameDefault")}</option>
-            {#each textColumns as name (name)}
-              <option value={name}>{name}</option>
-            {/each}
-          </select>
-        </label>
-      {/if}
-    </div>
-  {/each}
+    {/if}
 
-  <div class="pane-title">{$t("settings.profile")}</div>
-  <p class="muted">{$t("settings.profileHint")}</p>
-  <div class="row">
-    <button onclick={exportProfile}>{$t("settings.exportProfile")}</button>
-    <button onclick={importProfile}>{$t("settings.importProfile")}</button>
+    {#if status}<p class="muted">{status}</p>{/if}
+    {#if error}<p class="error">{error}</p>{/if}
   </div>
-
-  <button
-    onclick={() => {
-      closeSettings();
-      openSetupWizard();
-    }}>{$t("settings.runSetup")}</button
-  >
-
-  {#if status}<p class="muted">{status}</p>{/if}
-  {#if error}<p class="error">{error}</p>{/if}
 </div>
