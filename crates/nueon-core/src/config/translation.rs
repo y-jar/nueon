@@ -7,11 +7,13 @@ use serde::{Deserialize, Serialize};
 use super::morphology::Morphology;
 use crate::translation::SyntaxGrid;
 
-/// Whether an affix attaches before or after a root.
+/// Where an affix attaches relative to the root: before it (prefix), inside it
+/// after the first vowel (infix), or after it (suffix).
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default, Serialize, Deserialize)]
 #[serde(rename_all = "snake_case")]
 pub enum AffixKind {
     Prefix,
+    Infix,
     #[default]
     Suffix,
 }

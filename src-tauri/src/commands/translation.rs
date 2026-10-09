@@ -118,6 +118,7 @@ pub fn execute_translation(
 
     let affixes = workspace.translation_affixes();
     let fixes = workspace.fixes_tables();
+    let morphemes = workspace.translation_morphemes();
     Ok(nueon_core::model::translate::translate_with_scoped(
         &workspace.dictionary,
         &grid,
@@ -128,6 +129,7 @@ pub fn execute_translation(
         &workspace.translation.morphology,
         &features,
         &fixes,
+        &morphemes,
     ))
 }
 
@@ -165,6 +167,7 @@ pub fn execute_translation_direct(
 
     let affixes = workspace.translation_affixes();
     let fixes = workspace.fixes_tables();
+    let morphemes = workspace.translation_morphemes();
     Ok(nueon_core::model::translate::translate_direct_with_scoped(
         &workspace.dictionary,
         separator,
@@ -174,6 +177,7 @@ pub fn execute_translation_direct(
         &workspace.translation.morphology,
         &features,
         &fixes,
+        &morphemes,
     ))
 }
 

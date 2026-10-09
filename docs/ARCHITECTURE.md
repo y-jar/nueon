@@ -60,6 +60,20 @@ The authoritative domain model:
 - **Etymology** is multi-parent (`parent` is a `References` list, a DAG);
   traversals are cycle-safe.
 
+### Translation and morphology
+
+- `model/translate.rs` tokenizes English, matches conlang roots by `definition`
+  (light lemmatization + rule-based affixes), places them in a syntax grid or
+  word for word, and reports gaps.
+- `config/morphology.rs` holds feature definitions and per-class paradigms. A
+  paradigm is **ordered slots** (`ParadigmRow::slot`/`order`); the most-specific
+  matching rule wins per slot, then affixes compose around the stem as a prefix,
+  infix (inserted after the first vowel), or suffix. A row carries an inline
+  `surface` or references a `Fixes`-table morpheme (`morpheme`), so the table is
+  the single source of truth for the form.
+- `Fixes` tables feed both input parsing (`dictionary_affixes`, prefix/suffix
+  english triggers) and output inflection (`dictionary_morphemes`).
+
 ### Storage rules
 
 - Every write is **atomic** (temp file + rename).

@@ -26,7 +26,7 @@ use crate::config::{
     TranslationMode, TranslationOptions, UiLayout, WindowGeometry, WorkspaceSettings, POS_TAG,
 };
 use crate::export_table::TableFormat;
-use crate::model::translate::dictionary_affixes;
+use crate::model::translate::{dictionary_affixes, dictionary_morphemes, Morpheme};
 use crate::model::{
     Dictionary, FieldType, FieldValue, TagDef, TagFormat, TagKindChange, TagRemoval, WordEntry,
     DEFINITION_TAG, WORDNAME_TAG,
@@ -1340,6 +1340,11 @@ impl Workspace {
             &self.translation.table_roles,
         ));
         affixes
+    }
+
+    /// The morphemes supplied by `Fixes` tables, for paradigm slot references.
+    pub fn translation_morphemes(&self) -> Vec<Morpheme> {
+        dictionary_morphemes(&self.dictionary, &self.translation.table_roles)
     }
 
     /// Names of tables designated `Fixes`, which supply morphemes not roots.

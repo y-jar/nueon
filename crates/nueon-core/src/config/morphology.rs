@@ -32,6 +32,10 @@ pub struct Feature {
 }
 
 /// One ending in a paradigm, realised when `when` matches the selection.
+///
+/// Rows sharing a `slot` are alternatives for the same position; the
+/// most-specific match wins. Rows with no `slot` share one implicit slot, so a
+/// legacy single-row paradigm still realises exactly one affix.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct ParadigmRow {
     /// feature id -> value id, all of which must match the selection.
@@ -40,6 +44,20 @@ pub struct ParadigmRow {
     pub surface: String,
     #[serde(default)]
     pub kind: AffixKind,
+    /// Which ordered slot this ending occupies (`None` = the implicit slot).
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub slot: Option<String>,
+    /// Sort key among slots, ascending.
+    #[serde(default, skip_serializing_if = "is_zero")]
+    pub order: i32,
+    /// A morpheme in a `Fixes` table (by wordname or english trigger) supplying
+    /// the surface and gloss; the inline `surface` overrides it when non-empty.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub morpheme: Option<String>,
+}
+
+fn is_zero(value: &i32) -> bool {
+    *value == 0
 }
 
 /// The endings for one word class.
@@ -117,6 +135,46 @@ impl Morphology {
         best
     }
 
+    /// The most-specific matching row per slot, ordered by [`ParadigmRow::order`].
+    ///
+    /// Rows are grouped by `slot`; rows with no slot share one implicit slot.
+    /// Within a group the row with the most matching conditions wins (ties keep
+    /// the first declared), so a legacy single-row paradigm yields one row.
+    pub fn rows_for<'a>(
+        &'a self,
+        class: &str,
+        selections: &BTreeMap<String, String>,
+    ) -> Vec<&'a ParadigmRow> {
+        let Some(paradigm) = self.paradigms.iter().find(|p| p.class == class) else {
+            return Vec::new();
+        };
+        let mut groups: Vec<(Option<&str>, &ParadigmRow)> = Vec::new();
+        for row in &paradigm.rows {
+            if row.when.is_empty() {
+                continue;
+            }
+            let matches = row
+                .when
+                .iter()
+                .all(|(feature, value)| selections.get(feature) == Some(value));
+            if !matches {
+                continue;
+            }
+            let slot = row.slot.as_deref();
+            match groups.iter_mut().find(|(existing, _)| *existing == slot) {
+                Some((_, current)) => {
+                    if row.when.len() > current.when.len() {
+                        *current = row;
+                    }
+                }
+                None => groups.push((slot, row)),
+            }
+        }
+        // A stable sort keeps first-declared order among equal `order`s.
+        groups.sort_by_key(|(_, row)| row.order);
+        groups.into_iter().map(|(_, row)| row).collect()
+    }
+
     /// Upper-cased labels for a row's conditions (for the interlinear gloss).
     pub fn labels_for(&self, row: &ParadigmRow) -> Vec<String> {
         row.when
@@ -145,6 +203,9 @@ mod tests {
                 .collect(),
             surface: surface.to_string(),
             kind: AffixKind::Suffix,
+            slot: None,
+            order: 0,
+            morpheme: None,
         }
     }
 

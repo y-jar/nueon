@@ -281,6 +281,8 @@ fn matching_entries<'a>(
         let base = match rule.kind {
             AffixKind::Suffix => token.normalized.strip_suffix(&rule.english),
             AffixKind::Prefix => token.normalized.strip_prefix(&rule.english),
+            // English input has no infixes to strip; such rules never parse.
+            AffixKind::Infix => continue,
         };
         let Some(base) = base.filter(|base| !base.is_empty()) else {
             continue;
@@ -312,8 +314,8 @@ fn matching_entries<'a>(
 }
 
 /// A conlang affix surface read from a fixes table. A leading hyphen marks a
-/// suffix (`-i`), a trailing one a prefix (`ka-`); an infix (`-ta-`) is not
-/// realised yet and is skipped.
+/// suffix (`-i`), a trailing one a prefix (`ka-`), and both an infix (`-ta-`,
+/// inserted after the first vowel).
 pub fn parse_affix_surface(surface: &str) -> Option<(AffixKind, String)> {
     let trimmed = surface.trim();
     let leading = trimmed.starts_with('-');
@@ -325,7 +327,8 @@ pub fn parse_affix_surface(surface: &str) -> Option<(AffixKind, String)> {
     match (leading, trailing) {
         (true, false) => Some((AffixKind::Suffix, conlang.to_string())),
         (false, true) => Some((AffixKind::Prefix, conlang.to_string())),
-        // Neither hyphen-marked, or an infix: not an applicable affix.
+        (true, true) => Some((AffixKind::Infix, conlang.to_string())),
+        // Unmarked: not an affix.
         _ => None,
     }
 }
@@ -376,6 +379,10 @@ pub fn dictionary_affixes(
             let Some((kind, conlang)) = parse_affix_surface(&surface) else {
                 continue;
             };
+            // English input has no infixes, so they never become input rules.
+            if kind == AffixKind::Infix {
+                continue;
+            }
             for trigger in entry_texts(entry, trigger_column) {
                 let english = normalize(&trigger);
                 if english.is_empty() {
@@ -390,6 +397,87 @@ pub fn dictionary_affixes(
         }
     }
     rules
+}
+
+/// A morpheme read from a `Fixes` table: a surface form, where it attaches, and
+/// the gloss it contributes. A paradigm slot can reference one by [`Morpheme`]
+/// key instead of repeating its surface, keeping the fixes table the single
+/// source of truth for morpheme forms.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct Morpheme {
+    /// The fixes table it came from.
+    pub table: String,
+    /// The row's wordname, one of its keys.
+    pub wordname: String,
+    /// Names the morpheme answers to: its wordname plus every english trigger.
+    pub keys: Vec<String>,
+    /// The bare conlang form (hyphens stripped).
+    pub surface: String,
+    pub kind: AffixKind,
+    /// The morpheme's meaning, from the first definition sense.
+    pub gloss: String,
+}
+
+/// Every morpheme supplied by tables designated `Fixes`.
+pub fn dictionary_morphemes(
+    dict: &Dictionary,
+    roles: &BTreeMap<String, TableRoleConfig>,
+) -> Vec<Morpheme> {
+    let mut morphemes = Vec::new();
+    for (table_name, config) in roles {
+        if config.role != TableRole::Fixes {
+            continue;
+        }
+        let Some(table) = dict.table(table_name) else {
+            continue;
+        };
+        let Some(trigger_column) = config.trigger.as_deref() else {
+            continue;
+        };
+        for entry in &table.entries {
+            let surface = match config.surface.as_deref() {
+                Some(column) => entry_text(entry, column),
+                None => Some(entry.wordname.clone()),
+            };
+            let Some(surface) = surface else {
+                continue;
+            };
+            let Some((kind, form)) = parse_affix_surface(&surface) else {
+                continue;
+            };
+            let mut keys = vec![entry.wordname.clone()];
+            for trigger in entry_texts(entry, trigger_column) {
+                let trigger = normalize(&trigger);
+                if !trigger.is_empty() {
+                    keys.push(trigger);
+                }
+            }
+            let gloss = entry
+                .definition()
+                .and_then(<[String]>::first)
+                .cloned()
+                .unwrap_or_else(|| entry.wordname.clone());
+            morphemes.push(Morpheme {
+                table: table_name.clone(),
+                wordname: entry.wordname.clone(),
+                keys,
+                surface: form,
+                kind,
+                gloss,
+            });
+        }
+    }
+    morphemes
+}
+
+/// The morpheme a paradigm row references, matched by wordname or trigger.
+fn find_morpheme<'a>(morphemes: &'a [Morpheme], reference: &str) -> Option<&'a Morpheme> {
+    let wanted = normalize(reference);
+    morphemes.iter().find(|morpheme| {
+        morpheme.wordname == reference
+            || morpheme.keys.iter().any(|key| key == reference)
+            || (!wanted.is_empty() && morpheme.keys.contains(&wanted))
+    })
 }
 
 /// A chosen dictionary entry plus its morphology affix.
@@ -447,11 +535,13 @@ pub fn translate_with(
         morphology,
         selections,
         &BTreeSet::new(),
+        &[],
     )
 }
 
-/// Like [`translate_with`], but skipping `skip_tables` during root lookup. A
-/// `Fixes` table's rows are morphemes, never candidate roots.
+/// Like [`translate_with`], but skipping `skip_tables` during root lookup and
+/// resolving paradigm `morpheme` references against `morphemes`. A `Fixes`
+/// table's rows are morphemes, never candidate roots.
 #[allow(clippy::too_many_arguments)]
 pub fn translate_with_scoped(
     dict: &Dictionary,
@@ -463,6 +553,7 @@ pub fn translate_with_scoped(
     morphology: &Morphology,
     selections: &BTreeMap<String, String>,
     skip_tables: &BTreeSet<String>,
+    morphemes: &[Morpheme],
 ) -> TranslationReport {
     let tokens = tokenize(input);
     let candidates: Vec<Vec<Match>> = tokens
@@ -512,12 +603,12 @@ pub fn translate_with_scoped(
     let mut assigned = vec![false; count];
     let mut unfilled = Vec::new();
     let mut slots = Vec::new();
-    let mut morphemes = Vec::new();
+    let mut gloss_morphemes = Vec::new();
 
     for (index, slot) in grid.slots.iter().enumerate() {
         let symbol = match slot {
             ClauseSlot::Literal { text } => {
-                morphemes.push(GlossMorpheme {
+                gloss_morphemes.push(GlossMorpheme {
                     surface: text.clone(),
                     gloss: text.clone(),
                 });
@@ -528,20 +619,25 @@ pub fn translate_with_scoped(
                 match pick(&candidates, &chosen, &assigned, count, None, None) {
                     Some(token) => {
                         assigned[token] = true;
-                        if let Some(morpheme) =
-                            render_gloss(dict, chosen[token].as_ref(), morphology, selections)
-                        {
-                            morphemes.push(morpheme);
+                        if let Some(morpheme) = render_gloss(
+                            dict,
+                            chosen[token].as_ref(),
+                            morphology,
+                            morphemes,
+                            selections,
+                        ) {
+                            gloss_morphemes.push(morpheme);
                         }
                         Symbol::Word(render_word(
                             dict,
                             chosen[token].as_ref(),
                             morphology,
+                            morphemes,
                             selections,
                         ))
                     }
                     None => {
-                        morphemes.push(GlossMorpheme {
+                        gloss_morphemes.push(GlossMorpheme {
                             surface: "*?".to_string(),
                             gloss: "?".to_string(),
                         });
@@ -553,22 +649,27 @@ pub fn translate_with_scoped(
                 match pick(&candidates, &chosen, &assigned, count, Some(tag), None) {
                     Some(token) => {
                         assigned[token] = true;
-                        if let Some(morpheme) =
-                            render_gloss(dict, chosen[token].as_ref(), morphology, selections)
-                        {
-                            morphemes.push(morpheme);
+                        if let Some(morpheme) = render_gloss(
+                            dict,
+                            chosen[token].as_ref(),
+                            morphology,
+                            morphemes,
+                            selections,
+                        ) {
+                            gloss_morphemes.push(morpheme);
                         }
                         Symbol::Word(render_word(
                             dict,
                             chosen[token].as_ref(),
                             morphology,
+                            morphemes,
                             selections,
                         ))
                     }
                     None => {
                         unfilled.push(index);
                         let placeholder = format!("#{tag}?");
-                        morphemes.push(GlossMorpheme {
+                        gloss_morphemes.push(GlossMorpheme {
                             surface: placeholder.clone(),
                             gloss: "?".to_string(),
                         });
@@ -580,22 +681,27 @@ pub fn translate_with_scoped(
                 match pick(&candidates, &chosen, &assigned, count, None, Some(class)) {
                     Some(token) => {
                         assigned[token] = true;
-                        if let Some(morpheme) =
-                            render_gloss(dict, chosen[token].as_ref(), morphology, selections)
-                        {
-                            morphemes.push(morpheme);
+                        if let Some(morpheme) = render_gloss(
+                            dict,
+                            chosen[token].as_ref(),
+                            morphology,
+                            morphemes,
+                            selections,
+                        ) {
+                            gloss_morphemes.push(morpheme);
                         }
                         Symbol::Word(render_word(
                             dict,
                             chosen[token].as_ref(),
                             morphology,
+                            morphemes,
                             selections,
                         ))
                     }
                     None => {
                         unfilled.push(index);
                         let placeholder = format!("[{class}?]");
-                        morphemes.push(GlossMorpheme {
+                        gloss_morphemes.push(GlossMorpheme {
                             surface: placeholder.clone(),
                             gloss: "?".to_string(),
                         });
@@ -647,7 +753,7 @@ pub fn translate_with_scoped(
         leftovers,
         unfilled,
         gloss: InterlinearGloss {
-            morphemes,
+            morphemes: gloss_morphemes,
             translation: input.to_string(),
         },
     }
@@ -696,11 +802,13 @@ pub fn translate_direct_with(
         morphology,
         selections,
         &BTreeSet::new(),
+        &[],
     )
 }
 
 /// Like [`translate_direct_with`], but skipping `skip_tables` during root
-/// lookup and pass-through.
+/// lookup and pass-through, and resolving paradigm `morpheme` references
+/// against `morphemes`.
 #[allow(clippy::too_many_arguments)]
 pub fn translate_direct_with_scoped(
     dict: &Dictionary,
@@ -711,10 +819,11 @@ pub fn translate_direct_with_scoped(
     morphology: &Morphology,
     selections: &BTreeMap<String, String>,
     skip_tables: &BTreeSet<String>,
+    morphemes: &[Morpheme],
 ) -> TranslationReport {
     let tokens = tokenize(input);
     let mut slots = Vec::new();
-    let mut morphemes = Vec::new();
+    let mut gloss_morphemes = Vec::new();
     let mut missing = Vec::new();
     let mut conflicts = Vec::new();
     let mut candidate_map: BTreeMap<usize, Vec<WordHit>> = BTreeMap::new();
@@ -730,7 +839,7 @@ pub fn translate_direct_with_scoped(
             })
         {
             let word = entry.wordname.clone();
-            morphemes.push(GlossMorpheme {
+            gloss_morphemes.push(GlossMorpheme {
                 surface: word.clone(),
                 gloss: word.clone(),
             });
@@ -782,9 +891,10 @@ pub fn translate_direct_with_scoped(
 
         match &picked {
             Some(_) => {
-                if let Some(morpheme) = render_gloss(dict, picked.as_ref(), morphology, selections)
+                if let Some(morpheme) =
+                    render_gloss(dict, picked.as_ref(), morphology, morphemes, selections)
                 {
-                    morphemes.push(morpheme);
+                    gloss_morphemes.push(morpheme);
                 }
                 slots.push(SlotOutcome {
                     index,
@@ -793,12 +903,13 @@ pub fn translate_direct_with_scoped(
                         dict,
                         picked.as_ref(),
                         morphology,
+                        morphemes,
                         selections,
                     )),
                 });
             }
             None => {
-                morphemes.push(GlossMorpheme {
+                gloss_morphemes.push(GlossMorpheme {
                     surface: "*?".to_string(),
                     gloss: "?".to_string(),
                 });
@@ -825,7 +936,7 @@ pub fn translate_direct_with_scoped(
         leftovers: Vec::new(),
         unfilled: Vec::new(),
         gloss: InterlinearGloss {
-            morphemes,
+            morphemes: gloss_morphemes,
             translation: input.to_string(),
         },
     }
@@ -854,29 +965,85 @@ fn effective_selections(
     selections
 }
 
-/// The paradigm ending for `id`'s class given the selected features:
-/// `(surface, is_prefix, labels)`.
-fn entry_morphology(
+/// One affix to attach, resolved from a paradigm row (and, for a `morpheme`
+/// reference, from the fixes table that defines it).
+struct ResolvedAffix {
+    surface: String,
+    kind: AffixKind,
+    /// The gloss label this affix contributes (empty when it adds none).
+    gloss: String,
+}
+
+/// The paradigm affixes for `id`'s class given the selected features, ordered.
+fn resolve_affixes(
     dict: &Dictionary,
     id: Uuid,
     morphology: &Morphology,
+    morphemes: &[Morpheme],
     selections: &BTreeMap<String, String>,
-) -> Option<(String, bool, Vec<String>)> {
-    let (_, entry) = dict.find_entry(id)?;
-    let class = word_class(entry)?;
-    let row = morphology.affix_for(class, selections)?;
-    Some((
-        row.surface.clone(),
-        row.kind == AffixKind::Prefix,
-        morphology.labels_for(row),
-    ))
+) -> Vec<ResolvedAffix> {
+    let Some((_, entry)) = dict.find_entry(id) else {
+        return Vec::new();
+    };
+    let Some(class) = word_class(entry) else {
+        return Vec::new();
+    };
+    morphology
+        .rows_for(class, selections)
+        .into_iter()
+        .map(|row| {
+            if let Some(reference) = row.morpheme.as_deref() {
+                if let Some(morpheme) = find_morpheme(morphemes, reference) {
+                    return ResolvedAffix {
+                        surface: morpheme.surface.clone(),
+                        kind: morpheme.kind,
+                        gloss: morpheme.gloss.to_uppercase(),
+                    };
+                }
+            }
+            ResolvedAffix {
+                surface: row.surface.clone(),
+                kind: row.kind,
+                gloss: morphology.labels_for(row).join("."),
+            }
+        })
+        .collect()
 }
 
-/// The conlang surface for a chosen word, with any paradigm affix attached.
+/// Insert `infix` after the first vowel of `word` (or at the start if none).
+fn insert_after_first_vowel(word: &str, infix: &str) -> String {
+    const VOWELS: &str = "aeiou";
+    let at = word
+        .char_indices()
+        .find(|(_, ch)| VOWELS.contains(ch.to_ascii_lowercase()))
+        .map(|(index, ch)| index + ch.len_utf8())
+        .unwrap_or(0);
+    format!("{}{}{}", &word[..at], infix, &word[at..])
+}
+
+/// Attach resolved affixes around a stem: infixes inside it, then a prefix and
+/// a suffix on the ends. Affixes arrive already ordered.
+fn compose_word(base: &str, affixes: &[ResolvedAffix]) -> String {
+    let mut stem = base.to_string();
+    for affix in affixes.iter().filter(|a| a.kind == AffixKind::Infix) {
+        stem = insert_after_first_vowel(&stem, &affix.surface);
+    }
+    let mut word = stem;
+    for affix in affixes.iter().filter(|a| a.kind == AffixKind::Prefix) {
+        word = format!("{}{}", affix.surface, word);
+    }
+    for affix in affixes.iter().filter(|a| a.kind == AffixKind::Suffix) {
+        word.push_str(&affix.surface);
+    }
+    word
+}
+
+/// The conlang surface for a chosen word, with every paradigm affix attached.
 fn render_word(
     dict: &Dictionary,
     picked: Option<&Picked>,
     morphology: &Morphology,
+    morphemes: &[Morpheme],
     selections: &BTreeMap<String, String>,
 ) -> String {
     let base = word_for(dict, picked);
@@ -884,34 +1051,32 @@ fn render_word(
         return base;
     };
     let selections = effective_selections(selections, &picked.features);
-    match entry_morphology(dict, picked.id, morphology, &selections) {
-        Some((surface, true, _)) => format!("{surface}{base}"),
-        Some((surface, false, _)) => format!("{base}{surface}"),
-        None => base,
-    }
+    let affixes = resolve_affixes(dict, picked.id, morphology, morphemes, &selections);
+    compose_word(&base, &affixes)
 }
 
-/// The interlinear-gloss morpheme for a chosen word, with the paradigm affix
-/// and its feature labels.
+/// The interlinear-gloss morpheme for a chosen word, with every paradigm affix
+/// and its gloss labels.
 fn render_gloss(
     dict: &Dictionary,
     picked: Option<&Picked>,
     morphology: &Morphology,
+    morphemes: &[Morpheme],
     selections: &BTreeMap<String, String>,
 ) -> Option<GlossMorpheme> {
     let mut morpheme = gloss_for(dict, picked)?;
     let picked = picked?;
     let selections = effective_selections(selections, &picked.features);
-    if let Some((surface, prefix, labels)) =
-        entry_morphology(dict, picked.id, morphology, &selections)
-    {
-        morpheme.surface = if prefix {
-            format!("{surface}-{}", morpheme.surface)
-        } else {
-            format!("{}-{surface}", morpheme.surface)
+    for affix in resolve_affixes(dict, picked.id, morphology, morphemes, &selections) {
+        morpheme.surface = match affix.kind {
+            AffixKind::Prefix => format!("{}-{}", affix.surface, morpheme.surface),
+            AffixKind::Suffix => format!("{}-{}", morpheme.surface, affix.surface),
+            AffixKind::Infix => {
+                insert_after_first_vowel(&morpheme.surface, &format!("-{}-", affix.surface))
+            }
         };
-        if !labels.is_empty() {
-            morpheme.gloss = format!("{}.{}", morpheme.gloss, labels.join("."));
+        if !affix.gloss.is_empty() {
+            morpheme.gloss = format!("{}.{}", morpheme.gloss, affix.gloss);
         }
     }
     Some(morpheme)
@@ -1146,6 +1311,9 @@ mod tests {
                     when: BTreeMap::from([("number".to_string(), "plural".to_string())]),
                     surface: "i".into(),
                     kind: AffixKind::Suffix,
+                    slot: None,
+                    order: 0,
+                    morpheme: None,
                 }],
             }],
         }
@@ -1204,8 +1372,11 @@ mod tests {
             parse_affix_surface("ka-"),
             Some((AffixKind::Prefix, "ka".to_string()))
         );
-        // An infix is not realised yet, and an unmarked surface is not an affix.
-        assert_eq!(parse_affix_surface("-ta-"), None);
+        assert_eq!(
+            parse_affix_surface("-ta-"),
+            Some((AffixKind::Infix, "ta".to_string()))
+        );
+        // An unmarked surface is not an affix.
         assert_eq!(parse_affix_surface("i"), None);
         assert_eq!(parse_affix_surface("-"), None);
     }
@@ -1265,6 +1436,7 @@ mod tests {
             &Morphology::default(),
             &BTreeMap::new(),
             &skip,
+            &[],
         );
         assert_eq!(report.output, "kalai");
 
@@ -1278,6 +1450,7 @@ mod tests {
             &Morphology::default(),
             &BTreeMap::new(),
             &skip,
+            &[],
         );
         assert_eq!(report.missing, vec![0]);
     }

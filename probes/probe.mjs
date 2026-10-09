@@ -440,6 +440,14 @@ function seedWorkspace() {
               ],
             },
             {
+              id: "aspect",
+              label: "Aspect",
+              values: [
+                { id: "perfective", label: "Perfective" },
+                { id: "imperfective", label: "Imperfective" },
+              ],
+            },
+            {
               id: "number",
               label: "Number",
               values: [
@@ -448,10 +456,27 @@ function seedWorkspace() {
               ],
             },
           ],
+          // The verb's tense and aspect are ordered slots that stack (probe 57);
+          // each is a lone ending when the other is unselected (probe 25).
           paradigms: [
             {
               class: "verb",
-              rows: [{ when: { tense: "past" }, surface: "i", kind: "suffix" }],
+              rows: [
+                {
+                  when: { tense: "past" },
+                  surface: "i",
+                  kind: "suffix",
+                  slot: "tense",
+                  order: 1,
+                },
+                {
+                  when: { aspect: "perfective" },
+                  surface: "a",
+                  kind: "suffix",
+                  slot: "aspect",
+                  order: 2,
+                },
+              ],
             },
             {
               class: "noun",
@@ -3143,6 +3168,48 @@ async function main() {
       throw new Error(`missing Anki export: ${JSON.stringify(items)}`);
     }
     await js(`document.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape' })); return true;`);
+  });
+
+  // -- probe 57: an ordered multi-slot paradigm stacks endings --------------
+  await probe("57-multi-slot-affixes", async () => {
+    await openActivity("Translation");
+    await waitJs(`!!document.querySelector('.translation')`, {
+      label: "translation view",
+    });
+    await js(
+      `const b = [...document.querySelectorAll('.translation-toolbar .mode-switch button')]
+         .find((x) => x.textContent.trim() === 'Word for word');
+       if (b) b.click();
+       return !!b;`,
+    );
+    await waitJs(`!!document.querySelector('.feature-bar')`, { label: "feature bar" });
+
+    // Clear any selection left by an earlier probe.
+    await js(
+      `document.querySelectorAll('.feature-bar button.active').forEach((b) => b.click());
+       return true;`,
+    );
+
+    // "run" matches velo (pos=verb). Selecting Past (tense slot, order 1) and
+    // Perfective (aspect slot, order 2) stacks both endings: velo + i + a.
+    await js(`const t = document.querySelector('.runner textarea');
+      t.value = 'run';
+      t.dispatchEvent(new Event('input', { bubbles: true }));
+      return true;`);
+    const pick = (label) =>
+      js(
+        `const b = [...document.querySelectorAll('.feature-bar button')]
+           .find((x) => x.textContent.trim() === ${JSON.stringify(label)});
+         if (b) b.click();
+         return !!b;`,
+      );
+    if (!(await pick("Past"))) throw new Error("no Past button");
+    if (!(await pick("Perfective"))) throw new Error("no Perfective button");
+    await new Promise((resolve) => setTimeout(resolve, 1000));
+    const output = await js(
+      `return (document.querySelector('.runner .output')?.textContent ?? '').trim();`,
+    );
+    if (output !== "veloia") throw new Error(`expected 'veloia', got '${output}'`);
   });
 }
 
