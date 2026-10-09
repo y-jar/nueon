@@ -4,26 +4,31 @@
   import type {
     AffixKind,
     Morphology,
-    MorphemeInfo,
+    MorphemeRef,
     Paradigm,
     ParadigmRow,
   } from "../../lib/api";
+  import { morphology as store } from "../../lib/morphology.svelte";
 
   interface Props {
     morphology: Morphology;
     classId: string;
-    morphemes: MorphemeInfo[];
     onChange: (morphology: Morphology) => void;
   }
 
-  let { morphology, classId, morphemes, onChange }: Props = $props();
+  let { morphology, classId, onChange }: Props = $props();
 
   const KINDS: AffixKind[] = ["prefix", "infix", "suffix"];
 
-  function paradigmFor(classId: string): Paradigm {
+  let creating = $state<number | null>(null);
+  let newTable = $state("");
+  let newSurface = $state("");
+  let newGloss = $state("");
+
+  function paradigmFor(id: string): Paradigm {
     return (
-      morphology.paradigms.find((paradigm) => paradigm.class === classId) ?? {
-        class: classId,
+      morphology.paradigms.find((paradigm) => paradigm.class === id) ?? {
+        class: id,
         rows: [],
       }
     );
@@ -53,6 +58,7 @@
       slot: null,
       order: nextOrder(),
       morpheme: null,
+      zero: false,
     };
     update({ ...paradigm, rows: [...paradigm.rows, row] });
   }
@@ -76,13 +82,59 @@
     patchRow(index, { when });
   }
 
-  /** The fixes-table morpheme a row references, if it resolves. */
-  function morphemeFor(reference: string | null | undefined): MorphemeInfo | undefined {
-    if (!reference) return undefined;
-    return morphemes.find(
-      (morpheme) =>
-        morpheme.wordname === reference || morpheme.triggers.includes(reference),
+  /** What the row's surface control is currently editing. */
+  function mode(row: ParadigmRow): "zero" | "ref" | "broken" | "free" {
+    if (row.zero) return "zero";
+    if (row.morpheme) {
+      return store.resolveMorpheme(row.morpheme) ? "ref" : "broken";
+    }
+    return "free";
+  }
+
+  /** The morpheme `<select>` value encoding the row's current source. */
+  function selectValue(row: ParadigmRow): string {
+    if (row.zero) return "__zero";
+    if (row.morpheme) {
+      const resolved = store.resolveMorpheme(row.morpheme);
+      return resolved ? `ref:${resolved.table}:${resolved.id}` : "__broken";
+    }
+    return "__free";
+  }
+
+  function onSelect(index: number, value: string) {
+    if (value === "__free") {
+      patchRow(index, { morpheme: null, zero: false });
+    } else if (value === "__zero") {
+      patchRow(index, { morpheme: null, zero: true });
+    } else if (value.startsWith("ref:")) {
+      const [, table, id] = value.split(":");
+      patchRow(index, { morpheme: { table, id } as MorphemeRef, zero: false });
+    }
+  }
+
+  function startCreate(index: number) {
+    creating = index;
+    newTable = store.fixesTables()[0] ?? "";
+    newSurface = "";
+    newGloss = "";
+  }
+
+  async function createFor(index: number) {
+    if (!newTable || !newSurface.trim()) return;
+    const morpheme = await store.createMorpheme(
+      newTable,
+      newSurface.trim(),
+      newGloss.trim(),
     );
+    if (morpheme) {
+      patchRow(index, {
+        morpheme: { table: morpheme.table, id: morpheme.id },
+        zero: false,
+      });
+    }
+    creating = null;
+    newSurface = "";
+    newGloss = "";
   }
 </script>
 
@@ -94,6 +146,9 @@
   {/if}
 
   {#each paradigm.rows as row, index (index)}
+    {@const rowMode = mode(row)}
+    {@const resolved =
+      row.morpheme && rowMode === "ref" ? store.resolveMorpheme(row.morpheme) : undefined}
     <div class="paradigm-row">
       <div class="rule-when">
         {#each morphology.features as feature (feature.id)}
@@ -132,34 +187,48 @@
               patchRow(index, { order: Number(e.currentTarget.value) || 0 })}
           />
         </label>
+
+        {#if rowMode === "zero"}
+          <span class="badge zero">∅</span>
+        {:else if resolved}
+          <span class="badge">{$t(`morphology.${resolved.kind}`)}</span>
+        {:else}
+          <select
+            value={row.kind}
+            onchange={(e) =>
+              patchRow(index, { kind: e.currentTarget.value as AffixKind })}
+          >
+            {#each KINDS as kind (kind)}
+              <option value={kind}>{$t(`morphology.${kind}`)}</option>
+            {/each}
+          </select>
+        {/if}
+
         <select
-          value={row.kind}
-          onchange={(e) =>
-            patchRow(index, { kind: e.currentTarget.value as AffixKind })}
+          class="morpheme-select"
+          class:missing={rowMode === "broken"}
+          value={selectValue(row)}
+          onchange={(e) => onSelect(index, e.currentTarget.value)}
         >
-          {#each KINDS as kind (kind)}
-            <option value={kind}>{$t(`morphology.${kind}`)}</option>
-          {/each}
-        </select>
-        <select
-          value={row.morpheme ?? ""}
-          onchange={(e) =>
-            patchRow(index, { morpheme: e.currentTarget.value || null })}
-        >
-          <option value="">{$t("morphology.inline")}</option>
-          {#each morphemes as morpheme (`${morpheme.table}/${morpheme.wordname}`)}
-            <option value={morpheme.wordname}
-              >{morpheme.wordname} · {morpheme.gloss}</option
+          <option value="__free">{$t("morphology.freeText")}</option>
+          <option value="__zero">{$t("morphology.zeroEnding")}</option>
+          {#if rowMode === "broken"}
+            <option value="__broken">⚠ {$t("morphology.missingMorpheme")}</option>
+          {/if}
+          {#each store.morphemes as morpheme (`${morpheme.table}/${morpheme.id}`)}
+            <option value={`ref:${morpheme.table}:${morpheme.id}`}
+              >{morpheme.surface} · {morpheme.gloss}</option
             >
           {/each}
         </select>
 
-        {#if row.morpheme}
-          {@const morpheme = morphemeFor(row.morpheme)}
-          <span class="surface-preview mono" class:missing={!morpheme}>
-            {morpheme ? morpheme.surface : $t("morphology.unknownMorpheme")}
-          </span>
-        {:else}
+        <button
+          class="new-morpheme-btn"
+          title={$t("morphology.newMorpheme")}
+          onclick={() => startCreate(index)}><Plus size={12} /></button
+        >
+
+        {#if rowMode === "free"}
           <input
             class="surface-input"
             placeholder={$t("morphology.endingPlaceholder")}
@@ -176,6 +245,32 @@
           <X size={13} />
         </button>
       </div>
+
+      {#if creating === index}
+        <div class="new-morpheme">
+          {#if store.fixesTables().length === 0}
+            <span class="muted small">{$t("morphology.noFixesTable")}</span>
+          {:else}
+            <select bind:value={newTable}>
+              {#each store.fixesTables() as name (name)}
+                <option value={name}>{name}</option>
+              {/each}
+            </select>
+            <input
+              placeholder={$t("morphology.morphemeSurface")}
+              bind:value={newSurface}
+            />
+            <input
+              placeholder={$t("morphology.morphemeGloss")}
+              bind:value={newGloss}
+            />
+            <button onclick={() => createFor(index)}
+              >{$t("morphology.addMorpheme")}</button
+            >
+            <button onclick={() => (creating = null)}>{$t("morphology.cancel")}</button>
+          {/if}
+        </div>
+      {/if}
     </div>
   {/each}
 

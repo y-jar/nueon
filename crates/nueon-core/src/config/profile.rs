@@ -12,7 +12,7 @@ use super::{GrammarConfig, LanguageConfig, PhonologyConfig, TranslationConfig};
 /// Marker written into every exported profile.
 pub const PROFILE_FORMAT: &str = "nueon-profile";
 /// The profile schema version this build writes.
-pub const PROFILE_VERSION: u32 = 1;
+pub const PROFILE_VERSION: u32 = 2;
 
 /// A conlang profile: its language metadata and full linguistic setup.
 #[derive(Debug, Clone, Default, PartialEq, Serialize, Deserialize)]
@@ -58,7 +58,7 @@ impl Profile {
         }
         if self.version > PROFILE_VERSION {
             return Err(format!(
-                "profile version {} is newer than this app supports ({PROFILE_VERSION})",
+                "profile version {} found; this app supports up to version {PROFILE_VERSION}",
                 self.version
             ));
         }
@@ -109,5 +109,29 @@ mod tests {
         );
         newer.version = PROFILE_VERSION + 1;
         assert!(newer.validate().is_err());
+    }
+
+    #[test]
+    fn accepts_v1_and_v2_but_rejects_v3() {
+        let base = |version: u32| {
+            let mut profile = Profile::new(
+                LanguageConfig::default(),
+                PhonologyConfig::default(),
+                GrammarConfig::default(),
+                TranslationConfig::default(),
+            );
+            profile.version = version;
+            profile
+        };
+        assert!(base(1).validate().is_ok(), "a v1 profile still imports");
+        assert_eq!(PROFILE_VERSION, 2);
+        assert!(base(2).validate().is_ok(), "the current v2 profile imports");
+
+        let err = base(3).validate().unwrap_err();
+        assert!(err.contains('3'), "message names the found version: {err}");
+        assert!(
+            err.contains('2'),
+            "message names the supported version: {err}"
+        );
     }
 }

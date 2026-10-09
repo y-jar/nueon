@@ -13,7 +13,9 @@ use uuid::Uuid;
 use super::dictionary::{contains_word, Dictionary, WordHit};
 use super::entry::WordEntry;
 use super::field::FieldValue;
-use crate::config::{AffixKind, AffixRule, Morphology, TableRole, TableRoleConfig, POS_TAG};
+use crate::config::{
+    AffixKind, AffixRule, MorphemeRef, Morphology, TableRole, TableRoleConfig, POS_TAG,
+};
 use crate::translation::{ClauseSlot, SyntaxGrid};
 
 /// English function words dropped during tokenization.
@@ -407,6 +409,8 @@ pub fn dictionary_affixes(
 pub struct Morpheme {
     /// The fixes table it came from.
     pub table: String,
+    /// The row's stable id (the word entry's uuid).
+    pub id: String,
     /// The row's wordname, one of its keys.
     pub wordname: String,
     /// Names the morpheme answers to: its wordname plus every english trigger.
@@ -463,6 +467,7 @@ pub fn dictionary_morphemes(
                 .unwrap_or_else(|| entry.wordname.clone());
             morphemes.push(Morpheme {
                 table: table_name.clone(),
+                id: entry.id.to_string(),
                 wordname: entry.wordname.clone(),
                 keys,
                 surface: form,
@@ -491,6 +496,20 @@ fn find_morpheme<'a>(morphemes: &'a [Morpheme], reference: &str) -> Option<&'a M
     morphemes
         .iter()
         .find(|morpheme| morpheme.matches(reference))
+}
+
+/// Resolve a paradigm row's morpheme reference: `{ table, id }` first, then a
+/// legacy key by wordname/trigger.
+fn find_morpheme_ref<'a>(
+    morphemes: &'a [Morpheme],
+    reference: &MorphemeRef,
+) -> Option<&'a Morpheme> {
+    match reference {
+        MorphemeRef::Ref { table, id } => morphemes
+            .iter()
+            .find(|morpheme| morpheme.table == *table && morpheme.id == *id),
+        MorphemeRef::Key(key) => find_morpheme(morphemes, key),
+    }
 }
 
 /// A chosen dictionary entry plus its morphology affix.
@@ -1004,9 +1023,11 @@ fn resolve_affixes(
     morphology
         .rows_for(class, selections)
         .into_iter()
+        // A zero ending matches and counts as defined, but attaches nothing.
+        .filter(|row| !row.zero)
         .map(|row| {
-            if let Some(reference) = row.morpheme.as_deref() {
-                if let Some(morpheme) = find_morpheme(morphemes, reference) {
+            if let Some(reference) = row.morpheme.as_ref() {
+                if let Some(morpheme) = find_morpheme_ref(morphemes, reference) {
                     return ResolvedAffix {
                         surface: morpheme.surface.clone(),
                         kind: morpheme.kind,
@@ -1490,6 +1511,7 @@ mod tests {
                     slot: None,
                     order: 0,
                     morpheme: None,
+                    zero: false,
                 }],
             }],
         }

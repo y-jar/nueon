@@ -1466,6 +1466,36 @@ button.link {
   border-color: #d6785a;
 }
 
+.badge.zero {
+  color: var(--accent);
+}
+
+.paradigm-editor .morpheme-select.missing {
+  color: #d6785a;
+  border-color: #d6785a;
+}
+
+.paradigm-editor .new-morpheme {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 4px;
+  padding: 4px 6px;
+  background: var(--bg);
+  border: 1px dashed var(--border);
+  border-radius: 4px;
+}
+
+.paradigm-editor .new-morpheme input {
+  width: 8em;
+}
+
+.feature-bar button.missing {
+  color: #d6785a;
+  border-style: dashed;
+  border-color: #d6785a;
+}
+
 .small {
   font-size: 12px;
 }

@@ -8,8 +8,9 @@ use nueon_core::model::translate::{
 };
 use nueon_core::model::TranslationReport;
 use nueon_core::{
-    AffixKind, ComposePiece, Dictionary, FieldType, FieldValue, InflectionKind, Morphology,
-    Paradigm, ParadigmRow, TableRole, TableRoleConfig, TagDef, WordEntry, DEFINITION_TAG,
+    AffixKind, ComposePiece, Dictionary, FieldType, FieldValue, InflectionKind, MorphemeRef,
+    Morphology, Paradigm, ParadigmRow, TableRole, TableRoleConfig, TagDef, WordEntry,
+    DEFINITION_TAG,
 };
 
 fn classed(word: &str, sense: &str, class: &str) -> WordEntry {
@@ -51,6 +52,7 @@ fn row(
         slot: slot.map(str::to_string),
         order,
         morpheme: None,
+        zero: false,
     }
 }
 
@@ -245,7 +247,10 @@ fn a_slot_can_reference_a_fixes_table_morpheme() {
         Some("number"),
         0,
     );
-    plural_row.morpheme = Some("plural".to_string());
+    plural_row.morpheme = Some(MorphemeRef::Ref {
+        table: morphemes[0].table.clone(),
+        id: morphemes[0].id.clone(),
+    });
     let morphology = morphology(vec![plural_row]);
 
     let report = translate_direct_with_scoped(
@@ -417,4 +422,168 @@ fn inflect_stacks_paradigm_and_manual_morphemes() {
             ("u", InflectionKind::Suffix),
         ]
     );
+}
+
+/// A fixes table with one morpheme, for the reference tests.
+fn fixes_dict(
+    dict: &mut Dictionary,
+    surface: &str,
+    gloss: &str,
+) -> BTreeMap<String, TableRoleConfig> {
+    dict.add_table("fixes");
+    let mut entry = WordEntry::new(surface);
+    entry.set(DEFINITION_TAG, FieldValue::TagList(vec![gloss.to_string()]));
+    dict.add_entry("fixes", entry);
+    BTreeMap::from([(
+        "fixes".to_string(),
+        TableRoleConfig {
+            role: TableRole::Fixes,
+            trigger: None,
+            surface: None,
+        },
+    )])
+}
+
+#[test]
+fn a_referenced_morpheme_inflects_uene_to_ueneyu() {
+    let mut dict = noun_dict("uene");
+    let roles = fixes_dict(&mut dict, "-yu", "plural");
+    let morphemes = dictionary_morphemes(&dict, &roles);
+
+    let mut plural = row(
+        &[("number", "plural")],
+        "",
+        AffixKind::Suffix,
+        Some("number"),
+        0,
+    );
+    plural.morpheme = Some(MorphemeRef::Ref {
+        table: morphemes[0].table.clone(),
+        id: morphemes[0].id.clone(),
+    });
+    let morphology = morphology(vec![plural]);
+
+    let report = translate_direct_with_scoped(
+        &dict,
+        " ",
+        "dog",
+        &HashMap::new(),
+        &[],
+        &morphology,
+        &selections(&[("number", "plural")]),
+        &BTreeSet::from(["fixes".to_string()]),
+        &morphemes,
+    );
+    assert_eq!(report.output, "ueneyu");
+}
+
+#[test]
+fn legacy_key_and_id_ref_resolve_alike() {
+    let mut dict = noun_dict("kala");
+    dict.add_table("fixes");
+    dict.add_tag("fixes", TagDef::new("english", FieldType::Text));
+    let mut entry = WordEntry::new("-u");
+    entry.set(
+        DEFINITION_TAG,
+        FieldValue::TagList(vec!["plural".to_string()]),
+    );
+    entry.set("english", FieldValue::Text("plural".to_string()));
+    dict.add_entry("fixes", entry);
+    let roles = BTreeMap::from([(
+        "fixes".to_string(),
+        TableRoleConfig {
+            role: TableRole::Fixes,
+            trigger: Some("english".to_string()),
+            surface: None,
+        },
+    )]);
+    let morphemes = dictionary_morphemes(&dict, &roles);
+
+    let build = |reference: MorphemeRef| {
+        let mut plural = row(
+            &[("number", "plural")],
+            "",
+            AffixKind::Suffix,
+            Some("number"),
+            0,
+        );
+        plural.morpheme = Some(reference);
+        morphology(vec![plural])
+    };
+    let key = build(MorphemeRef::Key("plural".to_string()));
+    let id = build(MorphemeRef::Ref {
+        table: morphemes[0].table.clone(),
+        id: morphemes[0].id.clone(),
+    });
+
+    let skip = BTreeSet::from(["fixes".to_string()]);
+    let run = |m: &Morphology| {
+        translate_direct_with_scoped(
+            &dict,
+            " ",
+            "dog",
+            &HashMap::new(),
+            &[],
+            m,
+            &selections(&[("number", "plural")]),
+            &skip,
+            &morphemes,
+        )
+        .output
+    };
+    assert_eq!(run(&key), "kalau");
+    assert_eq!(run(&id), "kalau");
+}
+
+#[test]
+fn a_zero_ending_leaves_the_stem_unchanged() {
+    let dict = noun_dict("kala");
+    let mut plural = row(
+        &[("number", "plural")],
+        "",
+        AffixKind::Suffix,
+        Some("number"),
+        0,
+    );
+    plural.zero = true;
+    let morphology = morphology(vec![plural]);
+
+    let report = run(&dict, &morphology, &selections(&[("number", "plural")]));
+    assert_eq!(report.output, "kala");
+    let surface = &report.gloss.morphemes[0].surface;
+    assert!(!surface.ends_with('-'), "dangling hyphen in {surface:?}");
+}
+
+#[test]
+fn a_broken_reference_falls_back_to_the_surface() {
+    let dict = noun_dict("kala");
+    let mut plural = row(
+        &[("number", "plural")],
+        "u",
+        AffixKind::Suffix,
+        Some("number"),
+        0,
+    );
+    plural.morpheme = Some(MorphemeRef::Ref {
+        table: "missing".to_string(),
+        id: "nope".to_string(),
+    });
+    let morphology = morphology(vec![plural]);
+
+    let report = run(&dict, &morphology, &selections(&[("number", "plural")]));
+    assert_eq!(report.output, "kalau");
+}
+
+#[test]
+fn surface_only_paradigms_still_inflect() {
+    let dict = noun_dict("kala");
+    let morphology = morphology(vec![row(
+        &[("number", "plural")],
+        "u",
+        AffixKind::Suffix,
+        Some("number"),
+        0,
+    )]);
+    let report = run(&dict, &morphology, &selections(&[("number", "plural")]));
+    assert_eq!(report.output, "kalau");
 }

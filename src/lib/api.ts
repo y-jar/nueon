@@ -654,6 +654,9 @@ export interface Feature {
   label: string;
   values: FeatureValue[];
 }
+/** A morpheme reference: the stable `{ table, id }` form or a legacy key. */
+export type MorphemeRef = { table: string; id: string } | string;
+
 export interface ParadigmRow {
   when: Record<string, string>;
   surface: string;
@@ -662,8 +665,10 @@ export interface ParadigmRow {
   slot?: string | null;
   /** Sort key among slots, ascending. */
   order?: number;
-  /** A fixes-table morpheme (by wordname/trigger) supplying surface + gloss. */
-  morpheme?: string | null;
+  /** A fixes-table morpheme supplying surface + gloss (inline `surface` is the fallback). */
+  morpheme?: MorphemeRef | null;
+  /** An explicit zero ending: matches and counts as defined, emits nothing. */
+  zero?: boolean;
 }
 export interface Paradigm {
   class: string;
@@ -685,6 +690,7 @@ export const setTranslationMorphology = (
 /** One morpheme from a fixes table. */
 export interface MorphemeInfo {
   table: string;
+  id: string;
   wordname: string;
   surface: string;
   kind: AffixKind;

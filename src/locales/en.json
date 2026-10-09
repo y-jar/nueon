@@ -471,7 +471,17 @@
     "endingPlaceholder": "ending",
     "inline": "Inline",
     "unknownMorpheme": "unknown morpheme",
-    "removeRule": "Remove"
+    "removeRule": "Remove",
+    "freeText": "Free text…",
+    "zeroEnding": "∅ (no ending)",
+    "missingMorpheme": "missing morpheme",
+    "newMorpheme": "New morpheme…",
+    "noFixesTable": "No Fixes table yet — mark one in Settings → Tables.",
+    "morphemeSurface": "surface (-yu, ka-, -ta-)",
+    "morphemeGloss": "gloss",
+    "addMorpheme": "Add",
+    "cancel": "Cancel",
+    "noEnding": "No ending defined — set one in Endings."
   },
   "phonology": {
     "title": "Phonology",

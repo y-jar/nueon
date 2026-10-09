@@ -39,18 +39,39 @@
     store.lexicon.find((entry) => entry.id === store.selectedWord) ?? null,
   );
 
-  // Only features the picked class's paradigm rules actually condition on.
+  // The picked word's class paradigm, if it has one.
+  const paradigm = $derived(
+    word?.class
+      ? (store.morphology.paradigms.find(
+          (entry) => entry.class === word.class,
+        ) ?? null)
+      : null,
+  );
+
+  // With rules: only the features they condition on. With none: every feature,
+  // so the user can see what still needs defining.
   const relevantFeatures = $derived.by(() => {
     if (!word?.class) return [];
-    const paradigm = store.morphology.paradigms.find(
-      (entry) => entry.class === word.class,
-    );
-    if (!paradigm) return [];
-    const ids = new Set(
-      paradigm.rows.flatMap((row) => Object.keys(row.when)),
-    );
+    if (!paradigm || paradigm.rows.length === 0) {
+      return store.morphology.features;
+    }
+    const ids = new Set(paradigm.rows.flatMap((row) => Object.keys(row.when)));
     return store.morphology.features.filter((feature) => ids.has(feature.id));
   });
+
+  /** The (feature, value) pairs that have a matching ending. */
+  const covered = $derived.by(() => {
+    const set = new Set<string>();
+    for (const row of paradigm?.rows ?? []) {
+      for (const [feature, value] of Object.entries(row.when)) {
+        set.add(`${feature}\u0000${value}`);
+      }
+    }
+    return set;
+  });
+
+  const isMissing = (featureId: string, valueId: string) =>
+    !covered.has(`${featureId}\u0000${valueId}`);
 
   async function persistRules() {
     try {
@@ -118,6 +139,8 @@
           features={relevantFeatures}
           selections={store.selections}
           onToggle={(feature, value) => store.toggleFeature(feature, value)}
+          missing={isMissing}
+          onMissing={() => (store.tab = "paradigms")}
         />
         {#if store.morphemes.length}
           <p class="muted small">{$t("morphology.pickHint")}</p>
@@ -166,7 +189,6 @@
       <ParadigmEditor
         morphology={store.morphology}
         classId={store.selectedClass}
-        morphemes={store.morphemes}
         onChange={onMorphology}
       />
     </section>

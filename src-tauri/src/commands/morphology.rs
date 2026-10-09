@@ -19,6 +19,8 @@ type Shared = Mutex<AppState>;
 #[derive(Debug, Clone, Serialize)]
 pub struct MorphemeInfo {
     pub table: String,
+    /// The morpheme row's stable id (the word entry's uuid).
+    pub id: String,
     pub wordname: String,
     pub surface: String,
     pub kind: AffixKind,
@@ -63,6 +65,7 @@ pub fn list_morphemes(state: State<'_, Shared>) -> Result<Vec<MorphemeInfo>, Str
                 .collect();
             MorphemeInfo {
                 table: morpheme.table,
+                id: morpheme.id,
                 wordname: morpheme.wordname,
                 surface: morpheme.surface,
                 kind: morpheme.kind,

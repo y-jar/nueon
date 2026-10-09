@@ -21,7 +21,7 @@ use uuid::Uuid;
 use self::table_files::TableFiles;
 
 use crate::config::{
-    AffixRule, GrammarConfig, GridViewState, LanguageConfig, LayoutState, Morphology,
+    AffixRule, GrammarConfig, GridViewState, LanguageConfig, LayoutState, MorphemeRef, Morphology,
     PhonologyConfig, Profile, TableRole, TableRoleConfig, TilingLayout, TranslationConfig,
     TranslationMode, TranslationOptions, UiLayout, WindowGeometry, WorkspaceSettings, POS_TAG,
 };
@@ -391,11 +391,35 @@ impl Workspace {
         self.dictionary.tables.insert(to.to_string(), table);
         self.table_files.rename(from, to);
         self.save_table(to)?;
+        // Config that keyed the table by name (roles and morpheme references)
+        // follows the rename, so designations and endings are not orphaned.
+        self.rekey_table_references(from, to);
+        storage::save_json(
+            &self.config_dir().join(storage::TRANSLATION_FILE),
+            &self.translation,
+        )?;
         self.mark_change(
             Instant::now(),
             format!("nueon: rename table \"{from}\" to \"{to}\""),
         );
         Ok(true)
+    }
+
+    /// Point config that referenced a table by name at its new name: the
+    /// table's role and any paradigm morpheme references.
+    fn rekey_table_references(&mut self, from: &str, to: &str) {
+        if let Some(config) = self.translation.table_roles.remove(from) {
+            self.translation.table_roles.insert(to.to_string(), config);
+        }
+        for paradigm in &mut self.translation.morphology.paradigms {
+            for row in &mut paradigm.rows {
+                if let Some(MorphemeRef::Ref { table, .. }) = &mut row.morpheme {
+                    if table == from {
+                        *table = to.to_string();
+                    }
+                }
+            }
+        }
     }
 
     /// Export a table to `destination` in the requested format (atomic write).
@@ -1807,7 +1831,10 @@ impl Workspace {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::config::{Phoneme, PhonemeKind, PhonologyConfig, TableRole, POS_TAG};
+    use crate::config::{
+        AffixKind, MorphemeRef, Paradigm, ParadigmRow, Phoneme, PhonemeKind, PhonologyConfig,
+        TableRole, POS_TAG,
+    };
     use crate::model::{FieldType, FieldValue};
     use crate::vcs::git_available;
     use crate::WORDNAME_TAG;
@@ -3391,6 +3418,44 @@ mod tests {
         ws.create_table("nouns").unwrap();
         assert!(!ws.rename_table("actions", "nouns").unwrap());
         assert!(!ws.rename_table("missing", "x").unwrap());
+    }
+
+    #[test]
+    fn renaming_a_table_rekeys_roles_and_morpheme_refs() {
+        use std::collections::BTreeMap;
+
+        let dir = tempfile::tempdir().unwrap();
+        let mut ws = Workspace::new(dir.path()).unwrap();
+        ws.create_table("fixes").unwrap();
+        ws.set_table_role("fixes", TableRole::Fixes, None, None)
+            .unwrap();
+        let id = ws.create_entry("fixes", "-yu").unwrap().unwrap();
+        ws.translation.morphology.paradigms.push(Paradigm {
+            class: "noun".into(),
+            rows: vec![ParadigmRow {
+                when: BTreeMap::from([("number".to_string(), "plural".to_string())]),
+                surface: String::new(),
+                kind: AffixKind::Suffix,
+                slot: None,
+                order: 0,
+                morpheme: Some(MorphemeRef::Ref {
+                    table: "fixes".into(),
+                    id: id.to_string(),
+                }),
+                zero: false,
+            }],
+        });
+
+        assert!(ws.rename_table("fixes", "affixes").unwrap());
+        assert!(ws.translation.table_roles.contains_key("affixes"));
+        assert!(!ws.translation.table_roles.contains_key("fixes"));
+        assert_eq!(
+            ws.translation.morphology.paradigms[0].rows[0].morpheme,
+            Some(MorphemeRef::Ref {
+                table: "affixes".into(),
+                id: id.to_string(),
+            })
+        );
     }
 
     #[test]

@@ -31,6 +31,18 @@ pub struct Feature {
     pub values: Vec<FeatureValue>,
 }
 
+/// A reference to a morpheme in a `Fixes` table.
+///
+/// New references use the stable `{ table, id }` form; a bare string is the
+/// legacy key form, matched by wordname or trigger. Resolution tries the id
+/// first, then falls back to the key, so old and new configs both load.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(untagged)]
+pub enum MorphemeRef {
+    Ref { table: String, id: String },
+    Key(String),
+}
+
 /// One ending in a paradigm, realised when `when` matches the selection.
 ///
 /// Rows sharing a `slot` are alternatives for the same position; the
@@ -50,14 +62,22 @@ pub struct ParadigmRow {
     /// Sort key among slots, ascending.
     #[serde(default, skip_serializing_if = "is_zero")]
     pub order: i32,
-    /// A morpheme in a `Fixes` table (by wordname or english trigger) supplying
-    /// the surface and gloss; the inline `surface` overrides it when non-empty.
+    /// A morpheme in a `Fixes` table supplying the surface and gloss; the
+    /// inline `surface` is the fallback when this is unset (or unresolvable).
     #[serde(default, skip_serializing_if = "Option::is_none")]
-    pub morpheme: Option<String>,
+    pub morpheme: Option<MorphemeRef>,
+    /// An explicit zero ending: it matches and counts as defined, but emits
+    /// nothing. Takes precedence over `surface`.
+    #[serde(default, skip_serializing_if = "is_false")]
+    pub zero: bool,
 }
 
 fn is_zero(value: &i32) -> bool {
     *value == 0
+}
+
+fn is_false(value: &bool) -> bool {
+    !*value
 }
 
 /// The endings for one word class.
@@ -206,6 +226,7 @@ mod tests {
             slot: None,
             order: 0,
             morpheme: None,
+            zero: false,
         }
     }
 
@@ -254,6 +275,27 @@ mod tests {
         assert!(morphology
             .affix_for("verb", &BTreeMap::from([("tense".into(), "future".into())]))
             .is_none());
+    }
+
+    #[test]
+    fn morpheme_ref_reads_legacy_and_object_forms() {
+        let legacy: ParadigmRow =
+            serde_json::from_str(r#"{"surface":"-u","morpheme":"plural"}"#).unwrap();
+        assert_eq!(legacy.morpheme, Some(MorphemeRef::Key("plural".into())));
+        assert!(!legacy.zero);
+
+        let object: ParadigmRow = serde_json::from_str(
+            r#"{"surface":"","zero":true,"morpheme":{"table":"fixes","id":"abc"}}"#,
+        )
+        .unwrap();
+        assert_eq!(
+            object.morpheme,
+            Some(MorphemeRef::Ref {
+                table: "fixes".into(),
+                id: "abc".into()
+            })
+        );
+        assert!(object.zero);
     }
 
     #[test]

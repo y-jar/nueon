@@ -15,7 +15,9 @@ pub use layout::{
     GroupLayout, LayoutState, SecondaryWindow, SplitDirection, SplitLayout, TabKind, TabLayout,
     TilingLayout, WindowGeometry,
 };
-pub use morphology::{Feature, FeatureValue, Morphology, Paradigm, ParadigmRow, POS_TAG};
+pub use morphology::{
+    Feature, FeatureValue, MorphemeRef, Morphology, Paradigm, ParadigmRow, POS_TAG,
+};
 pub use phonology::{
     check_word, segments, Phoneme, PhonemeKind, PhonologyConfig, Segment, Violation,
 };

@@ -16,8 +16,8 @@ pub mod workspace;
 
 pub use config::{
     AffixKind, AffixRule, Feature, FeatureValue, GrammarConfig, GrammarRule, GridViewState,
-    GroupLayout, LanguageConfig, LayoutState, Morphology, Paradigm, ParadigmRow, Profile,
-    SecondaryWindow, SortSpec, SplitDirection, SplitLayout, TabKind, TabLayout, TableRole,
+    GroupLayout, LanguageConfig, LayoutState, MorphemeRef, Morphology, Paradigm, ParadigmRow,
+    Profile, SecondaryWindow, SortSpec, SplitDirection, SplitLayout, TabKind, TabLayout, TableRole,
     TableRoleConfig, TextDirection, TilingLayout, TranslationConfig, TranslationOptions, UiLayout,
     WindowGeometry, WorkspaceSettings,
 };

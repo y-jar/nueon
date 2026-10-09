@@ -199,6 +199,43 @@ class MorphologyStore {
     }
   }
 
+  /** Resolve a stored morpheme reference (id first, then legacy key). */
+  resolveMorpheme(reference: api.MorphemeRef): api.MorphemeInfo | undefined {
+    if (typeof reference === "string") {
+      return this.morphemes.find(
+        (morpheme) =>
+          morpheme.wordname === reference || morpheme.triggers.includes(reference),
+      );
+    }
+    return this.morphemes.find(
+      (morpheme) =>
+        morpheme.table === reference.table && morpheme.id === reference.id,
+    );
+  }
+
+  /** The distinct tables that currently supply morphemes (Fixes tables). */
+  fixesTables(): string[] {
+    return [...new Set(this.morphemes.map((morpheme) => morpheme.table))];
+  }
+
+  /** Create a morpheme row in a Fixes table; returns the new morpheme. */
+  async createMorpheme(
+    table: string,
+    surface: string,
+    gloss: string,
+  ): Promise<api.MorphemeInfo | null> {
+    try {
+      const id = await api.createTranslationWord(table, surface, gloss, [], null);
+      if (!id) return null;
+      this.morphemes = await api.listMorphemes();
+      this.error = "";
+      return this.morphemes.find((morpheme) => morpheme.id === id) ?? null;
+    } catch (e) {
+      this.error = String(e);
+      return null;
+    }
+  }
+
   /** The built-in word classes plus any class that already has a paradigm. */
   classNames(): string[] {
     return [

@@ -568,6 +568,15 @@ function seedWorkspace() {
             wordname: "feat",
             values: { definition: { type: "tag_list", value: ["feature"] } },
           },
+          // A noun whose plural the Endings editor defines (probe 65).
+          {
+            id: "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa",
+            wordname: "uene",
+            values: {
+              definition: { type: "tag_list", value: ["person"] },
+              pos: { type: "tag_list", value: ["noun"] },
+            },
+          },
         ],
       },
       null,
@@ -625,6 +634,12 @@ function seedWorkspace() {
             id: "88888888-8888-4888-8888-888888888888",
             wordname: "-o",
             values: { definition: { type: "tag_list", value: ["agent"] } },
+          },
+          // Referenced as the noun plural in probe 65.
+          {
+            id: "bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb",
+            wordname: "-yu",
+            values: { definition: { type: "tag_list", value: ["plural"] } },
           },
         ],
       },
@@ -3738,6 +3753,100 @@ async function main() {
       `(document.querySelector('.inflect-surface')?.textContent ?? '').trim() === 'paka'`,
       { label: "inflect selection via Enter" },
     );
+  });
+
+  // -- probe 65: an ending references a morpheme (uene -> ueneyu) -----------
+  await probe("65-endings-reference-morpheme", async () => {
+    await js(
+      `const b = document.querySelector('.activity[title="Morphology"]');
+       if (b) b.click();
+       return !!b;`,
+    );
+    await waitJs(`!!document.querySelector('.morphology-view')`, {
+      label: "morphology view",
+    });
+    await js(
+      `const b = [...document.querySelectorAll('.morphology-view .mode-switch button')]
+         .find((x) => x.textContent.trim() === 'Endings');
+       if (b) b.click();
+       return !!b;`,
+    );
+    await waitJs(`!!document.querySelector('.morphology-sidebar .class-row')`, {
+      label: "class chips",
+    });
+    await js(
+      `const b = [...document.querySelectorAll('.morphology-sidebar .class-row')]
+         .find((x) => x.textContent.trim() === 'noun');
+       if (b) b.click();
+       return !!b;`,
+    );
+    await waitJs(`document.querySelectorAll('.morphology-view .paradigm-row').length >= 1`, {
+      label: "noun endings",
+    });
+
+    // Point the number=plural row at the -yu morpheme instead of free text.
+    const referenced = await js(
+      `const row = [...document.querySelectorAll('.morphology-view .paradigm-row')]
+         .find((r) => [...r.querySelectorAll('.rule-when select')]
+           .some((s) => s.value === 'plural'));
+       if (!row) return false;
+       const select = row.querySelector('.morpheme-select');
+       const option = [...select.options].find((o) => o.textContent.includes('yu'));
+       if (!option) return false;
+       select.value = option.value;
+       select.dispatchEvent(new Event('change', { bubbles: true }));
+       return true;`,
+    );
+    if (!referenced) throw new Error("could not reference the -yu morpheme");
+
+    // Inflect uene with plural selected: uene -> ueneyu.
+    await js(
+      `const b = [...document.querySelectorAll('.morphology-view .mode-switch button')]
+         .find((x) => x.textContent.trim() === 'Inflect');
+       if (b) b.click();
+       return !!b;`,
+    );
+    await waitJs(`!!document.querySelector('.word-picker input')`, {
+      label: "word picker",
+    });
+    await js(
+      `const i = document.querySelector('.word-picker input');
+       i.value = 'uene';
+       i.dispatchEvent(new Event('input', { bubbles: true }));
+       i.focus();
+       return true;`,
+    );
+    await waitJs(
+      `[...document.querySelectorAll('.word-picker-list button .mono')]
+         .some((x) => x.textContent.trim() === 'uene')`,
+      { label: "uene option" },
+    );
+    await js(
+      `const b = [...document.querySelectorAll('.word-picker-list button')]
+         .find((x) => x.querySelector('.mono')?.textContent.trim() === 'uene');
+       if (b) b.click();
+       return !!b;`,
+    );
+    await waitJs(`!!document.querySelector('.inflect-surface')`, {
+      label: "inflect result",
+    });
+    const surface = () =>
+      js(
+        `return (document.querySelector('.inflect-surface')?.textContent ?? '').trim();`,
+      );
+    if ((await surface()) !== "uene") {
+      throw new Error(`expected 'uene', got '${await surface()}'`);
+    }
+
+    await js(
+      `const b = [...document.querySelectorAll('.morphology-view .feature-bar button')]
+         .find((x) => x.textContent.trim() === 'Plural');
+       if (b) b.click();
+       return !!b;`,
+    );
+    await new Promise((resolve) => setTimeout(resolve, 600));
+    const final = await surface();
+    if (final !== "ueneyu") throw new Error(`expected 'ueneyu', got '${final}'`);
   });
 }
 
