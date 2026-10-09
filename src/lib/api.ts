@@ -356,8 +356,18 @@ export const renameWord = (
   id: string,
   wordname: string,
 ): Promise<boolean> => invoke("rename_word", { table, id, wordname });
-export const deleteWord = (table: string, id: string): Promise<boolean> =>
-  invoke("delete_word", { table, id });
+export interface DeleteReassignment {
+  child: string;
+  /** Replacement parent, or `null` to leave the child parentless. */
+  parent: string | null;
+}
+export const deleteWord = (
+  table: string,
+  id: string,
+  reassignments: DeleteReassignment[] = [],
+  cascade = false,
+): Promise<number> =>
+  invoke("delete_word", { table, id, reassignments, cascade });
 export const addTag = (
   table: string,
   name: string,
@@ -435,6 +445,14 @@ export const parentCandidates = (child: string): Promise<RelatedWord[]> =>
   invoke("parent_candidates", { child });
 export const derivationGraph = (id: string): Promise<DerivationNode[]> =>
   invoke("derivation_graph", { id });
+export interface DerivationTree {
+  ancestors: RelatedWord[];
+  children: RelatedWord[];
+  descendants: RelatedWord[];
+}
+/** A word's ancestors, direct children, and descendants. */
+export const derivationTree = (id: string): Promise<DerivationTree> =>
+  invoke("derivation_tree", { id });
 
 // -- translation ---------------------------------------------------------
 export type ClauseSlot =

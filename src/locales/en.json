@@ -224,7 +224,19 @@
     "skip": "Skip setup"
   },
   "confirm": {
-    "dontAskAgain": "Don't ask me again"
+    "dontAskAgain": "Don't ask me again",
+    "typeToConfirm": "Type \u201c{text}\u201d to confirm"
+  },
+  "deleteWord": {
+    "title": "Delete word?",
+    "dependents": "These words derive from \u201c{name}\u201d:",
+    "leaveParentless": "leave parentless",
+    "moveUnder": "move under {name}",
+    "cascade": "Also delete the dependents and everything derived from them",
+    "typeName": "Type \u201c{name}\u201d to confirm",
+    "confirm": "Delete",
+    "bulkTitle": "Delete selected words?",
+    "bulkMessage": "Delete {count} selected word(s)? Words that derive from them will be left parentless."
   },
   "file": {
     "open": "Open in default app",

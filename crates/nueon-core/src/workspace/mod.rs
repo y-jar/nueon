@@ -786,6 +786,83 @@ impl Workspace {
         Ok(Some(removed))
     }
 
+    /// Delete a word, handling the words that derive from it. With
+    /// `cascade`, the whole descendant subtree goes too; otherwise each direct
+    /// child is either moved to the replacement parent chosen in
+    /// `reassignments` (guarded against cycles and against the deleted word)
+    /// or left parentless. One undo checkpoint for the whole operation.
+    /// Returns how many words were removed.
+    pub fn delete_entry_with(
+        &mut self,
+        table: &str,
+        id: Uuid,
+        reassignments: &BTreeMap<Uuid, Option<Uuid>>,
+        cascade: bool,
+    ) -> Result<usize, StorageError> {
+        let Some(wordname) = self
+            .dictionary
+            .get_entry(table, id)
+            .map(|e| e.wordname.clone())
+        else {
+            return Ok(0);
+        };
+        self.record();
+
+        let mut touched: BTreeSet<String> = BTreeSet::new();
+        let mut removed = 0usize;
+
+        if cascade {
+            // Remove the word and every word that descends from it.
+            let subtree: Vec<(String, Uuid)> = self
+                .dictionary
+                .descendants_of(id)
+                .into_iter()
+                .filter_map(|entry| {
+                    self.dictionary
+                        .find_entry(entry.id)
+                        .map(|(name, _)| (name.to_string(), entry.id))
+                })
+                .collect();
+            for (name, entry_id) in subtree {
+                if self.dictionary.remove_entry(&name, entry_id).is_some() {
+                    touched.insert(name);
+                    removed += 1;
+                }
+            }
+            self.dictionary.remove_entry(table, id);
+            touched.insert(table.to_string());
+            removed += 1;
+        } else {
+            // Re-parent or orphan each direct child, then remove the word.
+            for child in crate::model::derivation::direct_children(&self.dictionary, id) {
+                if let Some(entry) = self.dictionary.get_entry_mut(&child.table, child.id) {
+                    entry.remove_parent(id);
+                }
+                touched.insert(child.table.clone());
+                if let Some(Some(parent)) = reassignments.get(&child.id).copied() {
+                    if parent != id && self.dictionary.can_be_parent(child.id, parent) {
+                        if let Some(entry) = self.dictionary.get_entry_mut(&child.table, child.id) {
+                            entry.add_parent(parent);
+                        }
+                    }
+                }
+            }
+            self.dictionary.remove_entry(table, id);
+            touched.insert(table.to_string());
+            removed += 1;
+        }
+
+        for name in &touched {
+            self.save_table(name)?;
+        }
+        let suffix = if cascade { " and its dependents" } else { "" };
+        self.mark_change(
+            Instant::now(),
+            format!("nueon: delete word \"{wordname}\"{suffix} from table \"{table}\""),
+        );
+        Ok(removed)
+    }
+
     // -- tags -----------------------------------------------------------
 
     /// Add a column to a table.
@@ -2510,6 +2587,68 @@ mod tests {
                 .get("pos")
                 .is_none());
         }
+    }
+
+    #[test]
+    fn delete_entry_with_reassigns_or_orphans_children() {
+        let dir = tempfile::tempdir().unwrap();
+        let mut ws = Workspace::new(dir.path()).unwrap();
+        ws.create_table("t").unwrap();
+        let root = ws.create_entry("t", "kala").unwrap().unwrap();
+        let child_a = ws.create_entry("t", "kalator").unwrap().unwrap();
+        let child_b = ws.create_entry("t", "kalora").unwrap().unwrap();
+        let other = ws.create_entry("t", "velo").unwrap().unwrap();
+        ws.add_parent("t", child_a, root).unwrap();
+        ws.add_parent("t", child_b, root).unwrap();
+
+        let mut reassign = BTreeMap::new();
+        reassign.insert(child_a, Some(other));
+        reassign.insert(child_b, None);
+        assert_eq!(
+            ws.delete_entry_with("t", root, &reassign, false).unwrap(),
+            1
+        );
+
+        assert!(ws.dictionary.get_entry("t", root).is_none());
+        assert_eq!(
+            ws.dictionary.get_entry("t", child_a).unwrap().parents(),
+            vec![other]
+        );
+        assert!(!ws.dictionary.get_entry("t", child_b).unwrap().has_parent());
+
+        // One undo restores every change at once.
+        assert!(ws.undo().unwrap());
+        assert!(ws.dictionary.get_entry("t", root).is_some());
+        assert_eq!(
+            ws.dictionary.get_entry("t", child_a).unwrap().parents(),
+            vec![root]
+        );
+        assert_eq!(
+            ws.dictionary.get_entry("t", child_b).unwrap().parents(),
+            vec![root]
+        );
+    }
+
+    #[test]
+    fn delete_entry_with_cascade_removes_the_subtree() {
+        let dir = tempfile::tempdir().unwrap();
+        let mut ws = Workspace::new(dir.path()).unwrap();
+        ws.create_table("t").unwrap();
+        let root = ws.create_entry("t", "kala").unwrap().unwrap();
+        let child = ws.create_entry("t", "kalator").unwrap().unwrap();
+        let grandchild = ws.create_entry("t", "kalator-mini").unwrap().unwrap();
+        let other = ws.create_entry("t", "velo").unwrap().unwrap();
+        ws.add_parent("t", child, root).unwrap();
+        ws.add_parent("t", grandchild, child).unwrap();
+
+        let removed = ws
+            .delete_entry_with("t", root, &BTreeMap::new(), true)
+            .unwrap();
+        assert_eq!(removed, 3);
+        assert!(ws.dictionary.get_entry("t", root).is_none());
+        assert!(ws.dictionary.get_entry("t", child).is_none());
+        assert!(ws.dictionary.get_entry("t", grandchild).is_none());
+        assert!(ws.dictionary.get_entry("t", other).is_some());
     }
 
     #[test]

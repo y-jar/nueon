@@ -3,7 +3,7 @@
 use std::collections::BTreeMap;
 use std::sync::Mutex;
 
-use serde::Serialize;
+use serde::{Deserialize, Serialize};
 use tauri::{AppHandle, State};
 use uuid::Uuid;
 
@@ -259,21 +259,38 @@ pub fn rename_word(
     Ok(applied)
 }
 
-/// Delete a word; returns `false` if it did not exist.
+/// One child's choice when deleting a word it descends from: move it under
+/// `parent`, or leave it parentless when `parent` is `null`.
+#[derive(Debug, Deserialize)]
+pub struct Reassignment {
+    pub child: String,
+    pub parent: Option<String>,
+}
+
+/// Delete a word; returns how many words were removed. `reassignments` handles
+/// the deleted word's direct children (move or orphan); `cascade` also removes
+/// the whole descendant subtree.
 #[tauri::command]
 pub fn delete_word(
     app: AppHandle,
     state: State<'_, Shared>,
     table: String,
     id: String,
-) -> Result<bool, String> {
+    reassignments: Option<Vec<Reassignment>>,
+    cascade: Option<bool>,
+) -> Result<usize, String> {
     let id = parse_id(&id)?;
+    let mut map: BTreeMap<Uuid, Option<Uuid>> = BTreeMap::new();
+    for item in reassignments.unwrap_or_default() {
+        let child = parse_id(&item.child)?;
+        let parent = item.parent.as_deref().map(parse_id).transpose()?;
+        map.insert(child, parent);
+    }
     let mut state = state.lock().map_err(|_| "state poisoned".to_string())?;
     let removed = state
         .workspace_mut()?
-        .delete_entry(&table, id)
-        .map_err(|err| err.to_string())?
-        .is_some();
+        .delete_entry_with(&table, id, &map, cascade.unwrap_or(false))
+        .map_err(|err| err.to_string())?;
     drop(state);
     changed(&app, "dictionary");
     Ok(removed)

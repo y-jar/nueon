@@ -513,10 +513,17 @@ function seedWorkspace() {
             },
           },
           // Two entries for one sense => a real conflict (probe 24).
+          // `paka` derives from `kala`, so deleting `kala` has dependents (probe 48).
           {
             id: "33333333-3333-4333-8333-333333333333",
             wordname: "paka",
-            values: { definition: { type: "tag_list", value: ["to zzarg"] } },
+            values: {
+              definition: { type: "tag_list", value: ["to zzarg"] },
+              parent: {
+                type: "references",
+                value: ["11111111-1111-4111-8111-111111111111"],
+              },
+            },
           },
           {
             id: "44444444-4444-4444-8444-444444444444",
@@ -3033,6 +3040,76 @@ async function main() {
     await js(`const b = document.querySelector('.add-word-modal .modal-head button');
        if (b) b.click();
        return !!b;`);
+  });
+
+  // -- probe 48: deleting a word with dependents ---------------------------
+  await probe("48-delete-word-with-dependents", async () => {
+    await openActivity("Dictionary");
+    await waitJs(`!!document.querySelector('.table-list')`, { label: "tables panel" });
+    const opened = await js(
+      `const b = [...document.querySelectorAll('.table-list .table-row .tree-name')]
+         .find((x) => x.textContent.trim().startsWith('lex'));
+       if (b) b.click();
+       return !!b;`,
+    );
+    if (!opened) throw new Error("no 'lex' table in the panel");
+    await waitJs(`!!document.querySelector('.dict-grid')`, { label: "lex grid" });
+    await waitJs(
+      `[...document.querySelectorAll('.dict-grid td.wordname-col input')]
+         .some((i) => i.value === 'kaka')`,
+      { label: "kaka row" },
+    );
+
+    const delRow = (word) =>
+      `[...document.querySelectorAll('.dict-grid td.wordname-col input')]
+         .find((i) => i.value === ${JSON.stringify(word)})?.closest('tr')`;
+
+    // Deleting the parent (kaka, renamed from kala) prompts about dependents.
+    await js(`const tr = ${delRow("kaka")};
+       const b = tr?.querySelector('td:last-child button');
+       if (b) b.click();
+       return !!b;`);
+    await waitJs(`!!document.querySelector('.delete-word-modal')`, { label: "delete modal" });
+    await waitJs(
+      `[...document.querySelectorAll('.delete-word-modal .dependent-row .grow')]
+         .some((x) => x.textContent.trim() === 'paka')`,
+      { label: "dependent listed" },
+    );
+
+    // Confirm stays disabled until the word's name is typed.
+    if (
+      !(await js(`return document.querySelector('.delete-word-modal .modal-foot button.danger')?.disabled === true;`))
+    ) {
+      throw new Error("Delete was enabled before typing the name");
+    }
+
+    // Reassign paka under velo, then type the name to enable Delete.
+    const moved = await js(
+      `const row = [...document.querySelectorAll('.delete-word-modal .dependent-row')]
+         .find((r) => r.querySelector('.grow')?.textContent.trim() === 'paka');
+       const select = row?.querySelector('select');
+       const option = [...(select?.options ?? [])].find((o) => o.textContent.includes('velo'));
+       if (!option) return false;
+       select.value = option.value;
+       select.dispatchEvent(new Event('change', { bubbles: true }));
+       return true;`,
+    );
+    if (!moved) throw new Error("no 'velo' parent candidate for paka");
+    await js(`const i = document.querySelector('.delete-word-modal .field input');
+       i.value = 'kaka';
+       i.dispatchEvent(new Event('input', { bubbles: true }));
+       return true;`);
+    await waitJs(
+      `document.querySelector('.delete-word-modal .modal-foot button.danger')?.disabled === false`,
+      { label: "Delete enabled after typing" },
+    );
+    await js(`document.querySelector('.delete-word-modal .modal-foot button.danger').click();
+       return true;`);
+    await waitJs(`!document.querySelector('.delete-word-modal')`, { label: "modal closed" });
+    await waitJs(`!(${delRow("kaka")})`, { label: "kaka deleted" });
+    await waitJs(`(${delRow("paka")})?.textContent.includes('velo')`, {
+      label: "paka re-parented to velo",
+    });
   });
 }
 

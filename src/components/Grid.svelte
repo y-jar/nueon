@@ -46,6 +46,7 @@
     openImport,
     openColumnMenu,
     selectTable,
+    confirmDialog,
     type DocState,
   } from "../lib/state.svelte";
   import { createWordWithValues } from "../lib/words";
@@ -53,6 +54,7 @@
   import PillCell from "./PillCell.svelte";
   import SuggestInput from "./SuggestInput.svelte";
   import AddWordModal from "./AddWordModal.svelte";
+  import DeleteWordModal from "./DeleteWordModal.svelte";
   import Popover from "./Popover.svelte";
 
   let {
@@ -79,6 +81,13 @@
 
   let searchOpen = $state(false);
   let addWordOpen = $state(false);
+  /** The word whose delete needs a dependents-aware prompt, if any. */
+  let deleteTarget = $state<{
+    table: string;
+    id: string;
+    wordname: string;
+    children: api.RelatedWord[];
+  } | null>(null);
 
   // Row virtualization: only the visible window of rows is in the DOM.
   let gridScroll = $state<HTMLDivElement | null>(null);
@@ -840,8 +849,24 @@
   }
 
   async function removeWord(entry: api.WordEntry) {
-    if (!doc.currentTable) return;
-    await api.deleteWord(doc.currentTable, entry.id);
+    const table = doc.currentTable;
+    if (!table) return;
+    try {
+      const tree = await api.derivationTree(entry.id);
+      if (tree.children.length) {
+        // Deleting a word others derive from needs a dependents-aware prompt.
+        deleteTarget = {
+          table,
+          id: entry.id,
+          wordname: entry.wordname,
+          children: tree.children,
+        };
+        return;
+      }
+      await api.deleteWord(table, entry.id);
+    } catch (e) {
+      error = String(e);
+    }
   }
 
   function toggleSelected(id: string, checked: boolean) {
@@ -855,9 +880,20 @@
   }
 
   async function deleteSelected() {
-    if (!doc.currentTable || selectedIds.length === 0) return;
-    for (const id of selectedIds) {
-      await api.deleteWord(doc.currentTable, id);
+    const table = doc.currentTable;
+    if (!table || selectedIds.length === 0) return;
+    const count = selectedIds.length;
+    const confirmed = await confirmDialog({
+      title: $t("deleteWord.bulkTitle"),
+      message: $t("deleteWord.bulkMessage", { values: { count } }),
+      confirmLabel: $t("deleteWord.confirm"),
+      danger: true,
+      requireText: "Im sure",
+    });
+    if (!confirmed) return;
+    const ids = selectedIds;
+    for (const id of ids) {
+      await api.deleteWord(table, id);
     }
     selectedIds = [];
   }
@@ -1641,5 +1677,16 @@
     suggestions={suggestionsByTag}
     onClose={() => (addWordOpen = false)}
     onCreated={onRefresh}
+  />
+{/if}
+
+{#if deleteTarget}
+  <DeleteWordModal
+    table={deleteTarget.table}
+    id={deleteTarget.id}
+    wordname={deleteTarget.wordname}
+    children={deleteTarget.children}
+    onClose={() => (deleteTarget = null)}
+    onDeleted={onRefresh}
   />
 {/if}

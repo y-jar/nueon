@@ -99,6 +99,8 @@ export interface ConfirmRequest {
   danger: boolean;
   /** When set, the dialog offers a "don't ask again" that silences this kind. */
   kind?: string;
+  /** When set, the user must type this exact text to enable Confirm. */
+  requireText?: string;
   resolve: (confirmed: boolean) => void;
 }
 
@@ -1443,6 +1445,8 @@ export function confirmDialog(options: {
   danger?: boolean;
   /** Lets the dialog offer "don't ask again" for this kind. */
   kind?: string;
+  /** Requires the user to type this exact text before confirming. */
+  requireText?: string;
 }): Promise<boolean> {
   // A silenced kind answers "yes" without showing anything.
   if (options.kind && ui.suppressedConfirms.includes(options.kind)) {
@@ -1458,6 +1462,7 @@ export function confirmDialog(options: {
       cancelLabel: tr("grid.cancel"),
       danger: options.danger ?? false,
       kind: options.kind,
+      requireText: options.requireText,
       resolve: (confirmed) => {
         ui.confirm = null;
         resolve(confirmed);

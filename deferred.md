@@ -40,8 +40,8 @@ stage that completed them: `R0`–`R8` were done during the Tauri migration,
 
 - ~~Graphical ancestor/descendant tree (current inspector is a text list).~~ (D2)
 - ~~Re-parenting without removing the old parent in one step.~~ (D2)
-- Manual-convert option to **reassign** a dependent to a different parent
-  (current manual delete only unlinks/optionally deletes). (D2+)
+- ~~Manual-convert option to **reassign** a dependent to a different parent
+  (current manual delete only unlinks/optionally deletes).~~ (dependent-aware delete)
 - ~~Export a derivation tree to a note/file.~~ (D2)
 - Warn when changing a tag value that other rules depend on (beyond wordname). (D2+)
 

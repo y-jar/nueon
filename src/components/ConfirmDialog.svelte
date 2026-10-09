@@ -4,14 +4,20 @@
 
   let cancelButton = $state<HTMLButtonElement | null>(null);
   let dontAsk = $state(false);
+  let typed = $state("");
 
   // Cancel is the default focus so a stray Enter never confirms a delete.
   $effect(() => {
     if (ui.confirm) {
       cancelButton?.focus();
       dontAsk = false;
+      typed = "";
     }
   });
+
+  const canConfirm = $derived(
+    !ui.confirm?.requireText || typed.trim() === ui.confirm.requireText,
+  );
 
   function onKey(event: KeyboardEvent) {
     if (ui.confirm && event.key === "Escape") {
@@ -22,7 +28,7 @@
 
   function confirm() {
     const request = ui.confirm;
-    if (!request) return;
+    if (!request || !canConfirm) return;
     if (dontAsk && request.kind) void suppressConfirm(request.kind);
     request.resolve(true);
   }
@@ -51,6 +57,14 @@
       </div>
       <div class="confirm-body">
         <p id="confirm-message">{ui.confirm.message}</p>
+        {#if ui.confirm.requireText}
+          <label class="field"
+            >{$t("confirm.typeToConfirm", {
+              values: { text: ui.confirm.requireText },
+            })}
+            <input bind:value={typed} autocomplete="off" />
+          </label>
+        {/if}
         {#if ui.confirm.kind}
           <label class="confirm-dont-ask">
             <input type="checkbox" bind:checked={dontAsk} />
@@ -70,6 +84,7 @@
         <button
           class="confirm-ok"
           class:danger={ui.confirm.danger}
+          disabled={!canConfirm}
           onclick={confirm}
         >
           {ui.confirm.confirmLabel}
