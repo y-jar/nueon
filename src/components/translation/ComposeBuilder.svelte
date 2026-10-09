@@ -1,20 +1,12 @@
 <script lang="ts">
   import { t } from "svelte-i18n";
-  import { ArrowLeft, ArrowRight, Save, Search, Trash2, X } from "@lucide/svelte";
+  import { ArrowLeft, ArrowRight, Save, Trash2, X } from "@lucide/svelte";
   import { ui } from "../../lib/state.svelte";
-  import { morphology as store } from "../../lib/morphology.svelte";
+  import {
+    PIECE_DRAG_TYPE,
+    morphology as store,
+  } from "../../lib/morphology.svelte";
 
-  const DRAG_TYPE = "application/x-nueon-piece";
-
-  interface Result {
-    kind: "word" | "morpheme";
-    id: string;
-    label: string;
-    gloss: string;
-    sub: string;
-  }
-
-  let query = $state("");
   let definition = $state("");
   let saveTable = $state("");
   let saved = $state(false);
@@ -28,67 +20,23 @@
       .map((table) => table.name),
   );
 
-  const results = $derived.by(() => {
-    const needle = query.trim().toLowerCase();
-    const words: Result[] = store.lexicon.map((word) => ({
-      kind: "word",
-      id: word.id,
-      label: word.wordname,
-      gloss: word.gloss,
-      sub: word.class ?? word.table,
-    }));
-    const morphemes: Result[] = store.morphemes.map((morpheme) => ({
-      kind: "morpheme",
-      id: morpheme.wordname,
-      label: morpheme.surface,
-      gloss: morpheme.gloss,
-      sub: $t(`morphology.${morpheme.kind}`),
-    }));
-    return [...words, ...morphemes]
-      .filter(
-        (result) =>
-          !needle ||
-          result.label.toLowerCase().includes(needle) ||
-          result.gloss.toLowerCase().includes(needle),
-      )
-      .slice(0, 60);
-  });
-
-  function add(result: Result) {
-    if (result.kind === "word") {
-      const word = store.lexicon.find((entry) => entry.id === result.id);
-      if (word) store.addWord(word);
-    } else {
-      const morpheme = store.morphemes.find(
-        (entry) => entry.wordname === result.id,
-      );
-      if (morpheme) store.addMorpheme(morpheme);
-    }
-    saved = false;
-  }
-
-  function dragStart(event: DragEvent, result: Result) {
-    const payload = JSON.stringify({ kind: result.kind, id: result.id });
-    event.dataTransfer?.setData(DRAG_TYPE, payload);
-    if (event.dataTransfer) event.dataTransfer.effectAllowed = "copy";
-  }
-
   function onDragOver(event: DragEvent) {
-    if (Array.from(event.dataTransfer?.types ?? []).includes(DRAG_TYPE)) {
+    if (Array.from(event.dataTransfer?.types ?? []).includes(PIECE_DRAG_TYPE)) {
       event.preventDefault();
       if (event.dataTransfer) event.dataTransfer.dropEffect = "copy";
     }
   }
 
   function onDrop(event: DragEvent) {
-    const raw = event.dataTransfer?.getData(DRAG_TYPE);
+    const raw = event.dataTransfer?.getData(PIECE_DRAG_TYPE);
     if (!raw) return;
     event.preventDefault();
     const { kind, id } = JSON.parse(raw) as {
       kind: "word" | "morpheme";
       id: string;
     };
-    add({ kind, id, label: "", gloss: "", sub: "" });
+    store.addPieceRef(kind, id);
+    saved = false;
   }
 
   async function save() {
@@ -105,29 +53,6 @@
 </script>
 
 <div class="compose-builder">
-  <label class="explorer-filter">
-    <Search size={13} />
-    <input placeholder={$t("morphology.search")} bind:value={query} />
-  </label>
-
-  <div class="compose-results">
-    {#each results as result (`${result.kind}-${result.id}`)}
-      <button
-        class="compose-result"
-        class:is-morpheme={result.kind === "morpheme"}
-        draggable="true"
-        ondragstart={(event) => dragStart(event, result)}
-        onclick={() => add(result)}
-      >
-        <span class="mono">{result.label}</span>
-        <span class="muted grow">{result.gloss}</span>
-        <span class="badge">{result.sub}</span>
-      </button>
-    {:else}
-      <p class="muted small">{$t("morphology.noResults")}</p>
-    {/each}
-  </div>
-
   <div
     class="compose-strip"
     ondragover={onDragOver}

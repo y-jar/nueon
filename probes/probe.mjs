@@ -3251,31 +3251,44 @@ async function main() {
     await waitJs(`!!document.querySelector('.morphology-view')`, {
       label: "morphology view",
     });
-    await waitJs(`!!document.querySelector('.sidebar .morph-list')`, {
-      label: "morphology panel",
+    await waitJs(`!!document.querySelector('.morphology-sidebar')`, {
+      label: "morphology sidebar",
     });
 
-    // The panel lists the built-in classes and the fixes-table morpheme.
+    // On Compose/Inflect the sidebar lists the morphemes: `-i` comes from a
+    // trigger-based fixes table, `-o` from one with no English column at all.
+    await waitJs(`!!document.querySelector('.morphology-sidebar .morpheme-row')`, {
+      label: "morphemes region",
+    });
+    const morphemes = await js(
+      `return [...document.querySelectorAll('.morphology-sidebar .morpheme-row .mono')]
+         .map((x) => x.textContent.trim());`,
+    );
+    if (!morphemes.includes("i") || !morphemes.includes("o")) {
+      throw new Error(`missing morphemes (-i, -o): ${JSON.stringify(morphemes)}`);
+    }
+
+    // The Endings tab owns class selection through the sidebar chips.
+    await js(
+      `const b = [...document.querySelectorAll('.morphology-view .mode-switch button')]
+         .find((x) => x.textContent.trim() === 'Endings');
+       if (b) b.click();
+       return !!b;`,
+    );
+    await waitJs(`!!document.querySelector('.morphology-sidebar .class-row')`, {
+      label: "class chips",
+    });
     const classes = await js(
-      `return [...document.querySelectorAll('.sidebar .morph-row:not(.static) .grow')]
+      `return [...document.querySelectorAll('.morphology-sidebar .class-row .grow')]
          .map((x) => x.textContent.trim());`,
     );
     if (!classes.includes("verb") || !classes.includes("noun")) {
       throw new Error(`missing classes: ${JSON.stringify(classes)}`);
     }
-    const morphemes = await js(
-      `return [...document.querySelectorAll('.sidebar .morph-row.static .mono')]
-         .map((x) => x.textContent.trim());`,
-    );
-    // `-i` comes from a trigger-based fixes table, `-o` from one with no
-    // English column at all: both are morphemes.
-    if (!morphemes.includes("i") || !morphemes.includes("o")) {
-      throw new Error(`missing morphemes (-i, -o): ${JSON.stringify(morphemes)}`);
-    }
 
     // The verb's seeded two-slot paradigm shows its endings in the center.
     await js(
-      `const b = [...document.querySelectorAll('.sidebar .morph-row')]
+      `const b = [...document.querySelectorAll('.morphology-sidebar .class-row')]
          .find((x) => x.textContent.trim() === 'verb');
        if (b) b.click();
        return !!b;`,
@@ -3312,9 +3325,24 @@ async function main() {
       label: "morphology view",
     });
 
-    // Pick the verb "velo" from the lexicon.
+    // The Inflect tab makes a lexicon click pick the base word.
+    await js(
+      `const b = [...document.querySelectorAll('.morphology-view .mode-switch button')]
+         .find((x) => x.textContent.trim() === 'Inflect');
+       if (b) b.click();
+       return !!b;`,
+    );
+    await waitJs(`!!document.querySelector('.morphology-sidebar .word-search')`, {
+      label: "lexicon search",
+    });
+    await js(
+      `const i = document.querySelector('.morphology-sidebar .word-search input');
+       i.value = 'velo';
+       i.dispatchEvent(new Event('input', { bubbles: true }));
+       return true;`,
+    );
     const picked = await js(
-      `const b = [...document.querySelectorAll('.sidebar .word-row')]
+      `const b = [...document.querySelectorAll('.morphology-sidebar .word-row')]
          .find((x) => x.querySelector('.grow')?.textContent.trim() === 'velo');
        if (b) b.click();
        return !!b;`,
@@ -3343,20 +3371,19 @@ async function main() {
       throw new Error(`expected 'veloi', got '${await surface()}'`);
     }
 
-    // Ticking the -i morpheme attaches it manually as well.
+    // Clicking the -i morpheme row toggles it on (no checkbox any more).
     await js(
-      `const row = [...document.querySelectorAll('.sidebar .morpheme-row')]
+      `const row = [...document.querySelectorAll('.morphology-sidebar .morpheme-row')]
          .find((r) => r.querySelector('.mono')?.textContent.trim() === 'i');
-       const i = row?.querySelector('input[type="checkbox"]');
-       if (i) i.click();
-       return !!i;`,
+       if (row) row.click();
+       return !!row;`,
     );
     await new Promise((resolve) => setTimeout(resolve, 600));
     const final = await surface();
     if (final !== "veloii") throw new Error(`expected 'veloii', got '${final}'`);
   });
 
-  // -- probe 60: the Compose builder combines searched words ----------------
+  // -- probe 60: the Compose builder combines sidebar pieces -----------------
   await probe("60-compose-builder", async () => {
     await js(
       `const b = document.querySelector('.activity[title="Morphology"]');
@@ -3385,54 +3412,60 @@ async function main() {
        return true;`,
     );
 
-    const search = (text) =>
+    const typeIn = (selector, text) =>
       js(
-        `const i = document.querySelector('.compose-builder .explorer-filter input');
+        `const i = document.querySelector(${JSON.stringify(selector)});
          i.value = ${JSON.stringify(text)};
          i.dispatchEvent(new Event('input', { bubbles: true }));
          return true;`,
       );
-    const add = (label) =>
+    const clickIn = (selector, read, match) =>
       js(
-        `const b = [...document.querySelectorAll('.compose-builder .compose-result')]
-           .find((x) => x.querySelector('.mono')?.textContent.trim() === ${JSON.stringify(label)});
+        `const b = [...document.querySelectorAll(${JSON.stringify(selector)})]
+           .find((x) => (${read})?.textContent.trim() === ${JSON.stringify(match)});
          if (b) b.click();
          return !!b;`,
       );
     // Root + root = a compound.
-    await search("velo");
+    await typeIn(".morphology-sidebar .word-search input", "velo");
     await waitJs(
-      `[...document.querySelectorAll('.compose-builder .compose-result .mono')]
+      `[...document.querySelectorAll('.morphology-sidebar .word-row .grow')]
          .some((x) => x.textContent.trim() === 'velo')`,
-      { label: "velo result" },
+      { label: "velo row" },
     );
-    if (!(await add("velo"))) throw new Error("could not add velo");
+    if (
+      !(await clickIn(".morphology-sidebar .word-row", "x.querySelector('.grow')", "velo"))
+    ) {
+      throw new Error("could not add velo");
+    }
     await waitJs(
       `(document.querySelector('.compose-builder .inflect-surface')?.textContent ?? '').trim() === 'velo'`,
       { label: "velo composed" },
     );
 
-    await search("paka");
+    await typeIn(".morphology-sidebar .word-search input", "paka");
     await waitJs(
-      `[...document.querySelectorAll('.compose-builder .compose-result .mono')]
+      `[...document.querySelectorAll('.morphology-sidebar .word-row .grow')]
          .some((x) => x.textContent.trim() === 'paka')`,
-      { label: "paka result" },
+      { label: "paka row" },
     );
-    await add("paka");
+    await clickIn(".morphology-sidebar .word-row", "x.querySelector('.grow')", "paka");
     await waitJs(
       `(document.querySelector('.compose-builder .inflect-surface')?.textContent ?? '').trim() === 'velopaka'`,
-      { label: "compound composed" },
+      { label: "compound" },
     );
 
-    // Adding a fixes morpheme attaches it as a suffix.
-    await search("agent");
-    await waitJs(`!!document.querySelector('.compose-builder .compose-result.is-morpheme')`, {
-      label: "morpheme result",
-    });
-    await add("o");
+    // A fixes morpheme attaches as a suffix.
+    await typeIn(".morphology-sidebar .morph-search input", "agent");
+    await waitJs(
+      `[...document.querySelectorAll('.morphology-sidebar .morpheme-row .mono')]
+         .some((x) => x.textContent.trim() === 'o')`,
+      { label: "morpheme row" },
+    );
+    await clickIn(".morphology-sidebar .morpheme-row", "x.querySelector('.mono')", "o");
     await waitJs(
       `(document.querySelector('.compose-builder .inflect-surface')?.textContent ?? '').trim() === 'velopakao'`,
-      { label: "root + morpheme composed" },
+      { label: "root + morpheme" },
     );
   });
 
@@ -3452,10 +3485,13 @@ async function main() {
     );
     assertEqual(direction, "column", "sidebar flex direction");
 
-    const regions = await js(
+    // Compose/Inflect show the two piece regions; Endings shows the classes.
+    const composeRegions = await js(
       `return document.querySelectorAll('.morphology-sidebar .morph-region').length;`,
     );
-    if (regions !== 3) throw new Error(`expected 3 regions, got ${regions}`);
+    if (composeRegions !== 2) {
+      throw new Error(`expected 2 regions on Compose, got ${composeRegions}`);
+    }
 
     const overflow = await js(
       `const l = document.querySelector('.morphology-sidebar .morph-list');
@@ -3463,6 +3499,21 @@ async function main() {
     );
     assertEqual(overflow, "auto", "list overflow-y");
 
+    await js(
+      `const b = [...document.querySelectorAll('.morphology-view .mode-switch button')]
+         .find((x) => x.textContent.trim() === 'Endings');
+       if (b) b.click();
+       return !!b;`,
+    );
+    await waitJs(`!!document.querySelector('.morphology-sidebar .class-row')`, {
+      label: "class chips",
+    });
+    const endRegions = await js(
+      `return document.querySelectorAll('.morphology-sidebar .morph-region').length;`,
+    );
+    if (endRegions !== 1) {
+      throw new Error(`expected 1 region on Endings, got ${endRegions}`);
+    }
     const wrap = await js(
       `const c = document.querySelector('.morphology-sidebar .morph-chips');
        return c ? getComputedStyle(c).flexWrap : 'none';`,

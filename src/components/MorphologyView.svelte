@@ -80,19 +80,6 @@
       </button>
     </div>
     <span class="grow"></span>
-    {#if store.tab === "paradigms"}
-      <label class="morph-class-picker">
-        {$t("morphology.class")}
-        <select
-          value={store.selectedClass}
-          onchange={(e) => (store.selectedClass = e.currentTarget.value)}
-        >
-          {#each store.classNames() as name (name)}
-            <option value={name}>{name}</option>
-          {/each}
-        </select>
-      </label>
-    {/if}
   </div>
 
   {#if store.error}<p class="error">{store.error}</p>{/if}

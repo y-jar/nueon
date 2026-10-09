@@ -8,6 +8,9 @@ import * as api from "./api";
 import { ui } from "./state.svelte";
 import { POS_CLASSES } from "./dictionary";
 
+/** The drag payload type for pieces dragged from the sidebar to the strip. */
+export const PIECE_DRAG_TYPE = "application/x-nueon-piece";
+
 /** A chip on the compose strip: enough to display and to rebuild a piece. */
 export interface ComposeChip {
   key: string;
@@ -111,6 +114,17 @@ class MorphologyStore {
       this.error = "";
     } catch (e) {
       this.error = String(e);
+    }
+  }
+
+  /** Add a piece by kind + id (drag-drop / Enter), resolving it in the loaded lists. */
+  addPieceRef(kind: "word" | "morpheme", id: string): void {
+    if (kind === "word") {
+      const word = this.lexicon.find((entry) => entry.id === id);
+      if (word) this.addWord(word);
+    } else {
+      const morpheme = this.morphemes.find((entry) => entry.wordname === id);
+      if (morpheme) this.addMorpheme(morpheme);
     }
   }
 
