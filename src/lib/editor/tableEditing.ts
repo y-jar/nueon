@@ -16,6 +16,7 @@ import { EditorSelection, type EditorState } from "@codemirror/state";
 import type { Command, EditorView, KeyBinding } from "@codemirror/view";
 import type { SyntaxNode } from "@lezer/common";
 
+import { TABLE_KEYBINDS } from "../keybindings.ts";
 import {
   addColumn,
   addRow,
@@ -349,9 +350,22 @@ export const formatTable: Command = (view) => {
   return dispatchModel(view, ctx, ctx.model, { row: ctx.row, col: ctx.col });
 };
 
-/** Table keymap, placed before `indentWithTab` (and the default keymap). */
-export const tableKeymap: KeyBinding[] = [
-  { key: "Tab", run: nextCell, preventDefault: true },
-  { key: "Shift-Tab", run: prevCell, preventDefault: true },
-  { key: "Enter", run: enterRow, preventDefault: true },
-];
+/** Every remappable table command, by id. */
+export const TABLE_COMMANDS: Record<string, Command> = {
+  "next-cell": nextCell,
+  "prev-cell": prevCell,
+  "next-row": enterRow,
+};
+
+/** Build the table keymap from resolved keys, placed before `indentWithTab`. */
+export function buildTableKeymap(
+  resolved: Record<string, string | null>,
+): KeyBinding[] {
+  const bindings: KeyBinding[] = [];
+  for (const def of TABLE_KEYBINDS) {
+    const key = resolved[def.id];
+    if (!key) continue;
+    bindings.push({ key, run: TABLE_COMMANDS[def.id], preventDefault: true });
+  }
+  return bindings;
+}

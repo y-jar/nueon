@@ -470,9 +470,9 @@
       {#each KEYBIND_GROUPS as group (group.titleKey)}
         <div class="section-title">{$t(group.titleKey)}</div>
         <ul class="keybind-list">
-          {#each group.bindings as binding (binding.keys)}
+          {#each group.bindings as binding (binding.id)}
             <li>
-              <span class="keys mono">{formatKeys(binding.keys)}</span>
+              <span class="keys mono">{formatKeys(binding.defaultKey)}</span>
               <span
                 >{$t(
                   binding.labelKey,

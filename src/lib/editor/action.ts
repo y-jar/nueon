@@ -3,7 +3,13 @@ import { defaultKeymap, history, historyKeymap, indentWithTab } from "@codemirro
 import { markdown } from "@codemirror/lang-markdown";
 import { bracketMatching } from "@codemirror/language";
 import { highlightSelectionMatches, search, searchKeymap } from "@codemirror/search";
-import { Compartment, EditorState, Prec, Transaction } from "@codemirror/state";
+import {
+  Compartment,
+  EditorState,
+  Prec,
+  Transaction,
+  type Extension,
+} from "@codemirror/state";
 import {
   EditorView,
   crosshairCursor,
@@ -12,6 +18,7 @@ import {
   keymap,
   lineNumbers,
   rectangularSelection,
+  type KeyBinding,
 } from "@codemirror/view";
 import { GFM } from "@lezer/markdown";
 import type { Action } from "svelte/action";
@@ -39,7 +46,8 @@ import {
 } from "./livePreview";
 import { multiSelect } from "./multiselect";
 import { initialPosition, restoreScroll, savePosition } from "./positions";
-import { tableKeymap } from "./tableEditing";
+import { buildTableKeymap } from "./tableEditing";
+import { resolveKeybinds } from "../keybindings";
 import { highlight, theme } from "./theme";
 
 export interface EditorParams {
@@ -69,10 +77,15 @@ export interface EditorParams {
   onImage?: () => void;
   /** Whether to show the line-number gutter (default true). */
   showLineNumbers?: boolean;
+  /** Keybind overrides (command id → combo); missing ids use the defaults. */
+  keybinds?: Record<string, string>;
 }
 
 /** Lets the line-number gutter be toggled without rebuilding the editor. */
 const lineNumberCompartment = new Compartment();
+
+/** Lets the keymap be rebuilt in place when keybinds change. */
+const keymapCompartment = new Compartment();
 
 const AUTOSAVE_MS = 400;
 
@@ -152,6 +165,45 @@ export const codemirror: Action<HTMLElement, EditorParams> = (node, params) => {
   // so no corrective dispatch disturbs the first measure.
   const restored = initialPosition(params.path, params.content.length);
 
+  /** The full keymap, rebuilt from the current keybind overrides. */
+  function editorKeymaps(
+    keybinds: Record<string, string> | undefined,
+  ): Extension[] {
+    const resolved = resolveKeybinds(keybinds ?? {});
+    const inner: KeyBinding[] = [
+      // Backspace deletes a bracket pair before plain char deletion.
+      ...closeBracketsKeymap,
+      // Table keys first: Enter must beat `defaultKeymap`, and Tab must beat
+      // `indentWithTab`. Outside a table they return false.
+      ...buildTableKeymap(resolved),
+      ...defaultKeymap,
+      ...historyKeymap,
+      ...searchKeymap,
+      indentWithTab,
+    ];
+    const saveKey = resolved["save"];
+    if (saveKey) {
+      inner.push({
+        key: saveKey,
+        run: () => {
+          void flush();
+          return true;
+        },
+      });
+    }
+    return [
+      // Ahead of the default keymap, which binds Mod-i to "select parent".
+      Prec.high(
+        keymap.of(
+          buildMarkdownKeymap(resolved, {
+            onImage: () => current.onImage?.(),
+          }),
+        ),
+      ),
+      keymap.of(inner),
+    ];
+  }
+
   const view = new EditorView({
     parent: node,
     state: EditorState.create({
@@ -183,30 +235,7 @@ export const codemirror: Action<HTMLElement, EditorParams> = (node, params) => {
         dictionaryHover(),
         search({ top: true }),
         highlightSelectionMatches(),
-        // Ahead of the default keymap, which binds Mod-i to "select parent".
-        Prec.high(
-          keymap.of(
-            buildMarkdownKeymap({ onImage: () => current.onImage?.() }),
-          ),
-        ),
-        keymap.of([
-          // Backspace deletes a bracket pair before plain char deletion.
-          ...closeBracketsKeymap,
-          // Table keys first: Enter must beat `defaultKeymap`, and Tab must
-          // beat `indentWithTab`. Outside a table they return false.
-          ...tableKeymap,
-          ...defaultKeymap,
-          ...historyKeymap,
-          ...searchKeymap,
-          indentWithTab,
-          {
-            key: "Mod-s",
-            run: () => {
-              void flush();
-              return true;
-            },
-          },
-        ]),
+        keymapCompartment.of(editorKeymaps(params.keybinds)),
         EditorView.updateListener.of((update) => {
           if (update.docChanged) {
             current.onDirty(current.path, true);
@@ -378,6 +407,11 @@ export const codemirror: Action<HTMLElement, EditorParams> = (node, params) => {
           effects: lineNumberCompartment.reconfigure(
             next.showLineNumbers === false ? [] : lineNumbers(),
           ),
+        });
+      }
+      if (next.keybinds !== current.keybinds) {
+        view.dispatch({
+          effects: keymapCompartment.reconfigure(editorKeymaps(next.keybinds)),
         });
       }
       current = next;

@@ -6,13 +6,14 @@ import { EditorState, Transaction } from "@codemirror/state";
 import { GFM } from "@lezer/markdown";
 
 import {
+  buildTableKeymap,
   enterRow,
   getTableAtCursor,
   insertRowBelow,
   nextCell,
   prevCell,
-  tableKeymap,
 } from "./tableEditing.ts";
+import { resolveKeybinds } from "../keybindings.ts";
 
 /** A state with the same language/history stack the editor uses. */
 function state(doc: string, anchor: number): EditorState {
@@ -163,7 +164,9 @@ test("one Ctrl+Z reverts exactly one structural edit", () => {
 test("outside a table the Tab binding falls through to indentation", () => {
   const view = agent(state("hello\n", 0));
   assert.equal(nextCell(view), false); // the table handler declines
-  const binding = tableKeymap.find((entry) => entry.key === "Tab");
+  const binding = buildTableKeymap(resolveKeybinds({})).find(
+    (entry) => entry.key === "Tab",
+  );
   assert.ok(binding?.run);
   assert.equal(indentWithTab.run?.(view), true); // the default still indents
   assert.equal(view.state.doc.toString(), "  hello\n");

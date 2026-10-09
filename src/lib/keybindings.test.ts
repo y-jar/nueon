@@ -2,14 +2,16 @@ import { test } from "node:test";
 import assert from "node:assert/strict";
 
 import { buildMarkdownKeymap } from "./editor/commands.ts";
-import { tableKeymap } from "./editor/tableEditing.ts";
-import { KEYBIND_GROUPS, formatKeys } from "./keybindings.ts";
-
-function group(titleKey: string) {
-  const found = KEYBIND_GROUPS.find((entry) => entry.titleKey === titleKey);
-  assert.ok(found, `missing group ${titleKey}`);
-  return found;
-}
+import { buildTableKeymap } from "./editor/tableEditing.ts";
+import {
+  MARKDOWN_KEYBINDS,
+  TABLE_KEYBINDS,
+  conflictingId,
+  defaultKeybinds,
+  formatKeys,
+  isReserved,
+  resolveKeybinds,
+} from "./keybindings.ts";
 
 test("formats CodeMirror key notation for display", () => {
   assert.equal(formatKeys("Mod-Shift-l"), "Ctrl+Shift+L");
@@ -18,20 +20,42 @@ test("formats CodeMirror key notation for display", () => {
   assert.equal(formatKeys("Enter"), "Enter");
 });
 
-test("the markdown group lists exactly the markdown keymap", () => {
-  const real = buildMarkdownKeymap({ onImage() {} })
+test("resolved defaults reproduce the markdown and table keymaps", () => {
+  const resolved = resolveKeybinds({});
+  assert.deepEqual(resolved, defaultKeybinds());
+
+  const markdown = buildMarkdownKeymap(resolved, { onImage() {} })
     .map((binding) => binding.key)
     .sort();
-  const listed = group("keybinds.groupMarkdown")
-    .bindings.map((binding) => binding.keys)
+  assert.deepEqual(
+    markdown,
+    MARKDOWN_KEYBINDS.map((def) => def.defaultKey).sort(),
+  );
+
+  const tables = buildTableKeymap(resolved)
+    .map((binding) => binding.key)
     .sort();
-  assert.deepEqual(listed, real);
+  assert.deepEqual(
+    tables,
+    TABLE_KEYBINDS.map((def) => def.defaultKey).sort(),
+  );
 });
 
-test("the tables group lists exactly the table keymap", () => {
-  const real = tableKeymap.map((binding) => binding.key).sort();
-  const listed = group("keybinds.groupTables")
-    .bindings.map((binding) => binding.keys)
-    .sort();
-  assert.deepEqual(listed, real);
+test("overrides replace and empty values unbind", () => {
+  const resolved = resolveKeybinds({ bold: "Mod-Alt-b", italic: "" });
+  assert.equal(resolved["bold"], "Mod-Alt-b");
+  assert.equal(resolved["italic"], null);
+
+  const markdown = buildMarkdownKeymap(resolved, { onImage() {} });
+  assert.ok(markdown.some((binding) => binding.key === "Mod-Alt-b"));
+  assert.ok(!markdown.some((binding) => binding.key === "Mod-b"));
+  assert.ok(!markdown.some((binding) => binding.key === "Mod-i")); // unbound
+});
+
+test("reserved combos and conflicts are detected", () => {
+  assert.ok(isReserved("Mod-c"));
+  assert.ok(!isReserved("Mod-b"));
+  const resolved = resolveKeybinds({});
+  assert.equal(conflictingId("bold", "Mod-i", resolved), "italic");
+  assert.equal(conflictingId("bold", "Mod-Alt-b", resolved), undefined);
 });

@@ -11,6 +11,7 @@ import {
   setHeading,
   toggleStrikethrough,
 } from "./commands.ts";
+import { resolveKeybinds } from "../keybindings.ts";
 
 function state(doc: string, from = 0, to = from): EditorState {
   return EditorState.create({
@@ -113,7 +114,9 @@ test("strikethrough does nothing inside a code block", () => {
 // -- keymap ------------------------------------------------------------------
 
 test("the markdown keymap binds the table, task and image keys", () => {
-  const keys = buildMarkdownKeymap({ onImage: () => {} }).map((b) => b.key);
+  const keys = buildMarkdownKeymap(resolveKeybinds({}), {
+    onImage: () => {},
+  }).map((b) => b.key);
   assert.ok(keys.includes("Mod-Shift-t"), "table key");
   assert.ok(keys.includes("Mod-Shift-l"), "task key");
   assert.ok(keys.includes("Mod-Shift-p"), "image key");
@@ -122,12 +125,16 @@ test("the markdown keymap binds the table, task and image keys", () => {
 test("the image keybind opens the picker, or is a no-op without one", () => {
   const view = agent(state(""));
   const opened: string[] = [];
-  const open = buildMarkdownKeymap({ onImage: () => opened.push("yes") });
+  const open = buildMarkdownKeymap(resolveKeybinds({}), {
+    onImage: () => opened.push("yes"),
+  });
   const binding = open.find((b) => b.key === "Mod-Shift-p");
   assert.equal(binding?.run?.(view as never), true);
   assert.deepEqual(opened, ["yes"]);
 
-  const none = buildMarkdownKeymap().find((b) => b.key === "Mod-Shift-p");
+  const none = buildMarkdownKeymap(resolveKeybinds({})).find(
+    (b) => b.key === "Mod-Shift-p",
+  );
   assert.equal(none?.run?.(view as never), false);
 });
 

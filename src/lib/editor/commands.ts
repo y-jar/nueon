@@ -8,6 +8,7 @@ import type { Command, EditorView, KeyBinding } from "@codemirror/view";
 import type { SyntaxNode } from "@lezer/common";
 
 import { generateTable, serializeTable } from "./table.ts";
+import { MARKDOWN_KEYBINDS } from "../keybindings.ts";
 
 /** Which inline/block formats apply at the cursor (drives toolbar highlights). */
 export interface FormatState {
@@ -465,6 +466,28 @@ export function insertTextAt(view: EditorView, text: string, pos?: number): void
   });
 }
 
+/** Every remappable Markdown command, by id. */
+export const MARKDOWN_COMMANDS: Record<string, Command> = {
+  bold: toggleBold,
+  italic: toggleItalic,
+  underline: toggleUnderline,
+  link: insertLink,
+  "bullet-list": toggleBulletList,
+  "numbered-list": toggleNumberedList,
+  blockquote: toggleBlockquote,
+  "task-list": toggleTaskList,
+  table: insertTable,
+  "code-block": toggleCodeBlock,
+  "heading-1": setHeading(1),
+  "heading-2": setHeading(2),
+  "heading-3": setHeading(3),
+  "heading-4": setHeading(4),
+  "heading-5": setHeading(5),
+  "heading-6": setHeading(6),
+  "clear-heading": clearHeading,
+  strikethrough: toggleStrikethrough,
+};
+
 /** Non-command handlers the Markdown keymap needs. */
 export interface MarkdownKeymapHandlers {
   /** Open the image picker (the toolbar's insert-image action). */
@@ -472,40 +495,28 @@ export interface MarkdownKeymapHandlers {
 }
 
 /**
- * Standard Markdown keybinds; must take precedence over the default keymap.
- * The image keybind needs the picker the component owns, so it is supplied
- * through `handlers`.
+ * Build the Markdown keymap from resolved keys (command id → combo, or `null`
+ * to unbind). Must take precedence over the default keymap. The image command
+ * needs the picker the component owns, so it is supplied through `handlers`.
  */
 export function buildMarkdownKeymap(
+  resolved: Record<string, string | null>,
   handlers: MarkdownKeymapHandlers = {},
 ): readonly KeyBinding[] {
-  return [
-    { key: "Mod-b", run: toggleBold, preventDefault: true },
-    { key: "Mod-i", run: toggleItalic, preventDefault: true },
-    { key: "Mod-u", run: toggleUnderline, preventDefault: true },
-    { key: "Mod-k", run: insertLink, preventDefault: true },
-    { key: "Mod-Shift-8", run: toggleBulletList, preventDefault: true },
-    { key: "Mod-Shift-7", run: toggleNumberedList, preventDefault: true },
-    { key: "Mod-Shift-9", run: toggleBlockquote, preventDefault: true },
-    // Mod-Shift-l toggles a task list item; Mod-Shift-t inserts a table.
-    { key: "Mod-Shift-l", run: toggleTaskList, preventDefault: true },
-    { key: "Mod-Shift-t", run: insertTable, preventDefault: true },
-    { key: "Mod-Shift-c", run: toggleCodeBlock, preventDefault: true },
-    { key: "Mod-1", run: setHeading(1), preventDefault: true },
-    { key: "Mod-2", run: setHeading(2), preventDefault: true },
-    { key: "Mod-3", run: setHeading(3), preventDefault: true },
-    { key: "Mod-4", run: setHeading(4), preventDefault: true },
-    { key: "Mod-5", run: setHeading(5), preventDefault: true },
-    { key: "Mod-6", run: setHeading(6), preventDefault: true },
-    { key: "Mod-0", run: clearHeading, preventDefault: true },
-    { key: "Mod-Shift-x", run: toggleStrikethrough, preventDefault: true },
-    {
-      key: "Mod-Shift-p",
-      run: () => {
-        if (!handlers.onImage) return false;
-        handlers.onImage();
-        return true;
-      },
-    },
-  ];
+  const bindings: KeyBinding[] = [];
+  for (const def of MARKDOWN_KEYBINDS) {
+    const key = resolved[def.id];
+    if (!key) continue;
+    const run: Command | undefined =
+      def.id === "image"
+        ? () => {
+            if (!handlers.onImage) return false;
+            handlers.onImage();
+            return true;
+          }
+        : MARKDOWN_COMMANDS[def.id];
+    if (!run) continue;
+    bindings.push({ key, run, preventDefault: true });
+  }
+  return bindings;
 }

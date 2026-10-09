@@ -217,6 +217,7 @@
           onContextMenu: openEditorContextMenu,
           onImage: insertImage,
           showLineNumbers: ui.showLineNumbers,
+          keybinds: ui.keybinds,
         }}
       ></div>
     </div>
