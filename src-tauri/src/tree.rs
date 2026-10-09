@@ -16,7 +16,8 @@ pub struct NoteNode {
     pub children: Vec<NoteNode>,
 }
 
-/// Scan `notes_dir` recursively, skipping hidden entries (`.git`, `.DS_Store`, …).
+/// Scan `notes_dir` recursively. Every entry is shown, including dotfiles and
+/// dotfolders, so the tree mirrors the directory exactly.
 pub fn scan(notes_dir: &Path) -> io::Result<Vec<NoteNode>> {
     if !notes_dir.exists() {
         return Ok(Vec::new());
@@ -29,9 +30,6 @@ fn read_dir(abs: &Path, rel: &Path) -> io::Result<Vec<NoteNode>> {
     for entry in fs::read_dir(abs)? {
         let entry = entry?;
         let name = entry.file_name().to_string_lossy().into_owned();
-        if name.starts_with('.') {
-            continue;
-        }
         let is_dir = entry.file_type()?.is_dir();
         let child_rel = rel.join(&name);
         let children = if is_dir {

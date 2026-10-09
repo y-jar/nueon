@@ -620,6 +620,8 @@ function seedWorkspace() {
   );
   fs.writeFileSync(path.join(assetsDir, "notes.txt"), "asset text\n");
   fs.writeFileSync(path.join(assetsDir, "doc.pdf"), "%PDF-1.4 fake\n");
+  // A dotfile: the tree shows everything in notes/ (probe 41).
+  fs.writeFileSync(path.join(WORKSPACE, "notes", ".secret.md"), "hidden\n");
   const configDir = path.join(ROOT, "home", ".config", "nueon");
   fs.mkdirSync(configDir, { recursive: true });
   fs.writeFileSync(
@@ -2602,6 +2604,10 @@ async function main() {
     });
     await waitJs(`!!document.querySelector('.tree-row[data-path="assets/pic.png"]')`, {
       label: "asset file in tree",
+    });
+    // Dotfiles are shown too: full transparency of the notes dir.
+    await waitJs(`!!document.querySelector('.tree-row[data-path=".secret.md"]')`, {
+      label: "dotfile in tree",
     });
 
     const openTreeFile = (p) =>
