@@ -217,6 +217,7 @@ pub fn run() {
             commands::clear_suppressed_confirms,
             commands::editor_line_numbers,
             commands::set_editor_line_numbers,
+            commands::export_workspace_zip,
             commands::set_parent,
             commands::remove_parent,
             commands::reparent_word,

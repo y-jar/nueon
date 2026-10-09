@@ -1,8 +1,9 @@
 <script lang="ts">
   import { onMount } from "svelte";
   import { t } from "svelte-i18n";
-  import { open, save } from "@tauri-apps/plugin-dialog";
+  import { open } from "@tauri-apps/plugin-dialog";
   import * as api from "../lib/api";
+  import { exportProfileDialog } from "../lib/exports";
   import {
     ui,
     openSetupWizard,
@@ -120,13 +121,8 @@
   const PROFILE_FILTER = [{ name: "Nueon profile", extensions: ["json"] }];
 
   async function exportProfile() {
-    const path = await save({
-      defaultPath: "profile.nueon.json",
-      filters: PROFILE_FILTER,
-    });
-    if (!path) return;
     try {
-      await api.profileExport(path);
+      if (!(await exportProfileDialog())) return;
       status = $t("settings.saved");
       error = "";
     } catch (e) {

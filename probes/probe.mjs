@@ -2555,6 +2555,31 @@ async function main() {
        return !!b;`);
     await waitJs(`!!document.querySelector('.cm-lineNumbers')`, { label: "line numbers shown" });
   });
+
+  // -- probe 40: notes sidebar export menu ----------------------------------
+  await probe("40-sidebar-export-menu", async () => {
+    await openActivity("Notes");
+    await waitJs(`!!document.querySelector('.explorer-actions')`, { label: "notes sidebar" });
+    const opened = await js(
+      `const t = document.querySelector('.explorer-actions [title="Export"]');
+       if (t) { t.click(); return true; }
+       return false;`,
+    );
+    if (!opened) throw new Error("no export trigger in the sidebar");
+    await waitJs(`!!document.querySelector('.popover-panel')`, { label: "export menu" });
+    const items = await js(
+      `return [...document.querySelectorAll('.popover-panel .picker-body button')]
+         .map((b) => b.textContent.trim());`,
+    );
+    if (!items.includes("Export workspace as zip")) {
+      throw new Error(`missing zip export: ${JSON.stringify(items)}`);
+    }
+    if (!items.includes("Export profile")) {
+      throw new Error(`missing profile export: ${JSON.stringify(items)}`);
+    }
+    // Dismiss the menu.
+    await js(`document.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape' })); return true;`);
+  });
 }
 
 try {

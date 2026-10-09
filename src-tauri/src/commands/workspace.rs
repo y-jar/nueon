@@ -436,6 +436,17 @@ pub fn clear_suppressed_confirms(state: State<'_, Shared>) -> Result<(), String>
         .map_err(|err| err.to_string())
 }
 
+/// Zip the whole workspace into `path`, excluding `.git`.
+#[tauri::command]
+pub fn export_workspace_zip(state: State<'_, Shared>, path: String) -> Result<(), String> {
+    let root = {
+        let state = state.lock().map_err(|_| "state poisoned".to_string())?;
+        state.workspace()?.root_path.clone()
+    };
+    nueon_core::archive::zip_workspace(&root, std::path::Path::new(&path))
+        .map_err(|err| err.to_string())
+}
+
 /// Whether the Markdown editor shows line numbers.
 #[tauri::command]
 pub fn editor_line_numbers(state: State<'_, Shared>) -> Result<bool, String> {

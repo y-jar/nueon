@@ -1,7 +1,7 @@
 <script lang="ts">
   import { autofocus } from "../lib/actions";
   import { t } from "svelte-i18n";
-  import { Search, FilePlus, FolderPlus, Trash2 } from "@lucide/svelte";
+  import { Search, FilePlus, FolderPlus, Trash2, Download } from "@lucide/svelte";
   import {
     ui,
     createNote,
@@ -12,7 +12,12 @@
     openContextMenu,
   } from "../lib/state.svelte";
   import { filterTree } from "../lib/explorer";
+  import {
+    exportProfileDialog,
+    exportWorkspaceZipDialog,
+  } from "../lib/exports";
   import ExplorerTree from "./ExplorerTree.svelte";
+  import Popover from "./Popover.svelte";
 
   let newName = $state("");
   let newKind = $state<"note" | "folder" | null>(null);
@@ -84,6 +89,26 @@
     event.preventDefault();
     openContextMenu(event.clientX, event.clientY, "", true, "root");
   }
+
+  async function exportWorkspace() {
+    try {
+      const path = await exportWorkspaceZipDialog();
+      if (path) ui.status = $t("status.exporting", { values: { name: path } });
+      error = "";
+    } catch (e) {
+      error = String(e);
+    }
+  }
+
+  async function exportProfile() {
+    try {
+      const path = await exportProfileDialog();
+      if (path) ui.status = $t("status.exporting", { values: { name: path } });
+      error = "";
+    } catch (e) {
+      error = String(e);
+    }
+  }
 </script>
 
 <aside class="sidebar" oncontextmenu={onSidebarContext}>
@@ -122,6 +147,27 @@
     >
       <Trash2 size={15} />
     </button>
+    <Popover align="right">
+      {#snippet label()}<span title={$t("sidebar.export")}
+          ><Download size={15} /></span
+        >{/snippet}
+      {#snippet children(close)}
+        <div class="picker-body">
+          <button
+            onclick={() => {
+              close();
+              void exportWorkspace();
+            }}>{$t("sidebar.exportZip")}</button
+          >
+          <button
+            onclick={() => {
+              close();
+              void exportProfile();
+            }}>{$t("sidebar.exportProfile")}</button
+          >
+        </div>
+      {/snippet}
+    </Popover>
   </div>
 
   {#if newKind}

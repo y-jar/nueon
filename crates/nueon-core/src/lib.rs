@@ -3,6 +3,7 @@
 //! UI-agnostic: both the Tauri backend and its Svelte frontend build on this
 //! crate.
 
+pub mod archive;
 pub mod config;
 pub mod export;
 pub mod export_table;

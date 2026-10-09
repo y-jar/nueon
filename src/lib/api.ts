@@ -391,6 +391,8 @@ export const editorLineNumbers = (): Promise<boolean> =>
   invoke("editor_line_numbers");
 export const setEditorLineNumbers = (show: boolean): Promise<void> =>
   invoke("set_editor_line_numbers", { show });
+export const exportWorkspaceZip = (path: string): Promise<void> =>
+  invoke("export_workspace_zip", { path });
 export const knownTagNames = (): Promise<string[]> =>
   invoke("known_tag_names");
 export const gridViewGet = (table: string): Promise<GridViewState> =>

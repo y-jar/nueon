@@ -27,6 +27,9 @@
     "newFolderTooltip": "New folder",
     "notePathPlaceholder": "path/to/note",
     "folderPathPlaceholder": "path/to/folder",
+    "export": "Export",
+    "exportZip": "Export workspace as zip",
+    "exportProfile": "Export profile",
     "noNotes": "No notes yet."
   },
   "contextMenu": {
