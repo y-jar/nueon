@@ -28,6 +28,7 @@ export {
 export {
   activateTab,
   closeAllTabs,
+  closeOtherTabs,
   closePane,
   closeTab,
   cycleTab,

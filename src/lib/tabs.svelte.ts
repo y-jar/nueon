@@ -249,6 +249,15 @@ export function closeTab(groupId: string, id: string): void {
   if (wasActive) activateNeighbor(group, index);
 }
 
+/** Close every tab in `groupId` except `keepId`, activating the kept tab. */
+export function closeOtherTabs(groupId: string, keepId: string): void {
+  const group = ui.groups.find((candidate) => candidate.id === groupId);
+  if (!group) return;
+  if (!group.tabs.some((tab) => tab.id === keepId)) return;
+  group.tabs = group.tabs.filter((tab) => tab.id === keepId);
+  if (group.activeTabId !== keepId) void activateTab(groupId, keepId);
+}
+
 /**
  * Close every tab in a pane. The pane is removed when other panes remain
  * (or left empty when it is the last one).

@@ -5411,6 +5411,91 @@ async function main() {
       throw new Error(`Ctrl+PageDown did not advance (${back} -> ${again})`);
     }
   });
+
+  // -- probe 91: tab menu Close others / Close all ---------------------------
+  await probe("91-tab-close-others-all", async () => {
+    const openMany = () =>
+      js(`const names = [...document.querySelectorAll('.tree-row[data-dir="false"] .tree-name')];
+          for (const n of names) n.click();
+          return names.length;`);
+    const openMenu = () =>
+      js(`const p = document.querySelector('.group-pane.active') || document;
+          const tab = p.querySelector('.tab.active');
+          tab.dispatchEvent(new MouseEvent('contextmenu',
+            { bubbles: true, cancelable: true, clientX: 60, clientY: 60 }));
+          return true;`);
+    const clickItem = (label) =>
+      js(`const b = [...document.querySelectorAll('.ctx-menu button')]
+            .find((x) => x.textContent.trim() === ${JSON.stringify(label)});
+          if (b) b.click();
+          return !!b;`);
+
+    await openActivity("Notes");
+    await waitJs(`!!document.querySelector('.tree-row[data-dir="false"] .tree-name')`, {
+      label: "note rows",
+    });
+    await openMany();
+    await waitJs(`document.querySelectorAll('.group-pane.active .tab-strip .tab').length >= 3`, {
+      label: "tabs",
+    });
+    const kept = await js(
+      `const p = document.querySelector('.group-pane.active') || document;
+       return p.querySelector('.tab.active .tab-title')?.textContent.trim() ?? null;`,
+    );
+    await openMenu();
+    await waitJs(`!!document.querySelector('.ctx-menu')`, { label: "tab menu" });
+    const items = await js(
+      `return [...document.querySelectorAll('.ctx-menu button')].map((b) => b.textContent.trim());`,
+    );
+    if (!items.includes("Close others")) throw new Error(`no Close others: ${items}`);
+    if (!items.includes("Close all")) throw new Error(`no Close all: ${items}`);
+    if (!(await clickItem("Close others"))) throw new Error("could not click Close others");
+    await new Promise((resolve) => setTimeout(resolve, 200));
+    const others = await js(
+      `const p = document.querySelector('.group-pane.active') || document;
+       return { count: p.querySelectorAll('.tab-strip .tab').length,
+                title: p.querySelector('.tab.active .tab-title')?.textContent.trim() ?? null };`,
+    );
+    if (others.count !== 1) throw new Error(`Close others left ${others.count} tabs`);
+    if (others.title !== kept) {
+      throw new Error(`Close others kept the wrong tab (${kept} -> ${others.title})`);
+    }
+
+    await openMany();
+    await waitJs(`document.querySelectorAll('.group-pane.active .tab-strip .tab').length >= 3`, {
+      label: "tabs again",
+    });
+    await openMenu();
+    await waitJs(`!!document.querySelector('.ctx-menu')`, { label: "tab menu 2" });
+    if (!(await clickItem("Close all"))) throw new Error("could not click Close all");
+    await new Promise((resolve) => setTimeout(resolve, 200));
+    const total = await js(`return document.querySelectorAll('.tab-strip .tab').length;`);
+    if (total !== 0) throw new Error(`Close all left ${total} tabs`);
+  });
+
+  // -- probe 92: the new-tab button opens a note -----------------------------
+  await probe("92-tab-new-button", async () => {
+    await openActivity("Notes");
+    await waitJs(`!!document.querySelector('.group-pane.active .tabbar')`, {
+      label: "tab bar",
+    });
+    const before = await js(`return document.querySelectorAll('.tab-strip .tab').length;`);
+    const clicked = await js(
+      `const b = document.querySelector('.group-pane.active .tab-new');
+       if (b) b.click();
+       return !!b;`,
+    );
+    if (!clicked) throw new Error("no new-tab button");
+    await waitJs(
+      `document.querySelectorAll('.tab-strip .tab').length > ${before}`,
+      { label: "new tab" },
+    );
+    await waitJs(
+      `[...document.querySelectorAll('.group-pane.active .tab-title')]
+         .some((x) => /untitled/i.test(x.textContent))`,
+      { label: "untitled tab" },
+    );
+  });
 }
 
 try {

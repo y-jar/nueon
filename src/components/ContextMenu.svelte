@@ -18,6 +18,8 @@
     refreshTree,
     collapseAll,
     closeTab,
+    closeOtherTabs,
+    closeAllTabs,
     closePane,
     moveTabToNewWindow,
     getContextEditor,
@@ -320,6 +322,19 @@
           closeContextMenu();
           closeTab(groupId, tabId);
         }}>{$t("tabs.close")}</button
+      >
+      <button
+        onclick={() => {
+          const { groupId, tabId } = menu.tab!;
+          closeContextMenu();
+          closeOtherTabs(groupId, tabId);
+        }}>{$t("tabs.closeOthers")}</button
+      >
+      <button
+        onclick={() => {
+          closeContextMenu();
+          closeAllTabs();
+        }}>{$t("tabs.closeAll")}</button
       >
       <button
         onclick={() => {

@@ -133,6 +133,8 @@
   },
   "tabs": {
     "close": "Close tab",
+    "closeOthers": "Close others",
+    "closeAll": "Close all",
     "newNote": "New note",
     "emptyTitle": "Nothing open",
     "emptyHint": "Open a note or a table from the sidebar, or start something new.",

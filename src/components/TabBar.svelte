@@ -7,11 +7,13 @@
     X,
     PanelRight,
     PanelLeft,
+    Plus,
   } from "@lucide/svelte";
   import {
     ui,
     activateTab,
     closeTab,
+    createNote,
     moveTab,
     beginTabDrag,
     endTabDrag,
@@ -23,6 +25,7 @@
     type Tab,
     type TabGroup,
   } from "../lib/state.svelte";
+  import { uniqueNotePath } from "../lib/explorer";
 
   import { isMainWindow } from "../lib/window";
 
@@ -204,6 +207,15 @@
       </div>
     {/each}
   </div>
+
+  <button
+    class="tab-action tab-new"
+    title={$t("tabs.newNote")}
+    aria-label={$t("tabs.newNote")}
+    onclick={() => void createNote(uniqueNotePath(ui.tree))}
+  >
+    <Plus size={16} />
+  </button>
 
   {#if isMainWindow}
   <button
