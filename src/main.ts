@@ -1,3 +1,5 @@
+//! App entry point: initialises i18n and mounts the Svelte root.
+
 import { mount } from "svelte";
 import App from "./App.svelte";
 import "./app.css";

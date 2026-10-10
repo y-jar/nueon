@@ -73,6 +73,7 @@ let
         && npm run check \
         && npm run test \
         && sh scripts/check-icons.sh \
+        && sh scripts/check-headers.sh \
         && sh scripts/test-version.sh \
         && sh scripts/check-version.sh
     '';

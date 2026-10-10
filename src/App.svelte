@@ -1,3 +1,4 @@
+<!-- Root component: shell, layout, global keybinds and error surfacing. -->
 <script lang="ts">
   import { onDestroy, onMount } from "svelte";
   import * as api from "./lib/api";
