@@ -5138,6 +5138,65 @@ async function main() {
       );
     }
   });
+
+  // -- probe 86: completion dropdown layout and SVG icons --------------------
+  await probe("86-completion-dropdown-layout", async () => {
+    await openActivity("Notes");
+    await openNote("type.md");
+    await waitJs(`!!document.querySelector('.cm-host[data-note="type.md"] .cm-content')`, {
+      label: "type editor",
+    });
+    await focusEditor("type.md");
+    await js(`${viewScript("type.md")}
+      v.dispatch({
+        changes: { from: 0, insert: "[[" },
+        selection: { anchor: 2 },
+        userEvent: "input.type",
+      });
+      return v.state.doc.toString();`);
+    await waitJs(
+      `!!document.querySelector('.cm-tooltip-autocomplete ul li .cm-completionLabel')`,
+      { label: "completion rows" },
+    );
+    const layout = await js(`
+      const ul = document.querySelector('.cm-tooltip-autocomplete > ul');
+      const li = document.querySelector('.cm-tooltip-autocomplete > ul > li');
+      const detail = document.querySelector('.cm-tooltip-autocomplete .cm-completionDetail');
+      const container = document.querySelector('.cm-tooltip.cm-tooltip-autocomplete');
+      const icon = document.querySelector('.cm-tooltip-autocomplete .cm-completionIcon-word');
+      const ics = icon ? getComputedStyle(icon) : null;
+      return {
+        liHeight: parseFloat(getComputedStyle(li).height),
+        ulMaxHeight: getComputedStyle(ul).maxHeight,
+        detailFontStyle: detail ? getComputedStyle(detail).fontStyle : null,
+        radius: getComputedStyle(container).borderRadius,
+        iconMask: ics ? (ics.webkitMaskImage || ics.maskImage) : null,
+        iconBefore: icon ? getComputedStyle(icon, '::before').content : null,
+        iconWidth: ics ? parseFloat(ics.width) : null,
+      };`);
+    if (!(layout.liHeight >= 26 && layout.liHeight <= 28)) {
+      throw new Error(`row height not fixed (${layout.liHeight}px)`);
+    }
+    const maxH = parseFloat(layout.ulMaxHeight);
+    if (!(maxH >= 200 && maxH <= 260)) {
+      throw new Error(`list max-height not ~8 rows (${layout.ulMaxHeight})`);
+    }
+    if (layout.detailFontStyle !== "normal") {
+      throw new Error(`detail is italic (${layout.detailFontStyle})`);
+    }
+    if (layout.radius !== "6px") {
+      throw new Error(`dropdown radius not 6px (${layout.radius})`);
+    }
+    if (layout.iconBefore !== "none" && layout.iconBefore !== '""' && layout.iconBefore !== "normal") {
+      throw new Error(`word glyph is still a letter (${layout.iconBefore})`);
+    }
+    if (!layout.iconMask || layout.iconMask === "none") {
+      throw new Error("word icon has no SVG mask");
+    }
+    if (!(layout.iconWidth >= 15 && layout.iconWidth <= 17)) {
+      throw new Error(`word icon not 16px (${layout.iconWidth})`);
+    }
+  });
 }
 
 try {

@@ -99,6 +99,79 @@ export const theme = EditorView.theme(
     ".cm-tooltip.cm-tooltip-autocomplete > ul > li:hover:not([aria-selected])": {
       background: "rgba(255, 255, 255, 0.05)",
     },
+    // Dropdown layout: a fixed row height, a list bounded to ~8 rows, a thin
+    // scrollbar, and 16px SVG icons instead of the letter glyphs.
+    ".cm-tooltip.cm-tooltip-autocomplete": {
+      padding: "4px 0",
+      borderRadius: "6px",
+      boxShadow: "0 6px 16px rgba(0, 0, 0, 0.35)",
+    },
+    ".cm-tooltip.cm-tooltip-autocomplete > ul": {
+      maxHeight: "208px",
+    },
+    ".cm-tooltip.cm-tooltip-autocomplete > ul::-webkit-scrollbar": {
+      width: "8px",
+    },
+    ".cm-tooltip.cm-tooltip-autocomplete > ul::-webkit-scrollbar-thumb": {
+      background: "rgba(255, 255, 255, 0.15)",
+      borderRadius: "4px",
+    },
+    ".cm-tooltip.cm-tooltip-autocomplete > ul > li": {
+      height: "26px",
+      boxSizing: "border-box",
+      padding: "0 8px",
+      display: "flex",
+      alignItems: "center",
+      gap: "8px",
+    },
+    ".cm-tooltip-autocomplete .cm-completionDetail": {
+      fontStyle: "normal",
+    },
+    ".cm-completionIcon": {
+      width: "16px",
+      height: "16px",
+      paddingRight: "0",
+      opacity: "1",
+    },
+    ".cm-completionIcon-word": {
+      backgroundColor: "var(--accent)",
+      WebkitMaskImage:
+        "url(\"data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16'%3E%3Cpath fill='black' d='M2 3a1 1 0 0 1 1-1h3v11H3a1 1 0 0 1-1-1V3zm5 0h6a1 1 0 0 1 1 1v9a1 1 0 0 1-1 1H7V2z'/%3E%3C/svg%3E\")",
+      maskImage:
+        "url(\"data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16'%3E%3Cpath fill='black' d='M2 3a1 1 0 0 1 1-1h3v11H3a1 1 0 0 1-1-1V3zm5 0h6a1 1 0 0 1 1 1v9a1 1 0 0 1-1 1H7V2z'/%3E%3C/svg%3E\")",
+      WebkitMaskSize: "16px 16px",
+      maskSize: "16px 16px",
+      WebkitMaskRepeat: "no-repeat",
+      maskRepeat: "no-repeat",
+      WebkitMaskPosition: "center",
+      maskPosition: "center",
+    },
+    ".cm-completionIcon-note": {
+      backgroundColor: "var(--muted)",
+      WebkitMaskImage:
+        "url(\"data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16'%3E%3Cpath fill='black' d='M3 2h6l4 4v7a1 1 0 0 1-1 1H3a1 1 0 0 1-1-1V3a1 1 0 0 1 1-1zm6 0v4h4z'/%3E%3C/svg%3E\")",
+      maskImage:
+        "url(\"data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16'%3E%3Cpath fill='black' d='M3 2h6l4 4v7a1 1 0 0 1-1 1H3a1 1 0 0 1-1-1V3a1 1 0 0 1 1-1zm6 0v4h4z'/%3E%3C/svg%3E\")",
+      WebkitMaskSize: "16px 16px",
+      maskSize: "16px 16px",
+      WebkitMaskRepeat: "no-repeat",
+      maskRepeat: "no-repeat",
+      WebkitMaskPosition: "center",
+      maskPosition: "center",
+    },
+    ".cm-completionIcon-heading": {
+      backgroundColor: "var(--muted)",
+      WebkitMaskImage:
+        "url(\"data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16'%3E%3Cpath fill='black' d='M4.5 2h2.5v12H4.5zM9 2h2.5v12H9zM2 5h12v2.5H2zM2 8.5h12v2.5H2z'/%3E%3C/svg%3E\")",
+      maskImage:
+        "url(\"data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16'%3E%3Cpath fill='black' d='M4.5 2h2.5v12H4.5zM9 2h2.5v12H9zM2 5h12v2.5H2zM2 8.5h12v2.5H2z'/%3E%3C/svg%3E\")",
+      WebkitMaskSize: "16px 16px",
+      maskSize: "16px 16px",
+      WebkitMaskRepeat: "no-repeat",
+      maskRepeat: "no-repeat",
+      WebkitMaskPosition: "center",
+      maskPosition: "center",
+    },
   },
   { dark: true },
 );
