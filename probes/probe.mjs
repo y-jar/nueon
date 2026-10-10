@@ -4789,8 +4789,7 @@ async function main() {
       label: "type editor",
     });
     await focusEditor("type.md");
-    // Typing `[[` opens the completion list (CodeMirror reports it via the
-    // `aria-autocomplete` content attribute; the source itself is unit-tested).
+    // Typing `[[` opens the completion list and mounts its tooltip.
     await js(`${viewScript("type.md")}
       v.dispatch({
         changes: { from: 0, insert: "[[" },
@@ -4798,10 +4797,36 @@ async function main() {
         userEvent: "input.type",
       });
       return v.state.doc.toString();`);
+    await waitJs(`!!document.querySelector('.cm-tooltip-autocomplete')`, {
+      label: "completion tooltip",
+    });
     await waitJs(
-      `document.querySelector('.cm-host[data-note="type.md"] .cm-content')?.getAttribute('aria-autocomplete') === 'list'`,
-      { label: "completion active" },
+      `document.querySelectorAll('.cm-tooltip-autocomplete .cm-completionLabel').length >= 1`,
+      { label: "completion rows" },
     );
+    // Styling: rows carry a word/note glyph and secondary (table/folder) text,
+    // and the fixed-position tooltip sits within the viewport (not clipped).
+    if (
+      (await js(
+        `return document.querySelectorAll('.cm-tooltip-autocomplete .cm-completionIcon-word, .cm-tooltip-autocomplete .cm-completionIcon-note').length;`,
+      )) < 1
+    ) {
+      throw new Error("completion rows have no word/note glyph");
+    }
+    if (
+      (await js(
+        `return document.querySelectorAll('.cm-tooltip-autocomplete .cm-completionDetail').length;`,
+      )) < 1
+    ) {
+      throw new Error("completion rows have no secondary text");
+    }
+    const rect = await js(
+      `const r = document.querySelector('.cm-tooltip-autocomplete').getBoundingClientRect();
+       return { top: r.top, bottom: r.bottom, left: r.left, right: r.right, vw: window.innerWidth, vh: window.innerHeight };`,
+    );
+    if (rect.bottom > rect.vh + 1 || rect.right > rect.vw + 1 || rect.top < -1 || rect.left < -1) {
+      throw new Error(`completion tooltip clipped: ${JSON.stringify(rect)}`);
+    }
   });
 
   // -- probe 78: Mod+Shift+L wraps a selection as a [[...]] link ------------

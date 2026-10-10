@@ -39,7 +39,7 @@
         pname = "nueon-frontend";
         version = "0.1.0";
         src = ./.;
-        npmDepsHash = "sha256-XCFDzuX7PTlziXSwX+zJgkAF7O/JYfticQJtaR0ouao=";
+        npmDepsHash = "sha256-EasJiPYoBaz0bSz2E/rUYYS+KFzTqK1wyUoeG9lqBD0=";
         npmBuildScript = "build";
         installPhase = ''
           runHook preInstall

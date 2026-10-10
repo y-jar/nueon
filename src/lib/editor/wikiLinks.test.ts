@@ -85,3 +85,10 @@ test("no result outside a [[ prefix", () => {
     null,
   );
 });
+
+test("the result disables CodeMirror's filter so options are not dropped", () => {
+  const ctx = state("[[", 2);
+  const result = wikiCompletionSource(new CompletionContext(ctx.state, ctx.pos, true));
+  assert.ok(result, "source returned a result");
+  assert.equal(result!.filter, false);
+});

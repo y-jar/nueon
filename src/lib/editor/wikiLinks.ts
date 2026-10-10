@@ -345,7 +345,10 @@ function optionsFor(
     from: match.from,
     to: consumeTo(context, match),
     options,
-    validFor: /^\[\[[^\[\]\n]*$/,
+    // The source already ranks and filters, and `from` points at the `[[`, so
+    // CodeMirror's default fuzzy filter would match "[[ky" against the labels
+    // and hide every option. Disable it and re-run the source each keystroke.
+    filter: false,
   };
 }
 
