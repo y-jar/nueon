@@ -43,6 +43,10 @@ after a while, or before upgrading a dependency or releasing.
   builds the source variant. `flake.nix`'s `nueon-bin` package points at a
   GitHub release `.deb` with a placeholder hash until one is published (see
   `README.md`).
+- To build and collect a local release set, run `bundle` in the dev shell
+  (`loom-bundle` / `scripts/bundle.sh [out-dir]`): it builds all three formats
+  and copies each package **separately** into `~/downloads/nueon-<version>/`,
+  writing `SHA256SUMS` and printing the paths.
 
 ## When the app misbehaves
 

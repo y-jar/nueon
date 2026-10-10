@@ -43,6 +43,10 @@ let
     desktop-file-utils
     # Lint the GitHub Actions workflows.
     actionlint
+    # Tauri bundle step: build the .deb/.rpm and patch the AppImage.
+    dpkg
+    rpm
+    patchelf
   ];
 
   # Canonical dev commands. Short shell aliases are defined in `shellHook`.
@@ -63,6 +67,7 @@ let
     "loom-iconcheck" = "sh scripts/check-icons.sh";
     "loom-bump" = "sh scripts/bump-version.sh";
     "loom-versioncheck" = "sh scripts/check-version.sh";
+    "loom-bundle" = "sh scripts/bundle.sh";
     "loom-clean" = "cargo clean && rm -rf dist";
     # Keep in sync with .github/workflows/ci.yml (canonical list in AGENTS.md).
     "loom-gates" = ''
@@ -96,6 +101,7 @@ nueon dev commands
   iconcheck verify the generated icons (size + alpha)
   bump      set the app version (defaults to today's YY.M.D)
   versioncheck verify the app version is consistent and sane
+  bundle    build AppImage+deb+rpm and copy each into ~/downloads/nueon-<ver>
   clean     cargo clean && rm -rf dist
   gates     febuild + fmtcheck + clippy + testall + fecheck + npm test
             + iconcheck + version tests + version check (mirrors ci.yml)
@@ -130,6 +136,10 @@ pkgs.mkShell {
     desktop-file-utils
     # Lint the GitHub Actions workflows.
     actionlint
+    # Tauri bundle step: build the .deb/.rpm and patch the AppImage.
+    dpkg
+    rpm
+    patchelf
     # Packaged-build probes (probes/): virtual display for the webview.
     xorg-server
   ] ++ commandPackages;
@@ -158,11 +168,12 @@ pkgs.mkShell {
     alias iconcheck=loom-iconcheck
     alias bump=loom-bump
     alias versioncheck=loom-versioncheck
+    alias bundle=loom-bundle
     alias clean=loom-clean
     alias gates=loom-gates
     alias aliases=loom-help
     alias help=loom-help
 
-    echo "nueon dev shell — type 'help' for commands (deps dev run app pkg fmt fmtcheck clippy ctest testall fecheck febuild icons iconcheck bump versioncheck clean gates)"
+    echo "nueon dev shell — type 'help' for commands (deps dev run app pkg fmt fmtcheck clippy ctest testall fecheck febuild icons iconcheck bump versioncheck bundle clean gates)"
   '';
 }

@@ -108,6 +108,7 @@ nix-shell
 npm install
 npm run tauri dev      # hot-reloading dev app
 npm run tauri build    # bundles under src-tauri/target/release/bundle
+bundle                 # build AppImage+deb+rpm, copy into ~/downloads/nueon-<version>/
 ```
 
 ## Verification
