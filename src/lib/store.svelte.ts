@@ -1,3 +1,4 @@
+//! The reactive ui store and shared domain types.
 /**
  * The global reactive `ui` store, its document/tab types and the group
  * helpers that only touch it. Kept separate so the tab/layout/notes action

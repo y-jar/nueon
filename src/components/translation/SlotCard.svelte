@@ -1,3 +1,4 @@
+<!-- One clause slot card. -->
 <script lang="ts">
   import { X, GripVertical } from "@lucide/svelte";
   import { dragHandle } from "svelte-dnd-action";

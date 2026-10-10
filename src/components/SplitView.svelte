@@ -1,3 +1,4 @@
+<!-- Split-pane container over the tab groups. -->
 <script lang="ts">
   import { Pane, Splitpanes } from "svelte-splitpanes";
   import type { SplitNode } from "../lib/state.svelte";

@@ -1,3 +1,4 @@
+//! Keybinding definitions, formatting and reserved combos.
 /**
  * The keybind registry: every remappable command with its stable id and
  * built-in key. Kept as plain data (no editor imports) so it can feed Settings

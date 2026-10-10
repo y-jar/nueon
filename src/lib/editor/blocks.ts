@@ -1,3 +1,4 @@
+//! Block detection: fenced code and table regions.
 /**
  * Block scanning for live preview: which line ranges are GFM tables,
  * multi-line display math (`$$ … $$`) and multi-line HTML blocks, plus the

@@ -1,3 +1,4 @@
+//! Bracket auto-closing language data.
 /**
  * Bracket auto-closing for the note editor.
  *

@@ -1,3 +1,4 @@
+//! The codemirror Svelte action: one live editor per note.
 import { closeBracketsKeymap } from "@codemirror/autocomplete";
 import { defaultKeymap, history, historyKeymap, indentWithTab } from "@codemirror/commands";
 import { markdown } from "@codemirror/lang-markdown";

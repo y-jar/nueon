@@ -1,3 +1,4 @@
+<!-- tag_list cell as pills with suggestions. -->
 <script lang="ts">
   import { Plus, X } from "@lucide/svelte";
   import { filterSuggestions } from "../lib/suggest";

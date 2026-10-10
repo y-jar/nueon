@@ -1,3 +1,4 @@
+<!-- Host showing the active activity's sidebar. -->
 <script lang="ts">
   import { ui } from "../lib/state.svelte";
   import Sidebar from "./Sidebar.svelte";

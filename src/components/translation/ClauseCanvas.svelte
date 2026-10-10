@@ -1,3 +1,4 @@
+<!-- Drag-and-drop clause construction grid. -->
 <script lang="ts">
   import { t } from "svelte-i18n";
   import { dragHandleZone } from "svelte-dnd-action";

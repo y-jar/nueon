@@ -1,3 +1,4 @@
+//! Grid column visibility/sort/width normalization.
 /**
  * Pure helpers for a table's persisted grid view state.
  *

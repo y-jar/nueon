@@ -1,3 +1,4 @@
+<!-- Banner for unloadable dictionary files. -->
 <script lang="ts">
   import { t } from "svelte-i18n";
   import { TriangleAlert, X } from "@lucide/svelte";

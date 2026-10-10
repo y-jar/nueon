@@ -1,3 +1,4 @@
+<!-- One split pane: tab bar, body, drop edges. -->
 <script lang="ts">
   import TabBar from "./TabBar.svelte";
   import GroupBody from "./GroupBody.svelte";

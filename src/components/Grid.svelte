@@ -1,3 +1,4 @@
+<!-- The virtualized dictionary grid. -->
 <script lang="ts">
   import { onDestroy } from "svelte";
   import { get } from "svelte/store";

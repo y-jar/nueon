@@ -1,3 +1,4 @@
+<!-- Activity ribbon and workspace/settings buttons. -->
 <script lang="ts">
   import { t } from "svelte-i18n";
   import {

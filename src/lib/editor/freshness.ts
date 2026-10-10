@@ -1,3 +1,4 @@
+//! Read generations guarding stale file reads.
 /**
  * Freshness generations for note reads. A disk read that started before a
  * local save must never be applied over the save's result: applying is gated

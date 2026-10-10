@@ -1,3 +1,4 @@
+//! Morphology store: classes, morphemes, paradigms and compose.
 /**
  * Shared state for the Morphology activity: the left panel (classes, morphemes)
  * and the center view (features, endings) read and write the same store, so an

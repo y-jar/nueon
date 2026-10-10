@@ -1,3 +1,4 @@
+//! Dictionary word index field and highlight/hover.
 import type { Range } from "@codemirror/state";
 import { StateEffect, StateField } from "@codemirror/state";
 import {

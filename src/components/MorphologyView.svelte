@@ -1,3 +1,4 @@
+<!-- Morphology view wrapper (panel + preview). -->
 <script lang="ts">
   import { onMount } from "svelte";
   import { t } from "svelte-i18n";

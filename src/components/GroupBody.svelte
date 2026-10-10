@@ -1,3 +1,4 @@
+<!-- The active view (editor/grid/etc) for a tab group. -->
 <script lang="ts">
   import Editor from "./Editor.svelte";
   import Grid from "./Grid.svelte";

@@ -1,3 +1,4 @@
+//! Dictionary column types and part-of-speech classes.
 import type { FieldType, FieldValue } from "./api";
 
 /** The column types offered by the grid and context menu, in menu order. */

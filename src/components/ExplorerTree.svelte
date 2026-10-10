@@ -1,3 +1,4 @@
+<!-- The notes tree with inline rename and drag. -->
 <script lang="ts">
   import { autofocus } from "../lib/actions";
   import {

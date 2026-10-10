@@ -1,3 +1,4 @@
+<!-- Feature selection bar for paradigms. -->
 <script lang="ts">
   import { t } from "svelte-i18n";
   import type { Feature, FeatureSelections } from "../../lib/api";

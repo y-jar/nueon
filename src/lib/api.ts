@@ -1,3 +1,4 @@
+//! Typed Tauri IPC wrappers and request/response models.
 import { invoke } from "@tauri-apps/api/core";
 
 /** A registered workspace (mirrors `nueon_core::WorkspaceEntry`). */

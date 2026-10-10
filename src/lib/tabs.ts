@@ -1,3 +1,4 @@
+//! Pure tab helpers: pruning, identity and singleton checks.
 /**
  * Pure rules for the tab-group (split-pane) layout.
  *

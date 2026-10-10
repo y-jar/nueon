@@ -1,3 +1,4 @@
+<!-- CSV/TSV/JSON import wizard shell. -->
 <script lang="ts">
   import { t } from "svelte-i18n";
   import { ArrowLeft, ArrowRight, Check, Download, X } from "@lucide/svelte";

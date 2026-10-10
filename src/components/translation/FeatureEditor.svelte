@@ -1,3 +1,4 @@
+<!-- Feature and paradigm editor. -->
 <script lang="ts">
   import { t } from "svelte-i18n";
   import { Plus, X } from "@lucide/svelte";

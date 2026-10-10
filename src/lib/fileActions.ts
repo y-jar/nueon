@@ -1,3 +1,4 @@
+//! Reveal in the file manager and open in the default app.
 /**
  * Small OS-level file actions shared by the note tree's context menu and the
  * editor's overflow menu, so there is one implementation of each.

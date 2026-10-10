@@ -1,3 +1,4 @@
+<!-- Trash bin modal (restore/delete). -->
 <script lang="ts">
   import { t } from "svelte-i18n";
   import { FileText, Folder, Table2, X } from "@lucide/svelte";

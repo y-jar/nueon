@@ -1,3 +1,4 @@
+//! Compose helpers: root discovery and default save table.
 /**
  * Pure rules for linking a composed word back to its roots.
  *

@@ -1,3 +1,4 @@
+//! Minimal whole-document splice diff.
 /**
  * Minimal text splice shared by the editor's buffer reload: trim the common
  * prefix and suffix so only the changed middle is dispatched. CodeMirror maps

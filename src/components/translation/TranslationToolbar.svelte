@@ -1,3 +1,4 @@
+<!-- Translation toolbar: preset/mode controls. -->
 <script lang="ts">
   import { t } from "svelte-i18n";
   import { Save, Trash2, Check, X, Download, Upload } from "@lucide/svelte";

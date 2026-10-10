@@ -1,3 +1,4 @@
+<!-- Modal to add a new word to a table. -->
 <script lang="ts">
   import { t } from "svelte-i18n";
   import {

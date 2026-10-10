@@ -1,3 +1,4 @@
+<!-- Source Control: status, diff, history and check-in. -->
 <script lang="ts">
   import { t } from "svelte-i18n";
   import * as api from "../lib/api";

@@ -1,3 +1,4 @@
+//! Split layout: indices, serialization and tree helpers.
 /**
  * Pure tab-group (split-pane) layout rules and serialization.
  *

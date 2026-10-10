@@ -1,3 +1,4 @@
+//! OS file-drop onto the workspace (the drop bridge).
 import { EditorView } from "@codemirror/view";
 import { getCurrentWebview } from "@tauri-apps/api/webview";
 import * as api from "./api";

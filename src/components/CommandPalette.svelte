@@ -1,3 +1,4 @@
+<!-- Ctrl+P palette of recent notes, tables and actions. -->
 <script lang="ts">
   import { get } from "svelte/store";
   import { t } from "svelte-i18n";

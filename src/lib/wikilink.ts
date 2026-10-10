@@ -1,3 +1,4 @@
+//! Pure [[...]] link parsing, ranking and resolution.
 /**
  * Obsidian-style `[[...]]` note links. Kept free of Svelte/Tauri so the parse
  * and resolution rules can be unit-tested.

@@ -1,3 +1,4 @@
+<!-- Compose word-from-roots builder. -->
 <script lang="ts">
   import { t } from "svelte-i18n";
   import { ArrowLeft, ArrowRight, Trash2, X } from "@lucide/svelte";

@@ -1,3 +1,4 @@
+//! Value-suggestion filtering for tag_list/text cells.
 /**
  * Pure value-suggestion matching for column autocomplete. Kept free of Svelte
  * and DOM so the ranking rules can be unit-tested directly.

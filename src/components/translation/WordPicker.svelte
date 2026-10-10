@@ -1,3 +1,4 @@
+<!-- Homograph conflict word picker. -->
 <script lang="ts">
   import { t } from "svelte-i18n";
   import { Search } from "@lucide/svelte";

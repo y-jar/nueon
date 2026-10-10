@@ -1,3 +1,4 @@
+<!-- The suggestion dropdown list. -->
 <script lang="ts">
   interface Props {
     /** The input the list hangs below. */

@@ -1,3 +1,4 @@
+//! Locale initialisation for svelte-i18n.
 import { addMessages, init, locale, t } from "svelte-i18n";
 
 import en from "../locales/en.json";

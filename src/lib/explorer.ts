@@ -1,3 +1,4 @@
+//! Note-tree helpers: flattening, name stripping, unique paths.
 import type { NoteNode } from "./api";
 
 /** Depth-first flatten of a notes tree. */

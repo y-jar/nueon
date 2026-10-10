@@ -1,3 +1,4 @@
+<!-- Translation activity: builder + runner. -->
 <script lang="ts">
   import { onMount } from "svelte";
   import { t } from "svelte-i18n";

@@ -1,3 +1,4 @@
+//! Remember and recall cursor/scroll per note.
 /**
  * Per-note editor positions, kept across the editor's remounts (tab switches,
  * renames) so the cursor and the top visible line survive them. Positions are

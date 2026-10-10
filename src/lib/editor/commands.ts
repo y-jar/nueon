@@ -1,3 +1,4 @@
+//! Markdown formatting commands and keymap.
 import { ensureSyntaxTree, syntaxTree } from "@codemirror/language";
 import {
   EditorSelection,

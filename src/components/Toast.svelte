@@ -1,3 +1,4 @@
+<!-- Transient status toast. -->
 <script lang="ts">
   import { X } from "@lucide/svelte";
   import { ui, dismissToast } from "../lib/state.svelte";

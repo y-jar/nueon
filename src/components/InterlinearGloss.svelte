@@ -1,3 +1,4 @@
+<!-- Leipzig-style interlinear gloss view. -->
 <script lang="ts">
   import { t } from "svelte-i18n";
   import type { InterlinearGloss } from "../lib/api";

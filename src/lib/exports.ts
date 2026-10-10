@@ -1,3 +1,4 @@
+//! Profile/workspace export and import dialogs.
 /**
  * Export dialogs shared by Settings and the notes sidebar. Each opens a save
  * dialog and, if a destination is chosen, runs the matching backend command.

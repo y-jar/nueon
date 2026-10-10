@@ -1,3 +1,4 @@
+<!-- Form to save a composed word. -->
 <script lang="ts">
   import { t } from "svelte-i18n";
   import { Save, X } from "@lucide/svelte";

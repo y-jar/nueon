@@ -1,3 +1,4 @@
+<!-- Input with a suggestion dropdown. -->
 <script lang="ts">
   import { filterSuggestions } from "../lib/suggest";
   import SuggestionList from "./SuggestionList.svelte";

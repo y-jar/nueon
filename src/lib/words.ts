@@ -1,3 +1,4 @@
+//! Word creation and value editing helpers.
 import * as api from "./api";
 
 /** Result of creating a word together with its initial property values. */

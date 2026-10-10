@@ -1,3 +1,4 @@
+<!-- Shared confirm dialog with optional suppression. -->
 <script lang="ts">
   import { t } from "svelte-i18n";
   import { ui, suppressConfirm } from "../lib/state.svelte";

@@ -1,3 +1,4 @@
+<!-- Dependent-aware word delete with reassign. -->
 <script lang="ts">
   import { t } from "svelte-i18n";
   import { X } from "@lucide/svelte";

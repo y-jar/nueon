@@ -1,3 +1,4 @@
+<!-- First-run workspace picker/onboarding. -->
 <script lang="ts">
   import { autofocus } from "../lib/actions";
   import { t } from "svelte-i18n";

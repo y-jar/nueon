@@ -1,3 +1,4 @@
+<!-- Modal that captures a key chord. -->
 <script lang="ts">
   import { t } from "svelte-i18n";
   import {

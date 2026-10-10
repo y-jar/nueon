@@ -1,3 +1,4 @@
+//! Current window label and main-window flag.
 import { getCurrentWindow } from "@tauri-apps/api/window";
 
 /** Label of the window this webview runs in (`main` or `tear-<id>`). */

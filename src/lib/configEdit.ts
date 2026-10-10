@@ -1,3 +1,4 @@
+//! Parsing helpers for editable config (symbols, sound classes).
 /**
  * Pure edits to the phonology and morphology config, shared by Settings.
  *

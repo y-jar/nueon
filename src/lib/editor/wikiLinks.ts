@@ -1,3 +1,4 @@
+//! [[...]] decoration, autocomplete and hover.
 import { StateEffect, StateField } from "@codemirror/state";
 import type { Range } from "@codemirror/state";
 import { EditorSelection } from "@codemirror/state";

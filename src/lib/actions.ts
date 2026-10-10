@@ -1,3 +1,4 @@
+//! Svelte actions: autofocus and small DOM behaviours.
 /** Options for {@link autofocus}. */
 export interface AutofocusOptions {
   /** Select the existing text (useful for rename prompts). */

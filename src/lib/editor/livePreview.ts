@@ -1,3 +1,4 @@
+//! Live-preview decorations (images, math, blocks).
 import { type Range } from "@codemirror/state";
 import {
   Decoration,

@@ -1,3 +1,4 @@
+<!-- Import step: map source columns to tags. -->
 <script lang="ts">
   import { t } from "svelte-i18n";
   import { Info, List } from "@lucide/svelte";

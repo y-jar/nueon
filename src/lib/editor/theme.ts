@@ -1,3 +1,4 @@
+//! Editor theme and syntax highlighting.
 import { HighlightStyle, syntaxHighlighting } from "@codemirror/language";
 import { EditorView } from "@codemirror/view";
 import { tags } from "@lezer/highlight";

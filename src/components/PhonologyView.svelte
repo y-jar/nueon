@@ -1,3 +1,4 @@
+<!-- Phonology: IPA chart and sound changes. -->
 <script lang="ts">
   import { onMount } from "svelte";
   import { t } from "svelte-i18n";

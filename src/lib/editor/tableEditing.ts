@@ -1,3 +1,4 @@
+//! Markdown table editing commands.
 /**
  * CodeMirror glue for editing GFM tables: cursor detection, Tab/Enter
  * navigation and structural commands. This is the only table file that knows

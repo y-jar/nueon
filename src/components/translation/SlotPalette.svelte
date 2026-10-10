@@ -1,3 +1,4 @@
+<!-- Palette of draggable slots. -->
 <script lang="ts">
   import { t } from "svelte-i18n";
   import type { ClauseSlot } from "../../lib/api";

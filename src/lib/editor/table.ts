@@ -1,3 +1,4 @@
+//! Markdown table parsing helpers.
 /**
  * Pure Markdown table model: parse, serialize, width and structural edits.
  *

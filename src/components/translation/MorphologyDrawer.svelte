@@ -1,3 +1,4 @@
+<!-- Drawer of morphemes for slot filling. -->
 <script lang="ts">
   import { t } from "svelte-i18n";
   import { Plus, X } from "@lucide/svelte";

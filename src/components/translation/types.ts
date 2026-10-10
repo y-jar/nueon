@@ -1,3 +1,4 @@
+//! Shared types for the translation UI.
 import type { ClauseSlot } from "../../lib/api";
 
 /** A clause slot paired with a stable DOM id for drag-and-drop. */

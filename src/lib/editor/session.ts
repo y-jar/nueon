@@ -1,3 +1,4 @@
+//! Save-decision helpers for stale editor buffers.
 /**
  * Session decisions for the note editor.
  *

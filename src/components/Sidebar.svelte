@@ -1,3 +1,4 @@
+<!-- Notes explorer sidebar. -->
 <script lang="ts">
   import { autofocus } from "../lib/actions";
   import { t } from "svelte-i18n";

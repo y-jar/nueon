@@ -1,3 +1,4 @@
+<!-- Formatting toolbar for the note editor. -->
 <script lang="ts">
   import { t } from "svelte-i18n";
   import {

@@ -1,3 +1,4 @@
+<!-- The right-hand context inspector. -->
 <script lang="ts">
   import { t } from "svelte-i18n";
   import * as api from "../lib/api";

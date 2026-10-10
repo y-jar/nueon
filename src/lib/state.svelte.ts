@@ -1,3 +1,4 @@
+//! Public state API re-exported for components.
 import { stripMd } from "./explorer";
 import { canMoveInto } from "./tiling";
 export {

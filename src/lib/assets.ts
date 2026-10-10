@@ -1,3 +1,4 @@
+//! Asset path handling and note-relative asset links.
 /** Collapse `.` and `..` segments of a `/`-separated path. */
 export function normalizePath(path: string): string {
   const absolute = path.startsWith("/");

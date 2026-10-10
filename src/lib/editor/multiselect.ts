@@ -1,3 +1,4 @@
+//! Ctrl/Cmd-click multi-cursor support.
 /**
  * Multiple selections for the note editor.
  *

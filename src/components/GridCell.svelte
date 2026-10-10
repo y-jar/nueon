@@ -1,3 +1,4 @@
+<!-- One dictionary grid cell renderer. -->
 <script lang="ts">
   import { t } from "svelte-i18n";
   import { Check } from "@lucide/svelte";

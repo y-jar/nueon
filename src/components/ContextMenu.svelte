@@ -1,3 +1,4 @@
+<!-- The portaled context menu for all menu kinds. -->
 <script lang="ts">
   import { t } from "svelte-i18n";
   import { revealInFileExplorer } from "../lib/fileActions";

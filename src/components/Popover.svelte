@@ -1,3 +1,4 @@
+<!-- Anchor popover with click-outside/Escape dismissal. -->
 <script lang="ts">
   import type { Snippet } from "svelte";
 

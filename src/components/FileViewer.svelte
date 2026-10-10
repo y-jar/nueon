@@ -1,3 +1,4 @@
+<!-- Image/audio/video/archive viewer. -->
 <script lang="ts">
   import { t } from "svelte-i18n";
   import { convertFileSrc } from "@tauri-apps/api/core";

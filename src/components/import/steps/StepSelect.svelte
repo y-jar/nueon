@@ -1,3 +1,4 @@
+<!-- Import step: pick file and format. -->
 <script lang="ts">
   import { t } from "svelte-i18n";
   import { open } from "@tauri-apps/plugin-dialog";

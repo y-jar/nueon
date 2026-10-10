@@ -1,3 +1,4 @@
+<!-- Paradigm (feature x slot) grid. -->
 <script lang="ts">
   import { t } from "svelte-i18n";
   import * as api from "../../lib/api";

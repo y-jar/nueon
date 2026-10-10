@@ -1,3 +1,4 @@
+<!-- The English-to-conlang runner. -->
 <script lang="ts">
   import { t } from "svelte-i18n";
   import { Sparkles } from "@lucide/svelte";

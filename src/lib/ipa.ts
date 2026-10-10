@@ -1,3 +1,4 @@
+//! IPA chart data and phoneme feature helpers.
 /**
  * A curated IPA chart (pulmonic consonants and vowels) used only for display
  * and for mapping a clicked symbol to its class. The phonology itself stores
