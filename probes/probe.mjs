@@ -5004,6 +5004,37 @@ async function main() {
       { label: "link revealed" },
     );
   });
+
+  // -- probe 83: Enter inside a link exits it ---------------------------------
+  await probe("83-enter-exits-link", async () => {
+    await openActivity("Notes");
+    await openNote("type.md");
+    await waitJs(`!!document.querySelector('.cm-host[data-note="type.md"] .cm-content')`, {
+      label: "type editor",
+    });
+    await focusEditor("type.md");
+    // Type `[[ky` at the end of the note so `[[` auto-closes to `[[ky]]`.
+    await js(`${viewScript("type.md")}
+      v.dispatch({ selection: { anchor: v.state.doc.length } });
+      return true;`);
+    await pressKey("[");
+    await pressKey("[");
+    await waitJs(`!!document.querySelector('.cm-tooltip-autocomplete')`, {
+      label: "dropdown opened by typing",
+    });
+    await pressKey("k");
+    await pressKey("y");
+    await pressKey("\uE00C"); // Escape dismisses the dropdown
+    await pressKey(ENTER);
+    const after = await js(`${viewScript("type.md")}
+      return { text: v.state.doc.toString(), head: v.state.selection.main.head, length: v.state.doc.length };`);
+    if (!after.text.endsWith("[[ky]]")) {
+      throw new Error(`Enter inserted a newline: ${JSON.stringify(after.text)}`);
+    }
+    if (after.head !== after.length) {
+      throw new Error(`cursor not after ]]: head=${after.head} length=${after.length}`);
+    }
+  });
 }
 
 try {

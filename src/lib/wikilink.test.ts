@@ -3,6 +3,7 @@ import assert from "node:assert/strict";
 
 import {
   isLinkRevealed,
+  linkExit,
   parseHeadings,
   parseWikiLinks,
   rankCompletions,
@@ -194,4 +195,32 @@ test("isLinkRevealed considers any of several selections", () => {
     ]),
     true,
   );
+});
+
+test("linkExit returns the offset after ]] inside a plain link", () => {
+  // "[[ky]]" spans [0, 6).
+  assert.equal(linkExit("[[ky]]", 0), null); // at the opening [
+  assert.equal(linkExit("[[ky]]", 1), 6); // second [
+  assert.equal(linkExit("[[ky]]", 3), 6); // inside
+  assert.equal(linkExit("[[ky]]", 5), 6); // last ]
+  assert.equal(linkExit("[[ky]]", 6), null); // after ]]
+});
+
+test("linkExit handles alias, heading and embed forms", () => {
+  assert.equal(linkExit("[[target|alias]]", 9), 16);
+  assert.equal(linkExit("[[target#heading]]", 9), 18);
+  assert.equal(linkExit("![[ky]]", 1), 7); // the ! counts as the link start
+  assert.equal(linkExit("![[ky]]", 0), null); // before the !
+});
+
+test("linkExit picks the right link when two share a line", () => {
+  // "[[a]] [[b]]": first [0,5), second [6,11).
+  assert.equal(linkExit("[[a]] [[b]]", 2), 5);
+  assert.equal(linkExit("[[a]] [[b]]", 8), 11);
+  assert.equal(linkExit("[[a]] [[b]]", 5), null); // the space between
+});
+
+test("linkExit ignores plain text and fenced code blocks", () => {
+  assert.equal(linkExit("plain text", 3), null);
+  assert.equal(linkExit("```\n[[ky]]\n```\n", 6), null); // inside a fence
 });

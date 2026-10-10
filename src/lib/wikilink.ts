@@ -70,6 +70,44 @@ export function isLinkRevealed(
   return ranges.some((range) => range.from <= to && range.to >= from);
 }
 
+/**
+ * If `offset` sits strictly inside a `[[...]]` link (after the opening `[[`
+ * and before the closing `]]`, including the alias and heading parts, and the
+ * `!` of an embed), return the absolute offset just after the closing `]]`.
+ * Returns null at the very start of the link, after it, in plain text, or when
+ * the link is inside a fenced code block.
+ */
+export function linkExit(text: string, offset: number): number | null {
+  const lines = text.split("\n");
+  let start = 0;
+  let fence: string | null = null;
+  let targetLine: string | null = null;
+  let targetStart = 0;
+  for (const line of lines) {
+    const end = start + line.length;
+    if (offset >= start && offset <= end) {
+      targetLine = line;
+      targetStart = start;
+      break;
+    }
+    const trimmed = line.trim();
+    const opener = trimmed.match(/^(```|~~~)/);
+    if (opener) {
+      if (fence === null) fence = opener[1];
+      else if (fence === opener[1]) fence = null;
+    }
+    start = end + 1;
+  }
+  if (targetLine === null || fence !== null) return null;
+  const lineOffset = offset - targetStart;
+  for (const link of parseWikiLinks(targetLine)) {
+    if (lineOffset > link.from && lineOffset < link.to) {
+      return targetStart + link.to;
+    }
+  }
+  return null;
+}
+
 /** Strip inline formatting (bold, italic, code, links) from heading text. */
 function stripInline(text: string): string {
   return text

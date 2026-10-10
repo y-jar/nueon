@@ -9,6 +9,7 @@ import type { SyntaxNode } from "@lezer/common";
 
 import { generateTable, serializeTable } from "./table.ts";
 import { MARKDOWN_KEYBINDS } from "../keybindings.ts";
+import { linkExit } from "../wikilink.ts";
 
 /** Which inline/block formats apply at the cursor (drives toolbar highlights). */
 export interface FormatState {
@@ -484,6 +485,24 @@ export const insertWikiLink: Command = (view) => {
     selection: EditorSelection.cursor(main.from + 2 + text.length),
     scrollIntoView: true,
     userEvent: "input.format",
+  });
+  return true;
+};
+
+/**
+ * Enter inside a `[[...]]` link (or `![[...]]` embed) exits the link: the
+ * cursor jumps to just after the closing `]]` instead of inserting a newline.
+ * Returns false everywhere else so table/list/default Enter are unchanged.
+ * When the completion dropdown is open its `Prec.highest` Enter (accept) wins
+ * and this binding never runs.
+ */
+export const exitLinkCommand: Command = (view) => {
+  const to = linkExit(view.state.doc.toString(), view.state.selection.main.head);
+  if (to === null) return false;
+  view.dispatch({
+    selection: EditorSelection.cursor(to),
+    scrollIntoView: true,
+    userEvent: "select",
   });
   return true;
 };

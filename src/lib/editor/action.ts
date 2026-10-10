@@ -43,6 +43,7 @@ import type { WikiTarget } from "../wikilink";
 import {
   EMPTY_FORMAT,
   buildMarkdownKeymap,
+  exitLinkCommand,
   formatAt,
   type FormatState,
 } from "./commands";
@@ -193,6 +194,9 @@ export const codemirror: Action<HTMLElement, EditorParams> = (node, params) => {
     const inner: KeyBinding[] = [
       // Backspace deletes a bracket pair before plain char deletion.
       ...closeBracketsKeymap,
+      // Enter inside a [[...]] link exits it; falls through to the table and
+      // default Enter handlers when the cursor is not inside a link.
+      { key: "Enter", run: exitLinkCommand, preventDefault: true },
       // Table keys first: Enter must beat `defaultKeymap`, and Tab must beat
       // `indentWithTab`. Outside a table they return false.
       ...buildTableKeymap(resolved),
