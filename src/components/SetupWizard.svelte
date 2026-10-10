@@ -157,6 +157,12 @@
   }
 </script>
 
+<svelte:window
+  onkeydown={(e) => {
+    if (ui.setupWizardOpen && e.key === "Escape") closeSetupWizard();
+  }}
+/>
+
 {#if ui.setupWizardOpen}
   <div class="modal-overlay" role="presentation">
     <div class="modal setup-wizard" role="dialog" aria-modal="true" tabindex="-1">

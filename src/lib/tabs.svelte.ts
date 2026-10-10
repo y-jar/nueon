@@ -20,6 +20,11 @@ import { baseName, tr } from "./state.svelte";
 /** Per-group table-load generation, so a stale load cannot clobber a newer one. */
 const tableTickets = new Map<string, number>();
 
+/** Best-effort "recently opened" bookkeeping; a failed write is ignorable. */
+function recordRecent(entry: string): void {
+  void api.recentRecord(entry).catch(() => {});
+}
+
 export async function syncGroupTable(groupId: string): Promise<void> {
   const group = ui.groups.find((candidate) => candidate.id === groupId);
   const name = group?.doc.currentTable;
@@ -136,7 +141,7 @@ export async function openNote(
 ): Promise<void> {
   ui.activity = "notes";
   if (!opts?.force && revealExisting({ kind: "note", ref: path })) {
-    void api.recentRecord(`note:${path}`);
+    recordRecent(`note:${path}`);
     return;
   }
   const group = targetGroup(opts?.groupId);
@@ -147,7 +152,7 @@ export async function openNote(
     tab = { id: newId(), kind: "note", ref: path, title: baseName(path) };
     group.tabs = [...group.tabs, tab];
   }
-  void api.recentRecord(`note:${path}`);
+  recordRecent(`note:${path}`);
   await activateTab(group.id, tab.id);
 }
 
@@ -158,7 +163,7 @@ export async function openFile(
 ): Promise<void> {
   ui.activity = "notes";
   if (!opts?.force && revealExisting({ kind: "file", ref: path })) {
-    void api.recentRecord(`note:${path}`);
+    recordRecent(`note:${path}`);
     return;
   }
   const group = targetGroup(opts?.groupId);
@@ -169,7 +174,7 @@ export async function openFile(
     tab = { id: newId(), kind: "file", ref: path, title: baseName(path) };
     group.tabs = [...group.tabs, tab];
   }
-  void api.recentRecord(`note:${path}`);
+  recordRecent(`note:${path}`);
   await activateTab(group.id, tab.id);
 }
 
@@ -179,7 +184,7 @@ export async function openTable(
 ): Promise<void> {
   ui.activity = "dictionary";
   if (!opts?.force && revealExisting({ kind: "table", ref: name })) {
-    void api.recentRecord(`table:${name}`);
+    recordRecent(`table:${name}`);
     return;
   }
   const group = activeGroup();
@@ -190,7 +195,7 @@ export async function openTable(
     tab = { id: newId(), kind: "table", ref: name, title: name };
     group.tabs = [...group.tabs, tab];
   }
-  void api.recentRecord(`table:${name}`);
+  recordRecent(`table:${name}`);
   await activateTab(group.id, tab.id);
 }
 
