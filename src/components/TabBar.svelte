@@ -25,7 +25,6 @@
     type Tab,
     type TabGroup,
   } from "../lib/state.svelte";
-  import { uniqueNotePath } from "../lib/explorer";
 
   import { isMainWindow } from "../lib/window";
 
@@ -214,7 +213,7 @@
     class="tab-action tab-new"
     title={$t("tabs.newNote")}
     aria-label={$t("tabs.newNote")}
-    onclick={() => void createNote(uniqueNotePath(ui.tree), group.id)}
+    onclick={() => void createNote(undefined, group.id)}
   >
     <Plus size={16} />
   </button>

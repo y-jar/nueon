@@ -16,7 +16,6 @@
     refreshTables,
     selectTable,
   } from "../lib/state.svelte";
-  import { uniqueNotePath } from "../lib/explorer";
 
   let newTableName = $state("");
   let error = $state("");
@@ -26,7 +25,7 @@
   async function newNote() {
     error = "";
     try {
-      await createNote(uniqueNotePath(ui.tree));
+      await createNote();
     } catch (e) {
       error = String(e);
     }

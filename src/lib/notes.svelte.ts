@@ -1,7 +1,7 @@
 //! Note, folder and asset operations, and change/conflict handling.
 
 import * as api from "./api";
-import { isAssetPath, isNotePath, stripMd } from "./explorer";
+import { isAssetPath, isNotePath, stripMd, uniqueNotePath } from "./explorer";
 import { canMoveInto } from "./tiling";
 import { ui, type DocState } from "./store.svelte";
 import { flushNotes, quiesceNotes, resolveNoteConflict } from "./editor/action";
@@ -112,14 +112,24 @@ export async function selectTableInSplit(name: string): Promise<void> {
   await openInNewSplit("table", name, name);
 }
 
+/** Serialize note creation so two rapid `+` clicks make one note, not two. */
+let noteCreateInFlight = false;
+
 export async function createNote(
-  relPath: string,
+  relPath?: string,
   groupId?: string,
 ): Promise<void> {
-  // The backend appends `.md` to a bare name and returns the real path.
-  const created = await api.createNote(relPath);
-  await selectNote(created, groupId ? { groupId } : undefined);
-  ui.status = tr("status.created", { path: created });
+  if (noteCreateInFlight) return;
+  noteCreateInFlight = true;
+  try {
+    // Compute the free name here, after any in-flight create has been dropped,
+    // so a second click can never reuse the same path.
+    const created = await api.createNote(relPath ?? uniqueNotePath(ui.tree));
+    await selectNote(created, groupId ? { groupId } : undefined);
+    ui.status = tr("status.created", { path: created });
+  } finally {
+    noteCreateInFlight = false;
+  }
 }
 
 export async function createFolder(relPath: string): Promise<void> {

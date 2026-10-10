@@ -5707,6 +5707,45 @@ async function main() {
       throw new Error("middle-click on + changed the tabs");
     }
   });
+
+  // -- probe 95: two rapid + clicks make one note ----------------------------
+  await probe("95-tab-new-serialized", async () => {
+    await openActivity("Notes");
+    await collapsePanes();
+    await waitJs(`!!document.querySelector('.group-pane.active .tab-new')`, {
+      label: "new button",
+    });
+    await js(`
+      window.__rejections = [];
+      window.addEventListener('unhandledrejection', (e) => {
+        window.__rejections.push(String(e.reason));
+      });
+      return true;`);
+    const untitledCount = () =>
+      js(`return [...document.querySelectorAll('.tab-title')]
+            .filter((t) => /untitled/i.test(t.textContent.trim())).length;`);
+    const before = await untitledCount();
+    // Two synchronous clicks race the in-flight guard.
+    await js(`
+      const b = document.querySelector('.group-pane.active .tab-new');
+      b.click();
+      b.click();
+      return true;`);
+    await waitJs(
+      `[...document.querySelectorAll('.tab-title')]
+         .filter((t) => /untitled/i.test(t.textContent.trim())).length === ${before + 1}`,
+      { label: "one new untitled" },
+    );
+    await new Promise((resolve) => setTimeout(resolve, 400));
+    const after = await untitledCount();
+    const rejections = await js(`return window.__rejections ?? [];`);
+    if (after !== before + 1) {
+      throw new Error(`expected one new note, got ${after - before}`);
+    }
+    if (rejections.length) {
+      throw new Error(`unhandled rejections: ${JSON.stringify(rejections)}`);
+    }
+  });
 }
 
 try {
