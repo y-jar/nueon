@@ -5240,6 +5240,68 @@ async function main() {
       { label: "fixes morpheme listed" },
     );
   });
+
+  // -- probe 88: activating an off-screen tab reveals it ---------------------
+  await probe("88-tab-active-revealed", async () => {
+    await openActivity("Notes");
+    await waitJs(`!!document.querySelector('.tree-row[data-dir="false"] .tree-name')`, {
+      label: "note rows",
+    });
+    // Open every note so the strip overflows.
+    await js(`
+      const names = [...document.querySelectorAll('.tree-row[data-dir="false"] .tree-name')];
+      for (const n of names) n.click();
+      return names.length;`);
+    await waitJs(`document.querySelectorAll('.tab-strip .tab').length >= 8`, {
+      label: "many tabs",
+    });
+    // Reset to the start, then pick an inactive tab that is scrolled out.
+    const target = await js(`
+      const pane = document.querySelector('.group-pane.active') || document;
+      const strip = pane.querySelector('.tab-strip');
+      strip.scrollLeft = 0;
+      const sr = strip.getBoundingClientRect();
+      const tabs = [...strip.querySelectorAll('.tab')];
+      const active = strip.querySelector('.tab.active');
+      const off = tabs.find(
+        (t) => t !== active && t.getBoundingClientRect().right > sr.right + 1,
+      );
+      return off ? off.querySelector('.tab-title').textContent.trim() : null;`);
+    if (!target) throw new Error("no off-screen tab to activate");
+    // Activate it through its tree row: focus stays in the sidebar, so the
+    // browser does not auto-scroll the strip for us.
+    const clicked = await js(`
+      const name = [...document.querySelectorAll('.tree-row .tree-name')]
+        .find((x) => x.textContent.trim() === ${JSON.stringify(target)});
+      if (!name) return false;
+      name.click();
+      return true;`);
+    if (!clicked) throw new Error(`no tree row for ${target}`);
+    await new Promise((resolve) => setTimeout(resolve, 400));
+    const r = await js(`
+      const pane = document.querySelector('.group-pane.active') || document;
+      const strip = pane.querySelector('.tab-strip');
+      const active = strip.querySelector('.tab.active');
+      const sr = strip.getBoundingClientRect();
+      const ar = active.getBoundingClientRect();
+      const fully = ar.left >= sr.left - 1.5 && ar.right <= sr.right + 1.5;
+      const wide = ar.width >= sr.width;
+      const aligned =
+        Math.abs(ar.left - sr.left) <= 1.5 || Math.abs(ar.right - sr.right) <= 1.5;
+      return {
+        ok: fully || (wide && aligned),
+        fully,
+        aligned,
+        wide,
+        scrollLeft: strip.scrollLeft,
+        left: ar.left, right: ar.right, sleft: sr.left, sright: sr.right,
+        title: active.getAttribute('title'),
+      };`);
+    if (!r.ok) {
+      throw new Error(`active tab not revealed ${JSON.stringify(r)}`);
+    }
+    if (!r.title) throw new Error("active tab has no title tooltip");
+  });
 }
 
 try {

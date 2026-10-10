@@ -29,6 +29,27 @@
   let { group }: { group: TabGroup } = $props();
 
   let marker = $state<{ id: string; after: boolean } | null>(null);
+  let strip = $state<HTMLDivElement | null>(null);
+
+  // Keep the active tab within the visible strip when it changes: opening a
+  // note appends its tab at the end, and activating an off-screen tab should
+  // reveal it. Scroll only the strip, never its ancestors.
+  $effect(() => {
+    const id = group.activeTabId;
+    void group.tabs.length;
+    if (!strip || !id) return;
+    requestAnimationFrame(() => {
+      const el = strip?.querySelector<HTMLElement>(".tab.active");
+      if (!el || !strip) return;
+      const tabRect = el.getBoundingClientRect();
+      const stripRect = strip.getBoundingClientRect();
+      if (tabRect.left < stripRect.left) {
+        strip.scrollLeft += tabRect.left - stripRect.left;
+      } else if (tabRect.right > stripRect.right) {
+        strip.scrollLeft += tabRect.right - stripRect.right;
+      }
+    });
+  });
 
   function onDragStart(event: DragEvent, tab: Tab) {
     event.dataTransfer?.setData("text/plain", tab.id);
@@ -95,6 +116,7 @@
     class="tab-strip"
     role="tablist"
     tabindex="0"
+    bind:this={strip}
     ondragover={(e) => {
       if (!ui.dragTab) return;
       e.preventDefault();
@@ -116,6 +138,7 @@
         role="tab"
         tabindex="0"
         draggable="true"
+        title={tab.title}
         ondragstart={(e) => onDragStart(e, tab)}
         ondragend={onDragEnd}
         oncontextmenu={(e) => {
