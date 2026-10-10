@@ -387,6 +387,13 @@ textarea:focus {
   gap: 4px;
   min-height: 30px;
   overflow-x: auto;
+  scrollbar-width: none; /* Firefox: no horizontal scrollbar */
+}
+
+/* WebKit: hide the horizontal scrollbar so tabs can be dragged past the edge
+   without a scrollbar stealing the strip's bottom strip of pixels. */
+.tab-strip::-webkit-scrollbar {
+  display: none;
 }
 
 .tab {

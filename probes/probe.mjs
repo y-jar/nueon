@@ -5035,6 +5035,41 @@ async function main() {
       throw new Error(`cursor not after ]]: head=${after.head} length=${after.length}`);
     }
   });
+
+  // -- probe 84: tab strip scrolls but shows no horizontal scrollbar ---------
+  await probe("84-tab-strip-no-scrollbar", async () => {
+    await openActivity("Notes");
+    await waitJs(`!!document.querySelector('.tree-row[data-dir="false"] .tree-name')`, {
+      label: "note rows in tree",
+    });
+    // Open every note in the tree so the strip overflows horizontally.
+    const opened = await js(`
+      const names = [...document.querySelectorAll('.tree-row[data-dir="false"] .tree-name')];
+      for (const n of names) n.click();
+      return names.length;
+    `);
+    if (opened < 8) throw new Error(`only ${opened} note rows to open`);
+    await waitJs(`document.querySelectorAll('.tab-strip .tab').length >= 8`, {
+      label: "many tabs",
+    });
+    const r = await js(
+      `const el = document.querySelector('.tab-strip');
+       const cs = getComputedStyle(el);
+       return {
+         overflowX: cs.overflowX,
+         scrollbarWidth: cs.scrollbarWidth,
+         scrollWidth: el.scrollWidth,
+         clientWidth: el.clientWidth,
+         tabs: el.querySelectorAll('.tab').length,
+       };`,
+    );
+    if (!(r.scrollWidth > r.clientWidth)) {
+      throw new Error(`tab strip did not overflow: ${JSON.stringify(r)}`);
+    }
+    if (r.scrollbarWidth !== "none") {
+      throw new Error(`horizontal scrollbar visible (scrollbar-width=${r.scrollbarWidth})`);
+    }
+  });
 }
 
 try {
