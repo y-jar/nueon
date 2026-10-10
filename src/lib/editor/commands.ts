@@ -119,9 +119,11 @@ export function formatAt(state: EditorState): FormatState {
 
 /** Wrap, or unwrap, selections in Markdown emphasis marks. */
 function toggleEmphasis(nodeName: "StrongEmphasis" | "Emphasis", mark: string): Command {
+  const singleStar = mark === "*";
   return (view) => {
     const { state } = view;
     const transaction = state.changeByRange((range) => {
+      // Inside an emphasis node (syntax tree): unwrap it.
       const node = enclosing(state, range.from, [nodeName]);
       if (node && node.to >= range.to) {
         const marks = node.getChildren("EmphasisMark");
@@ -139,6 +141,26 @@ function toggleEmphasis(nodeName: "StrongEmphasis" | "Emphasis", mark: string): 
             range: EditorSelection.range(from, to),
           };
         }
+      }
+      // Markers sit right around the cursor/selection (parse-independent, so
+      // an empty `**` pair or an unparsed region still toggles off). For a
+      // single `*`, skip when it is part of a `**` strong pair.
+      const before = state.doc.sliceString(Math.max(0, range.from - mark.length), range.from);
+      const after = state.doc.sliceString(range.to, range.to + mark.length);
+      const insideStrong =
+        singleStar &&
+        (state.doc.sliceString(Math.max(0, range.from - 2), range.from - 1) === "*" ||
+          state.doc.sliceString(range.to + 1, range.to + 2) === "*");
+      if (before === mark && after === mark && !insideStrong) {
+        return {
+          changes: [
+            { from: range.from - mark.length, to: range.from },
+            { from: range.to, to: range.to + mark.length },
+          ],
+          range: range.empty
+            ? EditorSelection.cursor(range.from - mark.length)
+            : EditorSelection.range(range.from - mark.length, range.to - mark.length),
+        };
       }
       if (range.empty) {
         return {
@@ -419,10 +441,29 @@ export const insertHorizontalRule: Command = (view) => {
   return true;
 };
 
-/** Insert `[text](url)`, using the selection as the link text. */
+/** Insert `[text](url)`, or remove the link the cursor/selection is in. */
 export const insertLink: Command = (view) => {
   const { state } = view;
   const main = state.selection.main;
+
+  // Unlink: the cursor or selection sits inside a `[text](url)` link.
+  const line = state.doc.lineAt(main.from);
+  const link = /\[([^\]]+)\]\(([^)]+)\)/g;
+  let match: RegExpExecArray | null;
+  while ((match = link.exec(line.text))) {
+    const from = line.from + match.index;
+    const to = from + match[0].length;
+    if (main.from >= from && main.to <= to) {
+      view.dispatch({
+        changes: { from, to, insert: match[1] },
+        selection: EditorSelection.range(from, from + match[1].length),
+        scrollIntoView: true,
+        userEvent: "input.format",
+      });
+      return true;
+    }
+  }
+
   const text = main.empty ? "text" : state.doc.sliceString(main.from, main.to);
   const urlFrom = main.from + text.length + 3;
   view.dispatch({

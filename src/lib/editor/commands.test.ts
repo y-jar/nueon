@@ -8,7 +8,10 @@ import { GFM } from "@lezer/markdown";
 import {
   buildMarkdownKeymap,
   clearHeading,
+  insertLink,
   setHeading,
+  toggleBold,
+  toggleItalic,
   toggleStrikethrough,
 } from "./commands.ts";
 import { resolveKeybinds } from "../keybindings.ts";
@@ -147,4 +150,30 @@ test("one undo reverts a whole multi-line heading edit", () => {
   assert.notEqual(view.state.doc.toString(), before);
   assert.equal(undo(view), true);
   assert.equal(view.state.doc.toString(), before);
+});
+
+// -- emphasis toggles ---------------------------------------------------------
+
+test("bold toggles off an empty ** pair", () => {
+  const view = agent(state("****", 2));
+  assert.equal(toggleBold(view), true);
+  assert.equal(view.state.doc.toString(), "");
+});
+
+test("bold toggles off a **wrapped** selection", () => {
+  const view = agent(state("**text**", 2, 6));
+  assert.equal(toggleBold(view), true);
+  assert.equal(view.state.doc.toString(), "text");
+});
+
+test("italic toggles off a *wrapped* selection", () => {
+  const view = agent(state("*text*", 1, 5));
+  assert.equal(toggleItalic(view), true);
+  assert.equal(view.state.doc.toString(), "text");
+});
+
+test("insertLink unlinks a [label](url) at the cursor", () => {
+  const view = agent(state("see [dog](https://x) here", 6));
+  assert.equal(insertLink(view), true);
+  assert.equal(view.state.doc.toString(), "see dog here");
 });
