@@ -727,6 +727,39 @@ function seedWorkspace() {
       entries: bigEntries,
     }),
   );
+  // Tall (wrapped-pill) rows, for the scroll-jitter probe (72).
+  const propEntries = Array.from({ length: 200 }, (_, i) => {
+    const n = String(i).padStart(4, "0");
+    return {
+      id: `91000000-0000-4000-8000-${String(i).padStart(12, "0")}`,
+      wordname: `prop${n}`,
+      values: {
+        definition: {
+          type: "tag_list",
+          value: [
+            `a very long defining sense number ${n} that wraps across the cell`,
+            `another quite long sense for ${n} to make the row tall`,
+            `a third long sense for ${n} so the pills wrap onto more lines`,
+          ],
+        },
+      },
+    };
+  });
+  fs.writeFileSync(
+    path.join(WORKSPACE, "dictionary", "props"),
+    JSON.stringify({
+      name: "props",
+      tags: [
+        {
+          name: "wordname",
+          description: "The base conlang spelling.",
+          kind: "text",
+          builtin: true,
+        },
+      ],
+      entries: propEntries,
+    }),
+  );
   const lines = Array.from(
     { length: 120 },
     (_, i) => `line ${String(i + 1).padStart(3, "0")}`,
@@ -4190,6 +4223,74 @@ async function main() {
     const select = await topmost(".dict-grid th.select-col");
     if (!select.startsWith("TH|") || !select.includes("select-col")) {
       throw new Error(`select header not topmost (hit: ${select})`);
+    }
+  });
+
+  // -- probe 72: the virtualized grid does not drift while scrolling ----------
+  await probe("72-grid-scroll-jitter", async () => {
+    await openActivity("Dictionary");
+    await waitJs(`!!document.querySelector('.table-list')`, { label: "tables panel" });
+    const opened = await js(
+      `const b = [...document.querySelectorAll('.table-list .table-row .tree-name')]
+         .find((x) => x.textContent.trim().startsWith('props'));
+       if (b) b.click();
+       return !!b;`,
+    );
+    if (!opened) throw new Error("no 'props' table in the panel");
+    await waitJs(`!!document.querySelector('.dict-grid')`, { label: "props grid" });
+    await waitJs(
+      `document.querySelectorAll('.dict-grid tbody tr[data-index]').length > 0`,
+      { label: "rows rendered" },
+    );
+
+    // Tall rows really are taller than the estimate (else there is no jitter
+    // to measure).
+    const rowHeight = await js(
+      `const r = document.querySelector('.dict-grid tbody tr[data-index]');
+       return r ? Math.round(r.getBoundingClientRect().height) : 0;`,
+    );
+    if (rowHeight < 40) {
+      throw new Error(`seed rows are not tall (${rowHeight}px); can't test jitter`);
+    }
+
+    // The transient row-position drift did not reproduce reliably under the
+    // WebDriver harness (discrete programmatic scrolls settle between frames),
+    // so — as planned — assert the mechanism and a content-stability bound.
+    // (1) Scroll anchoring must be off, or the browser fights the spacers.
+    const anchor = await js(
+      `return getComputedStyle(document.querySelector('.grid-scroll')).overflowAnchor;`,
+    );
+    if (anchor !== "none") {
+      throw new Error(`grid scroll anchoring is '${anchor}', expected 'none'`);
+    }
+
+    // (2) The total content height must not climb as rows are measured. With
+    // the estimate tracking real row heights it stays near-constant; a fixed
+    // 30px estimate let it grow by thousands of px (the scrollbar/positions
+    // jumping under the user).
+    const top = await js(
+      `const s = document.querySelector('.grid-scroll');
+       s.scrollTop = 0;
+       s.dispatchEvent(new Event('scroll', { bubbles: true }));
+       return s.scrollHeight;`,
+    );
+    for (const target of [400, 900, 1600, 2500, 3600, 5000, 8000]) {
+      await js(
+        `const s = document.querySelector('.grid-scroll');
+         s.scrollTop = ${target};
+         s.dispatchEvent(new Event('scroll', { bubbles: true }));
+         return true;`,
+      );
+      await new Promise((resolve) => setTimeout(resolve, 120));
+    }
+    const bottom = await js(
+      `return document.querySelector('.grid-scroll').scrollHeight;`,
+    );
+    const growth = bottom - top;
+    if (growth > 1000) {
+      throw new Error(
+        `content height grew ${growth}px mid-scroll (top=${top}, bottom=${bottom})`,
+      );
     }
   });
 }

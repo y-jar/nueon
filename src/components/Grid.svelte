@@ -299,12 +299,18 @@
   // Window the rows: a dictionary can hold thousands, and rendering every
   // row as a live DOM node made scrolling crawl. `scrollMargin` is the sticky
   // header's height, so the window lines up with the body.
+  //
+  // `rowEstimate` tracks the real (often wrapped-pill) row height. A fixed
+  // estimate far below it made the total size climb mid-scroll as rows were
+  // measured — the scrollbar and positions jumped. Easing the estimate toward
+  // measured heights keeps the total stable without truncating cell content.
+  let rowEstimate = $state(44);
   const virtualizer = createVirtualizer<HTMLDivElement, HTMLElement>({
     // The real count is pushed in by the effect below, so this avoids
     // capturing a stale initial `rows`.
     count: 0,
     getScrollElement: () => gridScroll,
-    estimateSize: () => 30,
+    estimateSize: () => rowEstimate,
     overscan: 12,
     getItemKey: (index) => rows[index]?.id ?? index,
   });
@@ -340,6 +346,12 @@
 
   function measureRow(node: HTMLElement) {
     $virtualizer.measureElement(node);
+    const height = node.getBoundingClientRect().height;
+    // Ease the estimate toward the real height so wrapped rows stop shifting
+    // the total size; small deltas are ignored to avoid churn.
+    if (height > 0 && Math.abs(height - rowEstimate) > 4) {
+      rowEstimate = Math.round(rowEstimate + (height - rowEstimate) * 0.3);
+    }
   }
 
   function tagOf(name: string): api.TagDef | undefined {
