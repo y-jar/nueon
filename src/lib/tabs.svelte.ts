@@ -106,6 +106,17 @@ export async function activateTab(
 /** Whether `force` bypasses the reveal rule to open a deliberate duplicate. */
 interface OpenOptions {
   force?: boolean;
+  /** Open in this group instead of the active one (e.g. a pane's `+`). */
+  groupId?: string;
+}
+
+/** Resolve the target group for an open: `opts.groupId` or the active group. */
+function targetGroup(groupId?: string): TabGroup {
+  if (groupId) {
+    const found = ui.groups.find((candidate) => candidate.id === groupId);
+    if (found) return found;
+  }
+  return activeGroup();
 }
 
 /** Reveal a tab already open anywhere in this window; false if none. */
@@ -128,7 +139,7 @@ export async function openNote(
     void api.recentRecord(`note:${path}`);
     return;
   }
-  const group = activeGroup();
+  const group = targetGroup(opts?.groupId);
   let tab = opts?.force
     ? undefined
     : group.tabs.find((t) => t.kind === "note" && t.ref === path);
@@ -150,7 +161,7 @@ export async function openFile(
     void api.recentRecord(`note:${path}`);
     return;
   }
-  const group = activeGroup();
+  const group = targetGroup(opts?.groupId);
   let tab = opts?.force
     ? undefined
     : group.tabs.find((t) => t.kind === "file" && t.ref === path);

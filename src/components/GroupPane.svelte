@@ -83,6 +83,7 @@
   class:active={ui.activeGroupId === groupId}
   role="group"
   onpointerdown={() => setActiveGroup(groupId)}
+  onfocusin={() => setActiveGroup(groupId)}
 >
   <TabBar group={findGroup()} />
   <div

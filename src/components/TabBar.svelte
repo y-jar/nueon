@@ -212,7 +212,7 @@
     class="tab-action tab-new"
     title={$t("tabs.newNote")}
     aria-label={$t("tabs.newNote")}
-    onclick={() => void createNote(uniqueNotePath(ui.tree))}
+    onclick={() => void createNote(uniqueNotePath(ui.tree), group.id)}
   >
     <Plus size={16} />
   </button>

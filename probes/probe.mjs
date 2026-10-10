@@ -5552,6 +5552,91 @@ async function main() {
       { label: "untitled tab" },
     );
   });
+
+  // -- probe 93: the + opens a note in its own pane --------------------------
+  await probe("93-tab-new-own-pane", async () => {
+    await openActivity("Notes");
+    await collapsePanes();
+    await openNote("type.md");
+    await openNote("links.md");
+    await waitJs(`document.querySelectorAll('.group-pane.active .tab-strip .tab').length >= 2`, {
+      label: "tabs",
+    });
+    // Split the pane in two via the tab context menu.
+    await js(`
+      const p = document.querySelector('.group-pane.active') || document;
+      p.querySelector('.tab.active').dispatchEvent(new MouseEvent('contextmenu',
+        { bubbles: true, cancelable: true, clientX: 60, clientY: 60 }));
+      return true;`);
+    await waitJs(`!!document.querySelector('.ctx-menu')`, { label: "tab menu" });
+    await js(`
+      const b = [...document.querySelectorAll('.ctx-menu button')]
+        .find((x) => x.textContent.trim() === 'Open in new split');
+      if (b) b.click();
+      return !!b;`);
+    await waitJs(`document.querySelectorAll('.group-pane').length >= 2`, {
+      label: "two panes",
+    });
+    const counts = await js(`
+      const panes = [...document.querySelectorAll('.group-pane')];
+      const active = document.querySelector('.group-pane.active');
+      return panes.map((p) => ({
+        active: p === active,
+        count: p.querySelectorAll('.tab-strip .tab').length,
+      }));`);
+    const activeCount = counts.find((c) => c.active).count;
+    const otherCount = counts.find((c) => !c.active).count;
+
+    // Programmatic click on the non-active pane's + (no pointerdown/focusin),
+    // so only the threaded groupId can steer the note.
+    const clicked = await js(`
+      const panes = [...document.querySelectorAll('.group-pane')];
+      const active = document.querySelector('.group-pane.active');
+      const other = panes.find((p) => p !== active);
+      const plus = other.querySelector('.tab-new');
+      if (!plus) return false;
+      plus.click();
+      return true;`);
+    if (!clicked) throw new Error("no + in the non-active pane");
+    await waitJs(
+      `[...document.querySelectorAll('.group-pane.active .tab-title')]
+         .some((t) => /untitled/i.test(t.textContent))`,
+      { label: "untitled in clicked pane" },
+    );
+    const after = await js(`
+      const panes = [...document.querySelectorAll('.group-pane')];
+      const active = document.querySelector('.group-pane.active');
+      return panes.map((p) => ({
+        active: p === active,
+        count: p.querySelectorAll('.tab-strip .tab').length,
+        untitled: [...p.querySelectorAll('.tab-title')].some((t) => /untitled/i.test(t.textContent)),
+      }));`);
+    const newActive = after.find((p) => p.active);
+    const newOther = after.find((p) => !p.active);
+    if (!newActive.untitled) throw new Error("untitled note did not open in the clicked pane");
+    if (newActive.count !== otherCount + 1) {
+      throw new Error(`clicked pane count wrong (${newActive.count} vs ${otherCount + 1})`);
+    }
+    if (newOther.count !== activeCount) {
+      throw new Error(`other pane was touched (${newOther.count} vs ${activeCount})`);
+    }
+
+    // Focusin: focusing the + in a non-active pane makes that pane active.
+    const focused = await js(`
+      const panes = [...document.querySelectorAll('.group-pane')];
+      const active = document.querySelector('.group-pane.active');
+      const other = panes.find((p) => p !== active);
+      const plus = other.querySelector('.tab-new');
+      if (!plus) return false;
+      plus.focus();
+      return true;`);
+    if (!focused) throw new Error("no + to focus in the non-active pane");
+    await new Promise((resolve) => setTimeout(resolve, 100));
+    const focusActive = await js(`
+      const plus = document.querySelector('.group-pane.active .tab-new');
+      return !!plus && document.activeElement === plus;`);
+    if (!focusActive) throw new Error("focusing the + did not make its pane active");
+  });
 }
 
 try {

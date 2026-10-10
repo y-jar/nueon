@@ -85,7 +85,7 @@ export async function resolveConflict(
 
 export async function selectNote(
   path: string,
-  opts?: { force?: boolean },
+  opts?: { force?: boolean; groupId?: string },
 ): Promise<void> {
   // Markdown/text opens in the editor; anything else (and anything under
   // `notes/assets/`) opens in the viewer.
@@ -112,10 +112,13 @@ export async function selectTableInSplit(name: string): Promise<void> {
   await openInNewSplit("table", name, name);
 }
 
-export async function createNote(relPath: string): Promise<void> {
+export async function createNote(
+  relPath: string,
+  groupId?: string,
+): Promise<void> {
   // The backend appends `.md` to a bare name and returns the real path.
   const created = await api.createNote(relPath);
-  await selectNote(created);
+  await selectNote(created, groupId ? { groupId } : undefined);
   ui.status = tr("status.created", { path: created });
 }
 
