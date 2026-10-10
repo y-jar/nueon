@@ -83,6 +83,22 @@ export const theme = EditorView.theme(
       color: "var(--muted)",
       borderBottom: "none",
     },
+    // Completion dropdown: the base theme paints the selected row indigo with
+    // white text, and our own editor.css re-colours the label to the dark
+    // panel colour — dark text on indigo. Override it with a soft accent-tinted
+    // background, readable text, and a 2px left accent bar.
+    ".cm-tooltip.cm-tooltip-autocomplete > ul > li[aria-selected]": {
+      background: "color-mix(in srgb, var(--accent) 22%, var(--panel))",
+      color: "var(--text)",
+      boxShadow: "inset 2px 0 0 var(--accent)",
+    },
+    ".cm-tooltip.cm-tooltip-autocomplete > ul > li[aria-selected] .cm-completionLabel":
+      { color: "var(--text)" },
+    ".cm-tooltip.cm-tooltip-autocomplete > ul > li[aria-selected] .cm-completionDetail":
+      { color: "var(--muted)" },
+    ".cm-tooltip.cm-tooltip-autocomplete > ul > li:hover:not([aria-selected])": {
+      background: "rgba(255, 255, 255, 0.05)",
+    },
   },
   { dark: true },
 );

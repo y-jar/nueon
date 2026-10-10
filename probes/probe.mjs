@@ -5070,6 +5070,74 @@ async function main() {
       throw new Error(`horizontal scrollbar visible (scrollbar-width=${r.scrollbarWidth})`);
     }
   });
+
+  // -- probe 85: selected completion row is readable ------------------------
+  await probe("85-completion-selection-contrast", async () => {
+    await openActivity("Notes");
+    await openNote("type.md");
+    await waitJs(`!!document.querySelector('.cm-host[data-note="type.md"] .cm-content')`, {
+      label: "type editor",
+    });
+    await focusEditor("type.md");
+    await js(`${viewScript("type.md")}
+      v.dispatch({
+        changes: { from: 0, insert: "[[" },
+        selection: { anchor: 2 },
+        userEvent: "input.type",
+      });
+      return v.state.doc.toString();`);
+    await waitJs(
+      `!!document.querySelector('.cm-tooltip-autocomplete ul li[aria-selected]')`,
+      { label: "selected row" },
+    );
+    const contrast = await js(`
+      const rgba = (s) => {
+        const fn = s.match(/^color\\(srgb\\s+([\\d.]+)\\s+([\\d.]+)\\s+([\\d.]+)/);
+        if (fn) return [fn[1] * 255, fn[2] * 255, fn[3] * 255, 1];
+        const m = s.match(/^rgba?\\(([^)]+)\\)$/);
+        if (m) return m[1].split(',').map((x) => parseFloat(x.trim()));
+        let h = s.replace('#', '');
+        if (h.length === 3 || h.length === 4) h = h.split('').map((c) => c + c).join('');
+        return [
+          parseInt(h.slice(0, 2), 16),
+          parseInt(h.slice(2, 4), 16),
+          parseInt(h.slice(4, 6), 16),
+          h.length >= 8 ? parseInt(h.slice(6, 8), 16) / 255 : 1,
+        ];
+      };
+      const lum = (c) => {
+        const f = (v) => { v /= 255; return v <= 0.03928 ? v / 12.92 : Math.pow((v + 0.055) / 1.055, 2.4); };
+        return 0.2126 * f(c[0]) + 0.7152 * f(c[1]) + 0.0722 * f(c[2]);
+      };
+      const ratio = (a, b) => {
+        const l1 = lum(a), l2 = lum(b);
+        const hi = Math.max(l1, l2), lo = Math.min(l1, l2);
+        return (hi + 0.05) / (lo + 0.05);
+      };
+      const li = document.querySelector('.cm-tooltip-autocomplete ul li[aria-selected]');
+      const label = li.querySelector('.cm-completionLabel');
+      const detail = li.querySelector('.cm-completionDetail');
+      const bg = rgba(getComputedStyle(li).backgroundColor);
+      const labelColor = rgba(getComputedStyle(label).color);
+      const detailColor = rgba(getComputedStyle(detail).color);
+      return {
+        bg: getComputedStyle(li).backgroundColor,
+        label: getComputedStyle(label).color,
+        detail: getComputedStyle(detail).color,
+        labelContrast: Math.round(ratio(labelColor, bg) * 100) / 100,
+        detailContrast: Math.round(ratio(detailColor, bg) * 100) / 100,
+      };`);
+    if (contrast.labelContrast < 4.5) {
+      throw new Error(
+        `selected label contrast too low (${contrast.labelContrast}:1, ${contrast.label} on ${contrast.bg})`,
+      );
+    }
+    if (contrast.detailContrast < 3) {
+      throw new Error(
+        `selected detail contrast too low (${contrast.detailContrast}:1, ${contrast.detail} on ${contrast.bg})`,
+      );
+    }
+  });
 }
 
 try {
