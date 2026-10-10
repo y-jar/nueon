@@ -906,6 +906,29 @@ async function openNote(notePath) {
   );
 }
 
+/** Collapse every split pane down to one full-width pane (via Close pane). */
+async function collapsePanes() {
+  for (let i = 0; i < 8; i += 1) {
+    const count = await js(`return document.querySelectorAll('.group-pane').length;`);
+    if (count <= 1) return;
+    const ok = await js(`
+      const pane = [...document.querySelectorAll('.group-pane')]
+        .find((p) => p.querySelector('.tab'));
+      if (!pane) return false;
+      pane.querySelector('.tab').dispatchEvent(new MouseEvent('contextmenu',
+        { bubbles: true, cancelable: true, clientX: 60, clientY: 60 }));
+      return true;`);
+    if (!ok) return;
+    await waitJs(`!!document.querySelector('.ctx-menu')`, { label: "pane menu" });
+    await js(`
+      const b = [...document.querySelectorAll('.ctx-menu button')]
+        .find((x) => x.textContent.trim() === 'Close pane');
+      if (b) b.click();
+      return !!b;`);
+    await new Promise((resolve) => setTimeout(resolve, 200));
+  }
+}
+
 /**
  * Nudge the app into a `reloadOpenNotes` pass without touching the open
  * note: creating a folder emits `data-changed` (scope "notes") from the
@@ -5431,6 +5454,7 @@ async function main() {
           return !!b;`);
 
     await openActivity("Notes");
+    await collapsePanes();
     await waitJs(`!!document.querySelector('.tree-row[data-dir="false"] .tree-name')`, {
       label: "note rows",
     });
@@ -5448,7 +5472,9 @@ async function main() {
       `return [...document.querySelectorAll('.ctx-menu button')].map((b) => b.textContent.trim());`,
     );
     if (!items.includes("Close others")) throw new Error(`no Close others: ${items}`);
-    if (!items.includes("Close all")) throw new Error(`no Close all: ${items}`);
+    if (!items.includes("Close all in this pane")) {
+      throw new Error(`no Close all in this pane: ${items}`);
+    }
     if (!(await clickItem("Close others"))) throw new Error("could not click Close others");
     await new Promise((resolve) => setTimeout(resolve, 200));
     const others = await js(
@@ -5461,16 +5487,46 @@ async function main() {
       throw new Error(`Close others kept the wrong tab (${kept} -> ${others.title})`);
     }
 
+    // Split into two panes, then Close all in this pane empties only that pane
+    // and prunes it, leaving the other pane's tabs untouched.
     await openMany();
     await waitJs(`document.querySelectorAll('.group-pane.active .tab-strip .tab').length >= 3`, {
       label: "tabs again",
     });
     await openMenu();
-    await waitJs(`!!document.querySelector('.ctx-menu')`, { label: "tab menu 2" });
-    if (!(await clickItem("Close all"))) throw new Error("could not click Close all");
+    await waitJs(`!!document.querySelector('.ctx-menu')`, { label: "tab menu split" });
+    if (!(await clickItem("Open in new split"))) throw new Error("no Open in new split");
+    await waitJs(`document.querySelectorAll('.group-pane').length >= 2`, {
+      label: "two panes",
+    });
+    const otherTitles = await js(`
+      const panes = [...document.querySelectorAll('.group-pane')];
+      const active = document.querySelector('.group-pane.active');
+      const other = panes.find((p) => p !== active);
+      return other
+        ? [...other.querySelectorAll('.tab-title')].map((t) => t.textContent.trim()).sort()
+        : null;`);
+    if (!otherTitles || otherTitles.length < 1) throw new Error("other pane has no tabs");
+    await openMenu();
+    await waitJs(`!!document.querySelector('.ctx-menu')`, { label: "tab menu close-all" });
+    if (!(await clickItem("Close all in this pane"))) {
+      throw new Error("no Close all in this pane item");
+    }
     await new Promise((resolve) => setTimeout(resolve, 200));
-    const total = await js(`return document.querySelectorAll('.tab-strip .tab').length;`);
-    if (total !== 0) throw new Error(`Close all left ${total} tabs`);
+    const after = await js(`
+      const panes = [...document.querySelectorAll('.group-pane')];
+      return {
+        count: panes.length,
+        titles: panes.length
+          ? [...panes[0].querySelectorAll('.tab-title')].map((t) => t.textContent.trim()).sort()
+          : [],
+      };`);
+    if (after.count !== 1) throw new Error(`Close all in this pane left ${after.count} panes`);
+    if (JSON.stringify(after.titles) !== JSON.stringify(otherTitles)) {
+      throw new Error(
+        `other pane's tabs were touched: ${JSON.stringify(after.titles)} vs ${JSON.stringify(otherTitles)}`,
+      );
+    }
   });
 
   // -- probe 92: the new-tab button opens a note -----------------------------

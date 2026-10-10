@@ -19,7 +19,7 @@
     collapseAll,
     closeTab,
     closeOtherTabs,
-    closeAllTabs,
+    closePaneTabs,
     closePane,
     moveTabToNewWindow,
     getContextEditor,
@@ -332,9 +332,10 @@
       >
       <button
         onclick={() => {
+          const { groupId } = menu.tab!;
           closeContextMenu();
-          closeAllTabs();
-        }}>{$t("tabs.closeAll")}</button
+          closePaneTabs(groupId);
+        }}>{$t("tabs.closeAllInPane")}</button
       >
       <button
         onclick={() => {

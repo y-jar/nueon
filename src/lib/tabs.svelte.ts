@@ -285,12 +285,16 @@ export function reorderTabs(groupId: string, items: Tab[]): void {
   if (group) group.tabs = [...items];
 }
 
-export function closeAllTabs(): void {
-  for (const group of ui.groups) {
-    group.tabs = [];
-    group.activeTabId = null;
-    clearDoc(group.doc);
-  }
+/** Close every tab in `groupId`, then prune the pane if others remain. */
+export function closePaneTabs(groupId: string): void {
+  const group = ui.groups.find((candidate) => candidate.id === groupId);
+  if (!group) return;
+  group.tabs = [];
+  group.activeTabId = null;
+  clearDoc(group.doc);
+  // The same path closing the last tab uses: a pane that empties is removed
+  // when other panes remain, and left as the normal empty state otherwise.
+  pruneGroupIfEmpty(group);
 }
 
 /** Rename a table, keeping every open tab in sync. */

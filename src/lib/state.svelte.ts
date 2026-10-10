@@ -27,9 +27,9 @@ export {
 } from "./data.svelte";
 export {
   activateTab,
-  closeAllTabs,
   closeOtherTabs,
   closePane,
+  closePaneTabs,
   closeTab,
   cycleTab,
   deleteTable,
