@@ -1,105 +1,156 @@
+# Project Specification Document — nueon
 
-## Project Specification Document (PSD): Conlang Management & Translation Engine (v2)
+The **living specification**: what the app is and does *now*, kept in sync with
+the code. The original design brief is archived at `docs/history/PSD-v2.md`.
 
-> Implementation status: this is the original design brief. Most of it is
-> shipped. The dynamic schema, hidden UUIDs, live-preview editor, dictionary
-> search, misspelling guard, etymology and dependency handling, translation
-> grid, inspector and packaging all exist. Tables and config are stored as
-> plain extensionless JSON files (`dictionary/lex`, `config/translation`), as
-> described here. The translation engine is clause-level, not sentence-level.
+Rules:
 
-### 1. Data Structure & Schema Design
+- Each feature lists its **behaviour**, the **data** it touches, its
+  **invariants**, **where it lives**, and **how it is proved** (a probe in
+  `probes/probe.mjs`, a node test in `src/lib/**/*.test.ts`, or a cargo test in
+  `crates/**`).
+- Any stage that changes behaviour updates this document and the proof column in
+  the same commit. The gate `scripts/check-headers.sh` keeps the per-file headers
+  (and therefore `docs/MAP.md`) current; this document keeps the *why* current.
 
-Instead of forcing a rigid linguistic structure, the application will use a highly dynamic schema.
+## What it is
 
-* **Dynamic Data Model:** The only universally required field for any entry is the `wordname` (the base value). All other fields, tags, and categories (e.g., transitivity, gender, locational rules, formality) are entirely user-defined. Users create their own classification systems, and the application dynamically adapts its UI to these custom fields.
-* **Homograph Handling (Identical Words):** To support multiple words with the exact same spelling or script, the underlying database will assign a hidden Unique Identifier (UUID) to every entry upon creation. To the user, the words appear identical in the list, but internally, the database treats them as distinct entities. Optionally, the UI can append a subtle index number (e.g., *word¹*, *word²*) in editor views to help the user distinguish them during bulk edits.
-* **Extensionless File Storage:** Dictionary tables and config are saved locally as plain, extensionless files (e.g., `Roots` rather than `Roots.json`) within the user-designated workspace directory, keeping the file tree visually clean while remaining fully readable by the underlying Rust engine. Notes are Markdown files (`.md`).
+A single-user conlang workspace app. A workspace is a plain folder holding:
 
-### 2. Core Application Modules
+- `notes/` — Markdown notes (`.md`) and other files (images, PDFs).
+- `dictionary/` — one extensionless JSON file per word table.
+- `config/` — extensionless JSON for grammar, translation, morphology, phonology.
 
-#### A. Live-Preview Markdown Editor (The Notes View)
+Three tiers: `nueon-core` (Rust, no I/O beyond files + git CLI), the Tauri IPC
+layer (`src-tauri/`), and the Svelte 5 frontend (`src/`). See `docs/ARCHITECTURE.md`.
 
-* **Obsidian-Style Rendering:** The editor functions as a single, unified view rather than a split-pane "code vs. preview" setup. Text is rendered as rich formatting (headers, bold, italics) natively on the screen.
-* **Cursor Reveal Mechanic:** When the user clicks into or moves their cursor over a rendered element (like a header), that specific line seamlessly reverts to raw text, revealing the underlying Markdown syntax (e.g., `###`). Moving the cursor away instantly re-renders it.
-* **Database Integration:** The editor can recognize and interact with words stored in the dictionary, potentially highlighting them or allowing hover-previews of their definitions.
+---
 
-#### B. The Dictionary Explorer & Database Menu
+## Workspace & storage
 
-* **Dual-Layer Search System:**
-* *Global Search:* Scans the entire dictionary database across all files and categories simultaneously.
-* *Specific Search:* Allows the user to narrow the query to a specific user-defined tag, category, or field (e.g., searching only within words marked as "Favorite", or searching purely by "definition").
+- **Behaviour.** Open/create a workspace; the file tree is shown in the sidebar.
+  Everything is plain files under one folder so it is versionable and portable.
+- **Data.** `dictionary/<table>`, `config/<name>`, `notes/**`. A `config.toml`
+  registry (outside the workspace) remembers workspaces.
+- **Invariants.** All writes are atomic; paths never escape the workspace root.
+- **Where.** `crates/nueon-core/src/workspace/storage.rs`, `src/lib/data.svelte.ts`.
+- **Proof.** cargo `storage`/`workspace` tests; probe 32 (setup wizard).
 
+## Notes editor
 
-* **Dynamic Sorting:** Users can click to sort the database grid by `wordname` or by any of their custom-created categories and tags.
-* **Misspelling Guard:** When a user is filling out the English definition fields, the app checks input against a standard dependency dictionary. If it detects a typo, it prompts a correction. This guard is strictly disabled for the conlang `wordname` fields.
+- **Behaviour.** Obsidian-style live preview: a single CodeMirror 6 view renders
+  headings, bold/italic, links, code; GFM tables, task lists, footnotes; KaTeX
+  math and HTML blocks render but reveal raw text under the cursor. `[[...]]`
+  links highlight, follow on Ctrl/Cmd+click, and rewrite on rename.
+- **Data.** `notes/<path>.md`; the dictionary word index for highlighting.
+- **Invariants.** Autosave is debounced and never writes a stale buffer over a
+  file that changed on disk (conflict detection).
+- **Where.** `src/lib/editor/*`, `src/components/Editor.svelte`.
+- **Proof.** probes 1–15, 35, 76–83; node `editor/*.test.ts`.
 
-#### C. Etymology & Derivation Engine
+## Dictionary
 
-* **Dynamic Linking:** Users can assign a "Root/Parent" tag to a new word, permanently linking it to an existing base word in the database to track how words evolve or derive from one another.
-* **Dependency Warning System:** If a user attempts to edit or delete a root word that other words depend on, the application intercepts the action and displays a warning detailing how many generated words are derived from it.
-* **Resolution Options:** The interceptor provides four distinct choices:
-1. *Cancel:* Aborts the edit entirely.
-2. *Auto-Convert (Risky):* Automatically applies the spelling or structural change down the derivation tree to all child words.
-3. *Manual Convert:* Opens a dedicated bulk-editor menu, listing every dependent word so the user can manually adjust each one sequentially.
-4. *Continue Anyway:* Applies the change to the root word only. The child words remain visually unchanged but maintain their internal link to the newly edited parent word.
+- **Behaviour.** One grid per table with virtualized rows, sort/filter/hide per
+  column, rich cell editors (tag pills, references, suggestions), multi-select
+  and bulk edit, and a per-column context menu (sort, hide, change type, delete).
+- **Data.** `dictionary/<table>`; each entry has a hidden UUID, a required
+  `wordname`, and user-defined tags.
+- **Invariants.** The UUID is stable across renames/re-imports; deleting a word
+  with dependents prompts before acting.
+- **Where.** `crates/nueon-core/src/model/dictionary.rs`, `src/components/Grid.svelte`.
+- **Proof.** probes 29–31, 43–48, 56, 71–72, 96–97; cargo `model` tests.
 
+## Etymology & derivation
 
+- **Behaviour.** A word links to parents (roots); an inspector graph shows
+  ancestors/descendants; deleting/editing a root warns and offers auto/manual
+  convert or continue.
+- **Data.** `parent` tag (a list of UUID references) on each entry.
+- **Where.** `crates/nueon-core/src/model/derive*`, `src/components/DerivationGraph.svelte`.
+- **Proof.** probe 48; cargo `derive` tests.
 
-#### D. Visual Translation & Syntax Builder
+## Translation engine
 
-* **The Translation Grid:** Instead of a simple text box, the translation menu opens with an empty, drag-and-drop grid representing a sentence structure.
-* **Clause Construction:** The user drags their custom tags (e.g., "Subject", "Locational Noun", "Verb", "Particle") into the grid slots to define exactly how a sentence should be structured in their specific conlang. They can also define spaces for "between-word" rules.
-* **Translation Execution:** Once the grid logic is set, the user inputs an English sentence. The app breaks the English sentence down, finds the conlang equivalents in the database, and maps them directly into the visual grid based on the user's dragged-and-dropped rules.
-* **Conflict & Missing Word Handling:** If an English word has multiple distinct conlang translations (due to the homograph system), the app flags that grid slot, requiring the user to select the correct contextual meaning. If a word is missing entirely, it highlights the gap, allowing the user to immediately create a new database entry from the translation menu.
+- **Behaviour.** Clause-level: a drag-and-drop grid of tagged slots describes
+  word order; an English sentence maps onto it via the dictionary, with a
+  conflict picker for homographs and a gap for missing words.
+- **Data.** `config/grammar` (rules), `config/translation` (settings, grids,
+  affixes, table roles, morphology).
+- **Where.** `crates/nueon-core/src/model/translate/`, `src/components/translation/`.
+- **Proof.** probes 22–27; cargo `translate` tests.
 
----------------------------------------------------------------------------------------------
+## Morphology
 
-## Looks
+- **Behaviour.** Fixes tables supply morphemes; ordered multi-slot affixes and
+  feature/slot paradigms inflect words; a Compose builder combines roots; a
+  preview shows the result before saving.
+- **Data.** `config/translation.morphology`, `dictionary/<fixes table>`.
+- **Where.** `crates/nueon-core/src/model/morphology*`, `src/lib/morphology.svelte.ts`.
+- **Proof.** probes 57–70; cargo `morphology` tests.
 
-Here is a layout and navigation flow designed for efficiency, prioritizing a clean, native Linux feel with support for keyboard-centric navigation and tiling window environments.
+## Phonology
 
-## UI Layout & Architecture
+- **Behaviour.** An IPA chart and a sound-change engine (ordered rules with
+  find/replace, applied to a preview word and optionally to a whole table).
+- **Data.** `config/phonology`.
+- **Where.** `crates/nueon-core/src/model/phonology*`, `src/components/PhonologyView.svelte`.
+- **Proof.** probe 79; cargo `phonology` tests.
 
-The interface utilizes a modular, three-pane layout (Sidebar, Main Workspace, Inspector), allowing users to view their notes, database, and word relationships simultaneously without overlapping windows.
+## Import & export
 
-### 1. The Global Command & Search Bar (Top)
+- **Behaviour.** Import CSV/TSV/JSON into a table with column mapping; export a
+  table to CSV/TSV/JSON or Anki; notes to PDF/ODT; the whole workspace/profile as
+  a zip (and restore it).
+- **Where.** `crates/nueon-core/src/import.rs`, `export.rs`; `src/components/import/`.
+- **Proof.** probes 40, 56; cargo `import`/`export` tests.
 
-* **Omni-Search:** A unified search bar anchored at the top. Typing here triggers the dual-layer search:
-* Typing normally executes a global text search across all notes and dictionary entries.
-* Using a prefix (e.g., `tag:verb` or `def:run`) isolates the search to specific user-defined fields.
+## Version control
 
+- **Behaviour.** Opt-in git in the workspace: idle auto check-in, status, diff,
+  history and commit from the Source Control panel; remotes/push are deferred.
+- **Where.** `crates/nueon-core/src/workspace/vcs*`, `src/components/GitPanel.svelte`.
+- **Proof.** probe 37; cargo `vcs` tests.
 
-* **Quick Actions:** Keyboard shortcuts (e.g., `Ctrl+K`) focus this bar to quickly jump between files, add a new word, or launch the translation engine.
+## Tabs, splits & windows
 
-### 2. The Left Navigation Sidebar (Collapsible)
+- **Behaviour.** Per-pane tab groups with drag-to-reorder/split, torn-off
+  secondary windows, persisted layout. Tabs reveal on activate, expose a title
+  tooltip, `aria-selected` + roving tabindex with arrow/Home/End navigation,
+  `Ctrl+Tab`/`Ctrl+PageDown`/`Ctrl+PageUp` cycling, middle-click and
+  close-others/close-all-in-pane, and a `+` new-note button.
+- **Where.** `src/lib/tabs.svelte.ts`, `layout.svelte.ts`, `src/components/TabBar.svelte`.
+- **Proof.** probes 84–95; node `tabs.test.ts`, `tiling.test.ts`.
 
-* **Workspace Tree:** Displays the user's Markdown note files organized by folders (e.g., `Grammar/`, `Culture/`).
-* **Dictionary Categories:** A dynamic list populated by the user's custom categories (Nouns, Verbs, Particles). Clicking one opens that specific database grid in the Main Workspace.
-* **Translation Presets:** Saved drag-and-drop syntax grids (e.g., "Standard SVO", "Question Form") for quick access.
+## Command palette
 
-### 3. The Main Workspace (Tabbed Center Pane)
+- **Behaviour.** `Ctrl+P` opens a palette listing recent notes and tables with
+  quick actions.
+- **Where.** `src/components/CommandPalette.svelte`.
+- **Proof.** probe 80.
 
-This is the core working area. It supports a tabbed interface so users can quickly switch between editing a note and checking the dictionary.
+## Settings
 
-* **When viewing Notes:** The pane becomes the Obsidian-style unified editor. It is clean and distraction-free, with the markdown syntax revealing itself only under the active cursor.
-* **When viewing the Dictionary:** The pane transforms into a data grid (similar to a spreadsheet). Columns represent user-defined tags. Users can right-click column headers to sort, hide, or filter.
-* **When viewing the Translation Engine:** The pane splits horizontally.
-* *Top Half (The Builder):* The empty grid where users drag and drop their custom grammatical tags to form clause structures.
-* *Bottom Half (The Execution):* A text input box for English, a dedicated output box for the conlang, and a conflict-resolution space if a word has multiple meanings.
+- **Behaviour.** Language metadata, table roles, translator linting, and editable
+  keybinds (with capture and reserved-combo refusal).
+- **Where.** `src/components/Settings.svelte`, `src/lib/keybindings.ts`.
+- **Proof.** probes 29, 33–34, 36, 42; node `keybindings.test.ts`.
 
+## Wiki links
 
+- **Behaviour.** `[[target]]`, `[[target|alias]]`, `[[target#heading]]` and `!`
+  embeds; a ranked autocomplete (words and notes, Fixes ranked below vocab);
+  brackets hide until the cursor touches them; a `Mod+Shift+L` keybind wraps a
+  selection; `Enter` exits a link.
+- **Where.** `src/lib/wikilink.ts`, `src/lib/editor/wikiLinks.ts`.
+- **Proof.** probes 76–87; node `wikilink.test.ts`, `editor/wikiLinks*.test.ts`.
 
-### 4. The Context Inspector (Right Sidebar)
+## Internationalization
 
-This pane dynamically changes based on what is selected in the Main Workspace.
+- **Behaviour.** All chrome strings come from `src/locales/en.json` via
+  svelte-i18n; the language is a workspace setting.
+- **Where.** `src/lib/i18n.ts`, `src/locales/`.
+- **Proof.** (no automated proof — noted gap.)
 
-* **Dictionary Context:** When a word is clicked in the database grid, this panel displays its full entry, allowing rapid editing without opening a separate window.
-* **Etymology Visualizer:** If a word has a "Root/Parent" tag, this panel draws a visual tree showing the parent word and all other generated child words derived from it. This is where the user manages the "Dependency Warning" bulk-edits.
-* **Notes Context:** When typing in the Notes editor, selecting a conlang word opens its definition and tags in this panel for quick reference.
+## Scripting (design only)
 
-## Navigation & Aesthetic Flow
-
-* **Keyboard Navigation:** Built with Linux power-users in mind, every major pane and action is accessible via keyboard shortcuts, minimizing the need to drag the mouse back and forth.
-* **Visual Theme:** To reduce eye strain during long documentation sessions, the default color palette can utilize warm, low-saturation earthy tones rather than harsh, high-contrast dark modes or blinding light modes.
-* **Seamless Switching:** Clicking an unknown word in the Translation Engine instantly slides out the Right Inspector, pre-filled with the English word, allowing the user to assign it a conlang spelling, tag it, and save it directly into the database without leaving the translation screen.
+- **Where.** `docs/SCRIPTING.md`. Not implemented.
