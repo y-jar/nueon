@@ -5831,6 +5831,42 @@ async function main() {
     await new Promise((resolve) => setTimeout(resolve, 200));
     if (await menuOpen()) throw new Error("menu still open after an action");
   });
+
+  // -- probe 97: the menu takes focus and responds to arrows + Enter ---------
+  await probe("97-menu-keyboard-nav", async () => {
+    await openActivity("Dictionary");
+    await waitJs(`!!document.querySelector('.table-list')`, { label: "tables panel" });
+    await js(`
+      const b = [...document.querySelectorAll('.table-list .table-row .tree-name')]
+        .find((x) => x.textContent.trim().startsWith('lex'));
+      if (b) b.click();
+      return !!b;`);
+    await waitJs(`!!document.querySelector('.dict-grid')`, { label: "lex grid" });
+    await js(`
+      const th = document.querySelector('.dict-grid thead th:nth-child(2)');
+      th.dispatchEvent(new MouseEvent('contextmenu',
+        { bubbles: true, cancelable: true, clientX: 120, clientY: 120 }));
+      return true;`);
+    await waitJs(`!!document.querySelector('.ctx-menu')`, { label: "column menu" });
+    // The first item is focused on open.
+    const firstFocused = await js(`
+      const b = document.querySelector('.ctx-menu button');
+      return document.activeElement === b;`);
+    if (!firstFocused) throw new Error("menu did not focus its first item");
+    // ArrowDown moves to the next item.
+    await pressKey(ARROW_DOWN);
+    await new Promise((resolve) => setTimeout(resolve, 100));
+    const secondFocused = await js(`
+      const buttons = [...document.querySelectorAll('.ctx-menu button')];
+      return document.activeElement === buttons[1];`);
+    if (!secondFocused) throw new Error("ArrowDown did not move focus");
+    // Enter activates the focused item and closes the menu.
+    await pressKey(ENTER);
+    await new Promise((resolve) => setTimeout(resolve, 200));
+    if (await js(`return !!document.querySelector('.ctx-menu');`)) {
+      throw new Error("menu did not close after Enter");
+    }
+  });
 }
 
 try {

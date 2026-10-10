@@ -59,16 +59,36 @@
 
   let menuEl: HTMLElement | undefined;
 
-  // Portal the menu to <body> so it is never clipped by pane overflow.
+  // Portal the menu to <body> so it is never clipped by pane overflow, focus
+  // its first item so the keyboard works immediately, and return focus to the
+  // previously focused element when the menu closes.
   function portal(node: HTMLElement) {
+    const previouslyFocused = document.activeElement as HTMLElement | null;
     menuEl = node;
     document.body.appendChild(node);
+    node.querySelector("button")?.focus();
     return {
       destroy() {
         node.remove();
         menuEl = undefined;
+        previouslyFocused?.focus?.();
       },
     };
+  }
+
+  // Move focus between items: Arrow/Home/End, Enter activates the focused one.
+  function onMenuKeydown(event: KeyboardEvent) {
+    if (!["ArrowDown", "ArrowUp", "Home", "End"].includes(event.key)) return;
+    const buttons = [...menuEl!.querySelectorAll<HTMLButtonElement>("button")];
+    if (!buttons.length) return;
+    const current = buttons.findIndex((b) => b === document.activeElement);
+    let next: number;
+    if (event.key === "Home") next = 0;
+    else if (event.key === "End") next = buttons.length - 1;
+    else if (event.key === "ArrowDown") next = (current + 1 + buttons.length) % buttons.length;
+    else next = (current - 1 + buttons.length) % buttons.length;
+    event.preventDefault();
+    buttons[next].focus();
   }
 
   const menu = $derived(ui.contextMenu);
@@ -139,6 +159,7 @@
     tabindex="-1"
     use:portal
     style="left: {menu.x}px; top: {menu.y}px"
+    onkeydown={onMenuKeydown}
     oncontextmenu={(e) => e.preventDefault()}
   >
     {#if menu.kind === "root"}
