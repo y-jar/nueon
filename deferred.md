@@ -61,6 +61,9 @@ stage that completed them: `R0`–`R8` were done during the Tauri migration,
 - Remotes, push/pull. (D4+)
 - Conflict handling and resolution. (D4+)
 - ~~"Don't show again" for the git init/install prompt.~~ (D4)
+- Idle auto check-in only fires on app close. `autocheckin_pump` is never
+  invoked from the frontend during a session, so mid-session idle commits do
+  not happen. (dead-code audit)
 
 ## Workspace & app shell
 
@@ -70,6 +73,10 @@ stage that completed them: `R0`–`R8` were done during the Tauri migration,
   commands to the frontend.~~ (D5)
 - ~~Nix flake for packaging, app icon, `.desktop` entry.~~ (R8)
 - ~~Internationalization.~~ (D0)
+- Workspace management UI: the backend supports rename, remove, repoint
+  (`workspace_set_path`) and delete-from-disk (`workspace_delete_from_disk`),
+  but the shell never calls them, so a workspace cannot be renamed or removed
+  from the UI despite the README claiming it can. (dead-code audit)
 
 ## Data model
 
