@@ -6,6 +6,15 @@ import * as api from "./api";
 import { windowLabel } from "./window";
 import { isAssetPath, isNotePath, stripMd } from "./explorer";
 import { shouldPruneGroup } from "./tabs";
+import {
+  canMoveInto,
+  fromSplitLayout,
+  nextActiveIndex,
+  toSplitLayout,
+  type SplitNode,
+} from "./tiling";
+export type { SplitNode } from "./tiling";
+export { canMoveInto };
 import { flushNotes, quiesceNotes, resolveNoteConflict } from "./editor/action";
 import { beginRead, isFreshest } from "./editor/freshness";
 import { dropPosition, movePosition } from "./editor/positions";
@@ -70,15 +79,6 @@ export interface TabGroup {
 }
 
 /** A node in the recursive split layout. */
-export type SplitNode =
-  | { type: "leaf"; groupId: string }
-  | {
-      type: "split";
-      direction: "row" | "column";
-      children: SplitNode[];
-      sizes?: number[];
-    };
-
 function newId(): string {
   return crypto.randomUUID();
 }
@@ -390,7 +390,8 @@ export function closeSetupWizard(): void {
 // -- tabs ----------------------------------------------------------------
 
 function activateNeighbor(group: TabGroup, removedIndex: number): void {
-  const next = group.tabs[removedIndex] ?? group.tabs[removedIndex - 1] ?? null;
+  const index = nextActiveIndex(group.tabs.length, removedIndex);
+  const next = index === null ? null : group.tabs[index];
   group.activeTabId = next?.id ?? null;
   if (next) {
     void activateTab(group.id, next.id);
@@ -961,16 +962,6 @@ export async function moveTab(
 
 // -- layout persistence --------------------------------------------------
 
-function toSplitLayout(node: SplitNode): api.SplitLayout {
-  if (node.type === "leaf") return { type: "leaf", group: node.groupId };
-  return {
-    type: "split",
-    direction: node.direction,
-    children: node.children.map(toSplitLayout),
-    ...(node.sizes?.length ? { sizes: [...node.sizes] } : {}),
-  };
-}
-
 /** Snapshot this window's tab groups and split tree for persistence. */
 export function serializeTiling(): api.TilingLayout {
   return {
@@ -997,24 +988,6 @@ function notePaths(nodes: api.NoteNode[], into = new Set<string>()): Set<string>
     else into.add(node.path);
   }
   return into;
-}
-
-function fromSplitLayout(
-  node: api.SplitLayout,
-  ids: Map<string, string>,
-): SplitNode | null {
-  if (node.type === "leaf") {
-    const groupId = ids.get(node.group);
-    return groupId ? { type: "leaf", groupId } : null;
-  }
-  const children = node.children
-    .map((child) => fromSplitLayout(child, ids))
-    .filter((child): child is SplitNode => child !== null);
-  if (children.length === 0) return null;
-  if (children.length === 1) return children[0];
-  const sizes =
-    node.sizes && node.sizes.length === children.length ? node.sizes : undefined;
-  return { type: "split", direction: node.direction, children, sizes };
 }
 
 /**
@@ -1356,12 +1329,6 @@ export async function createFolder(relPath: string): Promise<void> {
 }
 
 /** Whether `src` may be moved into `folder` ("" is the notes root). */
-export function canMoveInto(src: string, folder: string): boolean {
-  const parent = src.split("/").slice(0, -1).join("/");
-  if (folder === parent) return false; // already there
-  return folder !== src && !folder.startsWith(`${src}/`);
-}
-
 /** Move a note/folder into `folder`, reporting failures in the status bar. */
 export async function movePath(src: string, folder: string): Promise<void> {
   if (!canMoveInto(src, folder)) return;
