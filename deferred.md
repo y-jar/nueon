@@ -22,6 +22,12 @@ stage that completed them: `R0`–`R8` were done during the Tauri migration,
 - Tables inside blockquotes and list items aren't editable with the table
   commands (raw editing only); handle the line prefix later if needed.
 
+## Note links
+
+- Block links (`[[note#^block-id]]`) are out of scope. (links)
+- Setext headings (`===` / `---` underlines) are not resolved by
+  `[[note#heading]]`; only ATX headings (`#` through `######`) are. (links)
+
 ## Dictionary grid
 
 - ~~Persist hidden columns / sort / filter state across restarts.~~ (D1)

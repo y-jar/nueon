@@ -5,13 +5,14 @@
 
 import type { NoteNode, WordIndex } from "./api";
 
-/** One `[[target]]`, `[[target|alias]]` or `![[target]]` link. */
+/** One `[[target]]`, `[[target|alias]]`, `[[target#heading]]` or an embed. */
 export interface WikiLink {
   /** Absolute offsets of the whole `[[...]]` span. */
   from: number;
   to: number;
   target: string;
   alias: string | null;
+  heading: string | null;
   embed: boolean;
 }
 
@@ -36,10 +37,13 @@ export function parseWikiLinks(text: string): WikiLink[] {
   WIKILINK_RE.lastIndex = 0;
   let match: RegExpExecArray | null;
   while ((match = WIKILINK_RE.exec(text))) {
+    const targetPart = match[2].trim();
+    const hash = targetPart.indexOf("#");
     links.push({
       from: match.index,
       to: match.index + match[0].length,
-      target: match[2].trim(),
+      target: (hash >= 0 ? targetPart.slice(0, hash) : targetPart).trim(),
+      heading: hash >= 0 ? targetPart.slice(hash + 1).trim() : null,
       alias: match[3] ? match[3].trim() : null,
       embed: match[1] === "!",
     });
@@ -47,21 +51,114 @@ export function parseWikiLinks(text: string): WikiLink[] {
   return links;
 }
 
-/** A resolved link target: a dictionary word, a note/file, or nothing. */
-export type WikiTarget =
-  | { kind: "word"; table: string; id: string; wordname: string; senses: string[] }
-  | { kind: "note"; path: string }
-  | { kind: "missing" };
+/** Strip inline formatting (bold, italic, code, links) from heading text. */
+function stripInline(text: string): string {
+  return text
+    .replace(/\[([^\]]*)\]\([^)]*\)/g, "$1")
+    .replace(/\*\*([^*]+)\*\*/g, "$1")
+    .replace(/\*([^*]+)\*/g, "$1")
+    .replace(/~~([^~]+)~~/g, "$1")
+    .replace(/`([^`]+)`/g, "$1")
+    .trim();
+}
+
+/** One ATX heading: its cleaned text and 1-indexed line number. */
+export interface HeadingPosition {
+  text: string;
+  line: number;
+}
 
 /**
- * Resolve a link target: a dictionary word first (case-insensitive), then a
- * note by path or basename.
+ * The ATX headings (`#` through `######`) in a Markdown note, in order.
+ * Headings inside fenced code blocks are skipped, a trailing run of `#` is
+ * dropped, and inline formatting is stripped.
+ */
+export function headingPositions(markdown: string): HeadingPosition[] {
+  const positions: HeadingPosition[] = [];
+  let fence: string | null = null;
+  const lines = markdown.split("\n");
+  for (let index = 0; index < lines.length; index += 1) {
+    const line = lines[index];
+    const trimmed = line.trim();
+    const opener = trimmed.match(/^(```|~~~)/);
+    if (opener) {
+      if (fence === null) fence = opener[1];
+      else if (fence === opener[1]) fence = null;
+      continue;
+    }
+    if (fence !== null) continue;
+    const heading = line.match(/^(#{1,6})[ \t]+(.*)$/);
+    if (!heading) continue;
+    const text = heading[2].replace(/#+\s*$/, "").trim();
+    if (text) positions.push({ text: stripInline(text), line: index + 1 });
+  }
+  return positions;
+}
+
+/** The heading texts of a Markdown note, in order. */
+export function parseHeadings(markdown: string): string[] {
+  return headingPositions(markdown).map((position) => position.text);
+}
+
+/** The 1-indexed line of the first heading matching `heading` (0 if none). */
+export function headingLine(markdown: string, heading: string): number {
+  const needle = heading.toLowerCase();
+  const found = headingPositions(markdown).find(
+    (position) => position.text.toLowerCase() === needle,
+  );
+  return found ? found.line : 0;
+}
+
+/** A resolved link target: a dictionary word, a note, or nothing. */
+export type WikiTarget =
+  | { kind: "word"; table: string; id: string; wordname: string; senses: string[] }
+  | {
+      kind: "note";
+      path: string;
+      heading: string | null;
+      /** null when unknown (optimistic); otherwise whether the heading exists. */
+      headingResolved: boolean | null;
+    }
+  | { kind: "missing" };
+
+/** Resolve `target` against the note paths, returning the matching path. */
+function resolveNotePath(target: string, notePaths: Set<string>): string | null {
+  if (notePaths.has(target)) return target;
+  if (notePaths.has(`${target}.md`)) return `${target}.md`;
+  for (const path of notePaths) {
+    if (path.endsWith(`/${target}.md`)) return path;
+  }
+  const base = target.split("/").pop() ?? target;
+  for (const path of notePaths) {
+    const name = (path.split("/").pop() ?? path).replace(/\.md$/, "");
+    if (name === base) return path;
+  }
+  return null;
+}
+
+/**
+ * Resolve a link target. Words win unless a `#heading` is present (only notes
+ * have headings), in which case a note wins over a same-named word. Headings
+ * are matched case-insensitively against the note's cached headings; an
+ * uncached note is optimistic (`headingResolved: null`).
  */
 export function resolveWikiTarget(
   target: string,
+  heading: string | null,
   index: WordIndex,
   notePaths: Set<string>,
+  noteHeadings: Readonly<Record<string, string[]>> = {},
 ): WikiTarget {
+  if (heading !== null) {
+    const notePath = resolveNotePath(target, notePaths);
+    if (notePath) {
+      const headings = noteHeadings[notePath];
+      const headingResolved = headings
+        ? headings.some((entry) => entry.toLowerCase() === heading.toLowerCase())
+        : null;
+      return { kind: "note", path: notePath, heading, headingResolved };
+    }
+  }
   const hits = index[target.toLowerCase()];
   if (hits && hits.length > 0) {
     const hit = hits[0];
@@ -73,15 +170,9 @@ export function resolveWikiTarget(
       senses: hit.senses,
     };
   }
-  if (notePaths.has(target)) return { kind: "note", path: target };
-  if (notePaths.has(`${target}.md`)) return { kind: "note", path: `${target}.md` };
-  for (const path of notePaths) {
-    if (path.endsWith(`/${target}.md`)) return { kind: "note", path };
-  }
-  const base = target.split("/").pop() ?? target;
-  for (const path of notePaths) {
-    const name = (path.split("/").pop() ?? path).replace(/\.md$/, "");
-    if (name === base) return { kind: "note", path };
+  const notePath = resolveNotePath(target, notePaths);
+  if (notePath) {
+    return { kind: "note", path: notePath, heading, headingResolved: null };
   }
   return { kind: "missing" };
 }

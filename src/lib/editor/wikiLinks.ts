@@ -34,6 +34,20 @@ export const notePathsField = StateField.define<Set<string>>({
   },
 });
 
+/** Holds note → headings, updated via `setNoteHeadings`. */
+export const setNoteHeadings = StateEffect.define<Record<string, string[]>>();
+
+export const noteHeadingsField = StateField.define<Record<string, string[]>>({
+  create: () => ({}),
+  update(value, transaction) {
+    let next = value;
+    for (const effect of transaction.effects) {
+      if (effect.is(setNoteHeadings)) next = effect.value;
+    }
+    return next;
+  },
+});
+
 /** The `[[target]]` link whose span contains `pos`, resolved, or null. */
 function linkAt(view: EditorView, pos: number): {
   target: WikiTarget;
@@ -44,10 +58,11 @@ function linkAt(view: EditorView, pos: number): {
   const offset = pos - line.from;
   const index = view.state.field(wordIndexField);
   const notes = view.state.field(notePathsField);
+  const headings = view.state.field(noteHeadingsField);
   for (const link of parseWikiLinks(line.text)) {
     if (offset >= link.from && offset <= link.to) {
       return {
-        target: resolveWikiTarget(link.target, index, notes),
+        target: resolveWikiTarget(link.target, link.heading, index, notes, headings),
         from: line.from + link.from,
         to: line.from + link.to,
       };
@@ -59,7 +74,12 @@ function linkAt(view: EditorView, pos: number): {
 function classFor(target: WikiTarget, embed: boolean): string {
   if (embed) return "cm-wikilink cm-wikilink-embed";
   if (target.kind === "word") return "cm-wikilink cm-wikilink-word";
-  if (target.kind === "note") return "cm-wikilink cm-wikilink-note";
+  if (target.kind === "note") {
+    if (target.headingResolved === false) {
+      return "cm-wikilink cm-wikilink-note cm-wikilink-heading-broken";
+    }
+    return "cm-wikilink cm-wikilink-note";
+  }
   return "cm-wikilink cm-wikilink-unresolved";
 }
 
@@ -91,6 +111,7 @@ class EmbedWidget extends WidgetType {
 function build(view: EditorView): DecorationSet {
   const index = view.state.field(wordIndexField);
   const notes = view.state.field(notePathsField);
+  const headings = view.state.field(noteHeadingsField);
   const code = codeLines(view.state);
   const ranges: Range<Decoration>[] = [];
   for (const visible of view.visibleRanges) {
@@ -99,7 +120,7 @@ function build(view: EditorView): DecorationSet {
       const from = visible.from + link.from;
       const to = visible.from + link.to;
       if (code.has(view.state.doc.lineAt(from).number)) continue;
-      const target = resolveWikiTarget(link.target, index, notes);
+      const target = resolveWikiTarget(link.target, link.heading, index, notes, headings);
       if (link.embed && target.kind === "word") {
         ranges.push(
           Decoration.replace({
@@ -136,7 +157,9 @@ export function wikiLinks(
           update.startState.field(wordIndexField) !==
             update.state.field(wordIndexField) ||
           update.startState.field(notePathsField) !==
-            update.state.field(notePathsField);
+            update.state.field(notePathsField) ||
+          update.startState.field(noteHeadingsField) !==
+            update.state.field(noteHeadingsField);
         if (
           update.docChanged ||
           update.viewportChanged ||
@@ -192,8 +215,16 @@ export function wikiLinkHover() {
           dom.appendChild(meta);
         } else if (link.target.kind === "note") {
           const title = document.createElement("strong");
-          title.textContent = link.target.path;
+          title.textContent = link.target.heading
+            ? `${link.target.path}#${link.target.heading}`
+            : link.target.path;
           dom.appendChild(title);
+          if (link.target.headingResolved === false) {
+            const broken = document.createElement("div");
+            broken.className = "muted";
+            broken.textContent = "heading not found";
+            dom.appendChild(broken);
+          }
         } else {
           const title = document.createElement("div");
           title.className = "muted";

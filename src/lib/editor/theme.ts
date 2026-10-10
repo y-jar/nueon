@@ -75,6 +75,10 @@ export const theme = EditorView.theme(
       color: "#d6785a",
       borderBottom: "1px dashed #d6785a",
     },
+    ".cm-wikilink-heading-broken": {
+      color: "#d6785a",
+      borderBottom: "1px dashed #d6785a",
+    },
   },
   { dark: true },
 );

@@ -13,13 +13,13 @@
     noteFilePath,
     type DocState,
   } from "../lib/state.svelte";
-  import { notePathSet, type WikiTarget } from "../lib/wikilink";
+  import { headingLine, notePathSet, parseHeadings, type WikiTarget } from "../lib/wikilink";
   import {
     revealInFileExplorer,
     openInDefaultApp,
     copyText,
   } from "../lib/fileActions";
-  import type { EditorView } from "@codemirror/view";
+  import { EditorView } from "@codemirror/view";
   import EditorToolbar from "./EditorToolbar.svelte";
   import {
     EMPTY_FORMAT,
@@ -42,6 +42,36 @@
 
   const notePaths = $derived(notePathSet(ui.tree));
 
+  // Cache the open note's headings so `[[note#heading]]` resolves and the
+  // broken-heading style is accurate once the note has loaded.
+  $effect(() => {
+    const path = doc.selected;
+    if (!path) return;
+    const headings = parseHeadings(doc.noteContent);
+    if (
+      JSON.stringify(ui.noteHeadings[path]) === JSON.stringify(headings)
+    ) {
+      return;
+    }
+    ui.noteHeadings = { ...ui.noteHeadings, [path]: headings };
+  });
+
+  // A pending "scroll to heading" request: this editor scrolls once its note
+  // is the one the request names.
+  $effect(() => {
+    const request = ui.scrollToHeading;
+    if (!request || doc.selected !== request.path) return;
+    const line = headingLine(doc.noteContent, request.heading);
+    if (!view || !line) {
+      ui.scrollToHeading = null;
+      return;
+    }
+    const target = view.state.doc.line(line);
+    view.dispatch({ selection: { anchor: target.from } });
+    view.dispatch({ effects: EditorView.scrollIntoView(target.from, { y: "start" }) });
+    ui.scrollToHeading = null;
+  });
+
   /** Ctrl/Cmd+click on a `[[...]]` link: open its target. */
   async function followLink(target: WikiTarget) {
     if (target.kind === "word") {
@@ -49,6 +79,9 @@
       activeDoc().selectedEntry = target.id;
     } else if (target.kind === "note") {
       await selectNote(target.path);
+      if (target.heading) {
+        ui.scrollToHeading = { path: target.path, heading: target.heading };
+      }
     }
   }
 
@@ -210,6 +243,7 @@
           hash: doc.noteHash,
           index: ui.wordIndex,
           notePaths,
+          noteHeadings: ui.noteHeadings,
           assetBase: ui.root ? `${ui.root}/notes` : "",
           onFollow: followLink,
           onDirty: (path: string, dirty: boolean) => {

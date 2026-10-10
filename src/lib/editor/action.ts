@@ -30,7 +30,15 @@ import {
   setWordIndex,
   wordIndexField,
 } from "./dictionary";
-import { notePathsField, setNotePaths, wikiCompletion, wikiLinkHover, wikiLinks } from "./wikiLinks";
+import {
+  noteHeadingsField,
+  notePathsField,
+  setNoteHeadings,
+  setNotePaths,
+  wikiCompletion,
+  wikiLinkHover,
+  wikiLinks,
+} from "./wikiLinks";
 import type { WikiTarget } from "../wikilink";
 import {
   EMPTY_FORMAT,
@@ -81,6 +89,8 @@ export interface EditorParams {
   onFollow?: (target: WikiTarget) => void;
   /** Note paths for resolving `[[note]]` links. */
   notePaths: Set<string>;
+  /** Note → headings, for resolving `[[note#heading]]` links. */
+  noteHeadings: Record<string, string[]>;
   /** Whether to show the line-number gutter (default true). */
   showLineNumbers?: boolean;
   /** Keybind overrides (command id → combo); missing ids use the defaults. */
@@ -235,6 +245,7 @@ export const codemirror: Action<HTMLElement, EditorParams> = (node, params) => {
         theme,
         wordIndexField,
         notePathsField,
+        noteHeadingsField,
         livePreview(),
         blockBlocks(),
         blockLineNumbers(),
@@ -282,7 +293,11 @@ export const codemirror: Action<HTMLElement, EditorParams> = (node, params) => {
   });
 
   view.dispatch({
-    effects: [setWordIndex.of(params.index), setNotePaths.of(params.notePaths)],
+    effects: [
+      setWordIndex.of(params.index),
+      setNotePaths.of(params.notePaths),
+      setNoteHeadings.of(params.noteHeadings),
+    ],
   });
   setAssetBase(params.assetBase, params.path);
   params.onView?.(view);
@@ -401,7 +416,11 @@ export const codemirror: Action<HTMLElement, EditorParams> = (node, params) => {
           setAssetBase(next.assetBase, next.path);
           replaceBuffer(next.content);
           view.dispatch({
-            effects: [setWordIndex.of(next.index), setNotePaths.of(next.notePaths)],
+            effects: [
+              setWordIndex.of(next.index),
+              setNotePaths.of(next.notePaths),
+              setNoteHeadings.of(next.noteHeadings),
+            ],
           });
           previous.onDirty(previous.path, false);
           next.onDirty(next.path, false);
@@ -414,6 +433,9 @@ export const codemirror: Action<HTMLElement, EditorParams> = (node, params) => {
       }
       if (next.notePaths !== current.notePaths) {
         view.dispatch({ effects: setNotePaths.of(next.notePaths) });
+      }
+      if (next.noteHeadings !== current.noteHeadings) {
+        view.dispatch({ effects: setNoteHeadings.of(next.noteHeadings) });
       }
       if (next.assetBase !== current.assetBase) {
         setAssetBase(next.assetBase, next.path);

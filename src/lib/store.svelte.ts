@@ -170,6 +170,10 @@ export const ui = $state({
   quarantineDismissed: [] as string[],
   wordIndex: {} as api.WordIndex,
   nameById: {} as Record<string, string>,
+  /** Note path → ATX headings, cached lazily for `[[note#heading]]`. */
+  noteHeadings: {} as Record<string, string[]>,
+  /** Pending "scroll to this heading" request after following a link. */
+  scrollToHeading: null as { path: string; heading: string } | null,
   vcsRevision: 0,
   /** Bumped when the phonology config is written elsewhere (Settings). */
   phonologyRevision: 0,

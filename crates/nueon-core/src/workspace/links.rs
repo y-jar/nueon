@@ -1,8 +1,9 @@
 //! Rewriting `[[...]]` wiki links when a word or note is renamed.
 
-/// Rewrite every `[[old]]`, `[[old|alias]]` and `![[old]]` in `text` to point
-/// at `new`, matching `old` case-insensitively and preserving the alias and the
-/// leading `!` embed marker. Any other text is left untouched.
+/// Rewrite every `[[old]]`, `[[old|alias]]`, `[[old#heading]]` and
+/// `[[old#heading|alias]]` (plus `!` embeds) in `text` to point at `new`,
+/// matching `old` case-insensitively and preserving the `#heading`, `|alias`
+/// and the leading `!` embed marker. Any other text is left untouched.
 pub fn rewrite_links(text: &str, old: &str, new: &str) -> String {
     let mut out = String::with_capacity(text.len());
     let mut pos = 0;
@@ -18,9 +19,13 @@ pub fn rewrite_links(text: &str, old: &str, new: &str) -> String {
         };
         let close = open + 2 + rel_close;
         let inner = &text[open + 2..close];
-        let (target, alias) = match inner.split_once('|') {
+        let (before_pipe, alias) = match inner.split_once('|') {
             Some((target, alias)) => (target.trim(), Some(alias.trim())),
             None => (inner.trim(), None),
+        };
+        let (target, heading) = match before_pipe.split_once('#') {
+            Some((target, heading)) => (target.trim(), Some(heading.trim())),
+            None => (before_pipe, None),
         };
         if target.eq_ignore_ascii_case(old) {
             if embed {
@@ -28,6 +33,10 @@ pub fn rewrite_links(text: &str, old: &str, new: &str) -> String {
             }
             out.push_str("[[");
             out.push_str(new);
+            if let Some(heading) = heading {
+                out.push('#');
+                out.push_str(heading);
+            }
             if let Some(alias) = alias {
                 out.push('|');
                 out.push_str(alias);
@@ -75,5 +84,30 @@ mod tests {
     #[test]
     fn no_links_is_unchanged() {
         assert_eq!(rewrite_links("plain text", "kala", "kaka"), "plain text");
+    }
+
+    #[test]
+    fn preserves_heading_and_alias() {
+        assert_eq!(
+            rewrite_links("[[kala#nouns]]", "kala", "kaka"),
+            "[[kaka#nouns]]"
+        );
+        assert_eq!(
+            rewrite_links("[[kala#nouns|dog]]", "kala", "kaka"),
+            "[[kaka#nouns|dog]]"
+        );
+        assert_eq!(
+            rewrite_links("![[kala#nouns]]", "kala", "kaka"),
+            "![[kaka#nouns]]"
+        );
+    }
+
+    #[test]
+    fn keeps_a_heading_when_renaming_a_word() {
+        // A word target with a #heading keeps the #x text, losing nothing.
+        assert_eq!(
+            rewrite_links("[[kala#nouns|dog]]", "kala", "kaka"),
+            "[[kaka#nouns|dog]]"
+        );
     }
 }

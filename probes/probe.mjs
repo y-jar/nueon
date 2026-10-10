@@ -802,8 +802,12 @@ function seedWorkspace() {
   fs.writeFileSync(path.join(WORKSPACE, "notes", "alpha.md"), `${lines.join("\n")}\n`);
   fs.writeFileSync(path.join(WORKSPACE, "notes", "beta.md"), "beta note\n");
   fs.writeFileSync(
+    path.join(WORKSPACE, "notes", "headings.md"),
+    "# Intro\n\n## Nouns\n\n## Verbs\n",
+  );
+  fs.writeFileSync(
     path.join(WORKSPACE, "notes", "links.md"),
-    "[[velo]] [[pako|zzarg]] ![[paka]] [[missing-word]] [[beta]]\n",
+    "[[velo]] [[pako|zzarg]] ![[paka]] [[missing-word]] [[beta]] [[headings#Intro]] [[headings#Missing]]\n",
   );
   fs.writeFileSync(path.join(WORKSPACE, "notes", "tables.md"), TABLES);
   fs.writeFileSync(path.join(WORKSPACE, "notes", "math.md"), MATH);
@@ -4885,6 +4889,59 @@ async function main() {
     );
     await pressKey(ENTER);
     await waitJs(`!!document.querySelector('.table-list')`, { label: "dictionary open" });
+  });
+
+  // -- probe 81: [[note#heading]] resolves and follows ----------------------
+  await probe("81-wikilink-heading", async () => {
+    await openActivity("Notes");
+    // Open headings.md first so its headings enter the cache, making the
+    // broken-heading style meaningful.
+    await js(
+      `const r = document.querySelector('.tree-row[data-path="headings.md"] .tree-name');
+       if (r) r.click();
+       return !!r;`,
+    );
+    await waitJs(`!!document.querySelector('.cm-host[data-note="headings.md"] .cm-content')`, {
+      label: "headings editor",
+    });
+    await js(
+      `const r = document.querySelector('.tree-row[data-path="links.md"] .tree-name');
+       if (r) r.click();
+       return !!r;`,
+    );
+    await waitJs(`!!document.querySelector('.cm-host[data-note="links.md"] .cm-content')`, {
+      label: "links editor",
+    });
+    await waitJs(
+      `document.querySelectorAll('.cm-wikilink-heading-broken').length >= 1`,
+      { label: "broken heading styled" },
+    );
+
+    // Ctrl+click the resolved heading link opens the note at the heading.
+    const clicked = await js(
+      `const el = [...document.querySelectorAll('.cm-wikilink-note')]
+         .find((x) => x.textContent.includes('headings#Intro'));
+       if (!el) return false;
+       const rect = el.getBoundingClientRect();
+       el.dispatchEvent(new MouseEvent('mousedown', {
+         bubbles: true, cancelable: true, ctrlKey: true,
+         clientX: rect.left + 2, clientY: rect.top + rect.height / 2,
+       }));
+       return true;`,
+    );
+    if (!clicked) throw new Error("no headings#Intro link");
+    await waitJs(
+      `document.querySelector('.cm-host[data-note="headings.md"]') !== null`,
+      { label: "headings.md open" },
+    );
+    // Following scrolled the note to the Intro heading (line 1).
+    await waitJs(
+      `(() => {
+         const v = document.querySelector('.cm-host[data-note="headings.md"] .cm-content')?.cmTile?.root?.view;
+         return v ? v.state.selection.main.head <= 2 : false;
+       })()`,
+      { label: "scrolled to Intro" },
+    );
   });
 }
 

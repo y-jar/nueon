@@ -1,24 +1,36 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
 
-import { parseWikiLinks, resolveWikiTarget } from "./wikilink.ts";
+import { parseHeadings, parseWikiLinks, resolveWikiTarget } from "./wikilink.ts";
 
 test("parses plain, aliased and embed links", () => {
   assert.deepEqual(parseWikiLinks("see [[kala]] here"), [
-    { from: 4, to: 12, target: "kala", alias: null, embed: false },
+    { from: 4, to: 12, target: "kala", alias: null, heading: null, embed: false },
   ]);
   assert.deepEqual(parseWikiLinks("[[kala|dog]]"), [
-    { from: 0, to: 12, target: "kala", alias: "dog", embed: false },
+    { from: 0, to: 12, target: "kala", alias: "dog", heading: null, embed: false },
   ]);
   assert.deepEqual(parseWikiLinks("![[kala]]"), [
-    { from: 0, to: 9, target: "kala", alias: null, embed: true },
+    { from: 0, to: 9, target: "kala", alias: null, heading: null, embed: true },
+  ]);
+});
+
+test("parses heading and heading-with-alias forms", () => {
+  assert.deepEqual(parseWikiLinks("[[kala#nouns]]"), [
+    { from: 0, to: 14, target: "kala", alias: null, heading: "nouns", embed: false },
+  ]);
+  assert.deepEqual(parseWikiLinks("[[kala#nouns|dog]]"), [
+    { from: 0, to: 18, target: "kala", alias: "dog", heading: "nouns", embed: false },
+  ]);
+  assert.deepEqual(parseWikiLinks("![[note#head]]"), [
+    { from: 0, to: 14, target: "note", alias: null, heading: "head", embed: true },
   ]);
 });
 
 test("parses several links on one line with offsets", () => {
   assert.deepEqual(parseWikiLinks("[[a]] and [[b]]"), [
-    { from: 0, to: 5, target: "a", alias: null, embed: false },
-    { from: 10, to: 15, target: "b", alias: null, embed: false },
+    { from: 0, to: 5, target: "a", alias: null, heading: null, embed: false },
+    { from: 10, to: 15, target: "b", alias: null, heading: null, embed: false },
   ]);
 });
 
@@ -27,11 +39,33 @@ test("targets may not contain newlines or a closing bracket", () => {
   assert.deepEqual(parseWikiLinks("[[a]b]]"), []);
 });
 
+test("parseHeadings finds ATX headings and skips fenced code", () => {
+  assert.deepEqual(
+    parseHeadings("# Title\n## Sub\n```\n# not a heading\n```\n### Last"),
+    ["Title", "Sub", "Last"],
+  );
+});
+
+test("parseHeadings drops trailing # marks and strips inline formatting", () => {
+  assert.deepEqual(
+    parseHeadings("## [A link](url) and **bold** and `code` ##"),
+    ["A link and bold and code"],
+  );
+});
+
+test("parseHeadings ignores setext-style underlines", () => {
+  assert.deepEqual(parseHeadings("Title\n===\nbody"), []);
+});
+
+test("parseHeadings keeps duplicate headings in order", () => {
+  assert.deepEqual(parseHeadings("# A\n## B\n# A"), ["A", "B", "A"]);
+});
+
 test("resolves a word first, case-insensitively", () => {
   const index = {
     kala: [{ id: "1", table: "lex", wordname: "kala", senses: ["dog"], tags: [] }],
   };
-  const result = resolveWikiTarget("KALA", index, new Set());
+  const result = resolveWikiTarget("KALA", null, index, new Set());
   assert.equal(result.kind, "word");
   if (result.kind === "word") assert.equal(result.id, "1");
 });
@@ -39,16 +73,72 @@ test("resolves a word first, case-insensitively", () => {
 test("resolves a note by path or basename", () => {
   const index = {};
   const notes = new Set(["Grammar/Phonology.md", "alpha.md"]);
-  assert.deepEqual(resolveWikiTarget("Grammar/Phonology", index, notes), {
+  assert.deepEqual(resolveWikiTarget("Grammar/Phonology", null, index, notes), {
     kind: "note",
     path: "Grammar/Phonology.md",
+    heading: null,
+    headingResolved: null,
   });
-  assert.deepEqual(resolveWikiTarget("alpha", index, notes), {
+  assert.deepEqual(resolveWikiTarget("alpha", null, index, notes), {
     kind: "note",
     path: "alpha.md",
+    heading: null,
+    headingResolved: null,
   });
 });
 
+test("a heading resolves the note and its heading", () => {
+  const index = {};
+  const notes = new Set(["alpha.md"]);
+  const headings = { "alpha.md": ["Nouns", "Verbs"] };
+  assert.deepEqual(resolveWikiTarget("alpha", "Nouns", index, notes, headings), {
+    kind: "note",
+    path: "alpha.md",
+    heading: "Nouns",
+    headingResolved: true,
+  });
+  assert.deepEqual(resolveWikiTarget("alpha", "Missing", index, notes, headings), {
+    kind: "note",
+    path: "alpha.md",
+    heading: "Missing",
+    headingResolved: false,
+  });
+});
+
+test("an uncached note heading is optimistic", () => {
+  const index = {};
+  const notes = new Set(["alpha.md"]);
+  const result = resolveWikiTarget("alpha", "Nouns", index, notes, {});
+  assert.deepEqual(result, {
+    kind: "note",
+    path: "alpha.md",
+    heading: "Nouns",
+    headingResolved: null,
+  });
+});
+
+test("a heading makes a note win over a same-named word", () => {
+  const index = {
+    alpha: [{ id: "1", table: "lex", wordname: "alpha", senses: ["x"], tags: [] }],
+  };
+  const notes = new Set(["alpha.md"]);
+  const headings = { "alpha.md": ["Intro"] };
+  const result = resolveWikiTarget("alpha", "Intro", index, notes, headings);
+  assert.equal(result.kind, "note");
+
+  // Without a heading the word still wins.
+  const word = resolveWikiTarget("alpha", null, index, notes, headings);
+  assert.equal(word.kind, "word");
+});
+
+test("a word target with a heading ignores the heading", () => {
+  const index = {
+    kala: [{ id: "1", table: "lex", wordname: "kala", senses: ["dog"], tags: [] }],
+  };
+  const result = resolveWikiTarget("kala", "Nouns", index, new Set(), {});
+  assert.equal(result.kind, "word");
+});
+
 test("reports missing targets", () => {
-  assert.deepEqual(resolveWikiTarget("nope", {}, new Set()), { kind: "missing" });
+  assert.deepEqual(resolveWikiTarget("nope", null, {}, new Set()), { kind: "missing" });
 });
