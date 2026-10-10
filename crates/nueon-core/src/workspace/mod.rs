@@ -362,6 +362,12 @@ impl Workspace {
         self.record();
         self.dictionary.remove_table(name);
         self.table_files.remove(name);
+        // Grid view state is presentation-only: drop it with the table. Table
+        // roles, morpheme references and bound feature columns are *kept* so a
+        // restored table heals; until then the editor flags them as broken.
+        if self.settings.grid_views.remove(name).is_some() {
+            self.save_settings()?;
+        }
         self.mark_change(Instant::now(), format!("nueon: delete table \"{name}\""));
         Ok(Some(record))
     }
@@ -398,6 +404,11 @@ impl Workspace {
             &self.config_dir().join(storage::TRANSLATION_FILE),
             &self.translation,
         )?;
+        // Grid view state is keyed by table name too; keep it with the table.
+        if let Some(view) = self.settings.grid_views.remove(from) {
+            self.settings.grid_views.insert(to.to_string(), view);
+            self.save_settings()?;
+        }
         self.mark_change(
             Instant::now(),
             format!("nueon: rename table \"{from}\" to \"{to}\""),
@@ -1914,8 +1925,8 @@ impl Workspace {
 mod tests {
     use super::*;
     use crate::config::{
-        AffixKind, MorphemeRef, Paradigm, ParadigmRow, Phoneme, PhonemeKind, PhonologyConfig,
-        TableRole, POS_TAG,
+        AffixKind, GridViewState, MorphemeRef, Paradigm, ParadigmRow, Phoneme, PhonemeKind,
+        PhonologyConfig, TableRole, POS_TAG,
     };
     use crate::model::{FieldType, FieldValue};
     use crate::vcs::git_available;
@@ -3553,6 +3564,15 @@ mod tests {
             }],
         });
 
+        ws.set_grid_view(
+            "fixes",
+            GridViewState {
+                search: "x".into(),
+                ..GridViewState::default()
+            },
+        )
+        .unwrap();
+
         assert!(ws.rename_table("fixes", "affixes").unwrap());
         assert!(ws.translation.table_roles.contains_key("affixes"));
         assert!(!ws.translation.table_roles.contains_key("fixes"));
@@ -3560,6 +3580,57 @@ mod tests {
             ws.translation.morphology.paradigms[0].rows[0].morpheme,
             Some(MorphemeRef::Ref {
                 table: "affixes".into(),
+                id: id.to_string(),
+            })
+        );
+        // Grid view state follows the table too.
+        assert_eq!(ws.grid_view("affixes").search, "x");
+        assert!(!ws.settings.grid_views.contains_key("fixes"));
+    }
+
+    #[test]
+    fn deleting_a_table_drops_grid_views_but_keeps_config() {
+        use std::collections::BTreeMap;
+
+        let dir = tempfile::tempdir().unwrap();
+        let mut ws = Workspace::new(dir.path()).unwrap();
+        ws.create_table("fixes").unwrap();
+        ws.set_table_role("fixes", TableRole::Fixes, None, None)
+            .unwrap();
+        let id = ws.create_entry("fixes", "-yu").unwrap().unwrap();
+        ws.set_grid_view(
+            "fixes",
+            GridViewState {
+                search: "x".into(),
+                ..GridViewState::default()
+            },
+        )
+        .unwrap();
+        ws.translation.morphology.paradigms.push(Paradigm {
+            class: "noun".into(),
+            rows: vec![ParadigmRow {
+                when: BTreeMap::from([("number".to_string(), "plural".to_string())]),
+                surface: String::new(),
+                kind: AffixKind::Suffix,
+                slot: None,
+                order: 0,
+                morpheme: Some(MorphemeRef::Ref {
+                    table: "fixes".into(),
+                    id: id.to_string(),
+                }),
+                zero: false,
+            }],
+        });
+
+        assert!(ws.delete_table("fixes").unwrap().is_some());
+        // View state is dropped with the table...
+        assert!(!ws.settings.grid_views.contains_key("fixes"));
+        // ...but roles and morpheme references are kept (broken until restored).
+        assert!(ws.translation.table_roles.contains_key("fixes"));
+        assert_eq!(
+            ws.translation.morphology.paradigms[0].rows[0].morpheme,
+            Some(MorphemeRef::Ref {
+                table: "fixes".into(),
                 id: id.to_string(),
             })
         );
