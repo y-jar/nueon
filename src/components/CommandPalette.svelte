@@ -1,8 +1,10 @@
 <script lang="ts">
   import { get } from "svelte/store";
   import { t } from "svelte-i18n";
+  import { onMount } from "svelte";
   import { autofocus } from "../lib/actions";
   import { stripMd } from "../lib/explorer";
+  import * as api from "../lib/api";
   import type { NoteNode } from "../lib/api";
   import {
     activeDoc,
@@ -26,6 +28,11 @@
 
   let query = $state("");
   let selected = $state(0);
+  let recents = $state<string[]>([]);
+
+  onMount(() => {
+    void api.recentList().then((list) => (recents = list));
+  });
 
   const tr = $derived(get(t));
 
@@ -43,6 +50,31 @@
 
   const commands = $derived.by(() => {
     const list: Command[] = [];
+    for (const entry of recents) {
+      if (entry.startsWith("note:")) {
+        const path = entry.slice(5);
+        list.push({
+          id: `recent-note-${path}`,
+          label: stripMd(path.split("/").pop() ?? path),
+          hint: tr("palette.recent"),
+          run: () => {
+            void selectNote(path);
+            close();
+          },
+        });
+      } else if (entry.startsWith("table:")) {
+        const name = entry.slice(6);
+        list.push({
+          id: `recent-table-${name}`,
+          label: name,
+          hint: tr("palette.recent"),
+          run: () => {
+            void selectTable(name);
+            close();
+          },
+        });
+      }
+    }
     const activities: [Activity, string][] = [
       ["notes", tr("activity.notes")],
       ["dictionary", tr("activity.dictionary")],

@@ -421,6 +421,9 @@ export const workspaceImportZip = (
   zipPath: string,
   dest: string,
 ): Promise<string> => invoke("workspace_import_zip", { zipPath, dest });
+export const recentRecord = (entry: string): Promise<void> =>
+  invoke("recent_record", { entry });
+export const recentList = (): Promise<string[]> => invoke("recent_list");
 export const knownTagNames = (): Promise<string[]> =>
   invoke("known_tag_names");
 export const gridViewGet = (table: string): Promise<GridViewState> =>

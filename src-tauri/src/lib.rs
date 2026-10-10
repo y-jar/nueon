@@ -148,6 +148,8 @@ pub fn run() {
             commands::workspace_current,
             commands::workspace_open,
             commands::workspace_create,
+            commands::recent_record,
+            commands::recent_list,
             commands::workspace_remove,
             commands::workspace_rename,
             commands::workspace_set_path,

@@ -13,6 +13,22 @@ use nueon_core::{
 use super::{changed, destroy_windows, secondary_labels};
 use crate::state::{default_name, AppState};
 
+/// Record a recently opened note or table (`note:<path>` / `table:<name>`).
+#[tauri::command]
+pub fn recent_record(state: State<'_, Shared>, entry: String) -> Result<(), String> {
+    let mut state = state.lock().map_err(|_| "state poisoned".to_string())?;
+    state.global.record_recent(entry);
+    let _ = state.global.save();
+    Ok(())
+}
+
+/// The recently opened items, newest first.
+#[tauri::command]
+pub fn recent_list(state: State<'_, Shared>) -> Result<Vec<String>, String> {
+    let state = state.lock().map_err(|_| "state poisoned".to_string())?;
+    Ok(state.global.recent.clone())
+}
+
 type Shared = Mutex<AppState>;
 
 /// Mark every secondary window as app-closed (so its saved layout survives)

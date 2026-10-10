@@ -52,6 +52,9 @@ pub struct GlobalConfig {
     /// unbinds it.
     #[serde(default, skip_serializing_if = "BTreeMap::is_empty")]
     pub keybinds: BTreeMap<String, String>,
+    /// Recently opened items (`note:<path>` or `table:<name>`), newest first.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub recent: Vec<String>,
 }
 
 /// Result type for global configuration operations.
@@ -143,6 +146,14 @@ impl GlobalConfig {
     /// Whether `path` is a registered workspace.
     pub fn contains(&self, path: &Path) -> bool {
         self.workspaces.iter().any(|entry| entry.path == path)
+    }
+
+    /// Record a recently opened item, newest first, deduplicated and capped.
+    pub fn record_recent(&mut self, entry: impl Into<String>) {
+        let entry = entry.into();
+        self.recent.retain(|existing| existing != &entry);
+        self.recent.insert(0, entry);
+        self.recent.truncate(20);
     }
 
     /// Rename a workspace's display name.
