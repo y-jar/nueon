@@ -1,6 +1,12 @@
 import { StateEffect, StateField } from "@codemirror/state";
 import type { Range } from "@codemirror/state";
 import {
+  autocompletion,
+  type Completion,
+  type CompletionContext,
+  type CompletionResult,
+} from "@codemirror/autocomplete";
+import {
   Decoration,
   type DecorationSet,
   EditorView,
@@ -9,9 +15,9 @@ import {
   hoverTooltip,
 } from "@codemirror/view";
 
-import { parseWikiLinks, resolveWikiTarget, type WikiTarget } from "../wikilink";
-import { codeLines } from "./blocks";
-import { wordIndexField } from "./dictionary";
+import { parseWikiLinks, resolveWikiTarget, type WikiTarget } from "../wikilink.ts";
+import { codeLines } from "./blocks.ts";
+import { wordIndexField } from "./dictionary.ts";
 
 /** Holds the note path set, updated via `setNotePaths`. */
 export const setNotePaths = StateEffect.define<Set<string>>();
@@ -164,4 +170,57 @@ export function wikiLinkHover() {
       },
     };
   });
+}
+
+/** Autocomplete words and notes as `[[name]]` while typing `[[`. */
+export function wikiCompletionSource(
+  context: CompletionContext,
+): CompletionResult | null {
+  const match = context.matchBefore(/\[\[[^\[\]\n]*/);
+  if (!match) return null;
+  const query = match.text.slice(2).toLowerCase();
+  const index = context.state.field(wordIndexField);
+  const notes = context.state.field(notePathsField);
+
+  const options: Completion[] = [];
+  const seen = new Set<string>();
+  for (const [name, hits] of Object.entries(index)) {
+    if (!hits.length || seen.has(name)) continue;
+    if (name.startsWith(query)) {
+      seen.add(name);
+      options.push({
+        label: hits[0].wordname,
+        type: "keyword",
+        detail: hits[0].table,
+        apply: `[[${hits[0].wordname}]]`,
+      });
+    }
+  }
+  for (const path of notes) {
+    const label = (path.split("/").pop() ?? path).replace(/\.md$/, "");
+    if (seen.has(label.toLowerCase())) continue;
+    if (label.toLowerCase().startsWith(query)) {
+      seen.add(label.toLowerCase());
+      options.push({
+        label,
+        type: "text",
+        detail: "note",
+        apply: `[[${label}]]`,
+      });
+    }
+  }
+  if (options.length === 0) return null;
+
+  // Consume the auto-closed `]]` (typed `[[` produced `[[]]`) on selection.
+  const after = context.state.sliceDoc(match.to, match.to + 2);
+  return {
+    from: match.from,
+    to: after === "]]" ? match.to + 2 : match.to,
+    options,
+    validFor: /^\[\[[^\[\]\n]*$/,
+  };
+}
+
+export function wikiCompletion() {
+  return autocompletion({ override: [wikiCompletionSource] });
 }

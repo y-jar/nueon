@@ -10,7 +10,7 @@ import {
 } from "@codemirror/view";
 
 import type { WordHit, WordIndex } from "../api";
-import { codeLines } from "./blocks";
+import { codeLines } from "./blocks.ts";
 
 export const setWordIndex = StateEffect.define<WordIndex>();
 

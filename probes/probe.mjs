@@ -4769,6 +4769,29 @@ async function main() {
       { label: "velo selected" },
     );
   });
+
+  // -- probe 77: [[ autocomplete offers words and notes ----------------------
+  await probe("77-wikilink-autocomplete", async () => {
+    await openActivity("Notes");
+    await openNote("type.md");
+    await waitJs(`!!document.querySelector('.cm-host[data-note="type.md"] .cm-content')`, {
+      label: "type editor",
+    });
+    await focusEditor("type.md");
+    // Typing `[[` opens the completion list (CodeMirror reports it via the
+    // `aria-autocomplete` content attribute; the source itself is unit-tested).
+    await js(`${viewScript("type.md")}
+      v.dispatch({
+        changes: { from: 0, insert: "[[" },
+        selection: { anchor: 2 },
+        userEvent: "input.type",
+      });
+      return v.state.doc.toString();`);
+    await waitJs(
+      `document.querySelector('.cm-host[data-note="type.md"] .cm-content')?.getAttribute('aria-autocomplete') === 'list'`,
+      { label: "completion active" },
+    );
+  });
 }
 
 try {

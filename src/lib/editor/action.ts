@@ -30,7 +30,7 @@ import {
   setWordIndex,
   wordIndexField,
 } from "./dictionary";
-import { notePathsField, setNotePaths, wikiLinkHover, wikiLinks } from "./wikiLinks";
+import { notePathsField, setNotePaths, wikiCompletion, wikiLinkHover, wikiLinks } from "./wikiLinks";
 import type { WikiTarget } from "../wikilink";
 import {
   EMPTY_FORMAT,
@@ -242,6 +242,7 @@ export const codemirror: Action<HTMLElement, EditorParams> = (node, params) => {
         dictionaryHover(),
         wikiLinks(() => current.onFollow),
         wikiLinkHover(),
+        wikiCompletion(),
         search({ top: true }),
         highlightSelectionMatches(),
         keymapCompartment.of(editorKeymaps(params.keybinds)),
