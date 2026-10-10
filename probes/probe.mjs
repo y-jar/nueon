@@ -4867,6 +4867,25 @@ async function main() {
       { label: "ka -> sa" },
     );
   });
+
+  // -- probe 80: the command palette opens and runs a command ----------------
+  await probe("80-command-palette", async () => {
+    await pressKey("p", [CTRL]);
+    await waitJs(`!!document.querySelector('.palette')`, { label: "palette open" });
+    await js(
+      `const i = document.querySelector('.palette > input');
+       i.value = 'dict';
+       i.dispatchEvent(new Event('input', { bubbles: true }));
+       return true;`,
+    );
+    await waitJs(
+      `[...document.querySelectorAll('.palette-row')]
+         .some((r) => r.textContent.includes('Dictionary'))`,
+      { label: "dictionary command" },
+    );
+    await pressKey(ENTER);
+    await waitJs(`!!document.querySelector('.table-list')`, { label: "dictionary open" });
+  });
 }
 
 try {

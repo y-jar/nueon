@@ -118,6 +118,17 @@
     "settings": "Settings",
     "toggleSidebar": "Toggle sidebar"
   },
+  "palette": {
+    "title": "Commands",
+    "placeholder": "Type a command, note, table or word\u2026",
+    "activity": "Activity",
+    "note": "Note",
+    "table": "Table",
+    "word": "Word",
+    "open": "Open",
+    "new": "New",
+    "noResults": "Nothing matches."
+  },
   "tabs": {
     "close": "Close tab",
     "newNote": "New note",

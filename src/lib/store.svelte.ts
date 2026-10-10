@@ -149,6 +149,8 @@ export const ui = $state({
   toast: null as ToastState | null,
   trashOpen: false,
   importOpen: false,
+  /** The command palette overlay. */
+  paletteOpen: false,
   /** Show the workspace picker/onboarding over an open workspace. */
   showWorkspacePicker: false,
 

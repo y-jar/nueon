@@ -28,6 +28,7 @@
   import Toast from "./components/Toast.svelte";
   import TrashModal from "./components/TrashModal.svelte";
   import ImportWizardModal from "./components/import/ImportWizardModal.svelte";
+  import CommandPalette from "./components/CommandPalette.svelte";
 
   const ACTIVITIES: Activity[] = [
     "notes",
@@ -139,6 +140,9 @@
       } else if (key === "w" && activeGroup().activeTabId) {
         event.preventDefault();
         closeTab(ui.activeGroupId, activeGroup().activeTabId!);
+      } else if (key === "p") {
+        event.preventDefault();
+        ui.paletteOpen = !ui.paletteOpen;
       }
     };
     window.addEventListener("keydown", handler);
@@ -184,6 +188,9 @@
 <ContextMenu />
 <ConfirmDialog />
 <Toast />
+{#if ui.paletteOpen}
+  <CommandPalette />
+{/if}
 {#if isMainWindow}
   <TrashModal />
   <ImportWizardModal />
