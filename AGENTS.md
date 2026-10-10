@@ -13,6 +13,16 @@ short on purpose and links to the detail.
   reproduces the problem, then makes it pass. Show both runs.
 - **One commit per finished stage**, green before committing.
 - **Don't add code comments** unless asked.
+- **Keep the docs in sync.** Before changing behaviour, read `docs/PSD.md` (and
+  the relevant `docs/` reference for the area). If a new feature or a change
+  isn't documented, update it in the existing style, in the same commit:
+  - `docs/PSD.md` — the feature's behaviour/data/invariants/code/proof entry.
+  - `docs/IPC.md` — new or changed commands, and any `data-changed` scope.
+  - `docs/STATE.md` / `docs/DATA-FORMATS.md` — state or on-disk format changes.
+  - `docs/UI-CONVENTIONS.md` / `docs/DECISIONS.md` — new UI contracts or
+    rationale.
+  - Module headers — a new file gets a `//!`/`<!-- -->` one-liner, and
+    `node scripts/gen-map.mjs` regenerates `docs/MAP.md`.
 
 ## Where things are
 
