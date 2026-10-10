@@ -249,6 +249,24 @@ async function pointerClick(x, y, hold = []) {
   await wd("POST", `/session/${sessionId}/actions`, { actions: sources });
 }
 
+/** A real right-click at viewport coordinates (fires mousedown + contextmenu). */
+async function rightClickAt(x, y) {
+  await wd("POST", `/session/${sessionId}/actions`, {
+    actions: [
+      {
+        type: "pointer",
+        id: "mouse",
+        parameters: { pointerType: "mouse" },
+        actions: [
+          { type: "pointerMove", duration: 0, origin: "viewport", x, y },
+          { type: "pointerDown", button: 2 },
+          { type: "pointerUp", button: 2 },
+        ],
+      },
+    ],
+  });
+}
+
 async function screenshot(name) {
   try {
     const png = await wd("GET", `/session/${sessionId}/screenshot`);
@@ -5745,6 +5763,73 @@ async function main() {
     if (rejections.length) {
       throw new Error(`unhandled rejections: ${JSON.stringify(rejections)}`);
     }
+  });
+
+  // -- probe 96: the column header menu closes on Escape / outside / action --
+  await probe("96-column-menu-dismiss", async () => {
+    await openActivity("Dictionary");
+    await waitJs(`!!document.querySelector('.table-list')`, { label: "tables panel" });
+    await js(`
+      const b = [...document.querySelectorAll('.table-list .table-row .tree-name')]
+        .find((x) => x.textContent.trim().startsWith('lex'));
+      if (b) b.click();
+      return !!b;`);
+    await waitJs(`!!document.querySelector('.dict-grid')`, { label: "lex grid" });
+
+    await js(`
+      window.__ctxErrors = [];
+      window.addEventListener('error', (e) => window.__ctxErrors.push(String(e.message)));
+      window.addEventListener('unhandledrejection', (e) => window.__ctxErrors.push('rej:' + String(e.reason)));
+      return true;`);
+
+    const openColMenu = () =>
+      js(`
+        const th = document.querySelector('.dict-grid thead th:nth-child(2)');
+        if (!th) return { ok: false };
+        const r = th.getBoundingClientRect();
+        return { ok: true, x: Math.round(r.left + r.width / 2), y: Math.round(r.top + r.height / 2) };
+      `).then(async (pos) => {
+        if (!pos || !pos.ok) return false;
+        await rightClickAt(pos.x, pos.y);
+        return true;
+      });
+    const menuOpen = () => js(`return !!document.querySelector('.ctx-menu');`);
+
+    if (!(await openColMenu())) throw new Error("no column header to right-click");
+    await waitJs(`!!document.querySelector('.ctx-menu')`, { label: "column menu" });
+
+    // Escape closes it.
+    await pressKey("\uE00C");
+    await new Promise((resolve) => setTimeout(resolve, 200));
+    const afterEscape = await menuOpen();
+    const errs = await js(`return window.__ctxErrors ?? [];`);
+    if (afterEscape) {
+      throw new Error(`menu still open after Escape; errors=${JSON.stringify(errs)}`);
+    }
+    if (errs.length) throw new Error(`errors: ${JSON.stringify(errs)}`);
+
+    // An outside mousedown closes it.
+    if (!(await openColMenu())) throw new Error("no column header (2)");
+    await waitJs(`!!document.querySelector('.ctx-menu')`, { label: "column menu 2" });
+    await js(`
+      const tbody = document.querySelector('.dict-grid tbody');
+      tbody.dispatchEvent(new MouseEvent('mousedown',
+        { bubbles: true, cancelable: true, clientX: 60, clientY: 300 }));
+      return true;`);
+    await new Promise((resolve) => setTimeout(resolve, 200));
+    if (await menuOpen()) throw new Error("menu still open after outside click");
+
+    // Choosing a sort action closes it.
+    if (!(await openColMenu())) throw new Error("no column header (3)");
+    await waitJs(`!!document.querySelector('.ctx-menu')`, { label: "column menu 3" });
+    const clicked = await js(`
+      const b = [...document.querySelectorAll('.ctx-menu button')]
+        .find((x) => x.textContent.trim().includes('A'));
+      if (b) b.click();
+      return !!b;`);
+    if (!clicked) throw new Error("no sort action in the column menu");
+    await new Promise((resolve) => setTimeout(resolve, 200));
+    if (await menuOpen()) throw new Error("menu still open after an action");
   });
 }
 

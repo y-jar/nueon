@@ -88,6 +88,14 @@
       : "",
   );
 
+  // The column payload when this is a grid column menu, else null. A derived
+  // value is used instead of an `{@const}` inside the branch: the branch is
+  // destroyed when `menu` clears, and a stale `{@const}` can leave the menu
+  // rendered (stuck) on some Svelte 5 revisions.
+  const column = $derived.by(() =>
+    menu && menu.kind === "column" && menu.column ? menu.column : null,
+  );
+
   function reveal() {
     if (!menu || !ui.root) return;
     const target = menu.path
@@ -159,53 +167,52 @@
           ui.trashOpen = true;
         }}>{$t("trash.open")}</button
       >
-    {:else if menu.kind === "column" && menu.column}
-      {@const col = menu.column}
-      {#if col.canHide}
+    {:else if column}
+      {#if column.canHide}
         <button
           onclick={() => {
-            col.onHide();
+            column.onHide();
             closeContextMenu();
           }}>{$t("grid.hideColumn")}</button
         >
       {/if}
       <button
         onclick={() => {
-          col.onSortAsc();
+          column.onSortAsc();
           closeContextMenu();
         }}>{$t("grid.sortAsc")}</button
       >
       <button
         onclick={() => {
-          col.onSortDesc();
+          column.onSortDesc();
           closeContextMenu();
         }}>{$t("grid.sortDesc")}</button
       >
       <button
         onclick={() => {
-          col.onClearSort();
+          column.onClearSort();
           closeContextMenu();
         }}>{$t("grid.clearSort")}</button
       >
-      {#if col.isTag && col.onChangeKind}
+      {#if column.isTag && column.onChangeKind}
         <div class="ctx-submenu">
           <span class="muted">{$t("grid.changeType")}</span>
           {#each COLUMN_TYPES as type (type.id)}
             <button
-              class:active={col.kind === type.id}
+              class:active={column.kind === type.id}
               onclick={() => {
-                col.onChangeKind?.(type.id);
+                column.onChangeKind?.(type.id);
                 closeContextMenu();
               }}>{type.label}</button
             >
           {/each}
         </div>
       {/if}
-      {#if col.isTag && col.onDelete}
+      {#if column.isTag && column.onDelete}
         <button
           class="danger"
           onclick={() => {
-            col.onDelete?.();
+            column.onDelete?.();
             closeContextMenu();
           }}>{$t("grid.deleteTag")}</button
         >

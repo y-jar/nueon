@@ -43,6 +43,23 @@
   let teardown: (() => void)[] = [];
 
   onMount(() => {
+    // Surface errors and unhandled rejections that would otherwise be silent
+    // (a render error can leave an overlay such as a context menu stuck).
+    const onError = (event: ErrorEvent) => {
+      console.error("nueon error:", event.message);
+      ui.status = `Error: ${event.message}`;
+    };
+    const onRejection = (event: PromiseRejectionEvent) => {
+      console.error("nueon unhandled rejection:", event.reason);
+      ui.status = `Error: ${String(event.reason)}`;
+    };
+    window.addEventListener("error", onError);
+    window.addEventListener("unhandledrejection", onRejection);
+    teardown.push(() => {
+      window.removeEventListener("error", onError);
+      window.removeEventListener("unhandledrejection", onRejection);
+    });
+
     void (async () => {
       await init();
       teardown.push(await installDragBridge());
