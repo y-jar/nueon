@@ -97,15 +97,17 @@
   }
 
   function onAuxClick(event: MouseEvent, id: string) {
-    if (event.button === 1) {
-      event.preventDefault();
-      closeTab(group.id, id);
-    }
+    if (event.button !== 1) return;
+    // Leave the close button's own handling alone (its left-click closes).
+    if ((event.target as HTMLElement).closest(".tab-close")) return;
+    event.preventDefault();
+    closeTab(group.id, id);
   }
 
   // Roving focus within the tablist: arrows move (and activate) the tab,
-  // Home/End jump to the first/last.
+  // Home/End jump to the first/last. Modifier combos are left alone.
   function onStripKeydown(event: KeyboardEvent) {
+    if (event.ctrlKey || event.metaKey || event.altKey) return;
     const tabs = group.tabs;
     if (!tabs.length) return;
     const index = tabs.findIndex((tab) => tab.id === group.activeTabId);
@@ -163,6 +165,7 @@
         tabindex={tab.id === group.activeTabId ? 0 : -1}
         draggable="true"
         title={tab.title}
+        onauxclick={(e) => onAuxClick(e, tab.id)}
         ondragstart={(e) => onDragStart(e, tab)}
         ondragend={onDragEnd}
         oncontextmenu={(e) => {
@@ -176,7 +179,6 @@
           class="tab-label"
           tabindex="-1"
           onclick={() => activateTab(group.id, tab.id)}
-          onauxclick={(e) => onAuxClick(e, tab.id)}
         >
           {#if tab.kind === "note"}
             <FileText size={13} />

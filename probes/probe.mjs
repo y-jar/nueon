@@ -5395,6 +5395,21 @@ async function main() {
                focused: document.activeElement === p.querySelector('.tab.active') };`);
     if (!end.last) throw new Error("End did not activate the last tab");
 
+    // A modifier held with an arrow must not move tabs.
+    const lastTitle = await js(
+      `const p = document.querySelector('.group-pane.active') || document;
+       return p.querySelector('.tab.active .tab-title')?.textContent.trim() ?? null;`,
+    );
+    await pressKey(ARROW_LEFT, [CTRL]);
+    await new Promise((resolve) => setTimeout(resolve, 150));
+    const afterMod = await js(
+      `const p = document.querySelector('.group-pane.active') || document;
+       return p.querySelector('.tab.active .tab-title')?.textContent.trim() ?? null;`,
+    );
+    if (afterMod !== lastTitle) {
+      throw new Error(`Ctrl+ArrowLeft moved tabs (${lastTitle} -> ${afterMod})`);
+    }
+
     // The close button becomes visible when its tab has keyboard focus.
     const closeOpacity = await js(`
       const p = document.querySelector('.group-pane.active') || document;
@@ -5636,6 +5651,59 @@ async function main() {
       const plus = document.querySelector('.group-pane.active .tab-new');
       return !!plus && document.activeElement === plus;`);
     if (!focusActive) throw new Error("focusing the + did not make its pane active");
+  });
+
+  // -- probe 94: middle-click closes a tab from anywhere on it ----------------
+  await probe("94-tab-middle-click", async () => {
+    await openActivity("Notes");
+    await collapsePanes();
+    await openNote("type.md");
+    await openNote("links.md");
+    await waitJs(`document.querySelectorAll('.group-pane.active .tab-strip .tab').length >= 2`, {
+      label: "tabs",
+    });
+    const tabCount = () =>
+      js(`const p = document.querySelector('.group-pane.active') || document;
+          return p.querySelectorAll('.tab-strip .tab').length;`);
+
+    // Middle-click on the tab body (not the label) closes it.
+    const before = await tabCount();
+    await js(`
+      const p = document.querySelector('.group-pane.active') || document;
+      const tab = p.querySelector('.tab.active');
+      tab.dispatchEvent(new MouseEvent('auxclick',
+        { bubbles: true, cancelable: true, button: 1 }));
+      return true;`);
+    await new Promise((resolve) => setTimeout(resolve, 200));
+    const afterBody = await tabCount();
+    if (afterBody !== before - 1) {
+      throw new Error(`middle-click on tab body did not close (${before} -> ${afterBody})`);
+    }
+
+    // Middle-click on the close button and on + are unaffected.
+    await openNote("type.md");
+    await waitJs(`document.querySelectorAll('.group-pane.active .tab-strip .tab').length >= 1`, {
+      label: "tabs again",
+    });
+    const beforeClose = await tabCount();
+    await js(`
+      const p = document.querySelector('.group-pane.active') || document;
+      p.querySelector('.tab.active .tab-close').dispatchEvent(new MouseEvent('auxclick',
+        { bubbles: true, cancelable: true, button: 1 }));
+      return true;`);
+    await new Promise((resolve) => setTimeout(resolve, 200));
+    if ((await tabCount()) !== beforeClose) {
+      throw new Error("middle-click on the close button closed the tab");
+    }
+    await js(`
+      const p = document.querySelector('.group-pane.active') || document;
+      p.querySelector('.tab-new').dispatchEvent(new MouseEvent('auxclick',
+        { bubbles: true, cancelable: true, button: 1 }));
+      return true;`);
+    await new Promise((resolve) => setTimeout(resolve, 200));
+    if ((await tabCount()) !== beforeClose) {
+      throw new Error("middle-click on + changed the tabs");
+    }
   });
 }
 
