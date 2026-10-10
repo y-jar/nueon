@@ -139,6 +139,26 @@ struct Picked {
     features: BTreeMap<String, String>,
 }
 
+/// The shared inputs to a translation run (grid or word-for-word).
+#[derive(Clone, Copy)]
+pub struct TranslateInput<'a> {
+    pub dict: &'a Dictionary,
+    pub separator: &'a str,
+    pub input: &'a str,
+    pub choices: &'a HashMap<usize, Uuid>,
+    pub affixes: &'a [AffixRule],
+    pub morphology: &'a Morphology,
+    pub selections: &'a BTreeMap<String, String>,
+}
+
+/// [`TranslateInput`] plus the tables to skip and the morpheme inventory.
+#[derive(Clone, Copy)]
+pub struct ScopedInput<'a> {
+    pub input: TranslateInput<'a>,
+    pub skip_tables: &'a BTreeSet<String>,
+    pub morphemes: &'a [Morpheme],
+}
+
 /// Translate `input` using `grid`, without any feature morphology.
 pub fn translate(
     dict: &Dictionary,
@@ -149,60 +169,45 @@ pub fn translate(
     affixes: &[AffixRule],
 ) -> TranslationReport {
     translate_with(
-        dict,
         grid,
-        separator,
-        input,
-        choices,
-        affixes,
-        &Morphology::default(),
-        &BTreeMap::new(),
+        &TranslateInput {
+            dict,
+            separator,
+            input,
+            choices,
+            affixes,
+            morphology: &Morphology::default(),
+            selections: &BTreeMap::new(),
+        },
     )
 }
 
 /// Translate `input` using `grid`, applying `morphology` for any selected
 /// features. `choices` resolves conflicts by token index.
-#[allow(clippy::too_many_arguments)]
-pub fn translate_with(
-    dict: &Dictionary,
-    grid: &SyntaxGrid,
-    separator: &str,
-    input: &str,
-    choices: &HashMap<usize, Uuid>,
-    affixes: &[AffixRule],
-    morphology: &Morphology,
-    selections: &BTreeMap<String, String>,
-) -> TranslationReport {
-    translate_with_scoped(
+pub fn translate_with(grid: &SyntaxGrid, input: &TranslateInput) -> TranslationReport {
+    let scoped = ScopedInput {
+        input: *input,
+        skip_tables: &BTreeSet::new(),
+        morphemes: &[],
+    };
+    translate_with_scoped(grid, &scoped)
+}
+
+/// Like [`translate_with`], but skipping `skip_tables` during root lookup and
+/// resolving paradigm `morpheme` references against `morphemes`. A `Fixes`
+/// table's rows are morphemes, never candidate roots.
+pub fn translate_with_scoped(grid: &SyntaxGrid, ctx: &ScopedInput) -> TranslationReport {
+    let TranslateInput {
         dict,
-        grid,
         separator,
         input,
         choices,
         affixes,
         morphology,
         selections,
-        &BTreeSet::new(),
-        &[],
-    )
-}
-
-/// Like [`translate_with`], but skipping `skip_tables` during root lookup and
-/// resolving paradigm `morpheme` references against `morphemes`. A `Fixes`
-/// table's rows are morphemes, never candidate roots.
-#[allow(clippy::too_many_arguments)]
-pub fn translate_with_scoped(
-    dict: &Dictionary,
-    grid: &SyntaxGrid,
-    separator: &str,
-    input: &str,
-    choices: &HashMap<usize, Uuid>,
-    affixes: &[AffixRule],
-    morphology: &Morphology,
-    selections: &BTreeMap<String, String>,
-    skip_tables: &BTreeSet<String>,
-    morphemes: &[Morpheme],
-) -> TranslationReport {
+    } = ctx.input;
+    let skip_tables = ctx.skip_tables;
+    let morphemes = ctx.morphemes;
     let tokens = tokenize(input);
     let candidates: Vec<Vec<Match>> = tokens
         .iter()
@@ -436,29 +441,32 @@ pub fn translate_direct(
     choices: &HashMap<usize, Uuid>,
     affixes: &[AffixRule],
 ) -> TranslationReport {
-    translate_direct_with(
+    translate_direct_with(&TranslateInput {
         dict,
         separator,
         input,
         choices,
         affixes,
-        &Morphology::default(),
-        &BTreeMap::new(),
-    )
+        morphology: &Morphology::default(),
+        selections: &BTreeMap::new(),
+    })
 }
 
 /// Word-for-word with feature morphology applied.
-#[allow(clippy::too_many_arguments)]
-pub fn translate_direct_with(
-    dict: &Dictionary,
-    separator: &str,
-    input: &str,
-    choices: &HashMap<usize, Uuid>,
-    affixes: &[AffixRule],
-    morphology: &Morphology,
-    selections: &BTreeMap<String, String>,
-) -> TranslationReport {
-    translate_direct_with_scoped(
+pub fn translate_direct_with(input: &TranslateInput) -> TranslationReport {
+    let scoped = ScopedInput {
+        input: *input,
+        skip_tables: &BTreeSet::new(),
+        morphemes: &[],
+    };
+    translate_direct_with_scoped(&scoped)
+}
+
+/// Like [`translate_direct_with`], but skipping `skip_tables` during root
+/// lookup and pass-through, and resolving paradigm `morpheme` references
+/// against `morphemes`.
+pub fn translate_direct_with_scoped(ctx: &ScopedInput) -> TranslationReport {
+    let TranslateInput {
         dict,
         separator,
         input,
@@ -466,26 +474,9 @@ pub fn translate_direct_with(
         affixes,
         morphology,
         selections,
-        &BTreeSet::new(),
-        &[],
-    )
-}
-
-/// Like [`translate_direct_with`], but skipping `skip_tables` during root
-/// lookup and pass-through, and resolving paradigm `morpheme` references
-/// against `morphemes`.
-#[allow(clippy::too_many_arguments)]
-pub fn translate_direct_with_scoped(
-    dict: &Dictionary,
-    separator: &str,
-    input: &str,
-    choices: &HashMap<usize, Uuid>,
-    affixes: &[AffixRule],
-    morphology: &Morphology,
-    selections: &BTreeMap<String, String>,
-    skip_tables: &BTreeSet<String>,
-    morphemes: &[Morpheme],
-) -> TranslationReport {
+    } = ctx.input;
+    let skip_tables = ctx.skip_tables;
+    let morphemes = ctx.morphemes;
     let tokens = tokenize(input);
     let mut slots = Vec::new();
     let mut gloss_morphemes = Vec::new();
@@ -753,14 +744,16 @@ mod tests {
         let dict = noun_dict();
         let grid = grid(vec![ClauseSlot::Wildcard]);
         let report = translate_with(
-            &dict,
             &grid,
-            " ",
-            "dogs",
-            &HashMap::new(),
-            &no_affixes(),
-            &noun_plural(),
-            &BTreeMap::new(),
+            &TranslateInput {
+                dict: &dict,
+                separator: " ",
+                input: "dogs",
+                choices: &HashMap::new(),
+                affixes: &no_affixes(),
+                morphology: &noun_plural(),
+                selections: &BTreeMap::new(),
+            },
         );
         assert_eq!(report.output, "kalai");
     }
@@ -771,14 +764,16 @@ mod tests {
         let grid = grid(vec![ClauseSlot::Wildcard]);
         let explicit = BTreeMap::from([("number".to_string(), "singular".to_string())]);
         let report = translate_with(
-            &dict,
             &grid,
-            " ",
-            "dogs",
-            &HashMap::new(),
-            &no_affixes(),
-            &noun_plural(),
-            &explicit,
+            &TranslateInput {
+                dict: &dict,
+                separator: " ",
+                input: "dogs",
+                choices: &HashMap::new(),
+                affixes: &no_affixes(),
+                morphology: &noun_plural(),
+                selections: &explicit,
+            },
         );
         assert_eq!(report.output, "kala");
     }
@@ -848,46 +843,50 @@ mod tests {
         let affixes = dictionary_affixes(&dict, &roles);
 
         // "dogz" has no plural/verb lemma, so it reaches the fixes affix.
-        let report = translate_direct_with_scoped(
-            &dict,
-            " ",
-            "dogz",
-            &HashMap::new(),
-            &affixes,
-            &Morphology::default(),
-            &BTreeMap::new(),
-            &skip,
-            &[],
-        );
+        let report = translate_direct_with_scoped(&ScopedInput {
+            input: TranslateInput {
+                dict: &dict,
+                separator: " ",
+                input: "dogz",
+                choices: &HashMap::new(),
+                affixes: &affixes,
+                morphology: &Morphology::default(),
+                selections: &BTreeMap::new(),
+            },
+            skip_tables: &skip,
+            morphemes: &[],
+        });
         assert_eq!(report.output, "kalai");
 
         // The fixes entry's own sense ("cat") is never matched as a root.
-        let report = translate_direct_with_scoped(
-            &dict,
-            " ",
-            "cat",
-            &HashMap::new(),
-            &affixes,
-            &Morphology::default(),
-            &BTreeMap::new(),
-            &skip,
-            &[],
-        );
+        let report = translate_direct_with_scoped(&ScopedInput {
+            input: TranslateInput {
+                dict: &dict,
+                separator: " ",
+                input: "cat",
+                choices: &HashMap::new(),
+                affixes: &affixes,
+                morphology: &Morphology::default(),
+                selections: &BTreeMap::new(),
+            },
+            skip_tables: &skip,
+            morphemes: &[],
+        });
         assert_eq!(report.missing, vec![0]);
     }
 
     #[test]
     fn a_plural_input_inflects_in_direct_mode() {
         let dict = noun_dict();
-        let report = translate_direct_with(
-            &dict,
-            " ",
-            "dogs",
-            &HashMap::new(),
-            &no_affixes(),
-            &noun_plural(),
-            &BTreeMap::new(),
-        );
+        let report = translate_direct_with(&TranslateInput {
+            dict: &dict,
+            separator: " ",
+            input: "dogs",
+            choices: &HashMap::new(),
+            affixes: &no_affixes(),
+            morphology: &noun_plural(),
+            selections: &BTreeMap::new(),
+        });
         assert_eq!(report.output, "kalai");
     }
 

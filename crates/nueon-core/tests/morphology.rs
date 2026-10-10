@@ -5,7 +5,7 @@ use std::collections::{BTreeMap, BTreeSet, HashMap};
 use nueon_core::config::POS_TAG;
 use nueon_core::model::translate::{
     class_column, compose, dictionary_affixes, dictionary_morphemes, inflect, inherent_values,
-    paradigm_grid, translate_direct_with_scoped,
+    paradigm_grid, translate_direct_with_scoped, ScopedInput, TranslateInput,
 };
 use nueon_core::model::TranslationReport;
 use nueon_core::{
@@ -73,17 +73,19 @@ fn run(
     morphology: &Morphology,
     selections: &BTreeMap<String, String>,
 ) -> TranslationReport {
-    translate_direct_with_scoped(
-        dict,
-        " ",
-        "dog",
-        &HashMap::new(),
-        &[],
-        morphology,
-        selections,
-        &BTreeSet::new(),
-        &[],
-    )
+    translate_direct_with_scoped(&ScopedInput {
+        input: TranslateInput {
+            dict,
+            separator: " ",
+            input: "dog",
+            choices: &HashMap::new(),
+            affixes: &[],
+            morphology,
+            selections,
+        },
+        skip_tables: &BTreeSet::new(),
+        morphemes: &[],
+    })
 }
 
 #[test]
@@ -255,17 +257,19 @@ fn a_slot_can_reference_a_fixes_table_morpheme() {
     });
     let morphology = morphology(vec![plural_row]);
 
-    let report = translate_direct_with_scoped(
-        &dict,
-        " ",
-        "dog",
-        &HashMap::new(),
-        &[],
-        &morphology,
-        &selections(&[("number", "plural")]),
-        &BTreeSet::from(["fixes".to_string()]),
-        &morphemes,
-    );
+    let report = translate_direct_with_scoped(&ScopedInput {
+        input: TranslateInput {
+            dict: &dict,
+            separator: " ",
+            input: "dog",
+            choices: &HashMap::new(),
+            affixes: &[],
+            morphology: &morphology,
+            selections: &selections(&[("number", "plural")]),
+        },
+        skip_tables: &BTreeSet::from(["fixes".to_string()]),
+        morphemes: &morphemes,
+    });
     assert_eq!(report.output, "kalau");
     let gloss: Vec<&str> = report
         .gloss
@@ -465,17 +469,19 @@ fn a_referenced_morpheme_inflects_uene_to_ueneyu() {
     });
     let morphology = morphology(vec![plural]);
 
-    let report = translate_direct_with_scoped(
-        &dict,
-        " ",
-        "dog",
-        &HashMap::new(),
-        &[],
-        &morphology,
-        &selections(&[("number", "plural")]),
-        &BTreeSet::from(["fixes".to_string()]),
-        &morphemes,
-    );
+    let report = translate_direct_with_scoped(&ScopedInput {
+        input: TranslateInput {
+            dict: &dict,
+            separator: " ",
+            input: "dog",
+            choices: &HashMap::new(),
+            affixes: &[],
+            morphology: &morphology,
+            selections: &selections(&[("number", "plural")]),
+        },
+        skip_tables: &BTreeSet::from(["fixes".to_string()]),
+        morphemes: &morphemes,
+    });
     assert_eq!(report.output, "ueneyu");
 }
 
@@ -520,17 +526,19 @@ fn legacy_key_and_id_ref_resolve_alike() {
 
     let skip = BTreeSet::from(["fixes".to_string()]);
     let run = |m: &Morphology| {
-        translate_direct_with_scoped(
-            &dict,
-            " ",
-            "dog",
-            &HashMap::new(),
-            &[],
-            m,
-            &selections(&[("number", "plural")]),
-            &skip,
-            &morphemes,
-        )
+        translate_direct_with_scoped(&ScopedInput {
+            input: TranslateInput {
+                dict: &dict,
+                separator: " ",
+                input: "dog",
+                choices: &HashMap::new(),
+                affixes: &[],
+                morphology: m,
+                selections: &selections(&[("number", "plural")]),
+            },
+            skip_tables: &skip,
+            morphemes: &morphemes,
+        })
         .output
     };
     assert_eq!(run(&key), "kalau");

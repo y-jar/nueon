@@ -6,6 +6,7 @@ use std::sync::Mutex;
 use tauri::{AppHandle, State};
 use uuid::Uuid;
 
+use nueon_core::model::translate::{ScopedInput, TranslateInput};
 use nueon_core::model::TranslationReport;
 use nueon_core::{Morphology, SyntaxGrid, TableRole, TableRoleConfig, TranslationOptions, WordHit};
 
@@ -120,16 +121,20 @@ pub fn execute_translation(
     let fixes = workspace.fixes_tables();
     let morphemes = workspace.translation_morphemes();
     Ok(nueon_core::model::translate::translate_with_scoped(
-        &workspace.dictionary,
         &grid,
-        separator,
-        &input_text,
-        &resolved,
-        &affixes,
-        &workspace.translation.morphology,
-        &features,
-        &fixes,
-        &morphemes,
+        &ScopedInput {
+            input: TranslateInput {
+                dict: &workspace.dictionary,
+                separator,
+                input: &input_text,
+                choices: &resolved,
+                affixes: &affixes,
+                morphology: &workspace.translation.morphology,
+                selections: &features,
+            },
+            skip_tables: &fixes,
+            morphemes: &morphemes,
+        },
     ))
 }
 
@@ -169,15 +174,19 @@ pub fn execute_translation_direct(
     let fixes = workspace.fixes_tables();
     let morphemes = workspace.translation_morphemes();
     Ok(nueon_core::model::translate::translate_direct_with_scoped(
-        &workspace.dictionary,
-        separator,
-        &input_text,
-        &resolved,
-        &affixes,
-        &workspace.translation.morphology,
-        &features,
-        &fixes,
-        &morphemes,
+        &ScopedInput {
+            input: TranslateInput {
+                dict: &workspace.dictionary,
+                separator,
+                input: &input_text,
+                choices: &resolved,
+                affixes: &affixes,
+                morphology: &workspace.translation.morphology,
+                selections: &features,
+            },
+            skip_tables: &fixes,
+            morphemes: &morphemes,
+        },
     ))
 }
 
