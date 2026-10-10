@@ -1,0 +1,222 @@
+/* -- editor --------------------------------------------------------------- */
+
+.editor {
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+}
+
+.editor-inner {
+  display: flex;
+  flex: 1;
+  flex-direction: column;
+  min-height: 0;
+  padding: 8px;
+}
+
+.editor-toolbar {
+  position: sticky;
+  top: 0;
+  z-index: 5;
+  display: flex;
+  align-items: center;
+  gap: 2px;
+  padding: 4px 8px;
+  background: var(--panel);
+  border-bottom: 1px solid var(--border);
+}
+
+.editor-toolbar button {
+  display: grid;
+  place-items: center;
+  width: 28px;
+  height: 26px;
+  padding: 0;
+  background: transparent;
+  border: 1px solid transparent;
+  border-radius: 4px;
+  color: var(--muted);
+}
+
+.editor-toolbar button:hover {
+  background: var(--faint);
+  color: var(--text);
+}
+
+.editor-toolbar button.active {
+  color: var(--accent);
+  border-color: var(--accent);
+}
+
+.toolbar-sep {
+  width: 1px;
+  height: 16px;
+  margin: 0 4px;
+  background: var(--border);
+}
+
+.cm-underline {
+  text-decoration: underline;
+}
+
+.editor-head {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 6px;
+}
+
+.editor-body {
+  flex: 1;
+  width: 100%;
+  resize: none;
+  font-family: ui-monospace, "JetBrains Mono", monospace;
+  font-size: 13px;
+  line-height: 1.5;
+  background: var(--bg);
+}
+
+.cm-host {
+  flex: 1;
+  min-height: 0;
+  overflow: hidden;
+  border: 1px solid var(--border);
+  border-radius: 4px;
+}
+
+.cm-host .cm-editor {
+  height: 100%;
+}
+
+.cm-tooltip {
+  background: var(--panel);
+  border: 1px solid var(--border);
+  border-radius: 4px;
+}
+
+.cm-dict-tooltip {
+  padding: 6px 8px;
+  max-width: 360px;
+  font-size: 12px;
+  color: var(--text);
+}
+
+.cm-dict-row + .cm-dict-row {
+  margin-top: 6px;
+  padding-top: 6px;
+  border-top: 1px solid var(--border);
+}
+
+.note {
+  margin: 6px 0 0;
+}
+
+.placeholder {
+  padding: 16px;
+  color: var(--muted);
+}
+
+/* -- live preview constructs --------------------------------------------- */
+
+.cm-image {
+  margin: 6px 0;
+}
+
+.cm-image img {
+  max-width: 100%;
+  border-radius: 4px;
+}
+
+.cm-image-error {
+  color: var(--muted);
+  font-size: 12px;
+  font-style: italic;
+}
+
+/* Vertical spacing lives on the wrapper as padding: CodeMirror measures a
+   block widget with getBoundingClientRect().height, which excludes margins but
+   includes padding, so a margin made the layout taller than the model and
+   shifted the cursor/line-number mapping. */
+.cm-table-wrap {
+  padding: 6px 0;
+  cursor: text;
+}
+
+table.cm-table {
+  border-collapse: collapse;
+  font-size: 13px;
+}
+
+table.cm-table th,
+table.cm-table td {
+  border: 1px solid var(--border);
+  padding: 2px 8px;
+  text-align: left;
+}
+
+table.cm-table th {
+  background: var(--panel);
+}
+
+input.cm-task {
+  vertical-align: middle;
+  margin-right: 4px;
+  accent-color: var(--accent);
+}
+
+sup.cm-footnote {
+  color: var(--accent);
+  cursor: help;
+}
+
+/* -- live preview math + HTML -------------------------------------------- */
+
+.cm-math-display {
+  display: block;
+  text-align: center;
+  /* Padding, not margin — see `table.cm-table` (block-widget measurement). */
+  padding: 6px 0;
+  cursor: text;
+}
+
+/* KaTeX gives display math a 1em margin; inside our padded wrapper that both
+   offsets the formula and inflates the measured block height. */
+.cm-math-display .katex-display {
+  margin: 0;
+}
+
+.cm-math {
+  padding: 0 1px;
+}
+
+.cm-html-block {
+  padding: 6px 0;
+  cursor: text;
+  /* The editor content is `white-space: pre-wrap`; without this the raw HTML's
+     newlines render as real line breaks, making a one-line block three lines
+     tall. */
+  white-space: normal;
+}
+
+/* -- interlinear gloss --------------------------------------------------- */
+
+.interlinear {
+  margin: 8px 0;
+}
+
+.gloss-table {
+  display: grid;
+  gap: 2px 14px;
+  margin: 4px 0;
+  font-size: 13px;
+}
+
+.gloss-morph {
+  color: var(--accent);
+}
+
+.gloss-translation {
+  font-style: italic;
+  color: var(--text);
+  margin-bottom: 6px;
+}

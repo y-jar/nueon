@@ -1,0 +1,607 @@
+/* -- dictionary grid ------------------------------------------------------ */
+
+.grid-view {
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+  padding: 8px;
+  gap: 6px;
+}
+
+.grid-toolbar {
+  display: flex;
+  gap: 6px;
+  align-items: center;
+  flex-wrap: wrap;
+}
+
+.grid-toolbar input.filter {
+  flex: 1;
+  min-width: 120px;
+}
+
+.grid-scroll {
+  flex: 1;
+  overflow: auto;
+  /* Don't let browser scroll anchoring fight the virtualizer's spacers. */
+  overflow-anchor: none;
+  border: 1px solid var(--border);
+  border-radius: 4px;
+}
+
+table.dict-grid {
+  border-collapse: collapse;
+  table-layout: fixed;
+  font-size: 13px;
+}
+
+table.dict-grid td {
+  overflow: hidden;
+}
+
+table.dict-grid th > button.sort {
+  max-width: calc(100% - 8px);
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+table.dict-grid th {
+  position: sticky;
+  top: 0;
+  z-index: 3;
+  background: var(--panel);
+  text-align: left;
+  padding: 5px 6px;
+  border-bottom: 1px solid var(--border);
+  cursor: pointer;
+  user-select: none;
+  white-space: nowrap;
+}
+
+table.dict-grid td {
+  padding: 2px 6px;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.04);
+}
+
+table.dict-grid tr.selected {
+  background: rgba(196, 148, 92, 0.12);
+}
+
+table.dict-grid td input:not([type="checkbox"]) {
+  width: 100%;
+  background: transparent;
+  border: 1px solid transparent;
+  padding: 2px 4px;
+}
+
+table.dict-grid td input:focus {
+  border-color: var(--accent);
+  background: var(--bg);
+}
+
+table.dict-grid th button.sort {
+  background: transparent;
+  border: none;
+  padding: 0;
+  color: inherit;
+  font: inherit;
+  font-weight: 600;
+}
+
+table.dict-grid input.col-filter {
+  width: 100%;
+  min-width: 60px;
+  font-size: 11px;
+  padding: 1px 4px;
+}
+
+.col-picker {
+  position: relative;
+}
+
+.col-picker summary {
+  cursor: pointer;
+  font-size: 12px;
+  padding: 3px 8px;
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  background: var(--faint);
+}
+
+.col-picker .picker-body {
+  position: absolute;
+  z-index: 20;
+  top: 100%;
+  left: 0;
+  min-width: 200px;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  padding: 8px;
+  background: var(--panel);
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  box-shadow: 0 6px 24px rgba(0, 0, 0, 0.4);
+}
+
+.picker-row,
+.tag-row {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 12px;
+}
+
+.tag-row span {
+  flex: 1;
+}
+
+.tag-row input {
+  flex: 1;
+  min-width: 80px;
+}
+
+/* -- spelling guard ------------------------------------------------------- */
+
+.spelling {
+  margin: 6px 0;
+}
+
+.spelling .row {
+  align-items: center;
+  flex-wrap: wrap;
+}
+
+/* -- grid extras --------------------------------------------------------- */
+
+table.dict-grid td textarea {
+  width: 100%;
+  background: transparent;
+  border: 1px solid transparent;
+  padding: 2px 4px;
+  font: inherit;
+  resize: vertical;
+}
+
+table.dict-grid td textarea:focus {
+  border-color: var(--accent);
+  background: var(--bg);
+}
+
+.warn-panel {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  padding: 8px;
+  background: var(--panel);
+  border: 1px solid var(--border);
+  border-radius: 4px;
+}
+
+.warn-panel .row {
+  display: flex;
+  gap: 6px;
+}
+
+/* -- grid affordances ---------------------------------------------------- */
+
+.grid-empty {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  padding: 8px 10px;
+  background: var(--panel);
+  border: 1px dashed var(--border);
+  border-radius: 4px;
+}
+
+table.dict-grid td.editable:hover {
+  background: rgba(255, 255, 255, 0.03);
+}
+
+table.dict-grid tbody tr:hover {
+  background: rgba(255, 255, 255, 0.02);
+}
+
+table.dict-grid input::placeholder,
+table.dict-grid textarea::placeholder {
+  color: var(--muted);
+  opacity: 0.5;
+}
+
+/* -- grid toolbar (Notion-style) ---------------------------------------- */
+
+.grid-toolbar .results-count {
+  font-size: 12px;
+  color: var(--muted);
+}
+
+.popover-trigger {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  padding: 3px 8px;
+  font-size: 12px;
+  background: var(--faint);
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  cursor: pointer;
+}
+
+.popover-trigger.active {
+  color: var(--accent);
+  border-color: var(--accent);
+}
+
+/* Portaled to <body> and fixed-positioned so pane overflow never clips it. */
+.popover-panel {
+  position: fixed;
+  z-index: 3000;
+  min-width: 240px;
+  max-width: min(420px, calc(100vw - 16px));
+  max-height: min(420px, calc(100vh - 80px));
+  overflow: auto;
+  padding: 8px;
+  background: var(--panel);
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  box-shadow: 0 8px 28px rgba(0, 0, 0, 0.45);
+}
+
+.popover-panel .picker-body {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.grid-search {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 3px 8px;
+  background: var(--bg);
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  color: var(--muted);
+}
+
+.grid-search input {
+  flex: 1;
+  min-width: 0;
+  padding: 0;
+  background: transparent;
+  border: none;
+}
+
+.grid-search input:focus {
+  outline: none;
+}
+
+.grid-search:focus-within {
+  border-color: var(--accent);
+}
+
+.tool-btn.active {
+  color: var(--accent);
+  border-color: var(--accent);
+}
+
+button.primary {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  background: var(--accent);
+  color: var(--bg);
+  border-color: var(--accent);
+  font-weight: 600;
+}
+
+.modal.add-word-modal {
+  width: min(560px, 92vw);
+}
+
+/* Obsidian-style property list */
+.prop-list {
+  display: flex;
+  flex-direction: column;
+  padding: 6px 0;
+}
+
+.prop-row {
+  display: grid;
+  grid-template-columns: 150px 1fr;
+  align-items: start;
+  gap: 8px;
+  padding: 4px 14px;
+}
+
+.prop-row:hover {
+  background: rgba(255, 255, 255, 0.03);
+}
+
+.prop-name {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding-top: 5px;
+  font-size: 12px;
+  color: var(--muted);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.prop-value input:not([type="checkbox"]),
+.prop-value textarea {
+  width: 100%;
+  background: transparent;
+  border: 1px solid transparent;
+  padding: 4px 6px;
+}
+
+.prop-value input:not([type="checkbox"]):hover,
+.prop-value textarea:hover {
+  border-color: var(--border);
+}
+
+.prop-value input:focus,
+.prop-value textarea:focus {
+  border-color: var(--accent);
+  background: var(--bg);
+}
+
+.modal-foot {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 14px;
+  border-top: 1px solid var(--border);
+}
+
+/* -- notion grid cells --------------------------------------------------- */
+
+.pill-cell {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 3px;
+}
+
+.pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 2px;
+  padding: 1px 3px 1px 7px;
+  background: var(--faint);
+  border: 1px solid var(--border);
+  border-radius: 999px;
+  font-size: 11px;
+}
+
+.pill button {
+  display: grid;
+  place-items: center;
+  padding: 0 2px;
+  background: transparent;
+  border: none;
+  color: var(--muted);
+}
+
+.pill button:hover {
+  color: #d6785a;
+}
+
+.pill-add {
+  display: grid;
+  place-items: center;
+  flex: none;
+  width: 18px;
+  height: 18px;
+  padding: 0;
+  background: transparent;
+  border: none;
+  color: var(--muted);
+  cursor: pointer;
+}
+
+.pill-add:hover {
+  color: var(--accent);
+}
+
+.pill-input {
+  /* Prefer wrapping to a new line over squeezing into a sliver. */
+  flex: 1 1 8em;
+  min-width: 8em;
+  padding: 2px 4px;
+  background: transparent;
+  border: 1px solid transparent;
+}
+
+.pill-input:focus {
+  border-color: var(--accent);
+  background: var(--bg);
+}
+
+button.check-cell {
+  display: grid;
+  place-items: center;
+  width: 22px;
+  height: 22px;
+  padding: 0;
+  background: transparent;
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  color: var(--accent);
+}
+
+button.check-cell.on {
+  background: rgba(196, 148, 92, 0.18);
+  border-color: var(--accent);
+}
+
+tr.ghost input {
+  color: var(--muted);
+  font-style: italic;
+}
+
+/* Sticky-column layering: body sticky cells (2) < normal headers (3) < the
+   corner headers (4). Without this the body's wordname/select cells share the
+   headers' z-index and, painting later, scroll over them. */
+table.dict-grid td.select-col,
+table.dict-grid td.wordname-col {
+  z-index: 2;
+}
+
+table.dict-grid th.select-col,
+table.dict-grid td.select-col {
+  position: sticky;
+  left: 0;
+  width: 28px;
+  text-align: center;
+  background: var(--panel);
+}
+
+table.dict-grid td.select-col {
+  background: var(--bg);
+}
+
+table.dict-grid th.wordname-col,
+table.dict-grid td.wordname-col {
+  position: sticky;
+  left: 28px;
+  background: var(--panel);
+  border-right: 1px solid var(--border);
+}
+
+table.dict-grid td.wordname-col {
+  background: var(--bg);
+}
+
+table.dict-grid th.select-col,
+table.dict-grid th.wordname-col {
+  z-index: 4;
+}
+
+/* Non-blocking phonotactic warning on a word name. */
+table.dict-grid td.wordname-col .word-warning {
+  position: absolute;
+  right: 3px;
+  top: 50%;
+  display: inline-flex;
+  transform: translateY(-50%);
+  color: #d6a15a;
+  /* Hoverable so its tooltip explains the warning. */
+  pointer-events: auto;
+  cursor: help;
+}
+
+/* -- sortable / reorderable headers --------------------------------------- */
+
+table.dict-grid th.dragging {
+  opacity: 0.45;
+}
+
+table.dict-grid th.drop-before {
+  box-shadow: inset 2px 0 0 var(--accent);
+}
+
+table.dict-grid th.drop-after {
+  box-shadow: inset -2px 0 0 var(--accent);
+}
+
+table.dict-grid th[draggable="true"] {
+  cursor: grab;
+}
+
+.sort-ind {
+  margin-left: 4px;
+  font-size: 10px;
+  color: var(--muted);
+  opacity: 0.55;
+}
+
+.sort-ind.on {
+  color: var(--accent);
+  opacity: 1;
+}
+
+/* -- column resize handle ------------------------------------------------- */
+
+.col-resizer {
+  position: absolute;
+  top: 0;
+  right: -3px;
+  bottom: 0;
+  z-index: 6;
+  width: 7px;
+  cursor: col-resize;
+}
+
+.col-resizer::after {
+  content: "";
+  position: absolute;
+  top: 25%;
+  bottom: 25%;
+  left: 3px;
+  width: 1px;
+  background: var(--border);
+}
+
+.col-resizer:hover::after {
+  width: 2px;
+  left: 2px;
+  background: var(--accent);
+}
+
+body.col-resizing,
+body.col-resizing * {
+  cursor: col-resize !important;
+  user-select: none !important;
+}
+
+/* -- value suggestions --------------------------------------------------- */
+
+.suggest-input {
+  position: relative;
+  width: 100%;
+}
+
+.suggest-input input {
+  width: 100%;
+}
+
+.suggestions {
+  position: fixed;
+  z-index: 3000;
+  margin: 0;
+  padding: 3px;
+  list-style: none;
+  max-height: 220px;
+  overflow: auto;
+  background: var(--panel);
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  box-shadow: 0 6px 20px rgba(0, 0, 0, 0.45);
+}
+
+.suggestions li {
+  margin: 0;
+}
+
+.suggestions button {
+  display: block;
+  width: 100%;
+  text-align: left;
+  background: transparent;
+  border: none;
+  padding: 3px 8px;
+  border-radius: 3px;
+  cursor: pointer;
+}
+
+.suggestions button.active,
+.suggestions button:hover {
+  background: var(--faint);
+  color: var(--text);
+}
