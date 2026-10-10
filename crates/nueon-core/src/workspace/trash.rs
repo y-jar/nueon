@@ -18,7 +18,7 @@
 use std::fs;
 use std::io;
 use std::path::{Path, PathBuf};
-use std::time::{SystemTime, UNIX_EPOCH};
+use std::time::{Instant, SystemTime, UNIX_EPOCH};
 
 use serde::{Deserialize, Serialize};
 use uuid::Uuid;
@@ -385,6 +385,76 @@ pub fn consume_table(root: &Path, table: &WordTable) {
 }
 
 /// Write a note's file name safely into the trash listing helpers' tests.
+impl super::Workspace {
+    /// Everything currently in the trash, newest first.
+    pub fn list_trash(&self) -> Vec<TrashRecord> {
+        self::list(&self.root_path)
+    }
+
+    /// Restore a trashed item. Notes and folders return to their original
+    /// path (or a unique name if it is taken); tables return under their name
+    /// (or a unique one) as an undoable step.
+    pub fn restore_trash(&mut self, id: &str) -> Result<Restored, StorageError> {
+        let record = self
+            .list_trash()
+            .into_iter()
+            .find(|r| r.id == id)
+            .ok_or_else(|| StorageError::NotFound(PathBuf::from(id)))?;
+        match record.kind {
+            TrashKind::Note | TrashKind::Folder => {
+                let path = self::restore_notes(&self.root_path, &self.notes_dir(), id)?;
+                self.refresh_notes()?;
+                self.mark_change(
+                    Instant::now(),
+                    format!("nueon: restore \"{}\"", path.display()),
+                );
+                Ok(Restored {
+                    kind: record.kind,
+                    name: path.to_string_lossy().replace('\\', "/"),
+                })
+            }
+            TrashKind::Table => {
+                let mut table = self::read_table(&self.root_path, id)?;
+                let base = table.name.clone();
+                let mut attempt = 0;
+                while self.dictionary.table(&table.name).is_some() {
+                    attempt += 1;
+                    table.name = if attempt == 1 {
+                        format!("{base} (restored)")
+                    } else {
+                        format!("{base} (restored {attempt})")
+                    };
+                }
+                let name = table.name.clone();
+                self.record();
+                self.dictionary.tables.insert(name.clone(), table);
+                if let Err(err) = self.save_table(&name) {
+                    // Roll back: the entry stays in the trash.
+                    self.dictionary.tables.remove(&name);
+                    self.history.undo.pop();
+                    return Err(err);
+                }
+                self::purge(&self.root_path, id)?;
+                self.mark_change(Instant::now(), format!("nueon: restore table \"{name}\""));
+                Ok(Restored {
+                    kind: TrashKind::Table,
+                    name,
+                })
+            }
+        }
+    }
+
+    /// Delete one trash entry permanently.
+    pub fn purge_trash(&self, id: &str) -> Result<(), StorageError> {
+        self::purge(&self.root_path, id)
+    }
+
+    /// Delete everything in the trash permanently.
+    pub fn empty_trash(&self) -> usize {
+        self::empty(&self.root_path)
+    }
+}
+
 #[cfg(test)]
 pub(super) fn write_entry_for_test(
     root: &Path,
