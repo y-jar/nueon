@@ -5,15 +5,13 @@
     PIECE_DRAG_TYPE,
     morphology as store,
   } from "../../lib/morphology.svelte";
+  import { defaultTableFor, rootsOf } from "../../lib/compose";
   import SaveWordForm from "./SaveWordForm.svelte";
 
-  const firstRoot = $derived(
-    store.pieces.find((piece) => piece.kind === "word") ?? null,
-  );
-  const rootWord = $derived(
-    firstRoot
-      ? (store.lexicon.find((word) => word.id === firstRoot.id) ?? null)
-      : null,
+  const roots = $derived(rootsOf(store.pieces, store.lexicon));
+  const defaultTable = $derived(defaultTableFor(roots));
+  const wordClass = $derived(
+    store.lexicon.find((word) => word.id === roots[0]?.id)?.class ?? null,
   );
   const gloss = $derived(store.pieces.map((piece) => piece.gloss).join(" "));
 
@@ -83,8 +81,9 @@
     <SaveWordForm
       surface={store.composed.surface}
       {gloss}
-      wordClass={rootWord?.class ?? null}
-      lemma={rootWord ? { table: rootWord.table, id: rootWord.id } : null}
+      {wordClass}
+      parents={roots}
+      {defaultTable}
     />
   {/if}
 </div>

@@ -1,9 +1,16 @@
 <script lang="ts">
   import { t } from "svelte-i18n";
-  import { Save } from "@lucide/svelte";
+  import { Save, X } from "@lucide/svelte";
   import * as api from "../../lib/api";
   import { ui } from "../../lib/state.svelte";
   import { morphology as store } from "../../lib/morphology.svelte";
+
+  /** A root to record as a parent of the new word (Reference). */
+  interface ParentRef {
+    table: string;
+    id: string;
+    label: string;
+  }
 
   interface Props {
     /** The word form to create. */
@@ -12,16 +19,27 @@
     gloss: string;
     /** A word class (`pos`) to store on the new word. */
     wordClass?: string | null;
-    /** A base word to record as the new word's parent (Reference). */
-    lemma?: { table: string; id: string } | null;
+    /** Roots to link as parents, when the saved word shares their table. */
+    parents?: ParentRef[];
+    /** The table to default to, e.g. the one holding the most roots. */
+    defaultTable?: string | null;
   }
 
-  let { surface, gloss, wordClass = null, lemma = null }: Props = $props();
+  let {
+    surface,
+    gloss,
+    wordClass = null,
+    parents = [],
+    defaultTable = null,
+  }: Props = $props();
 
   let table = $state("");
   let definition = $state("");
   let saved = $state(false);
+  let removed = $state<string[]>([]);
   let violations = $state<api.PhonologyViolation[]>([]);
+
+  const kept = $derived(parents.filter((parent) => !removed.includes(parent.id)));
 
   const morphemeTables = $derived(
     new Set(store.morphemes.map((morpheme) => morpheme.table)),
@@ -32,11 +50,11 @@
       .map((entry) => entry.name),
   );
 
-  // Default the table: the lemma's own table first (so the Reference sticks),
-  // then the last-used one, then the first vocabulary table.
+  // Default the table: the suggested one first (so the most roots link), then
+  // the last-used one, then the first vocabulary table.
   $effect(() => {
-    if (lemma && tables.includes(lemma.table)) {
-      table = lemma.table;
+    if (defaultTable && tables.includes(defaultTable)) {
+      table = defaultTable;
     } else if (ui.morphologySaveTable && tables.includes(ui.morphologySaveTable)) {
       table = ui.morphologySaveTable;
     } else if (tables.length) {
@@ -86,8 +104,9 @@
       wordClass,
     );
     if (!id) return;
-    if (lemma && lemma.table === table) {
-      await api.setParent(table, id, lemma.id).catch(() => {});
+    for (const parent of kept) {
+      if (parent.table !== table) continue;
+      await api.setParent(table, id, parent.id).catch(() => {});
     }
     ui.morphologySaveTable = table;
     store.lexicon = await api.lexicon();
@@ -114,6 +133,27 @@
     </button>
     {#if saved}<span class="muted">{$t("morphology.saved")}</span>{/if}
   </div>
+
+  {#if kept.length}
+    <div class="parent-chips">
+      <span class="muted small">{$t("morphology.parents")}</span>
+      {#each kept as parent (parent.id)}
+        <span class="compose-chip parent-chip" class:unlinked={parent.table !== table}>
+          <span class="mono">{parent.label}</span>
+          {#if parent.table !== table}
+            <span class="muted small">{$t("morphology.differentTable")}</span>
+          {/if}
+          <button
+            class="chip-remove"
+            title={$t("morphology.removeParent")}
+            onclick={() => (removed = [...removed, parent.id])}
+          >
+            <X size={11} />
+          </button>
+        </span>
+      {/each}
+    </div>
+  {/if}
 
   {#if duplicate.length}
     <p class="warn-inline">

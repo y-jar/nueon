@@ -639,6 +639,41 @@ function seedWorkspace() {
       2,
     ),
   );
+  // A second vocabulary table, so a mixed-table Compose strip has a root to
+  // link (probe 73).
+  fs.writeFileSync(
+    path.join(WORKSPACE, "dictionary", "roots"),
+    JSON.stringify(
+      {
+        name: "roots",
+        tags: [
+          {
+            name: "wordname",
+            description: "The base conlang spelling.",
+            kind: "text",
+            builtin: true,
+          },
+          {
+            name: "pos",
+            description: "Part of speech.",
+            kind: "tag_list",
+          },
+        ],
+        entries: [
+          {
+            id: "12121212-1212-4121-8121-121212121212",
+            wordname: "tomo",
+            values: {
+              definition: { type: "tag_list", value: ["house"] },
+              pos: { type: "tag_list", value: ["noun"] },
+            },
+          },
+        ],
+      },
+      null,
+      2,
+    ),
+  );
   // A fixes table: wordname is the conlang surface (hyphen-marked), the
   // `english` column the trigger. Used by probe 30.
   fs.writeFileSync(
@@ -4292,6 +4327,141 @@ async function main() {
         `content height grew ${growth}px mid-scroll (top=${top}, bottom=${bottom})`,
       );
     }
+  });
+
+  // -- probe 73: Compose links every same-table root as a parent -------------
+  await probe("73-compose-multi-parent", async () => {
+    const typeIn = (selector, text) =>
+      js(
+        `const i = document.querySelector(${JSON.stringify(selector)});
+         i.value = ${JSON.stringify(text)};
+         i.dispatchEvent(new Event('input', { bubbles: true }));
+         return true;`,
+      );
+    const clickWord = async (word) => {
+      await typeIn(".morphology-sidebar .word-search input", word);
+      await waitJs(
+        `[...document.querySelectorAll('.morphology-sidebar .word-row')]
+           .some((r) => r.querySelector('.grow')?.textContent.trim() === ${JSON.stringify(word)})`,
+        { label: `word ${word}` },
+      );
+      const ok = await js(
+        `const b = [...document.querySelectorAll('.morphology-sidebar .word-row')]
+           .find((r) => r.querySelector('.grow')?.textContent.trim() === ${JSON.stringify(word)});
+         if (b) b.click();
+         return !!b;`,
+      );
+      if (!ok) throw new Error(`no word row ${word}`);
+    };
+    const clearStrip = () =>
+      js(
+        `const b = document.querySelector('.compose-builder .clear-strip');
+         if (b) b.click();
+         return true;`,
+      );
+    const openCompose = async () => {
+      await openActivity("Morphology");
+      await waitJs(`!!document.querySelector('.morphology-view')`, {
+        label: "morphology view",
+      });
+      await js(
+        `const b = [...document.querySelectorAll('.morphology-view .mode-switch button')]
+           .find((x) => x.textContent.trim() === 'Compose');
+         if (b) b.click();
+         return !!b;`,
+      );
+      await waitJs(`!!document.querySelector('.compose-builder')`, {
+        label: "compose builder",
+      });
+    };
+
+    // Two roots from one table are both linked.
+    await openCompose();
+    await clearStrip();
+    await clickWord("velo");
+    await clickWord("kala");
+    await waitJs(`document.querySelectorAll('.save-word .parent-chip').length === 2`, {
+      label: "two parent chips",
+    });
+    if (
+      (await js(
+        `return document.querySelectorAll('.save-word .parent-chip.unlinked').length;`,
+      )) !== 0
+    ) {
+      throw new Error("same-table roots should not be marked unlinked");
+    }
+
+    const saved = await js(
+      `const b = [...document.querySelectorAll('.compose-builder .save-word button')]
+         .find((x) => x.textContent.includes('Save as word'));
+       if (b) b.click();
+       return !!b;`,
+    );
+    if (!saved) throw new Error("no Save as word button");
+    await waitJs(
+      `document.querySelector('.compose-builder .save-word .muted')?.textContent.trim() === 'Saved'`,
+      { label: "saved" },
+    );
+
+    // The compound's row lists both roots as parents (references resolve to
+    // wordnames); the roots-table word is not there.
+    await openActivity("Dictionary");
+    await waitJs(`!!document.querySelector('.table-list')`, { label: "tables panel" });
+    const opened = await js(
+      `const b = [...document.querySelectorAll('.table-list .table-row .tree-name')]
+         .find((x) => x.textContent.trim().startsWith('lex'));
+       if (b) b.click();
+       return !!b;`,
+    );
+    if (!opened) throw new Error("no 'lex' table in the panel");
+    await waitJs(`!!document.querySelector('.dict-grid')`, { label: "lex grid" });
+    await waitJs(
+      `[...document.querySelectorAll('.dict-grid td.wordname-col input')]
+         .some((i) => i.value === 'velokala')`,
+      { label: "velokala row" },
+    );
+    const parentText = await js(
+      `const i = [...document.querySelectorAll('.dict-grid td.wordname-col input')]
+         .find((i) => i.value === 'velokala');
+       return i?.closest('tr')?.textContent ?? '';`,
+    );
+    if (!parentText.includes("velo") || !parentText.includes("kala")) {
+      throw new Error(`velokala row is missing its parents: ${parentText}`);
+    }
+    if (parentText.includes("tomo")) {
+      throw new Error(`velokala should not link a cross-table parent: ${parentText}`);
+    }
+
+    // A root from another table is shown, but marked not linked; it can be
+    // removed from the form.
+    await openCompose();
+    await clearStrip();
+    await clickWord("velo");
+    await clickWord("tomo");
+    await waitJs(`document.querySelectorAll('.save-word .parent-chip').length === 2`, {
+      label: "mixed parent chips",
+    });
+    if (
+      (await js(
+        `return document.querySelectorAll('.save-word .parent-chip.unlinked').length;`,
+      )) !== 1
+    ) {
+      throw new Error("the cross-table root should be the one marked unlinked");
+    }
+    const unlinkedText = await js(
+      `return document.querySelector('.save-word .parent-chip.unlinked')?.textContent ?? '';`,
+    );
+    if (!unlinkedText.includes("tomo") || !unlinkedText.includes("different table")) {
+      throw new Error(`unexpected unlinked chip: ${unlinkedText}`);
+    }
+    await js(
+      `const b = document.querySelector('.save-word .parent-chip.unlinked .chip-remove');
+       if (b) b.click();
+       return !!b;`,
+    );
+    await waitJs(`document.querySelectorAll('.save-word .parent-chip').length === 1`, {
+      label: "unlinked parent removed",
+    });
   });
 }
 

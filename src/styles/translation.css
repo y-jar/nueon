@@ -630,6 +630,22 @@
   color: var(--accent);
 }
 
+.parent-chips {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px;
+}
+
+.parent-chip.unlinked {
+  border-style: dashed;
+  color: var(--muted);
+}
+
+.parent-chip.unlinked .mono {
+  text-decoration: line-through;
+}
+
 .clear-strip {
   align-self: flex-start;
   display: inline-flex;

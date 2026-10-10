@@ -166,7 +166,8 @@
               .map((morpheme) => morpheme.gloss)
               .join(" ")}
             wordClass={word.class}
-            lemma={{ table: word.table, id: word.id }}
+            parents={[{ table: word.table, id: word.id, label: word.wordname }]}
+            defaultTable={word.table}
           />
         </section>
       {/if}
