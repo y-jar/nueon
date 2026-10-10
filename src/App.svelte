@@ -5,6 +5,7 @@
     ui,
     init,
     closeTab,
+    cycleTab,
     openTranslation,
     openMorphology,
     activeGroup,
@@ -140,6 +141,15 @@
       } else if (key === "w" && activeGroup().activeTabId) {
         event.preventDefault();
         closeTab(ui.activeGroupId, activeGroup().activeTabId!);
+      } else if (key === "tab" && activeGroup().tabs.length > 1) {
+        event.preventDefault();
+        cycleTab(ui.activeGroupId, event.shiftKey ? -1 : 1);
+      } else if (
+        (key === "pagedown" || key === "pageup") &&
+        activeGroup().tabs.length > 1
+      ) {
+        event.preventDefault();
+        cycleTab(ui.activeGroupId, key === "pagedown" ? 1 : -1);
       } else if (key === "p") {
         event.preventDefault();
         ui.paletteOpen = !ui.paletteOpen;

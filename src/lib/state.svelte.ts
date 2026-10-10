@@ -30,6 +30,7 @@ export {
   closeAllTabs,
   closePane,
   closeTab,
+  cycleTab,
   deleteTable,
   openFile,
   openMorphology,

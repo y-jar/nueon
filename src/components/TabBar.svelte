@@ -99,6 +99,25 @@
       closeTab(group.id, id);
     }
   }
+
+  // Roving focus within the tablist: arrows move (and activate) the tab,
+  // Home/End jump to the first/last.
+  function onStripKeydown(event: KeyboardEvent) {
+    const tabs = group.tabs;
+    if (!tabs.length) return;
+    const index = tabs.findIndex((tab) => tab.id === group.activeTabId);
+    let next = index;
+    if (event.key === "ArrowRight") next = Math.min(index + 1, tabs.length - 1);
+    else if (event.key === "ArrowLeft") next = Math.max(index - 1, 0);
+    else if (event.key === "Home") next = 0;
+    else if (event.key === "End") next = tabs.length - 1;
+    else return;
+    event.preventDefault();
+    if (next !== index && next >= 0) void activateTab(group.id, tabs[next].id);
+    requestAnimationFrame(() => {
+      strip?.querySelector<HTMLElement>(".tab.active")?.focus();
+    });
+  }
 </script>
 
 <div class="tabbar">
@@ -115,8 +134,9 @@
   <div
     class="tab-strip"
     role="tablist"
-    tabindex="0"
+    tabindex="-1"
     bind:this={strip}
+    onkeydown={onStripKeydown}
     ondragover={(e) => {
       if (!ui.dragTab) return;
       e.preventDefault();
@@ -136,7 +156,8 @@
         class:drop-before={marker?.id === tab.id && !marker.after}
         class:drop-after={marker?.id === tab.id && marker.after}
         role="tab"
-        tabindex="0"
+        aria-selected={tab.id === group.activeTabId}
+        tabindex={tab.id === group.activeTabId ? 0 : -1}
         draggable="true"
         title={tab.title}
         ondragstart={(e) => onDragStart(e, tab)}
@@ -150,6 +171,7 @@
       >
         <button
           class="tab-label"
+          tabindex="-1"
           onclick={() => activateTab(group.id, tab.id)}
           onauxclick={(e) => onAuxClick(e, tab.id)}
         >
@@ -169,7 +191,9 @@
         </button>
         <button
           class="tab-close"
+          tabindex={tab.id === group.activeTabId ? 0 : -1}
           title={$t("tabs.close")}
+          aria-label={$t("tabs.close")}
           onclick={(e) => {
             e.stopPropagation();
             closeTab(group.id, tab.id);

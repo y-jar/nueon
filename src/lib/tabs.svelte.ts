@@ -62,6 +62,16 @@ export function activateNeighbor(group: TabGroup, removedIndex: number): void {
   }
 }
 
+/** Move to the next/previous tab in `groupId`, wrapping around. */
+export function cycleTab(groupId: string, delta: number): void {
+  const group = ui.groups.find((candidate) => candidate.id === groupId);
+  if (!group || group.tabs.length < 2) return;
+  const index = group.tabs.findIndex((tab) => tab.id === group.activeTabId);
+  const start = index === -1 ? 0 : index;
+  const next = (start + delta + group.tabs.length) % group.tabs.length;
+  void activateTab(groupId, group.tabs[next].id);
+}
+
 export async function activateTab(
   groupId: string,
   id: string,

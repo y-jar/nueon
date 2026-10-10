@@ -188,6 +188,12 @@ const SHIFT = "\uE008";
 const CTRL = "\uE009";
 const ALT = "\uE00A";
 const ARROW_DOWN = "\uE015";
+const ARROW_LEFT = "\uE012";
+const ARROW_RIGHT = "\uE014";
+const HOME = "\uE011";
+const END = "\uE010";
+const PAGE_UP = "\uE00E";
+const PAGE_DOWN = "\uE00F";
 
 /** Press a key, optionally held with modifiers (e.g. `pressKey("z", [CTRL])`). */
 async function pressKey(value, modifiers = []) {
@@ -5301,6 +5307,109 @@ async function main() {
       throw new Error(`active tab not revealed ${JSON.stringify(r)}`);
     }
     if (!r.title) throw new Error("active tab has no title tooltip");
+  });
+
+  // -- probe 89: tab ARIA + arrow-key navigation -----------------------------
+  await probe("89-tab-keyboard-nav", async () => {
+    await openActivity("Notes");
+    await waitJs(`!!document.querySelector('.tree-row[data-dir="false"] .tree-name')`, {
+      label: "note rows",
+    });
+    await js(`
+      const names = [...document.querySelectorAll('.tree-row[data-dir="false"] .tree-name')];
+      for (const n of names) n.click();
+      return names.length;`);
+    await waitJs(
+      `document.querySelectorAll('.group-pane.active .tab-strip .tab').length >= 3`,
+      { label: "tabs in active pane" },
+    );
+    // Every tab carries aria-selected; exactly the active one is true.
+    const aria = await js(`
+      const pane = document.querySelector('.group-pane.active') || document;
+      const tabs = [...pane.querySelectorAll('.tab-strip .tab')];
+      return {
+        selected: tabs.filter((t) => t.getAttribute('aria-selected') === 'true').length,
+        active: tabs.find((t) => t.classList.contains('active'))?.getAttribute('aria-selected'),
+        allHave: tabs.every((t) => t.hasAttribute('aria-selected')),
+      };`);
+    if (!aria.allHave) throw new Error("not every tab has aria-selected");
+    if (aria.selected !== 1) throw new Error(`aria-selected count ${aria.selected}`);
+    if (aria.active !== "true") throw new Error("active tab is not aria-selected");
+
+    const activeTitle = () =>
+      js(`const p = document.querySelector('.group-pane.active') || document;
+          return p.querySelector('.tab.active .tab-title')?.textContent.trim() ?? null;`);
+    await js(`(document.querySelector('.group-pane.active') || document)
+      .querySelector('.tab.active')?.focus();
+      return document.activeElement?.classList?.contains('tab') ?? false;`);
+    const before = await activeTitle();
+
+    await pressKey(ARROW_LEFT);
+    await new Promise((resolve) => setTimeout(resolve, 150));
+    const left = await js(`
+      const p = document.querySelector('.group-pane.active') || document;
+      const active = p.querySelector('.tab.active');
+      return { title: active?.querySelector('.tab-title')?.textContent.trim(),
+               focused: document.activeElement === active };`);
+    if (left.title === before) throw new Error(`ArrowLeft did not move (${before})`);
+    if (!left.focused) throw new Error("ArrowLeft did not focus the new active tab");
+
+    await pressKey(HOME);
+    await new Promise((resolve) => setTimeout(resolve, 150));
+    const home = await js(`
+      const p = document.querySelector('.group-pane.active') || document;
+      const tabs = [...p.querySelectorAll('.tab-strip .tab')];
+      return { first: p.querySelector('.tab.active') === tabs[0],
+               focused: document.activeElement === p.querySelector('.tab.active') };`);
+    if (!home.first) throw new Error("Home did not activate the first tab");
+
+    await pressKey(END);
+    await new Promise((resolve) => setTimeout(resolve, 150));
+    const end = await js(`
+      const p = document.querySelector('.group-pane.active') || document;
+      const tabs = [...p.querySelectorAll('.tab-strip .tab')];
+      return { last: p.querySelector('.tab.active') === tabs[tabs.length - 1],
+               focused: document.activeElement === p.querySelector('.tab.active') };`);
+    if (!end.last) throw new Error("End did not activate the last tab");
+
+    // The close button becomes visible when its tab has keyboard focus.
+    const closeOpacity = await js(`
+      const p = document.querySelector('.group-pane.active') || document;
+      const close = p.querySelector('.tab.active .tab-close');
+      close.focus();
+      return parseFloat(getComputedStyle(close).opacity);`);
+    if (!(closeOpacity >= 0.9)) {
+      throw new Error(`close button not visible on focus (${closeOpacity})`);
+    }
+  });
+
+  // -- probe 90: Ctrl+Tab cycles tabs ----------------------------------------
+  await probe("90-tab-cycle-keybind", async () => {
+    await openActivity("Notes");
+    await waitJs(
+      `document.querySelectorAll('.group-pane.active .tab-strip .tab').length >= 2`,
+      { label: "tabs" },
+    );
+    const activeTitle = () =>
+      js(`const p = document.querySelector('.group-pane.active') || document;
+          return p.querySelector('.tab.active .tab-title')?.textContent.trim() ?? null;`);
+    const before = await activeTitle();
+    await pressKey(TAB, [CTRL]);
+    await new Promise((resolve) => setTimeout(resolve, 150));
+    const next = await activeTitle();
+    if (next === before) throw new Error(`Ctrl+Tab did not cycle (${before})`);
+    await pressKey(PAGE_UP, [CTRL]);
+    await new Promise((resolve) => setTimeout(resolve, 150));
+    const back = await activeTitle();
+    if (back !== before) {
+      throw new Error(`Ctrl+PageUp did not return (${before} -> ${next} -> ${back})`);
+    }
+    await pressKey(PAGE_DOWN, [CTRL]);
+    await new Promise((resolve) => setTimeout(resolve, 150));
+    const again = await activeTitle();
+    if (again !== next) {
+      throw new Error(`Ctrl+PageDown did not advance (${back} -> ${again})`);
+    }
   });
 }
 
