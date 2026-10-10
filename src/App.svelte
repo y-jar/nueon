@@ -143,6 +143,9 @@
         closeTab(ui.activeGroupId, activeGroup().activeTabId!);
       } else if (key === "tab" && activeGroup().tabs.length > 1) {
         event.preventDefault();
+        // WebKitGTK reports Ctrl+Shift+Tab as key "Unidentified", so the
+        // shift branch below is effectively dead there; the working backward
+        // binding is Ctrl+PageUp.
         cycleTab(ui.activeGroupId, event.shiftKey ? -1 : 1);
       } else if (
         (key === "pagedown" || key === "pageup") &&

@@ -5273,6 +5273,7 @@ async function main() {
   // -- probe 88: activating an off-screen tab reveals it ---------------------
   await probe("88-tab-active-revealed", async () => {
     await openActivity("Notes");
+    await collapsePanes(); // full-width pane so a tab can be fully revealed
     await waitJs(`!!document.querySelector('.tree-row[data-dir="false"] .tree-name')`, {
       label: "note rows",
     });
@@ -5281,7 +5282,7 @@ async function main() {
       const names = [...document.querySelectorAll('.tree-row[data-dir="false"] .tree-name')];
       for (const n of names) n.click();
       return names.length;`);
-    await waitJs(`document.querySelectorAll('.tab-strip .tab').length >= 8`, {
+    await waitJs(`document.querySelectorAll('.group-pane.active .tab-strip .tab').length >= 8`, {
       label: "many tabs",
     });
     // Reset to the start, then pick an inactive tab that is scrolled out.
@@ -5313,23 +5314,24 @@ async function main() {
       const active = strip.querySelector('.tab.active');
       const sr = strip.getBoundingClientRect();
       const ar = active.getBoundingClientRect();
-      const fully = ar.left >= sr.left - 1.5 && ar.right <= sr.right + 1.5;
-      const wide = ar.width >= sr.width;
-      const aligned =
-        Math.abs(ar.left - sr.left) <= 1.5 || Math.abs(ar.right - sr.right) <= 1.5;
       return {
-        ok: fully || (wide && aligned),
-        fully,
-        aligned,
-        wide,
+        fully: ar.left >= sr.left - 1.5 && ar.right <= sr.right + 1.5,
         scrollLeft: strip.scrollLeft,
         left: ar.left, right: ar.right, sleft: sr.left, sright: sr.right,
         title: active.getAttribute('title'),
       };`);
-    if (!r.ok) {
-      throw new Error(`active tab not revealed ${JSON.stringify(r)}`);
-    }
+    if (!r.fully) throw new Error(`active tab not revealed ${JSON.stringify(r)}`);
     if (!r.title) throw new Error("active tab has no title tooltip");
+
+    // The tooltip is the full relative path, not the bare basename.
+    await openNote("type.md");
+    const tooltip = await js(
+      `const p = document.querySelector('.group-pane.active') || document;
+       return p.querySelector('.tab.active')?.getAttribute('title') ?? null;`,
+    );
+    if (tooltip !== "type.md") {
+      throw new Error(`note tooltip is not the path (${tooltip})`);
+    }
   });
 
   // -- probe 89: tab ARIA + arrow-key navigation -----------------------------

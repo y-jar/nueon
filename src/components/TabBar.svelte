@@ -164,7 +164,7 @@
         aria-selected={tab.id === group.activeTabId}
         tabindex={tab.id === group.activeTabId ? 0 : -1}
         draggable="true"
-        title={tab.title}
+        title={tab.ref ?? tab.title}
         onauxclick={(e) => onAuxClick(e, tab.id)}
         ondragstart={(e) => onDragStart(e, tab)}
         ondragend={onDragEnd}
