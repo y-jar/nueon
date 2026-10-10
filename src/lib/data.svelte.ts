@@ -5,7 +5,8 @@ import * as api from "./api";
 import { clearDoc, makeGroup, ui } from "./store.svelte";
 import { activateNeighbor, syncGroupTable } from "./tabs.svelte";
 import { restoreMainTiling } from "./layout.svelte";
-import { reloadOpenNotes, tr } from "./state.svelte";
+import { reloadOpenNotes } from "./notes.svelte";
+import { tr } from "./state.svelte";
 
 export async function refreshWorkspaces(): Promise<void> {
   ui.workspaces = await api.workspaceList();

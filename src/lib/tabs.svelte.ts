@@ -13,7 +13,9 @@ import {
   type TabGroup,
 } from "./store.svelte";
 import { removeGroup } from "./layout.svelte";
-import { baseName, loadNote, refreshTables, tr } from "./state.svelte";
+import { refreshTables } from "./data.svelte";
+import { loadNote } from "./notes.svelte";
+import { baseName, tr } from "./state.svelte";
 
 /** Per-group table-load generation, so a stale load cannot clobber a newer one. */
 const tableTickets = new Map<string, number>();
