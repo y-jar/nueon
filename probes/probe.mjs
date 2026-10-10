@@ -862,6 +862,9 @@ exec "${APP}" "$@"
 const results = [];
 
 async function probe(name, fn) {
+  // `PROBE_ONLY` runs a subset (substring match) for focused debugging.
+  const only = process.env.PROBE_ONLY;
+  if (only && !name.includes(only)) return;
   // `PROBE_DELAY_MS` slows each step so a human can follow it on screen.
   const delay = Number(process.env.PROBE_DELAY_MS || 0);
   if (delay > 0) await new Promise((resolve) => setTimeout(resolve, delay));
@@ -4379,7 +4382,7 @@ async function main() {
     await openCompose();
     await clearStrip();
     await clickWord("velo");
-    await clickWord("kala");
+    await clickWord("demo1");
     await waitJs(`document.querySelectorAll('.save-word .parent-chip').length === 2`, {
       label: "two parent chips",
     });
@@ -4417,19 +4420,19 @@ async function main() {
     await waitJs(`!!document.querySelector('.dict-grid')`, { label: "lex grid" });
     await waitJs(
       `[...document.querySelectorAll('.dict-grid td.wordname-col input')]
-         .some((i) => i.value === 'velokala')`,
-      { label: "velokala row" },
+         .some((i) => i.value === 'velodemo1')`,
+      { label: "velodemo1 row" },
     );
     const parentText = await js(
       `const i = [...document.querySelectorAll('.dict-grid td.wordname-col input')]
-         .find((i) => i.value === 'velokala');
+         .find((i) => i.value === 'velodemo1');
        return i?.closest('tr')?.textContent ?? '';`,
     );
-    if (!parentText.includes("velo") || !parentText.includes("kala")) {
-      throw new Error(`velokala row is missing its parents: ${parentText}`);
+    if (!parentText.includes("velo") || !parentText.includes("demo1")) {
+      throw new Error(`velodemo1 row is missing its parents: ${parentText}`);
     }
     if (parentText.includes("tomo")) {
-      throw new Error(`velokala should not link a cross-table parent: ${parentText}`);
+      throw new Error(`velodemo1 should not link a cross-table parent: ${parentText}`);
     }
 
     // A root from another table is shown, but marked not linked; it can be
@@ -4463,23 +4466,142 @@ async function main() {
       label: "unlinked parent removed",
     });
   });
-}
 
-try {
-  await main();
-} catch (error) {
-  console.log(`HARNESS-ERROR ${String(error?.stack ?? error).slice(0, 500)}`);
-  results.push(["harness", "FAIL", String(error)]);
-} finally {
-  if (sessionId) {
-    await wd("DELETE", `/session/${sessionId}`).catch(() => {});
-  }
-  cleanup();
-}
+  // -- probe 74: dragging sidebar pieces onto the Inflect view ---------------
+  await probe("74-morphology-drop", async () => {
+    // WebKit may not copy `dataTransfer` from the DragEvent init dict; fall
+    // back to defining it on the instance so the handlers see the payload.
+    const dispatchDrag = `
+      const fire = (target, type, dt) => {
+        const ev = new DragEvent(type, { bubbles: true, cancelable: true, dataTransfer: dt });
+        if (!ev.dataTransfer) Object.defineProperty(ev, 'dataTransfer', { value: dt });
+        return target.dispatchEvent(ev);
+      };`;
+    const setInput = (selector, text) =>
+      js(
+        `const i = document.querySelector(${JSON.stringify(selector)});
+         i.value = ${JSON.stringify(text)};
+         i.dispatchEvent(new Event('input', { bubbles: true }));
+         return true;`,
+      );
+    const dragTo = (sourceSel, readExpr, match, targetSel) =>
+      js(
+        `${dispatchDrag}
+         const src = [...document.querySelectorAll(${JSON.stringify(sourceSel)})]
+           .find((x) => (${readExpr})?.textContent.trim() === ${JSON.stringify(match)});
+         const target = document.querySelector(${JSON.stringify(targetSel)});
+         if (!src || !target) return false;
+         const dt = new DataTransfer();
+         fire(src, 'dragstart', dt);
+         fire(target, 'dragover', dt);
+         fire(target, 'drop', dt);
+         return true;`,
+      );
 
-const failed = results.filter(([, status]) => status !== "PASS");
-console.log(`\n${results.length - failed.length}/${results.length} probes passed`);
-if (failed.length) {
-  for (const [name, , why] of failed) console.log(`  FAIL ${name}: ${why.slice(0, 160)}`);
+    await openActivity("Morphology");
+    await waitJs(`!!document.querySelector('.morphology-view')`, {
+      label: "morphology view",
+    });
+    await js(
+      `const b = [...document.querySelectorAll('.morphology-view .mode-switch button')]
+         .find((x) => x.textContent.trim() === 'Inflect');
+       if (b) b.click();
+       return !!b;`,
+    );
+    await waitJs(`!!document.querySelector('.inflect-drop')`, {
+      label: "inflect drop zone",
+    });
+
+    // A word dropped on the Inflect view becomes the base.
+    await setInput(".morphology-sidebar .word-search input", "uene");
+    await waitJs(
+      `[...document.querySelectorAll('.morphology-sidebar .word-row')]
+         .some((r) => r.querySelector('.grow')?.textContent.trim() === 'uene')`,
+      { label: "uene row" },
+    );
+    if (
+      !(await dragTo(
+        ".morphology-sidebar .word-row",
+        "x.querySelector('.grow')",
+        "uene",
+        ".inflect-drop",
+      ))
+    ) {
+      throw new Error("could not drag the uene row");
+    }
+    await waitJs(
+      `document.querySelector('.inflect-drop .section-title')?.textContent.includes('uene')`,
+      { label: "uene selected by drop" },
+    );
+
+    // A morpheme dropped on the Inflect view toggles on (row goes active).
+    await setInput(".morphology-sidebar .morph-search input", "agent");
+    await waitJs(
+      `[...document.querySelectorAll('.morphology-sidebar .morpheme-row .mono')]
+         .some((x) => x.textContent.trim() === 'o')`,
+      { label: "morpheme row" },
+    );
+    if (
+      !(await dragTo(
+        ".morphology-sidebar .morpheme-row",
+        "x.querySelector('.mono')",
+        "o",
+        ".inflect-drop",
+      ))
+    ) {
+      throw new Error("could not drag the -o morpheme");
+    }
+    await waitJs(
+      `document.querySelector('.morphology-sidebar .morpheme-row.active .mono')?.textContent.trim() === 'o'`,
+      { label: "morpheme toggled by drop" },
+    );
+
+    // A foreign drag is not accepted: the drop zone must not preventDefault.
+    const prevented = await js(
+      `${dispatchDrag}
+       const target = document.querySelector('.inflect-drop');
+       const dt = new DataTransfer();
+       dt.setData('text/plain', 'nope');
+       return fire(target, 'dragover', dt) === false;`,
+    );
+    if (prevented) {
+      throw new Error("the Inflect drop zone accepted an unrelated drag");
+    }
+
+    // The Compose strip still accepts a dropped piece.
+    await js(
+      `const b = [...document.querySelectorAll('.morphology-view .mode-switch button')]
+         .find((x) => x.textContent.trim() === 'Compose');
+       if (b) b.click();
+       return !!b;`,
+    );
+    await waitJs(`!!document.querySelector('.compose-builder')`, {
+      label: "compose builder",
+    });
+    await js(
+      `const b = document.querySelector('.compose-builder .clear-strip');
+       if (b) b.click();
+       return true;`,
+    );
+    await setInput(".morphology-sidebar .word-search input", "velo");
+    await waitJs(
+      `[...document.querySelectorAll('.morphology-sidebar .word-row')]
+         .some((r) => r.querySelector('.grow')?.textContent.trim() === 'velo')`,
+      { label: "velo row" },
+    );
+    if (
+      !(await dragTo(
+        ".morphology-sidebar .word-row",
+        "x.querySelector('.grow')",
+        "velo",
+        ".compose-strip",
+      ))
+    ) {
+      throw new Error("could not drag velo onto the strip");
+    }
+    await waitJs(
+      `(document.querySelector('.compose-builder .inflect-surface')?.textContent ?? '').trim() === 'velo'`,
+      { label: "velo composed by drop" },
+    );
+  });
 }
-process.exit(failed.length ? 1 : 0);

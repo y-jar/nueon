@@ -226,6 +226,18 @@
   gap: 6px;
 }
 
+.inflect-drop {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+  border-radius: 8px;
+}
+
+.inflect-drop.drop-active {
+  outline: 2px dashed var(--accent);
+  outline-offset: 4px;
+}
+
 .morph-list {
   display: flex;
   flex-direction: column;

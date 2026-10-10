@@ -2,7 +2,10 @@
   import { onMount } from "svelte";
   import { t } from "svelte-i18n";
   import * as api from "../lib/api";
-  import { morphology as store } from "../lib/morphology.svelte";
+  import {
+    PIECE_DRAG_TYPE,
+    morphology as store,
+  } from "../lib/morphology.svelte";
   import ComposeBuilder from "./translation/ComposeBuilder.svelte";
   import FeatureBar from "./translation/FeatureBar.svelte";
   import FeatureEditor from "./translation/FeatureEditor.svelte";
@@ -96,6 +99,32 @@
   }
 
   const onMorphology = (next: api.Morphology) => void store.save(next);
+
+  // Dropping a sidebar piece on the Inflect view: a word becomes the base, a
+  // morpheme is toggled on. Other drags fall through (no "drop allowed").
+  let dropActive = $state(false);
+
+  function onPieceDragOver(event: DragEvent) {
+    if (!Array.from(event.dataTransfer?.types ?? []).includes(PIECE_DRAG_TYPE)) {
+      return;
+    }
+    event.preventDefault();
+    if (event.dataTransfer) event.dataTransfer.dropEffect = "copy";
+    dropActive = true;
+  }
+
+  function onPieceDrop(event: DragEvent) {
+    dropActive = false;
+    const raw = event.dataTransfer?.getData(PIECE_DRAG_TYPE);
+    if (!raw) return;
+    event.preventDefault();
+    const { kind, id } = JSON.parse(raw) as {
+      kind: "word" | "morpheme";
+      id: string;
+    };
+    if (kind === "word") store.selectWord(id);
+    else store.toggleMorpheme(id);
+  }
 </script>
 
 <div class="morphology-view">
@@ -125,53 +154,63 @@
   {#if store.tab === "compose"}
     <ComposeBuilder />
   {:else if store.tab === "inflect"}
-    <section class="morph-section">
-      <WordPicker />
-    </section>
-    {#if !word}
-      <p class="muted">{$t("morphology.pickWord")}</p>
-    {:else}
+    <div
+      class="inflect-drop"
+      class:drop-active={dropActive}
+      role="group"
+      aria-label={$t("morphology.inflect")}
+      ondragover={onPieceDragOver}
+      ondragleave={() => (dropActive = false)}
+      ondrop={onPieceDrop}
+    >
       <section class="morph-section">
-        <div class="section-title">
-          {word.wordname}
-          {#if word.class}<span class="badge">{word.class}</span>{/if}
-          <span class="muted">— {word.gloss}</span>
-        </div>
-        <FeatureBar
-          features={relevantFeatures}
-          selections={store.selections}
-          onToggle={(feature, value) => store.toggleFeature(feature, value)}
-          missing={isMissing}
-          onMissing={() => (store.tab = "paradigms")}
-        />
-        {#if store.morphemes.length}
-          <p class="muted small">{$t("morphology.pickHint")}</p>
-        {/if}
+        <WordPicker />
       </section>
-
-      {#if store.inflection}
+      {#if !word}
+        <p class="muted">{$t("morphology.pickWord")}</p>
+      {:else}
         <section class="morph-section">
-          <div class="inflect-surface">{store.inflection.surface}</div>
-          <div class="inflect-pieces">
-            {#each store.inflection.morphemes as morpheme, index (index)}
-              <span class="piece {morpheme.kind}">
-                <span class="mono">{morpheme.surface}</span>
-                <span class="muted">{morpheme.gloss}</span>
-              </span>
-            {/each}
+          <div class="section-title">
+            {word.wordname}
+            {#if word.class}<span class="badge">{word.class}</span>{/if}
+            <span class="muted">— {word.gloss}</span>
           </div>
-          <SaveWordForm
-            surface={store.inflection.surface}
-            gloss={store.inflection.morphemes
-              .map((morpheme) => morpheme.gloss)
-              .join(" ")}
-            wordClass={word.class}
-            parents={[{ table: word.table, id: word.id, label: word.wordname }]}
-            defaultTable={word.table}
+          <FeatureBar
+            features={relevantFeatures}
+            selections={store.selections}
+            onToggle={(feature, value) => store.toggleFeature(feature, value)}
+            missing={isMissing}
+            onMissing={() => (store.tab = "paradigms")}
           />
+          {#if store.morphemes.length}
+            <p class="muted small">{$t("morphology.pickHint")}</p>
+          {/if}
         </section>
+
+        {#if store.inflection}
+          <section class="morph-section">
+            <div class="inflect-surface">{store.inflection.surface}</div>
+            <div class="inflect-pieces">
+              {#each store.inflection.morphemes as morpheme, index (index)}
+                <span class="piece {morpheme.kind}">
+                  <span class="mono">{morpheme.surface}</span>
+                  <span class="muted">{morpheme.gloss}</span>
+                </span>
+              {/each}
+            </div>
+            <SaveWordForm
+              surface={store.inflection.surface}
+              gloss={store.inflection.morphemes
+                .map((morpheme) => morpheme.gloss)
+                .join(" ")}
+              wordClass={word.class}
+              parents={[{ table: word.table, id: word.id, label: word.wordname }]}
+              defaultTable={word.table}
+            />
+          </section>
+        {/if}
       {/if}
-    {/if}
+    </div>
   {:else}
     <section class="morph-section">
       <div class="section-title">{$t("morphology.features")}</div>
