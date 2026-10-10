@@ -209,10 +209,9 @@ fn matches_syllables(kinds: &[PhonemeKind], shapes: &[String]) -> bool {
 // -- sound change engine ---------------------------------------------------
 
 /// Apply every rule in order, returning the word after each step (for a
-/// step-by-step preview). An empty inventory means "not configured", so the
-/// word is returned unchanged.
+/// step-by-step preview). No rules means the word is returned unchanged.
 pub fn apply_rules(word: &str, config: &PhonologyConfig) -> Vec<String> {
-    if config.phonemes.is_empty() || config.rules.is_empty() {
+    if config.rules.is_empty() {
         return vec![word.to_string()];
     }
     let mut steps = Vec::with_capacity(config.rules.len() + 1);

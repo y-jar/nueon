@@ -4808,6 +4808,58 @@ async function main() {
       { label: "link inserted" },
     );
   });
+
+  // -- probe 79: sound changes apply to a preview word -----------------------
+  await probe("79-sound-change-preview", async () => {
+    await openActivity("Phonology");
+    await waitJs(`!!document.querySelector('.phonology')`, { label: "phonology view" });
+
+    // Add a rule k -> s.
+    const added = await js(
+      `const b = [...document.querySelectorAll('.phonology button')]
+         .find((x) => x.textContent.includes('Add rule'));
+       if (b) b.click();
+       return !!b;`,
+    );
+    if (!added) throw new Error("no Add rule button");
+    await waitJs(`document.querySelectorAll('.phonology .rule-row').length >= 1`, {
+      label: "rule row",
+    });
+    const setRule = (index, value) =>
+      js(
+        `const i = document.querySelectorAll('.phonology .rule-row input')[${index}];
+         if (!i) return false;
+         i.value = ${JSON.stringify(value)};
+         i.dispatchEvent(new Event('input', { bubbles: true }));
+         return true;`,
+      );
+    await setRule(0, "k");
+    await setRule(1, "s");
+    // The rules autosave on a debounce; let it land before the preview reads
+    // the backend config.
+    await new Promise((resolve) => setTimeout(resolve, 800));
+
+    const previewed = await js(
+      `const i = [...document.querySelectorAll('.phonology .custom-row input')]
+         .find((x) => x.placeholder.includes('preview'));
+       if (!i) return false;
+       i.value = 'ka';
+       i.dispatchEvent(new Event('input', { bubbles: true }));
+       return true;`,
+    );
+    if (!previewed) throw new Error("no preview input");
+    await js(
+      `const b = [...document.querySelectorAll('.phonology button')]
+         .find((x) => x.textContent.trim() === 'Preview');
+       if (b) b.click();
+       return !!b;`,
+    );
+    await waitJs(
+      `[...document.querySelectorAll('.phonology .rule-step')]
+         .map((x) => x.textContent.trim()).join(' ') === 'ka sa'`,
+      { label: "ka -> sa" },
+    );
+  });
 }
 
 try {

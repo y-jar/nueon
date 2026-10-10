@@ -247,6 +247,8 @@ pub fn run() {
             commands::set_table_role,
             commands::phonology_check_words,
             commands::phonology_segments,
+            commands::phonology_apply_word,
+            commands::phonology_apply_table,
             commands::translation_options,
             commands::set_translation_options,
             commands::export_presets,

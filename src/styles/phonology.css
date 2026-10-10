@@ -126,3 +126,36 @@
 .preset-row .preset {
   font-family: ui-monospace, monospace;
 }
+
+.rule-row {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin: 4px 0;
+}
+
+.rule-row input {
+  width: 60px;
+  font-family: ui-monospace, monospace;
+}
+
+.rule-row input.grow {
+  flex: 1;
+  width: auto;
+}
+
+.rule-steps {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin: 6px 0;
+}
+
+.rule-step {
+  padding: 2px 6px;
+  font-family: ui-monospace, monospace;
+  background: var(--bg);
+  border: 1px solid var(--border);
+  border-radius: 4px;
+}

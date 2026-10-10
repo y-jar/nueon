@@ -792,15 +792,32 @@ export interface Phoneme {
   kind: PhonemeKind;
 }
 
+export interface SoundChangeRule {
+  name?: string;
+  from: string;
+  to: string;
+  left?: string;
+  right?: string;
+}
+
 export interface PhonologyConfig {
   phonemes: Phoneme[];
   syllables: string[];
+  rules: SoundChangeRule[];
 }
 
 export const phonologyGet = (): Promise<PhonologyConfig> =>
   configGet<PhonologyConfig>("phonology");
 export const phonologySet = (value: PhonologyConfig): Promise<void> =>
   configSet("phonology", value);
+
+/** The word after each sound-change rule, for a step-by-step preview. */
+export const phonologyApplyWord = (word: string): Promise<string[]> =>
+  invoke("phonology_apply_word", { word });
+
+/** Apply every sound change to a table; returns how many words were renamed. */
+export const phonologyApplyTable = (table: string): Promise<number> =>
+  invoke("phonology_apply_table", { table });
 
 export type PhonologyViolation =
   | { kind: "unknown_phoneme"; at: number; symbol: string }

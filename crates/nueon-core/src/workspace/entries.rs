@@ -1,5 +1,6 @@
 //! Word entries: create, edit, classify, parents and delete.
 use super::*;
+use crate::config::apply_to_word;
 
 impl Workspace {
     // -- words ----------------------------------------------------------
@@ -348,6 +349,59 @@ impl Workspace {
             storage::write_existing_note(&self.notes_dir(), &edit.path, &edit.after, None)?;
         }
         Ok(true)
+    }
+
+    /// Apply every sound-change rule to a table's wordnames, renaming the
+    /// words that change and rewriting their `[[...]]` note links. The whole
+    /// pass is one undo step. Returns how many words were renamed.
+    pub fn apply_sound_changes(&mut self, table: &str) -> Result<usize, StorageError> {
+        let config = self.phonology.clone();
+        let entries: Vec<(Uuid, String)> = match self.dictionary.table(table) {
+            Some(table) => table
+                .entries
+                .iter()
+                .map(|entry| (entry.id, entry.wordname.clone()))
+                .collect(),
+            None => return Ok(0),
+        };
+        let mut renames: Vec<(Uuid, String, String)> = Vec::new();
+        for (id, word) in &entries {
+            let new = apply_to_word(word, &config);
+            if &new != word {
+                renames.push((*id, word.clone(), new));
+            }
+        }
+        if renames.is_empty() {
+            return Ok(0);
+        }
+
+        let mut notes = Vec::new();
+        for note in &self.notes {
+            let before = storage::read_note(&self.notes_dir(), &note.path)?;
+            let mut after = before.clone();
+            for (_, old, new) in &renames {
+                after = links::rewrite_links(&after, old, new);
+            }
+            if after != before {
+                notes.push(history::NoteEdit {
+                    path: note.path.clone(),
+                    before,
+                    after,
+                });
+            }
+        }
+
+        self.record_with_notes(notes.clone());
+        for (id, _old, new) in &renames {
+            if let Some(entry) = self.dictionary.get_entry_mut(table, *id) {
+                entry.wordname = new.clone();
+            }
+        }
+        self.save_table(table)?;
+        for edit in &notes {
+            storage::write_existing_note(&self.notes_dir(), &edit.path, &edit.after, None)?;
+        }
+        Ok(renames.len())
     }
 
     /// Move a word to another table and persist both tables.

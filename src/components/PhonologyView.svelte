@@ -8,12 +8,17 @@
 
   let phonemes = $state<api.Phoneme[]>([]);
   let syllables = $state<string[]>([]);
+  let rules = $state<api.SoundChangeRule[]>([]);
   let customSymbol = $state("");
   let customKind = $state<api.PhonemeKind>("consonant");
   let newSyllable = $state("");
   let status = $state("");
   let error = $state("");
   let timer: ReturnType<typeof setTimeout> | undefined;
+  let previewWord = $state("");
+  let previewSteps = $state<string[]>([]);
+  let applyTable = $state("");
+  let applyCount = $state<number | null>(null);
 
   const chosen = $derived(new Set(phonemes.map((phoneme) => phoneme.symbol)));
   const consonantCount = $derived(
@@ -41,6 +46,7 @@
       const config = await api.phonologyGet();
       phonemes = config.phonemes;
       syllables = config.syllables;
+      rules = config.rules ?? [];
       error = "";
     } catch (e) {
       error = String(e);
@@ -54,7 +60,7 @@
 
   async function save() {
     try {
-      await api.phonologySet({ phonemes, syllables });
+      await api.phonologySet({ phonemes, syllables, rules });
       status = $t("phonology.saved");
       error = "";
     } catch (e) {
@@ -102,6 +108,44 @@
   function removeSyllable(shape: string) {
     syllables = syllables.filter((value) => value !== shape);
     scheduleSave();
+  }
+
+  function addRule() {
+    rules = [...rules, { from: "", to: "", left: "", right: "" }];
+  }
+
+  function removeRule(index: number) {
+    rules = rules.filter((_, i) => i !== index);
+    scheduleSave();
+  }
+
+  function updateRule(index: number, field: keyof api.SoundChangeRule, value: string) {
+    rules = rules.map((rule, i) => (i === index ? { ...rule, [field]: value } : rule));
+    scheduleSave();
+  }
+
+  async function runPreview() {
+    const word = previewWord.trim();
+    if (!word) {
+      previewSteps = [];
+      return;
+    }
+    try {
+      previewSteps = await api.phonologyApplyWord(word);
+    } catch (e) {
+      error = String(e);
+    }
+  }
+
+  async function runApply() {
+    if (!applyTable) return;
+    applyCount = null;
+    try {
+      applyCount = await api.phonologyApplyTable(applyTable);
+      void load();
+    } catch (e) {
+      error = String(e);
+    }
   }
 </script>
 
@@ -281,5 +325,82 @@
         >
       {/each}
     </div>
+  </section>
+
+  <section class="ipa-section">
+    <h2>{$t("phonology.soundChanges")}</h2>
+    <p class="muted">{$t("phonology.rulesHint")}</p>
+    {#if rules.length === 0}
+      <p class="muted">{$t("phonology.noRules")}</p>
+    {:else}
+      {#each rules as rule, index (index)}
+        <div class="rule-row">
+          <input
+            placeholder="a"
+            value={rule.from}
+            oninput={(e) => updateRule(index, "from", e.currentTarget.value)}
+          />
+          <span class="muted">→</span>
+          <input
+            placeholder="b"
+            value={rule.to}
+            oninput={(e) => updateRule(index, "to", e.currentTarget.value)}
+          />
+          <span class="muted">/</span>
+          <input
+            class="grow"
+            placeholder="_"
+            value={rule.left ?? ""}
+            oninput={(e) => updateRule(index, "left", e.currentTarget.value)}
+          />
+          <span class="muted">_</span>
+          <input
+            class="grow"
+            placeholder=""
+            value={rule.right ?? ""}
+            oninput={(e) => updateRule(index, "right", e.currentTarget.value)}
+          />
+          <button title={$t("phonology.remove")} onclick={() => removeRule(index)}>
+            <X size={13} />
+          </button>
+        </div>
+      {/each}
+    {/if}
+    <div class="custom-row">
+      <button onclick={addRule}><Plus size={14} /> {$t("phonology.addRule")}</button>
+    </div>
+
+    <div class="custom-row">
+      <input
+        placeholder={$t("phonology.previewPlaceholder")}
+        bind:value={previewWord}
+        onkeydown={(e) => e.key === "Enter" && runPreview()}
+      />
+      <button onclick={runPreview}>{$t("phonology.preview")}</button>
+    </div>
+    {#if previewSteps.length}
+      <div class="rule-steps">
+        {#each previewSteps as step, index (index)}
+          <span class="rule-step">{step}</span>
+          {#if index < previewSteps.length - 1}<span class="muted">→</span>{/if}
+        {/each}
+      </div>
+    {/if}
+  </section>
+
+  <section class="ipa-section">
+    <h2>{$t("phonology.apply")}</h2>
+    <div class="custom-row">
+      <select bind:value={applyTable}>
+        <option value="">{$t("phonology.pickTable")}</option>
+        {#each ui.tables as table (table.name)}
+          <option value={table.name}>{table.name}</option>
+        {/each}
+      </select>
+      <button onclick={runApply}>{$t("phonology.applyToTable")}</button>
+    </div>
+    {#if applyCount !== null}
+      <p class="muted">{$t("phonology.applied", { values: { count: applyCount } })}</p>
+    {/if}
   </section>
 </div>

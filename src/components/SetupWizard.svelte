@@ -111,7 +111,7 @@
           kind: "vowel" as const,
         })),
       ];
-      await api.phonologySet({ phonemes, syllables: [] });
+      await api.phonologySet({ phonemes, syllables: [], rules: [] });
 
       const grammar = await api.grammarGet();
       const rule: api.GrammarRule = {

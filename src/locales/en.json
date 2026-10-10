@@ -523,7 +523,17 @@
     "saved": "Saved",
     "warning": "Phonology: {reasons}",
     "unknownPhoneme": "\u201c{symbol}\u201d (character {at}) isn\u2019t in your sound inventory",
-    "badSyllable": "doesn\u2019t match your syllable shapes"
+    "badSyllable": "doesn\u2019t match your syllable shapes",
+    "soundChanges": "Sound changes",
+    "rulesHint": "Ordered rules: a sound becomes another in context. Use C, V, L for classes, # for the word edge, and literal sounds.",
+    "noRules": "No sound changes yet.",
+    "addRule": "Add rule",
+    "previewPlaceholder": "word to preview",
+    "preview": "Preview",
+    "apply": "Apply to the lexicon",
+    "pickTable": "Pick a table",
+    "applyToTable": "Apply to table",
+    "applied": "Renamed {count} words."
   },
   "derivation": {
     "title": "Derivation",

@@ -49,7 +49,7 @@
   });
   let rules = $state<api.GrammarRule[]>([]);
   let tableRoles = $state<Record<string, api.TableRoleConfig>>({});
-  let phonology = $state<api.PhonologyConfig>({ phonemes: [], syllables: [] });
+  let phonology = $state<api.PhonologyConfig>({ phonemes: [], syllables: [], rules: [] });
   let morphology = $state<api.Morphology>({ features: [], paradigms: [] });
   let classInfo = $state<api.ClassColumnInfo | null>(null);
   let consonants = $state("");
@@ -102,8 +102,9 @@
       await api.phonologySet({
         phonemes,
         syllables: phonology.syllables,
+        rules: phonology.rules,
       });
-      phonology = { phonemes, syllables: phonology.syllables };
+      phonology = { phonemes, syllables: phonology.syllables, rules: phonology.rules };
       // Let the Phonology tab reload from the new config.
       ui.phonologyRevision += 1;
       status = $t("settings.saved");
