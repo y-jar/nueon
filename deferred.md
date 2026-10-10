@@ -24,9 +24,15 @@ stage that completed them: `R0`–`R8` were done during the Tauri migration,
 
 ## Note links
 
-- Block links (`[[note#^block-id]]`) are out of scope. (links)
+Shipped: `[[target]]`, `[[target|alias]]`, `[[target#heading]]`,
+`[[target#heading|alias]]`, `!` embeds, the ranked dropdown, a link keybind,
+hidden brackets that reveal on the cursor, and link rewriting on rename.
+
+- Block links (`[[note#^block-id]]`) are out of scope.
 - Setext headings (`===` / `---` underlines) are not resolved by
-  `[[note#heading]]`; only ATX headings (`#` through `######`) are. (links)
+  `[[note#heading]]`; only ATX headings (`#` through `######`) are.
+- Heading embeds (`![[note#heading]]`) render like a note embed without
+  heading-specific display.
 
 ## Dictionary grid
 
@@ -97,7 +103,8 @@ stage that completed them: `R0`–`R8` were done during the Tauri migration,
 - ~~Quick-add "Draft Word" stubs from the translation builder.~~
 - ~~Rule-Based Affix & Declension Engine (ordered multi-slot affixes, fixes-table
   morphemes, feature/slot authoring, and an Inflect preview).~~ (Morphology)
-- Interactive Phonology & IPA Chart with Sound Change Engine (SCA).
+- ~~Interactive Phonology & IPA Chart with Sound Change Engine (SCA).~~
+  (Morphology/SCA)
 - ~~Automatic Interlinear Gloss Generator (Leipzig rules) + clipboard exports.~~
 
 ## Morphology (next)
