@@ -1,5 +1,6 @@
-//! Morphology commands: the fixes-table morpheme inventory and the lexicon
-//! picker. Both are read-only views over the current workspace.
+//! Morphology commands: the fixes-table morpheme inventory, the lexicon picker,
+//! the class-column setting and a one-off class-value cleanup. Most are
+//! read-only; `normalize_class_values` writes the class column across tables.
 
 use std::collections::{BTreeMap, BTreeSet, HashMap};
 use std::sync::Mutex;

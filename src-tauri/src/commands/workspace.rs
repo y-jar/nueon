@@ -3,12 +3,11 @@
 use std::path::PathBuf;
 use std::sync::Mutex;
 
-use serde::Serialize;
 use tauri::{AppHandle, Manager, State};
 
 use nueon_core::{
-    LayoutState, Profile, StorageError, TilingLayout, UiLayout, WindowGeometry, WindowLayout,
-    Workspace, WorkspaceEntry,
+    LayoutState, Profile, StorageError, TilingLayout, UiLayout, WindowGeometry, Workspace,
+    WorkspaceEntry,
 };
 
 use super::{changed, destroy_windows, secondary_labels};
@@ -268,21 +267,6 @@ pub fn profile_import(
     Ok(())
 }
 
-/// The persisted window geometry and dock layout.
-#[tauri::command]
-pub fn layout_get(state: State<'_, Shared>) -> Result<WindowLayout, String> {
-    let state = state.lock().map_err(|_| "state poisoned".to_string())?;
-    Ok(state.global.window.clone())
-}
-
-/// Persist whether the git pane is open.
-#[tauri::command]
-pub fn layout_set_git_panel(state: State<'_, Shared>, open: bool) -> Result<(), String> {
-    let mut state = state.lock().map_err(|_| "state poisoned".to_string())?;
-    state.global.set_git_panel_open(open);
-    state.global.save().map_err(|err| err.to_string())
-}
-
 /// The persisted shell layout for the current workspace.
 #[tauri::command]
 pub fn ui_layout_get(state: State<'_, Shared>) -> Result<UiLayout, String> {
@@ -342,24 +326,6 @@ pub fn tiling_save(
         workspace.set_window_tiling(&label, geometry, tiling)
     }
     .map_err(|err| err.to_string())
-}
-
-/// Whether dictionary undo/redo steps are available.
-#[derive(Debug, Clone, Serialize)]
-pub struct HistoryStatus {
-    pub can_undo: bool,
-    pub can_redo: bool,
-}
-
-/// Whether an undo and/or redo step is available.
-#[tauri::command]
-pub fn history_status(state: State<'_, Shared>) -> Result<HistoryStatus, String> {
-    let state = state.lock().map_err(|_| "state poisoned".to_string())?;
-    let workspace = state.workspace()?;
-    Ok(HistoryStatus {
-        can_undo: workspace.can_undo(),
-        can_redo: workspace.can_redo(),
-    })
 }
 
 /// Undo the last revertible dictionary edit; returns `false` if none.

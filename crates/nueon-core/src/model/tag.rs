@@ -48,8 +48,6 @@ pub struct TagDef {
     pub name: String,
     #[serde(default)]
     pub description: String,
-    #[serde(default, skip_serializing_if = "Option::is_none")]
-    pub color: Option<String>,
     /// The value type stored under this tag.
     pub kind: FieldType,
     /// Whether the app owns this tag (e.g. `wordname`), preventing removal.
@@ -80,7 +78,6 @@ impl TagDef {
             builtin: name == WORDNAME_TAG,
             name,
             description: String::new(),
-            color: None,
             kind,
             format: TagFormat::Default,
             suggest: false,
@@ -92,7 +89,6 @@ impl TagDef {
         Self {
             name: WORDNAME_TAG.to_string(),
             description: "The base conlang spelling.".to_string(),
-            color: None,
             kind: FieldType::Text,
             builtin: true,
             format: TagFormat::Default,

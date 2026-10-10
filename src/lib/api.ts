@@ -157,7 +157,6 @@ export type FieldValue =
 export interface TagDef {
   name: string;
   description: string;
-  color?: string | null;
   kind: FieldType;
   builtin: boolean;
   format: TagFormat;

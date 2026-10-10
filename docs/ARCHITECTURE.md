@@ -125,8 +125,7 @@ Command groups (see `src-tauri/src/commands/`):
   `workspace_open`, `workspace_create`, `workspace_remove`, `workspace_rename`,
   `workspace_set_path`, `workspace_delete_from_disk`)
 - config (`config_get`, `config_set`)
-- layout (`layout_get`, `layout_set_git_panel`, `ui_layout_get`,
-  `ui_layout_set`, `layout_state_get`, `tiling_save`)
+- layout (`ui_layout_get`, `ui_layout_set`, `layout_state_get`, `tiling_save`)
 - notes (`list_workspace`, `read_note`, `save_note`, `create_note`,
   `create_note_with_content`, `create_folder`, `move_or_rename_note`,
   `delete_note`, `note_count`)
@@ -134,11 +133,10 @@ Command groups (see `src-tauri/src/commands/`):
 - dictionary (`list_tables`, `get_table`, `create_table`, `delete_table`,
   `rename_table`, `word_index`, `quarantine_warnings`, word CRUD
   (`create_word`/`save_word_entry`/`set_word_value`/`set_word_definition`/
-  `rename_word`/`delete_word`/`move_word`), tag management
+  `rename_word`/`delete_word`), tag management
   (`add_tag`/`remove_tag_preview`/`remove_tag`/`set_tag_kind`/`set_tag_format`/
   `known_tag_names`))
-- history (`history_status`, `undo`, `redo`, `warning_dismissed`,
-  `dismiss_warning`)
+- history (`undo`, `redo`, `warning_dismissed`, `dismiss_warning`)
 - etymology (`set_parent`, `remove_parent`, `reparent_word`,
   `parent_candidates`, `derivation_tree`, `derivation_graph`)
 - grid view state (`grid_view_get`, `grid_view_set`)

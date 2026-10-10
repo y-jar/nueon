@@ -1,8 +1,10 @@
 //! Feature-based morphology: paradigm tables that realize a combination of
 //! selected grammatical features as an affix on a word class.
 //!
-//! A word's class comes from its `pos` tag (a `TagList`; the first sense).
-//! Each [`Paradigm`] belongs to one class; a [`ParadigmRow`] applies when every
+//! A word's class comes from the column named by [`Morphology::class_column`]
+//! (or, when unset, the first of `pos`/`class`/`type` a table declares) — a
+//! `TagList`/`Text` whose first sense is the class, with any leading `#`
+//! dropped. Each [`Paradigm`] belongs to one class; a [`ParadigmRow`] applies when every
 //! feature/value in its `when` matches the clause's feature selection, and the
 //! row with the most conditions wins. This models fusional languages, where one
 //! ending realizes several features at once.

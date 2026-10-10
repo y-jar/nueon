@@ -296,26 +296,6 @@ pub fn delete_word(
     Ok(removed)
 }
 
-/// Move a word to another table; returns `false` if it did not exist.
-#[tauri::command]
-pub fn move_word(
-    app: AppHandle,
-    state: State<'_, Shared>,
-    from: String,
-    to: String,
-    id: String,
-) -> Result<bool, String> {
-    let id = parse_id(&id)?;
-    let mut state = state.lock().map_err(|_| "state poisoned".to_string())?;
-    let moved = state
-        .workspace_mut()?
-        .move_entry(&from, &to, id)
-        .map_err(|err| err.to_string())?;
-    drop(state);
-    changed(&app, "dictionary");
-    Ok(moved)
-}
-
 /// Add a tag (column) to a table; returns `false` if it already exists.
 #[tauri::command]
 pub fn add_tag(

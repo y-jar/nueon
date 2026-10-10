@@ -81,9 +81,6 @@ pub struct WorkspaceSettings {
     pub auto_checkin: bool,
     /// Idle debounce before an automatic check-in, in seconds.
     pub auto_checkin_secs: u64,
-    /// Table to open by default, if any.
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub default_table: Option<String>,
     /// Per-table grid presentation state, keyed by table name.
     #[serde(skip_serializing_if = "BTreeMap::is_empty")]
     pub grid_views: BTreeMap<String, GridViewState>,
@@ -113,7 +110,6 @@ impl Default for WorkspaceSettings {
         Self {
             auto_checkin: true,
             auto_checkin_secs: DEFAULT_AUTO_CHECKIN_SECS,
-            default_table: None,
             grid_views: BTreeMap::new(),
             git_prompt_dismissed: false,
             dismissed_warnings: Vec::new(),
