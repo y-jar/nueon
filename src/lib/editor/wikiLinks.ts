@@ -11,6 +11,7 @@ import {
   type DecorationSet,
   EditorView,
   ViewPlugin,
+  WidgetType,
   type ViewUpdate,
   hoverTooltip,
 } from "@codemirror/view";
@@ -62,6 +63,31 @@ function classFor(target: WikiTarget, embed: boolean): string {
   return "cm-wikilink cm-wikilink-unresolved";
 }
 
+/** Inline definition shown for a `![[word]]` embed. */
+class EmbedWidget extends WidgetType {
+  readonly wordname: string;
+  readonly senses: string[];
+
+  constructor(wordname: string, senses: string[]) {
+    super();
+    this.wordname = wordname;
+    this.senses = senses;
+  }
+
+  eq(other: EmbedWidget): boolean {
+    return other.wordname === this.wordname;
+  }
+
+  toDOM(): HTMLElement {
+    const span = document.createElement("span");
+    span.className = "cm-wikilink-embed-widget";
+    span.textContent = this.senses.length
+      ? `${this.wordname} (${this.senses.join("; ")})`
+      : this.wordname;
+    return span;
+  }
+}
+
 function build(view: EditorView): DecorationSet {
   const index = view.state.field(wordIndexField);
   const notes = view.state.field(notePathsField);
@@ -74,9 +100,17 @@ function build(view: EditorView): DecorationSet {
       const to = visible.from + link.to;
       if (code.has(view.state.doc.lineAt(from).number)) continue;
       const target = resolveWikiTarget(link.target, index, notes);
-      ranges.push(
-        Decoration.mark({ class: classFor(target, link.embed) }).range(from, to),
-      );
+      if (link.embed && target.kind === "word") {
+        ranges.push(
+          Decoration.replace({
+            widget: new EmbedWidget(target.wordname, target.senses),
+          }).range(from, to),
+        );
+      } else {
+        ranges.push(
+          Decoration.mark({ class: classFor(target, link.embed) }).range(from, to),
+        );
+      }
     }
   }
   return Decoration.set(ranges, true);

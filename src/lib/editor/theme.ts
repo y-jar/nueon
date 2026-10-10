@@ -63,6 +63,14 @@ export const theme = EditorView.theme(
     ".cm-wikilink-word": { fontWeight: "600" },
     ".cm-wikilink-note": { color: "var(--fg)" },
     ".cm-wikilink-embed": { fontStyle: "italic" },
+    ".cm-wikilink-embed-widget": {
+      display: "inline-block",
+      padding: "0 4px",
+      border: "1px solid var(--border)",
+      borderRadius: "4px",
+      background: "var(--panel)",
+      color: "var(--text)",
+    },
     ".cm-wikilink-unresolved": {
       color: "#d6785a",
       borderBottom: "1px dashed #d6785a",

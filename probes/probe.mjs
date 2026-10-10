@@ -4739,7 +4739,7 @@ async function main() {
          word: document.querySelectorAll('.cm-wikilink-word').length,
          note: document.querySelectorAll('.cm-wikilink-note').length,
          unresolved: document.querySelectorAll('.cm-wikilink-unresolved').length,
-         embed: document.querySelectorAll('.cm-wikilink-embed').length,
+         embed: document.querySelectorAll('.cm-wikilink-embed-widget').length,
        };`,
     );
     if (kinds.word < 2) throw new Error(`word links: ${JSON.stringify(kinds)}`);
