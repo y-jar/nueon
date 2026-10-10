@@ -4,8 +4,9 @@ import { emit, listen } from "@tauri-apps/api/event";
 
 import * as api from "./api";
 import { windowLabel } from "./window";
-import { makeGroup, newId, ui, type Tab, type TabGroup } from "./store.svelte";
+import { makeGroup, newId, ui, type Tab, type TabGroup, type TabKind } from "./store.svelte";
 import { fromSplitLayout, toSplitLayout, type SplitNode } from "./tiling";
+import { duplicateTabs } from "./tabs";
 import { activateTab, closeTab, tr } from "./state.svelte";
 import { activateNeighbor } from "./tabs.svelte";
 
@@ -263,6 +264,38 @@ function placeGroup(
   }));
 }
 
+/**
+ * Open a tab in a brand-new pane to the right of the active one, leaving any
+ * existing tab of the same identity in place. Used by the deliberate
+ * "Open in new split" actions.
+ */
+export async function openInNewSplit(
+  kind: TabKind,
+  ref: string | null,
+  title: string,
+): Promise<void> {
+  const target = ui.activeGroupId;
+  const group = makeGroup();
+  const tab: Tab = { id: newId(), kind, ref, title };
+  group.tabs = [tab];
+  group.activeTabId = tab.id;
+  ui.groups = [...ui.groups, group];
+  await activateTab(group.id, tab.id);
+  placeGroup(target, group.id, "right");
+  ui.activeGroupId = group.id;
+}
+
+/** Duplicate the given open tab into a new split pane. */
+export async function duplicateTabToNewSplit(
+  groupId: string,
+  tabId: string,
+): Promise<void> {
+  const group = ui.groups.find((candidate) => candidate.id === groupId);
+  const tab = group?.tabs.find((candidate) => candidate.id === tabId);
+  if (!tab) return;
+  await openInNewSplit(tab.kind, tab.ref, tab.title);
+}
+
 /** Drag a tab to `edge` of `targetGroupId`, creating a new pane. */
 export async function splitGroup(
   fromGroupId: string,
@@ -429,6 +462,43 @@ export async function restoreTiling(layout: api.TilingLayout): Promise<void> {
     groups.push(group);
   }
   if (groups.length === 0) return;
+
+  // Collapse tabs the reveal rule would have prevented: the first occurrence
+  // of an identity wins, later repeats are dropped (and logged so a surprise
+  // is traceable, with nothing shown to the user).
+  const drops = new Map<string, Set<number>>();
+  for (const { groupId, index } of duplicateTabs(
+    groups.map((group) => ({
+      id: group.id,
+      tabs: group.tabs.map((tab) => ({ kind: tab.kind, ref: tab.ref })),
+    })),
+  )) {
+    const indices = drops.get(groupId) ?? new Set<number>();
+    indices.add(index);
+    drops.set(groupId, indices);
+  }
+  for (const [groupId, indices] of drops) {
+    const group = groups.find((candidate) => candidate.id === groupId);
+    if (!group) continue;
+    for (const index of indices) {
+      const tab = group.tabs[index];
+      if (tab) {
+        console.debug(
+          "nueon: dropped duplicate restored tab",
+          tab.kind,
+          tab.ref ?? "",
+        );
+      }
+    }
+    group.tabs = group.tabs.filter((_, index) => !indices.has(index));
+  }
+  // A dropped active tab falls back to the group's first remaining tab.
+  for (const group of groups) {
+    const activeId = activeIds.get(group.id);
+    if (!activeId || !group.tabs.some((tab) => tab.id === activeId)) {
+      activeIds.set(group.id, group.tabs[0]?.id ?? null);
+    }
+  }
 
   let root = fromSplitLayout(layout.root, ids);
   for (const group of groups) {

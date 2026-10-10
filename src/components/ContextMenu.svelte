@@ -5,10 +5,16 @@
   import {
     ui,
     closeContextMenu,
+    duplicateTabToNewSplit,
     requestNew,
     requestRename,
+    requestRenameTable,
     requestDeleteNote,
+    requestDeleteTable,
     selectNote,
+    selectNoteInSplit,
+    selectTable,
+    selectTableInSplit,
     refreshTree,
     collapseAll,
     closeTab,
@@ -298,6 +304,13 @@
         onclick={() => {
           const { groupId, tabId } = menu.tab!;
           closeContextMenu();
+          void duplicateTabToNewSplit(groupId, tabId);
+        }}>{$t("contextMenu.openInNewSplit")}</button
+      >
+      <button
+        onclick={() => {
+          const { groupId, tabId } = menu.tab!;
+          closeContextMenu();
           void moveTabToNewWindow(groupId, tabId);
         }}>{$t("contextMenu.moveToWindow")}</button
       >
@@ -315,6 +328,33 @@
           closePane(groupId);
         }}>{$t("tabs.closePane")}</button
       >
+    {:else if menu.kind === "table" && menu.table}
+      <button
+        onclick={() => {
+          const name = menu.table!;
+          closeContextMenu();
+          void selectTable(name);
+        }}>{$t("contextMenu.open")}</button
+      >
+      <button
+        onclick={() => {
+          const name = menu.table!;
+          closeContextMenu();
+          void selectTableInSplit(name);
+        }}>{$t("contextMenu.openInNewSplit")}</button
+      >
+      <button
+        onclick={() => requestRenameTable(menu.table!)}
+        >{$t("contextMenu.rename")}</button
+      >
+      <button
+        class="danger"
+        onclick={() => {
+          const name = menu.table!;
+          closeContextMenu();
+          void requestDeleteTable(name);
+        }}>{$t("contextMenu.delete")}</button
+      >
     {:else}
       {#if !menu.isDir}
         <button
@@ -322,6 +362,13 @@
             selectNote(menu.path);
             closeContextMenu();
           }}>{$t("contextMenu.open")}</button
+        >
+        <button
+          onclick={() => {
+            const path = menu.path;
+            closeContextMenu();
+            void selectNoteInSplit(path);
+          }}>{$t("contextMenu.openInNewSplit")}</button
         >
       {/if}
       <button onclick={() => requestNew("note", base)}

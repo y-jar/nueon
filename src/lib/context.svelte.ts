@@ -51,6 +51,11 @@ export function openContextMenu(
   ui.contextMenu = { x, y, path, isDir, kind };
 }
 
+/** Open the right-click menu for a table row in the sidebar. */
+export function openTableContextMenu(x: number, y: number, name: string): void {
+  ui.contextMenu = { x, y, path: "", isDir: false, kind: "table", table: name };
+}
+
 export function closeContextMenu(): void {
   ui.contextMenu = null;
   // Drop the editor the menu acted on so it cannot be kept alive or reused.
@@ -73,6 +78,16 @@ export function requestRename(path: string): void {
 
 export function consumeRename(): void {
   ui.renameTarget = null;
+}
+
+/** Ask the Tables panel to start inline-renaming a table. */
+export function requestRenameTable(name: string): void {
+  ui.tableRenameTarget = name;
+  ui.contextMenu = null;
+}
+
+export function consumeTableRename(): void {
+  ui.tableRenameTarget = null;
 }
 
 export function requestNew(kind: "note" | "folder", base: string): void {

@@ -10,6 +10,9 @@
     selectTable,
     renameTable,
     requestDeleteTable,
+    requestRenameTable,
+    consumeTableRename,
+    openTableContextMenu,
   } from "../lib/state.svelte";
   import QuarantineBanner from "./QuarantineBanner.svelte";
 
@@ -19,6 +22,16 @@
   let editing = $state<string | null>(null);
   let editName = $state("");
   let error = $state("");
+
+  // Context-menu "Rename" requests from the overlay.
+  $effect(() => {
+    const target = ui.tableRenameTarget;
+    if (target) {
+      editing = target;
+      editName = target;
+      consumeTableRename();
+    }
+  });
 
   const visible = $derived(
     ui.tables.filter((table) =>
@@ -111,7 +124,15 @@
 
   <div class="table-list">
     {#each visible as table (table.name)}
-      <div class="table-row" class:active={activeDoc().currentTable === table.name}>
+      <div
+        class="table-row"
+        class:active={activeDoc().currentTable === table.name}
+        role="listitem"
+        oncontextmenu={(e) => {
+          e.preventDefault();
+          openTableContextMenu(e.clientX, e.clientY, table.name);
+        }}
+      >
         {#if editing === table.name}
           <input
             use:autofocus={{ select: true }}
@@ -126,7 +147,13 @@
         {:else}
           <button
             class="tree-name"
-            onclick={() => selectTable(table.name)}
+            onclick={(e) => selectTable(table.name, { force: e.ctrlKey || e.metaKey })}
+            onauxclick={(e) => {
+              if (e.button === 1) {
+                e.preventDefault();
+                void selectTable(table.name, { force: true });
+              }
+            }}
             ondblclick={() => {
               editing = table.name;
               editName = table.name;
@@ -139,10 +166,7 @@
           <button
             class="row-action"
             title={$t("tables.rename")}
-            onclick={() => {
-              editing = table.name;
-              editName = table.name;
-            }}
+            onclick={() => requestRenameTable(table.name)}
           >
             <Pencil size={13} />
           </button>

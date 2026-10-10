@@ -210,8 +210,19 @@
             class="tree-name {activeDoc().selected === node.path ? 'selected' : ''} {node.is_dir
               ? 'dir'
               : ''}"
-            onclick={() =>
-              node.is_dir ? toggle(node.path) : selectNote(node.path)}
+            onclick={(e) => {
+              if (node.is_dir) {
+                toggle(node.path);
+                return;
+              }
+              void selectNote(node.path, { force: e.ctrlKey || e.metaKey });
+            }}
+            onauxclick={(e) => {
+              if (e.button === 1 && !node.is_dir) {
+                e.preventDefault();
+                void selectNote(node.path, { force: true });
+              }
+            }}
             ondblclick={() => {
               editing = node.path;
               editValue = labelOf(node);

@@ -12,7 +12,9 @@ export {
   resolveConflict,
   restoreFromTrash,
   selectNote,
+  selectNoteInSplit,
   selectTable,
+  selectTableInSplit,
 } from "./notes.svelte";
 export {
   createWorkspace,
@@ -75,14 +77,17 @@ export {
   closeContextMenu,
   consumeNew,
   consumeRename,
+  consumeTableRename,
   dismissQuarantine,
   getContextEditor,
   openColumnMenu,
   openContextMenu,
   openEditorContextMenu,
   openTabContextMenu,
+  openTableContextMenu,
   requestNew,
   requestRename,
+  requestRenameTable,
 } from "./context.svelte";
 export {
   closeImport,
@@ -98,12 +103,14 @@ export {
 } from "./shell.svelte";
 export {
   beginTabDrag,
+  duplicateTabToNewSplit,
   endTabDrag,
   finishTabDrag,
   FOREIGN_GROUP,
   installDragBridge,
   moveTab,
   moveTabToNewWindow,
+  openInNewSplit,
   removeGroup,
   restoreMainTiling,
   restoreSecondaryTiling,

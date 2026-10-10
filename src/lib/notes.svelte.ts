@@ -14,6 +14,7 @@ import {
   openTable,
   pruneGroupIfEmpty,
 } from "./tabs.svelte";
+import { openInNewSplit } from "./layout.svelte";
 import { refreshTables } from "./data.svelte";
 import { baseName, confirmDialog, showToast, tr } from "./state.svelte";
 
@@ -82,16 +83,33 @@ export async function resolveConflict(
 
 // -- notes CRUD ----------------------------------------------------------
 
-export async function selectNote(path: string): Promise<void> {
+export async function selectNote(
+  path: string,
+  opts?: { force?: boolean },
+): Promise<void> {
   // Markdown/text opens in the editor; anything else (and anything under
   // `notes/assets/`) opens in the viewer.
   await (isNotePath(path) && !isAssetPath(path)
-    ? openNote(path)
-    : openFile(path));
+    ? openNote(path, opts)
+    : openFile(path, opts));
 }
 
-export async function selectTable(name: string): Promise<void> {
-  await openTable(name);
+export async function selectTable(
+  name: string,
+  opts?: { force?: boolean },
+): Promise<void> {
+  await openTable(name, opts);
+}
+
+/** Open a note/file in a brand-new split pane, bypassing the reveal rule. */
+export async function selectNoteInSplit(path: string): Promise<void> {
+  const kind = isNotePath(path) && !isAssetPath(path) ? "note" : "file";
+  await openInNewSplit(kind, path, baseName(path));
+}
+
+/** Open a table in a brand-new split pane, bypassing the reveal rule. */
+export async function selectTableInSplit(name: string): Promise<void> {
+  await openInNewSplit("table", name, name);
 }
 
 export async function createNote(relPath: string): Promise<void> {

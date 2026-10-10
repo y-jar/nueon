@@ -4604,4 +4604,130 @@ async function main() {
       { label: "velo composed by drop" },
     );
   });
+
+  // -- probe 75: opening a tab reveals it instead of duplicating ------------
+  await probe("75-tabs-reveal-not-duplicate", async () => {
+    const tabCount = (title) =>
+      js(
+        `return [...document.querySelectorAll('.tab-title')]
+           .filter((x) => x.textContent.trim() === ${JSON.stringify(title)}).length;`,
+      );
+    const paneCount = () =>
+      js(`return document.querySelectorAll('.group-pane').length;`);
+    const tableRow = (name) =>
+      `[...document.querySelectorAll('.table-list .table-row .tree-name')]
+         .find((x) => x.querySelector('.grow')?.textContent.trim() === ${JSON.stringify(name)})`;
+    const clickTable = (name, modifiers = {}) =>
+      js(
+        `const b = ${tableRow(name)};
+         if (!b) return false;
+         b.dispatchEvent(new MouseEvent('click', { bubbles: true, cancelable: true,
+           ctrlKey: ${!!modifiers.ctrl}, metaKey: ${!!modifiers.meta} }));
+         return true;`,
+      );
+    const auxClickTable = (name) =>
+      js(
+        `const b = ${tableRow(name)};
+         if (!b) return false;
+         b.dispatchEvent(new MouseEvent('auxclick', { bubbles: true, cancelable: true, button: 1 }));
+         return true;`,
+      );
+    const openSplitFromRow = async (name) => {
+      const ok = await js(
+        `const b = ${tableRow(name)};
+         if (!b) return false;
+         b.closest('.table-row').dispatchEvent(new MouseEvent('contextmenu',
+           { bubbles: true, cancelable: true, clientX: 40, clientY: 40 }));
+         return true;`,
+      );
+      if (!ok) throw new Error(`no table row ${name}`);
+      await waitJs(`!!document.querySelector('.ctx-menu')`, { label: "table menu" });
+      const clicked = await js(
+        `const b = [...document.querySelectorAll('.ctx-menu button')]
+           .find((x) => x.textContent.trim() === 'Open in new split');
+         if (b) b.click();
+         return !!b;`,
+      );
+      if (!clicked) throw new Error("no Open in new split item");
+    };
+
+    await openActivity("Dictionary");
+    await waitJs(`!!document.querySelector('.table-list')`, { label: "tables panel" });
+
+    // Open `roots`, then `morphs` in a new split pane.
+    if (!(await clickTable("roots"))) throw new Error("no roots row");
+    await waitJs(
+      `[...document.querySelectorAll('.tab-title')].some((x) => x.textContent.trim() === 'roots')`,
+      { label: "roots tab" },
+    );
+    const rootsBefore = await tabCount("roots");
+    const panesBefore = await paneCount();
+    await openSplitFromRow("morphs");
+    await waitJs(
+      `document.querySelectorAll('.group-pane').length === ${panesBefore + 1}`,
+      { label: "new split pane" },
+    );
+    const panesSplit = await paneCount();
+
+    // Clicking `roots` again reveals its existing tab: no new tab, no pane.
+    if (!(await clickTable("roots"))) throw new Error("no roots row (reveal)");
+    await new Promise((resolve) => setTimeout(resolve, 200));
+    if ((await tabCount("roots")) !== rootsBefore) {
+      throw new Error("revealing roots created a duplicate tab");
+    }
+    if ((await paneCount()) !== panesSplit) {
+      throw new Error("revealing roots changed the pane count");
+    }
+
+    // Tool tabs are singletons: opening Translation twice leaves one tab.
+    await openActivity("Translation");
+    await openActivity("Translation");
+    await new Promise((resolve) => setTimeout(resolve, 200));
+    if ((await tabCount("Translation")) !== 1) {
+      throw new Error("Translation should be a single tab");
+    }
+
+    // Ctrl+click forces a deliberate duplicate in the active pane.
+    await openActivity("Dictionary");
+    await waitJs(`!!document.querySelector('.table-list')`, { label: "tables panel again" });
+    const morphsBefore = await tabCount("morphs");
+    if (!(await clickTable("morphs", { ctrl: true }))) {
+      throw new Error("no morphs row (ctrl-click)");
+    }
+    await waitJs(
+      `[...document.querySelectorAll('.tab-title')]
+         .filter((x) => x.textContent.trim() === 'morphs').length === ${morphsBefore + 1}`,
+      { label: "ctrl-click duplicated morphs" },
+    );
+
+    // Middle-click does the same.
+    const rootsDupBefore = await tabCount("roots");
+    if (!(await auxClickTable("roots"))) {
+      throw new Error("no roots row (middle-click)");
+    }
+    await waitJs(
+      `[...document.querySelectorAll('.tab-title')]
+         .filter((x) => x.textContent.trim() === 'roots').length === ${rootsDupBefore + 1}`,
+      { label: "middle-click duplicated roots" },
+    );
+  });
 }
+
+try {
+  await main();
+} catch (error) {
+  console.log(`HARNESS-ERROR ${String(error?.stack ?? error).slice(0, 500)}`);
+  results.push(["harness", "FAIL", String(error)]);
+} finally {
+  if (sessionId) {
+    await wd("DELETE", `/session/${sessionId}`).catch(() => {});
+  }
+  cleanup();
+}
+
+const failed = results.filter(([, status]) => status !== "PASS");
+console.log(`\n${results.length - failed.length}/${results.length} probes passed`);
+if (failed.length) {
+  for (const [name, , why] of failed) console.log(`  FAIL ${name}: ${why.slice(0, 160)}`);
+}
+process.exit(failed.length ? 1 : 0);

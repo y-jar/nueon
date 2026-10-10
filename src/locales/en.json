@@ -34,6 +34,7 @@
   },
   "contextMenu": {
     "open": "Open",
+    "openInNewSplit": "Open in new split",
     "moveToWindow": "Move to new window",
     "newNote": "New note",
     "newFolder": "New folder",

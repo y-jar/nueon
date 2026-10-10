@@ -1,7 +1,7 @@
 //! Opening, activating and closing tabs, and their table operations.
 
 import * as api from "./api";
-import { shouldPruneGroup } from "./tabs";
+import { findTabGroup, shouldPruneGroup, tabMatches, type TabKey } from "./tabs";
 import { nextActiveIndex } from "./tiling";
 import {
   activeDoc,
@@ -93,10 +93,32 @@ export async function activateTab(
   }
 }
 
-export async function openNote(path: string): Promise<void> {
-  const group = activeGroup();
+/** Whether `force` bypasses the reveal rule to open a deliberate duplicate. */
+interface OpenOptions {
+  force?: boolean;
+}
+
+/** Reveal a tab already open anywhere in this window; false if none. */
+function revealExisting(key: TabKey): boolean {
+  const groupId = findTabGroup(ui.groups, key);
+  if (!groupId) return false;
+  const group = ui.groups.find((candidate) => candidate.id === groupId);
+  const tab = group?.tabs.find((candidate) => tabMatches(candidate, key));
+  if (!group || !tab) return false;
+  void activateTab(groupId, tab.id);
+  return true;
+}
+
+export async function openNote(
+  path: string,
+  opts?: OpenOptions,
+): Promise<void> {
   ui.activity = "notes";
-  let tab = group.tabs.find((t) => t.kind === "note" && t.ref === path);
+  if (!opts?.force && revealExisting({ kind: "note", ref: path })) return;
+  const group = activeGroup();
+  let tab = opts?.force
+    ? undefined
+    : group.tabs.find((t) => t.kind === "note" && t.ref === path);
   if (!tab) {
     tab = { id: newId(), kind: "note", ref: path, title: baseName(path) };
     group.tabs = [...group.tabs, tab];
@@ -105,10 +127,16 @@ export async function openNote(path: string): Promise<void> {
 }
 
 /** Open a non-note file (image, PDF, …) in the viewer. */
-export async function openFile(path: string): Promise<void> {
-  const group = activeGroup();
+export async function openFile(
+  path: string,
+  opts?: OpenOptions,
+): Promise<void> {
   ui.activity = "notes";
-  let tab = group.tabs.find((t) => t.kind === "file" && t.ref === path);
+  if (!opts?.force && revealExisting({ kind: "file", ref: path })) return;
+  const group = activeGroup();
+  let tab = opts?.force
+    ? undefined
+    : group.tabs.find((t) => t.kind === "file" && t.ref === path);
   if (!tab) {
     tab = { id: newId(), kind: "file", ref: path, title: baseName(path) };
     group.tabs = [...group.tabs, tab];
@@ -116,10 +144,16 @@ export async function openFile(path: string): Promise<void> {
   await activateTab(group.id, tab.id);
 }
 
-export async function openTable(name: string): Promise<void> {
-  const group = activeGroup();
+export async function openTable(
+  name: string,
+  opts?: OpenOptions,
+): Promise<void> {
   ui.activity = "dictionary";
-  let tab = group.tabs.find((t) => t.kind === "table" && t.ref === name);
+  if (!opts?.force && revealExisting({ kind: "table", ref: name })) return;
+  const group = activeGroup();
+  let tab = opts?.force
+    ? undefined
+    : group.tabs.find((t) => t.kind === "table" && t.ref === name);
   if (!tab) {
     tab = { id: newId(), kind: "table", ref: name, title: name };
     group.tabs = [...group.tabs, tab];
@@ -127,9 +161,12 @@ export async function openTable(name: string): Promise<void> {
   await activateTab(group.id, tab.id);
 }
 
-export async function openTranslation(): Promise<void> {
+export async function openTranslation(opts?: OpenOptions): Promise<void> {
+  if (!opts?.force && revealExisting({ kind: "translation", ref: null })) return;
   const group = activeGroup();
-  let tab = group.tabs.find((t) => t.kind === "translation");
+  let tab = opts?.force
+    ? undefined
+    : group.tabs.find((t) => t.kind === "translation");
   if (!tab) {
     tab = {
       id: newId(),
@@ -142,9 +179,12 @@ export async function openTranslation(): Promise<void> {
   await activateTab(group.id, tab.id);
 }
 
-export async function openMorphology(): Promise<void> {
+export async function openMorphology(opts?: OpenOptions): Promise<void> {
+  if (!opts?.force && revealExisting({ kind: "morphology", ref: null })) return;
   const group = activeGroup();
-  let tab = group.tabs.find((t) => t.kind === "morphology");
+  let tab = opts?.force
+    ? undefined
+    : group.tabs.find((t) => t.kind === "morphology");
   if (!tab) {
     tab = {
       id: newId(),
@@ -157,9 +197,12 @@ export async function openMorphology(): Promise<void> {
   await activateTab(group.id, tab.id);
 }
 
-export async function openPhonology(): Promise<void> {
+export async function openPhonology(opts?: OpenOptions): Promise<void> {
+  if (!opts?.force && revealExisting({ kind: "phonology", ref: null })) return;
   const group = activeGroup();
-  let tab = group.tabs.find((t) => t.kind === "phonology");
+  let tab = opts?.force
+    ? undefined
+    : group.tabs.find((t) => t.kind === "phonology");
   if (!tab) {
     tab = {
       id: newId(),

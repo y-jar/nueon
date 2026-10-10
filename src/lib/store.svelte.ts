@@ -183,11 +183,14 @@ export const ui = $state({
     y: number;
     path: string;
     isDir: boolean;
-    kind: "node" | "root" | "tab" | "editor" | "column";
+    kind: "node" | "root" | "tab" | "editor" | "column" | "table";
     tab?: { groupId: string; tabId: string };
     column?: ColumnMenuPayload;
+    table?: string;
   } | null,
   renameTarget: null as string | null,
+  /** A table the Tables panel should flip into inline-rename mode. */
+  tableRenameTarget: null as string | null,
   newRequest: null as { kind: "note" | "folder"; base: string } | null,
   collapseAllSignal: 0,
   /** Tab currently being dragged (native DnD), if any. */
