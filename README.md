@@ -53,6 +53,7 @@ editor, so they never fire in the dictionary grid, inputs or the inspector):
 
 - `Mod+B` / `Mod+I` / `Mod+U` - bold / italic / underline
 - `Mod+K` - link
+- `Mod+Shift+L` - link a word or note with `[[...]]`
 - `Mod+Shift+7` / `Mod+Shift+8` / `Mod+Shift+9` - numbered / bullet / quote
 - `Mod+Shift+C` - code block; `Mod+Shift+X` - strikethrough
 - `Mod+1` to `Mod+6` - heading level (the same level again removes it);

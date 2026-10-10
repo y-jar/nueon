@@ -2516,11 +2516,11 @@ async function main() {
     );
     if (!hasTaskButton) throw new Error("toolbar has no task-list button");
 
-    // Ctrl+Shift+L toggles a task item, matching the TaskWidget rendering.
-    await pressKey("l", [CTRL, SHIFT]);
-    assertEqual(await editorText("fmt.md"), "- [ ] plain line\n", "Ctrl+Shift+L on");
-    await pressKey("l", [CTRL, SHIFT]);
-    assertEqual(await editorText("fmt.md"), "plain line\n", "Ctrl+Shift+L off");
+    // Ctrl+Alt+L toggles a task item, matching the TaskWidget rendering.
+    await pressKey("l", [CTRL, ALT]);
+    assertEqual(await editorText("fmt.md"), "- [ ] plain line\n", "Ctrl+Alt+L on");
+    await pressKey("l", [CTRL, ALT]);
+    assertEqual(await editorText("fmt.md"), "plain line\n", "Ctrl+Alt+L off");
 
     // Ctrl+Shift+T inserts a table.
     await pressKey("t", [CTRL, SHIFT]);
@@ -2571,7 +2571,7 @@ async function main() {
     const has = (keys, label) =>
       rows.some((row) => row.keys === keys && row.label === label);
     if (!has("Ctrl+B", "Bold")) throw new Error("no Bold binding");
-    if (!has("Ctrl+Shift+L", "Task list")) throw new Error("no task binding");
+    if (!has("Ctrl+Alt+L", "Task list")) throw new Error("no task binding");
     if (!has("Ctrl+Shift+T", "Insert table")) throw new Error("no table binding");
     if (!has("Ctrl+Shift+P", "Insert image")) throw new Error("no image binding");
 
@@ -4790,6 +4790,22 @@ async function main() {
     await waitJs(
       `document.querySelector('.cm-host[data-note="type.md"] .cm-content')?.getAttribute('aria-autocomplete') === 'list'`,
       { label: "completion active" },
+    );
+  });
+
+  // -- probe 78: Mod+Shift+L wraps a selection as a [[...]] link ------------
+  await probe("78-wikilink-keybind", async () => {
+    await openActivity("Notes");
+    await openNote("type.md");
+    await waitJs(`!!document.querySelector('.cm-host[data-note="type.md"] .cm-content')`, {
+      label: "type editor",
+    });
+    await focusEditor("type.md");
+    await placeCursor("type.md", 0);
+    await pressKey("l", [CTRL, SHIFT]);
+    await waitJs(
+      `(document.querySelector('.cm-host[data-note="type.md"] .cm-content')?.textContent ?? '').includes('[[]]')`,
+      { label: "link inserted" },
     );
   });
 }

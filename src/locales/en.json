@@ -274,6 +274,7 @@
     "underline": "Underline",
     "strikethrough": "Strikethrough",
     "link": "Insert link",
+    "wordLink": "Link word",
     "bulletList": "Bullet list",
     "numberedList": "Numbered list",
     "taskList": "Task list",

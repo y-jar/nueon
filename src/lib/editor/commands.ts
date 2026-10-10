@@ -434,6 +434,19 @@ export const insertLink: Command = (view) => {
   return true;
 };
 
+/** Wrap the selection in a `[[...]]` wiki link, or insert an empty one. */
+export const insertWikiLink: Command = (view) => {
+  const main = view.state.selection.main;
+  const text = main.empty ? "" : view.state.sliceDoc(main.from, main.to);
+  view.dispatch({
+    changes: { from: main.from, to: main.to, insert: `[[${text}]]` },
+    selection: EditorSelection.cursor(main.from + 2 + text.length),
+    scrollIntoView: true,
+    userEvent: "input.format",
+  });
+  return true;
+};
+
 /** Insert an image reference at the selection (or at `pos`). */
 export function insertImageMarkdown(
   view: EditorView,
@@ -472,6 +485,7 @@ export const MARKDOWN_COMMANDS: Record<string, Command> = {
   italic: toggleItalic,
   underline: toggleUnderline,
   link: insertLink,
+  "word-link": insertWikiLink,
   "bullet-list": toggleBulletList,
   "numbered-list": toggleNumberedList,
   blockquote: toggleBlockquote,
