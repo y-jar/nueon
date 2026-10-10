@@ -801,6 +801,10 @@ function seedWorkspace() {
   );
   fs.writeFileSync(path.join(WORKSPACE, "notes", "alpha.md"), `${lines.join("\n")}\n`);
   fs.writeFileSync(path.join(WORKSPACE, "notes", "beta.md"), "beta note\n");
+  fs.writeFileSync(
+    path.join(WORKSPACE, "notes", "links.md"),
+    "[[velo]] [[pako|zzarg]] ![[paka]] [[missing-word]] [[beta]]\n",
+  );
   fs.writeFileSync(path.join(WORKSPACE, "notes", "tables.md"), TABLES);
   fs.writeFileSync(path.join(WORKSPACE, "notes", "math.md"), MATH);
   fs.writeFileSync(path.join(WORKSPACE, "notes", "html.md"), HTML);
@@ -4709,6 +4713,60 @@ async function main() {
       `[...document.querySelectorAll('.tab-title')]
          .filter((x) => x.textContent.trim() === 'roots').length === ${rootsDupBefore + 1}`,
       { label: "middle-click duplicated roots" },
+    );
+  });
+
+  // -- probe 76: [[...]] wiki links render and follow ------------------------
+  await probe("76-wikilink-render-follow", async () => {
+    await openActivity("Notes");
+    await waitJs(`!!document.querySelector('.tree-row[data-path="links.md"] .tree-name')`, {
+      label: "links row",
+    });
+    await js(
+      `const r = document.querySelector('.tree-row[data-path="links.md"] .tree-name');
+       if (r) r.click();
+       return !!r;`,
+    );
+    await waitJs(`!!document.querySelector('.cm-host[data-note="links.md"] .cm-content')`, {
+      label: "links editor",
+    });
+    await waitJs(
+      `document.querySelectorAll('.cm-wikilink').length >= 4`,
+      { label: "wiki links decorated" },
+    );
+    const kinds = await js(
+      `return {
+         word: document.querySelectorAll('.cm-wikilink-word').length,
+         note: document.querySelectorAll('.cm-wikilink-note').length,
+         unresolved: document.querySelectorAll('.cm-wikilink-unresolved').length,
+         embed: document.querySelectorAll('.cm-wikilink-embed').length,
+       };`,
+    );
+    if (kinds.word < 2) throw new Error(`word links: ${JSON.stringify(kinds)}`);
+    if (kinds.unresolved < 1) {
+      throw new Error(`unresolved link missing: ${JSON.stringify(kinds)}`);
+    }
+    if (kinds.note < 1) throw new Error(`note link missing: ${JSON.stringify(kinds)}`);
+    if (kinds.embed < 1) throw new Error(`embed link missing: ${JSON.stringify(kinds)}`);
+
+    // Ctrl+click a word link opens its table and selects the word.
+    const followed = await js(
+      `const el = document.querySelector('.cm-wikilink-word');
+       if (!el) return false;
+       const rect = el.getBoundingClientRect();
+       el.dispatchEvent(new MouseEvent('mousedown', {
+         bubbles: true, cancelable: true, ctrlKey: true,
+         clientX: rect.left + 2, clientY: rect.top + rect.height / 2,
+       }));
+       return true;`,
+    );
+    if (!followed) throw new Error("no word link to click");
+    await waitJs(`!!document.querySelector('.dict-grid')`, { label: "dictionary opened" });
+    await waitJs(
+      `[...document.querySelectorAll('.dict-grid tbody tr')]
+         .some((tr) => tr.classList.contains('selected') &&
+                     tr.querySelector('.wordname-col input')?.value === 'velo')`,
+      { label: "velo selected" },
     );
   });
 }

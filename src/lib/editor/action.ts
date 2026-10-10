@@ -30,6 +30,8 @@ import {
   setWordIndex,
   wordIndexField,
 } from "./dictionary";
+import { notePathsField, setNotePaths, wikiLinkHover, wikiLinks } from "./wikiLinks";
+import type { WikiTarget } from "../wikilink";
 import {
   EMPTY_FORMAT,
   buildMarkdownKeymap,
@@ -75,6 +77,10 @@ export interface EditorParams {
   onContextMenu?: (x: number, y: number, view: EditorView) => void;
   /** Open the image picker (the toolbar's insert-image action). */
   onImage?: () => void;
+  /** Follow a `[[...]]` link (Ctrl/Cmd+click). */
+  onFollow?: (target: WikiTarget) => void;
+  /** Note paths for resolving `[[note]]` links. */
+  notePaths: Set<string>;
   /** Whether to show the line-number gutter (default true). */
   showLineNumbers?: boolean;
   /** Keybind overrides (command id → combo); missing ids use the defaults. */
@@ -228,11 +234,14 @@ export const codemirror: Action<HTMLElement, EditorParams> = (node, params) => {
         highlight,
         theme,
         wordIndexField,
+        notePathsField,
         livePreview(),
         blockBlocks(),
         blockLineNumbers(),
         dictionaryHighlight(),
         dictionaryHover(),
+        wikiLinks(() => current.onFollow),
+        wikiLinkHover(),
         search({ top: true }),
         highlightSelectionMatches(),
         keymapCompartment.of(editorKeymaps(params.keybinds)),
@@ -271,7 +280,9 @@ export const codemirror: Action<HTMLElement, EditorParams> = (node, params) => {
     }),
   });
 
-  view.dispatch({ effects: setWordIndex.of(params.index) });
+  view.dispatch({
+    effects: [setWordIndex.of(params.index), setNotePaths.of(params.notePaths)],
+  });
   setAssetBase(params.assetBase, params.path);
   params.onView?.(view);
   params.onFormat?.(formatAt(view.state) ?? EMPTY_FORMAT);
@@ -388,7 +399,9 @@ export const codemirror: Action<HTMLElement, EditorParams> = (node, params) => {
           conflicted = false;
           setAssetBase(next.assetBase, next.path);
           replaceBuffer(next.content);
-          view.dispatch({ effects: setWordIndex.of(next.index) });
+          view.dispatch({
+            effects: [setWordIndex.of(next.index), setNotePaths.of(next.notePaths)],
+          });
           previous.onDirty(previous.path, false);
           next.onDirty(next.path, false);
         })();
@@ -397,6 +410,9 @@ export const codemirror: Action<HTMLElement, EditorParams> = (node, params) => {
 
       if (next.index !== current.index) {
         view.dispatch({ effects: setWordIndex.of(next.index) });
+      }
+      if (next.notePaths !== current.notePaths) {
+        view.dispatch({ effects: setNotePaths.of(next.notePaths) });
       }
       if (next.assetBase !== current.assetBase) {
         setAssetBase(next.assetBase, next.path);

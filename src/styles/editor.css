@@ -101,6 +101,13 @@
   color: var(--text);
 }
 
+.cm-wikilink-tooltip {
+  padding: 6px 8px;
+  max-width: 360px;
+  font-size: 12px;
+  color: var(--text);
+}
+
 .cm-dict-row + .cm-dict-row {
   margin-top: 6px;
   padding-top: 6px;

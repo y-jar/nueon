@@ -3,13 +3,17 @@
   import * as api from "../lib/api";
   import {
     ui,
+    activeDoc,
     openEditorContextMenu,
+    openTable,
     resolveConflict,
     requestDeleteNote,
+    selectNote,
     setEditorLineNumbers,
     noteFilePath,
     type DocState,
   } from "../lib/state.svelte";
+  import { notePathSet, type WikiTarget } from "../lib/wikilink";
   import {
     revealInFileExplorer,
     openInDefaultApp,
@@ -35,6 +39,18 @@
 
   let view = $state<EditorView | null>(null);
   let format = $state<FormatState>({ ...EMPTY_FORMAT });
+
+  const notePaths = $derived(notePathSet(ui.tree));
+
+  /** Ctrl/Cmd+click on a `[[...]]` link: open its target. */
+  async function followLink(target: WikiTarget) {
+    if (target.kind === "word") {
+      await openTable(target.table);
+      activeDoc().selectedEntry = target.id;
+    } else if (target.kind === "note") {
+      await selectNote(target.path);
+    }
+  }
 
   /** Ask for a destination, then export the note's current text. */
   async function exportAs(format: api.ExportFormat) {
@@ -193,7 +209,9 @@
           content: doc.noteContent,
           hash: doc.noteHash,
           index: ui.wordIndex,
+          notePaths,
           assetBase: ui.root ? `${ui.root}/notes` : "",
+          onFollow: followLink,
           onDirty: (path: string, dirty: boolean) => {
             if (shouldApplySave(doc.selected, path)) doc.dirty = dirty;
           },

@@ -55,6 +55,18 @@ export const theme = EditorView.theme(
       borderBottom: "1px dotted rgba(196,148,92,0.55)",
       cursor: "help",
     },
+    ".cm-wikilink": {
+      color: "var(--accent)",
+      borderBottom: "1px solid var(--accent)",
+      cursor: "pointer",
+    },
+    ".cm-wikilink-word": { fontWeight: "600" },
+    ".cm-wikilink-note": { color: "var(--fg)" },
+    ".cm-wikilink-embed": { fontStyle: "italic" },
+    ".cm-wikilink-unresolved": {
+      color: "#d6785a",
+      borderBottom: "1px dashed #d6785a",
+    },
   },
   { dark: true },
 );
