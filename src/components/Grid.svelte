@@ -24,7 +24,6 @@
     Undo2,
     Redo2,
     X,
-    Check,
     Upload,
     Eye,
     Download,
@@ -32,14 +31,7 @@
     TriangleAlert,
   } from "@lucide/svelte";
   import * as api from "../lib/api";
-  import {
-    boolValue,
-    COLUMN_TYPES,
-    displayValue,
-    parseList,
-    textValue,
-    typeLabel,
-  } from "../lib/dictionary";
+  import { COLUMN_TYPES, displayValue, parseList, textValue, typeLabel } from "../lib/dictionary";
   import { misspelledWords } from "../lib/spellcheck";
   import {
     ui,
@@ -52,7 +44,7 @@
   import { createWordWithValues } from "../lib/words";
   import { normalizeView } from "../lib/gridView";
   import PillCell from "./PillCell.svelte";
-  import SuggestInput from "./SuggestInput.svelte";
+  import GridCell from "./GridCell.svelte";
   import AddWordModal from "./AddWordModal.svelte";
   import DeleteWordModal from "./DeleteWordModal.svelte";
   import Popover from "./Popover.svelte";
@@ -656,17 +648,8 @@
     return value && value.type === "tag_list" ? value.value : [];
   }
 
-  function ghostRefs(tag: string): string[] {
-    const value = ghostValues[tag];
-    return value && value.type === "references" ? value.value : [];
-  }
-
   function ghostSetList(tag: string, items: string[]) {
     setGhost(tag, items.length ? { type: "tag_list", value: items } : null);
-  }
-
-  function ghostSetRefs(tag: string, ids: string[]) {
-    setGhost(tag, ids.length ? { type: "references", value: ids } : null);
   }
 
   function optionId(label: string, excludeId?: string): string | null {
@@ -1469,7 +1452,26 @@
               {:else}
                 {@const tag = tagOf(column.id)}
                 <td class="editable" onclick={(e) => e.stopPropagation()}>
-                  {#if tag}{@render tagCell(row.original, tag)}{/if}
+                  {#if tag}
+                    <GridCell
+                      {tag}
+                      entry={row.original}
+                      ghostValues={ghostValues}
+                      suggestions={suggestionsByTag[tag.name] ?? []}
+                      relationOptions={relationOptions}
+                      nameById={ui.nameById}
+                      {onCellKey}
+                      {commitText}
+                      {commitBool}
+                      {addToList}
+                      {removeFromList}
+                      {addRelation}
+                      {removeRelation}
+                      {setGhost}
+                      {createGhost}
+                      {optionId}
+                    />
+                  {/if}
                 </td>
               {/if}
             {/each}
@@ -1543,7 +1545,26 @@
             {:else}
               {@const tag = tagOf(column.id)}
               <td class="editable">
-                {#if tag}{@render ghostCell(tag)}{/if}
+                {#if tag}
+                  <GridCell
+                    {tag}
+                    entry={null}
+                    ghostValues={ghostValues}
+                    suggestions={suggestionsByTag[tag.name] ?? []}
+                    relationOptions={relationOptions}
+                    nameById={ui.nameById}
+                    {onCellKey}
+                    {commitText}
+                    {commitBool}
+                    {addToList}
+                    {removeFromList}
+                    {addRelation}
+                    {removeRelation}
+                    {setGhost}
+                    {createGhost}
+                    {optionId}
+                  />
+                {/if}
               </td>
             {/if}
           {/each}
@@ -1553,151 +1574,6 @@
     </table>
   </div>
 </div>
-
-{#snippet tagCell(entry: api.WordEntry, tag: api.TagDef)}
-  {#if tag.kind === "text"}
-    {#if tag.format === "multiline"}
-      <textarea
-        rows="2"
-        placeholder="—"
-        value={textValue(entry.values[tag.name])}
-        onkeydown={(e) => onCellKey(e, textValue(entry.values[tag.name]))}
-        onblur={(e) => commitText(entry, tag.name, e.currentTarget.value)}
-      ></textarea>
-    {:else if tag.suggest}
-      <SuggestInput
-        type={tag.format === "date"
-          ? "date"
-          : tag.format === "measurement"
-            ? "number"
-            : "text"}
-        placeholder="—"
-        value={textValue(entry.values[tag.name])}
-        suggestions={suggestionsByTag[tag.name] ?? []}
-        onCommit={(value) => commitText(entry, tag.name, value)}
-      />
-    {:else}
-      <input
-        type={tag.format === "date"
-          ? "date"
-          : tag.format === "measurement"
-            ? "number"
-            : "text"}
-        placeholder="—"
-        value={textValue(entry.values[tag.name])}
-        onkeydown={(e) => onCellKey(e, textValue(entry.values[tag.name]))}
-        onblur={(e) => commitText(entry, tag.name, e.currentTarget.value)}
-      />
-    {/if}
-  {:else if tag.kind === "boolean"}
-    <button
-      class="check-cell"
-      class:on={boolValue(entry.values[tag.name])}
-      onclick={() =>
-        commitBool(entry, tag.name, !boolValue(entry.values[tag.name]))}
-    >
-      {#if boolValue(entry.values[tag.name])}<Check size={14} />{/if}
-    </button>
-  {:else if tag.kind === "tag_list"}
-    <PillCell
-      pills={listValues(entry, tag.name).map((value) => ({
-        id: value,
-        label: value,
-      }))}
-      placeholder={$t("grid.addPill")}
-      options={tag.suggest
-        ? (suggestionsByTag[tag.name] ?? []).map((value) => ({
-            id: value,
-            label: value,
-          }))
-        : []}
-      onAdd={(text) => addToList(entry, tag.name, text)}
-      onRemove={(id) => removeFromList(entry, tag.name, id)}
-    />
-  {:else if tag.kind === "references" || tag.kind === "reference"}
-    <PillCell
-      pills={refValues(entry, tag.name).map((id) => ({
-        id,
-        label: ui.nameById[id] ?? "?",
-      }))}
-      placeholder={$t("grid.addRelation")}
-      options={relationOptions}
-      onAdd={(label) => addRelation(entry, tag.name, label)}
-      onRemove={(id) => removeRelation(entry, tag.name, id)}
-    />
-  {:else}
-    {displayValue(entry.values[tag.name]) || "—"}
-  {/if}
-{/snippet}
-
-{#snippet ghostCell(tag: api.TagDef)}
-  {#if tag.kind === "text"}
-    <input
-      type={tag.format === "date"
-        ? "date"
-        : tag.format === "measurement"
-          ? "number"
-          : "text"}
-      placeholder="—"
-      value={textValue(ghostValues[tag.name])}
-      oninput={(e) =>
-        setGhost(
-          tag.name,
-          e.currentTarget.value
-            ? { type: "text", value: e.currentTarget.value }
-            : null,
-        )}
-      onkeydown={(e) => e.key === "Enter" && createGhost()}
-    />
-  {:else if tag.kind === "boolean"}
-    <button
-      class="check-cell"
-      class:on={boolValue(ghostValues[tag.name])}
-      onclick={() =>
-        setGhost(
-          tag.name,
-          boolValue(ghostValues[tag.name])
-            ? null
-            : { type: "boolean", value: true },
-        )}
-    >
-      {#if boolValue(ghostValues[tag.name])}<Check size={14} />{/if}
-    </button>
-  {:else if tag.kind === "tag_list"}
-    <PillCell
-      pills={ghostList(tag.name).map((value) => ({ id: value, label: value }))}
-      placeholder={$t("grid.addPill")}
-      onAdd={(text) => {
-        const items = ghostList(tag.name);
-        if (!items.includes(text)) ghostSetList(tag.name, [...items, text]);
-      }}
-      onRemove={(id) =>
-        ghostSetList(
-          tag.name,
-          ghostList(tag.name).filter((item) => item !== id),
-        )}
-    />
-  {:else if tag.kind === "references" || tag.kind === "reference"}
-    <PillCell
-      pills={ghostRefs(tag.name).map((id) => ({
-        id,
-        label: ui.nameById[id] ?? "?",
-      }))}
-      placeholder={$t("grid.addRelation")}
-      options={relationOptions}
-      onAdd={(label) => {
-        const id = optionId(label);
-        const ids = ghostRefs(tag.name);
-        if (id && !ids.includes(id)) ghostSetRefs(tag.name, [...ids, id]);
-      }}
-      onRemove={(id) =>
-        ghostSetRefs(
-          tag.name,
-          ghostRefs(tag.name).filter((item) => item !== id),
-        )}
-    />
-  {/if}
-{/snippet}
 
 {#if addWordOpen && doc.currentTable}
   <AddWordModal
