@@ -44,9 +44,11 @@ after a while, or before upgrading a dependency or releasing.
   GitHub release `.deb` with a placeholder hash until one is published (see
   `README.md`).
 - To build and collect a local release set, run `bundle` in the dev shell
-  (`loom-bundle` / `scripts/bundle.sh [out-dir]`): it builds all three formats
+  (`loom-bundle` / `scripts/bundle.sh [out-dir]`): it builds `.deb` and `.rpm`
   and copies each package **separately** into `~/downloads/nueon-<version>/`,
-  writing `SHA256SUMS` and printing the paths.
+  writing `SHA256SUMS` and printing the paths. The `.AppImage` is attempted but
+  skipped on NixOS (linuxdeploy needs an FHS with `/bin/bash`); CI's Ubuntu
+  runner builds it, so publish the tag to get all three.
 
 ## When the app misbehaves
 
