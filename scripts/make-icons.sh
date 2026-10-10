@@ -3,7 +3,7 @@
 #
 # Requires ImageMagick (`magick`). Downscales with Lanczos, keeps the alpha
 # channel, and never upscales: a requested size larger than the master is
-# skipped. The master is 390x390, so the largest output here is 256x256 and
+# skipped. The master is 512x512, so the largest output here is 256x256 and
 # `icon.png` stays 256 (not 512). The in-app mark is the SVG source, imported
 # directly by the app, so it is not regenerated here.
 set -eu
