@@ -2,6 +2,7 @@ import { test } from "node:test";
 import assert from "node:assert/strict";
 
 import {
+  isLinkRevealed,
   parseHeadings,
   parseWikiLinks,
   rankCompletions,
@@ -171,4 +172,26 @@ test("rankCompletions ranks a boundary match before a substring", () => {
   // "b" is a word-boundary match of "a-b", a substring of "ab" and "cab".
   const result = rankCompletions("b", candidates).map((candidate) => candidate.name);
   assert.deepEqual(result, ["a-b", "ab", "cab"]);
+});
+
+test("isLinkRevealed reveals a touched link but not a distant one", () => {
+  const link = { from: 4, to: 12 };
+  // Cursor inside, at either end, and an overlapping selection all reveal.
+  assert.equal(isLinkRevealed(4, 12, [{ from: 6, to: 6 }]), true);
+  assert.equal(isLinkRevealed(4, 12, [{ from: 4, to: 4 }]), true);
+  assert.equal(isLinkRevealed(4, 12, [{ from: 12, to: 12 }]), true);
+  assert.equal(isLinkRevealed(4, 12, [{ from: 5, to: 8 }]), true);
+  // A cursor before or after the link does not.
+  assert.equal(isLinkRevealed(4, 12, [{ from: 3, to: 3 }]), false);
+  assert.equal(isLinkRevealed(4, 12, [{ from: 13, to: 13 }]), false);
+});
+
+test("isLinkRevealed considers any of several selections", () => {
+  assert.equal(
+    isLinkRevealed(4, 12, [
+      { from: 0, to: 0 },
+      { from: 6, to: 6 },
+    ]),
+    true,
+  );
 });

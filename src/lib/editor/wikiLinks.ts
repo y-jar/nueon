@@ -18,6 +18,7 @@ import {
 } from "@codemirror/view";
 
 import {
+  isLinkRevealed,
   parseWikiLinks,
   rankCompletions,
   resolveNotePath,
@@ -115,12 +116,67 @@ class EmbedWidget extends WidgetType {
   }
 }
 
-function build(view: EditorView): DecorationSet {
+/** Collapsed `[[...]]` display: the alias (or target) plus a muted heading. */
+class LinkWidget extends WidgetType {
+  readonly text: string;
+  readonly heading: string | null;
+  readonly classes: string;
+  readonly follow: () => void;
+
+  constructor(
+    text: string,
+    heading: string | null,
+    classes: string,
+    follow: () => void,
+  ) {
+    super();
+    this.text = text;
+    this.heading = heading;
+    this.classes = classes;
+    this.follow = follow;
+  }
+
+  eq(other: LinkWidget): boolean {
+    return (
+      other.text === this.text &&
+      other.heading === this.heading &&
+      other.classes === this.classes
+    );
+  }
+
+  toDOM(): HTMLElement {
+    const span = document.createElement("span");
+    span.className = `${this.classes} cm-wikilink-hidden`;
+    span.textContent = this.text;
+    if (this.heading) {
+      const heading = document.createElement("span");
+      heading.className = "cm-wikilink-heading";
+      heading.textContent = `#${this.heading}`;
+      span.appendChild(heading);
+    }
+    // A replace widget is atomic to CodeMirror's own click handling, so the
+    // follow is bound directly to the element (Ctrl/Cmd+click only).
+    span.addEventListener("mousedown", (event) => {
+      if (!(event.ctrlKey || event.metaKey)) return;
+      event.preventDefault();
+      event.stopPropagation();
+      this.follow();
+    });
+    return span;
+  }
+}
+
+function build(
+  view: EditorView,
+  getFollow: () => ((target: WikiTarget) => void) | undefined,
+): DecorationSet {
   const index = view.state.field(wordIndexField);
   const notes = view.state.field(notePathsField);
   const headings = view.state.field(noteHeadingsField);
   const code = codeLines(view.state);
   const ranges: Range<Decoration>[] = [];
+  const selection = view.state.selection.ranges;
+  const follow = getFollow();
   for (const visible of view.visibleRanges) {
     const text = view.state.sliceDoc(visible.from, visible.to);
     for (const link of parseWikiLinks(text)) {
@@ -128,16 +184,30 @@ function build(view: EditorView): DecorationSet {
       const to = visible.from + link.to;
       if (code.has(view.state.doc.lineAt(from).number)) continue;
       const target = resolveWikiTarget(link.target, link.heading, index, notes, headings);
+      const classes = classFor(target, link.embed);
       if (link.embed && target.kind === "word") {
         ranges.push(
           Decoration.replace({
             widget: new EmbedWidget(target.wordname, target.senses),
           }).range(from, to),
         );
+      } else if (!link.embed) {
+        if (isLinkRevealed(from, to, selection)) {
+          ranges.push(Decoration.mark({ class: classes }).range(from, to));
+        } else {
+          ranges.push(
+            Decoration.replace({
+              widget: new LinkWidget(
+                link.alias ?? link.target,
+                link.heading,
+                classes,
+                () => follow?.(target),
+              ),
+            }).range(from, to),
+          );
+        }
       } else {
-        ranges.push(
-          Decoration.mark({ class: classFor(target, link.embed) }).range(from, to),
-        );
+        ranges.push(Decoration.mark({ class: classes }).range(from, to));
       }
     }
   }
@@ -156,7 +226,7 @@ export function wikiLinks(
       decorations: DecorationSet;
 
       constructor(view: EditorView) {
-        this.decorations = build(view);
+        this.decorations = build(view, getFollow);
       }
 
       update(update: ViewUpdate) {
@@ -173,7 +243,7 @@ export function wikiLinks(
           update.selectionSet ||
           changed
         ) {
-          this.decorations = build(update.view);
+          this.decorations = build(update.view, getFollow);
         }
       }
     },

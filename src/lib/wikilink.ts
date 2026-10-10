@@ -51,6 +51,25 @@ export function parseWikiLinks(text: string): WikiLink[] {
   return links;
 }
 
+/** A document selection range (from and to, inclusive of the endpoints). */
+export interface LinkSelectionRange {
+  from: number;
+  to: number;
+}
+
+/**
+ * Whether a link's raw text should be shown. A link is revealed whenever any
+ * selection range touches it: a cursor inside it, a cursor sitting on either
+ * end, or a selection that overlaps it.
+ */
+export function isLinkRevealed(
+  from: number,
+  to: number,
+  ranges: readonly LinkSelectionRange[],
+): boolean {
+  return ranges.some((range) => range.from <= to && range.to >= from);
+}
+
 /** Strip inline formatting (bold, italic, code, links) from heading text. */
 function stripInline(text: string): string {
   return text

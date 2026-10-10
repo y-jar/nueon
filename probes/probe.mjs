@@ -4943,6 +4943,42 @@ async function main() {
       { label: "scrolled to Intro" },
     );
   });
+
+  // -- probe 82: [[...]] brackets hide until the cursor touches the link -----
+  await probe("82-wikilink-hidden-brackets", async () => {
+    await openActivity("Notes");
+    await js(
+      `const r = document.querySelector('.tree-row[data-path="links.md"] .tree-name');
+       if (r) r.click();
+       return !!r;`,
+    );
+    await waitJs(`!!document.querySelector('.cm-host[data-note="links.md"] .cm-content')`, {
+      label: "links editor",
+    });
+    // Put the cursor at the very end, away from every link.
+    await js(`${viewScript("links.md")}
+      v.dispatch({ selection: { anchor: v.state.doc.length } });
+      return true;`);
+    await waitJs(`document.querySelectorAll('.cm-wikilink-hidden').length >= 1`, {
+      label: "hidden links",
+    });
+    const hiddenText = await js(
+      `return document.querySelector('.cm-host[data-note="links.md"] .cm-content')?.textContent ?? '';`,
+    );
+    if (hiddenText.includes("[[")) {
+      throw new Error(`brackets not hidden: ${hiddenText}`);
+    }
+
+    // Moving the cursor onto the first link reveals its raw text.
+    await js(`${viewScript("links.md")}
+      v.dispatch({ selection: { anchor: 2 } });
+      return true;`);
+    await waitJs(
+      `(document.querySelector('.cm-host[data-note="links.md"] .cm-content')?.textContent ?? '')
+         .includes('[[velo]]')`,
+      { label: "link revealed" },
+    );
+  });
 }
 
 try {
