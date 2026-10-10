@@ -11,6 +11,14 @@ testable and reusable independently of any UI:
    editor, and the grid/translation/import/export components, talking to the
    core only through `invoke()` wrappers.
 
+Companion reference (see also `docs/MAP.md`, the generated index):
+
+- `docs/PSD.md` — what the app does (living spec).
+- `docs/IPC.md` — the full command surface and `data-changed` scopes.
+- `docs/STATE.md` — frontend state and ownership.
+- `docs/DATA-FORMATS.md` — the on-disk JSON schemas.
+- `docs/DECISIONS.md` — why these choices.
+
 ## Repository layout
 
 ```

@@ -24,6 +24,12 @@ short on purpose and links to the detail.
   unstaged files, `pgrep`/`pkill` self-matches).
 - `docs/ARCHITECTURE.md` — the three tiers: `nueon-core` (Rust) → Tauri IPC
   (`src-tauri/`) → Svelte 5 frontend (`src/`).
+- `docs/PSD.md` — the **living spec**; update it when behaviour changes.
+- `docs/MAP.md` — generated index of every module (from `scripts/gen-map.mjs`).
+- `docs/IPC.md`, `docs/STATE.md`, `docs/DATA-FORMATS.md` — command surface,
+  frontend state and on-disk formats.
+- `docs/DECISIONS.md`, `docs/MAINTENANCE.md`, `docs/UI-CONVENTIONS.md` — why,
+  how to maintain, and UI contracts.
 - `README.md` — features, install, verification commands.
 
 ## Gates (run before every commit)
