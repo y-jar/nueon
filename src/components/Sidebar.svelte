@@ -15,6 +15,7 @@
   import {
     exportProfileDialog,
     exportWorkspaceZipDialog,
+    importWorkspaceZipDialog,
   } from "../lib/exports";
   import ExplorerTree from "./ExplorerTree.svelte";
   import Popover from "./Popover.svelte";
@@ -109,6 +110,16 @@
       error = String(e);
     }
   }
+
+  async function importWorkspace() {
+    try {
+      const root = await importWorkspaceZipDialog();
+      if (root) ui.status = $t("status.imported", { values: { name: root } });
+      error = "";
+    } catch (e) {
+      error = String(e);
+    }
+  }
 </script>
 
 <aside class="sidebar" oncontextmenu={onSidebarContext}>
@@ -164,6 +175,12 @@
               close();
               void exportProfile();
             }}>{$t("sidebar.exportProfile")}</button
+          >
+          <button
+            onclick={() => {
+              close();
+              void importWorkspace();
+            }}>{$t("sidebar.importZip")}</button
           >
         </div>
       {/snippet}

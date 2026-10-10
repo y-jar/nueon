@@ -4,7 +4,7 @@
  * Returns the chosen path, or `null` when cancelled.
  */
 
-import { save } from "@tauri-apps/plugin-dialog";
+import { open, save } from "@tauri-apps/plugin-dialog";
 import * as api from "./api";
 
 /** Export the current conlang profile to a JSON file. */
@@ -27,4 +27,18 @@ export async function exportWorkspaceZipDialog(): Promise<string | null> {
   if (!path) return null;
   await api.exportWorkspaceZip(path);
   return path;
+}
+
+/** Restore a workspace from a zip backup into a chosen parent directory. */
+export async function importWorkspaceZipDialog(): Promise<string | null> {
+  const zipPath = await open({
+    multiple: false,
+    filters: [{ name: "Zip archive", extensions: ["zip"] }],
+  });
+  if (typeof zipPath !== "string") return null;
+  const parent = await open({ directory: true, multiple: false });
+  if (typeof parent !== "string") return null;
+  const base = (zipPath.split("/").pop() ?? "restored").replace(/\.zip$/, "");
+  const dest = `${parent.replace(/\/$/, "")}/${base}`;
+  return api.workspaceImportZip(zipPath, dest);
 }

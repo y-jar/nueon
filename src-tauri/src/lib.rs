@@ -217,6 +217,7 @@ pub fn run() {
             commands::editor_line_numbers,
             commands::set_editor_line_numbers,
             commands::export_workspace_zip,
+            commands::workspace_import_zip,
             commands::keybinds_get,
             commands::set_keybind,
             commands::reset_keybinds,

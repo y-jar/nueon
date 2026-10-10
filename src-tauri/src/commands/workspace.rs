@@ -413,6 +413,38 @@ pub fn export_workspace_zip(state: State<'_, Shared>, path: String) -> Result<()
         .map_err(|err| err.to_string())
 }
 
+/// Extract a workspace zip into `dest` and open it, registering it like a
+/// freshly opened workspace.
+#[tauri::command]
+pub fn workspace_import_zip(
+    app: AppHandle,
+    state: State<'_, Shared>,
+    zip_path: String,
+    dest: String,
+) -> Result<String, String> {
+    nueon_core::archive::unzip_workspace(
+        std::path::Path::new(&zip_path),
+        std::path::Path::new(&dest),
+    )
+    .map_err(|err| err.to_string())?;
+
+    let workspace = Workspace::open(&dest).map_err(|err| err.to_string())?;
+    let root = workspace.root_path.display().to_string();
+    let mut state = state.lock().map_err(|_| "state poisoned".to_string())?;
+    let stale = retire_secondary_windows(&app, &mut state);
+    state.workspace = Some(workspace);
+    let path = PathBuf::from(&dest);
+    state.global.add(path.clone(), default_name(&path));
+    state.global.last = Some(path);
+    let _ = state.global.save();
+    drop(state);
+    destroy_windows(&app, &stale);
+
+    changed(&app, "workspace");
+    changed(&app, "notes");
+    Ok(root)
+}
+
 /// Whether the Markdown editor shows line numbers.
 #[tauri::command]
 pub fn editor_line_numbers(state: State<'_, Shared>) -> Result<bool, String> {

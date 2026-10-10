@@ -417,6 +417,10 @@ export const setKeybind = (id: string, key: string | null): Promise<void> =>
 export const resetKeybinds = (): Promise<void> => invoke("reset_keybinds");
 export const exportWorkspaceZip = (path: string): Promise<void> =>
   invoke("export_workspace_zip", { path });
+export const workspaceImportZip = (
+  zipPath: string,
+  dest: string,
+): Promise<string> => invoke("workspace_import_zip", { zipPath, dest });
 export const knownTagNames = (): Promise<string[]> =>
   invoke("known_tag_names");
 export const gridViewGet = (table: string): Promise<GridViewState> =>

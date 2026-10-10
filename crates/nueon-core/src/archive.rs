@@ -26,6 +26,33 @@ pub fn zip_workspace(root: &Path, dest: &Path) -> Result<(), ArchiveError> {
     Ok(())
 }
 
+/// Extract a workspace zip into `dest`, refusing any entry that escapes the
+/// destination directory.
+pub fn unzip_workspace(zip_path: &Path, dest: &Path) -> Result<(), ArchiveError> {
+    let file = File::open(zip_path)?;
+    let mut archive = zip::ZipArchive::new(file)?;
+    for index in 0..archive.len() {
+        let mut entry = archive.by_index(index)?;
+        let name = entry.enclosed_name().ok_or_else(|| {
+            ArchiveError::Io(std::io::Error::new(
+                std::io::ErrorKind::InvalidInput,
+                "unsafe path in archive",
+            ))
+        })?;
+        let out = dest.join(name);
+        if entry.is_dir() {
+            fs::create_dir_all(&out)?;
+        } else {
+            if let Some(parent) = out.parent() {
+                fs::create_dir_all(parent)?;
+            }
+            let mut target = File::create(&out)?;
+            std::io::copy(&mut entry, &mut target)?;
+        }
+    }
+    Ok(())
+}
+
 fn add_dir(writer: &mut ZipWriter<File>, base: &Path, dir: &Path) -> Result<(), ArchiveError> {
     for entry in fs::read_dir(dir)? {
         let entry = entry?;
@@ -75,6 +102,30 @@ mod tests {
         assert!(
             !names.iter().any(|name| name.starts_with(".git")),
             "{names:?}"
+        );
+    }
+
+    #[test]
+    fn round_trips_a_workspace_through_a_zip() {
+        let root = tempfile::tempdir().unwrap();
+        fs::create_dir_all(root.path().join("notes")).unwrap();
+        fs::write(root.path().join("notes/a.md"), "hi").unwrap();
+        fs::create_dir_all(root.path().join("dictionary")).unwrap();
+        fs::write(root.path().join("dictionary/lex"), "{}").unwrap();
+
+        let out = tempfile::tempdir().unwrap();
+        let zip_path = out.path().join("ws.zip");
+        zip_workspace(root.path(), &zip_path).unwrap();
+
+        let restored = out.path().join("restored");
+        unzip_workspace(&zip_path, &restored).unwrap();
+        assert_eq!(
+            fs::read_to_string(restored.join("notes/a.md")).unwrap(),
+            "hi"
+        );
+        assert_eq!(
+            fs::read_to_string(restored.join("dictionary/lex")).unwrap(),
+            "{}"
         );
     }
 }

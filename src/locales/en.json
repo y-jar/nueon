@@ -30,6 +30,7 @@
     "export": "Export",
     "exportZip": "Export workspace as zip",
     "exportProfile": "Export profile",
+    "importZip": "Restore workspace from zip",
     "noNotes": "No notes yet."
   },
   "contextMenu": {
@@ -678,6 +679,7 @@
     "imported": "imported {names}",
     "dropHint": "drop files on the editor or the explorer to import them",
     "exporting": "exporting {name}\u2026",
+    "imported": "restored {name}",
     "exported": "exported {name} \u2192 {path}",
     "exportFailed": "export failed: {error}",
     "couldNotInsertImage": "could not insert image: {error}",
