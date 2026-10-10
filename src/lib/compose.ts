@@ -51,11 +51,3 @@ export function defaultTableFor(roots: Root[]): string {
   }
   return best;
 }
-
-/** Each root with whether it can be linked to a word saved in `table`. */
-export function partitionParents(
-  roots: Root[],
-  table: string,
-): { root: Root; linked: boolean }[] {
-  return roots.map((root) => ({ root, linked: root.table === table }));
-}

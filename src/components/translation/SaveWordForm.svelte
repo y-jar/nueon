@@ -19,7 +19,7 @@
     gloss: string;
     /** A word class (`pos`) to store on the new word. */
     wordClass?: string | null;
-    /** Roots to link as parents, when the saved word shares their table. */
+    /** Roots to record as parents (by UUID, across any table). */
     parents?: ParentRef[];
     /** The table to default to, e.g. the one holding the most roots. */
     defaultTable?: string | null;
@@ -105,7 +105,6 @@
     );
     if (!id) return;
     for (const parent of kept) {
-      if (parent.table !== table) continue;
       await api.setParent(table, id, parent.id).catch(() => {});
     }
     ui.morphologySaveTable = table;
@@ -138,11 +137,8 @@
     <div class="parent-chips">
       <span class="muted small">{$t("morphology.parents")}</span>
       {#each kept as parent (parent.id)}
-        <span class="compose-chip parent-chip" class:unlinked={parent.table !== table}>
+        <span class="compose-chip parent-chip">
           <span class="mono">{parent.label}</span>
-          {#if parent.table !== table}
-            <span class="muted small">{$t("morphology.differentTable")}</span>
-          {/if}
           <button
             class="chip-remove"
             title={$t("morphology.removeParent")}

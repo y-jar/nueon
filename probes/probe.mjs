@@ -4390,13 +4390,6 @@ async function main() {
     await waitJs(`document.querySelectorAll('.save-word .parent-chip').length === 2`, {
       label: "two parent chips",
     });
-    if (
-      (await js(
-        `return document.querySelectorAll('.save-word .parent-chip.unlinked').length;`,
-      )) !== 0
-    ) {
-      throw new Error("same-table roots should not be marked unlinked");
-    }
 
     const saved = await js(
       `const b = [...document.querySelectorAll('.compose-builder .save-word button')]
@@ -4439,8 +4432,7 @@ async function main() {
       throw new Error(`velodemo1 should not link a cross-table parent: ${parentText}`);
     }
 
-    // A root from another table is shown, but marked not linked; it can be
-    // removed from the form.
+    // A root from another table is now linked too.
     await openCompose();
     await clearStrip();
     await clickWord("velo");
@@ -4448,27 +4440,42 @@ async function main() {
     await waitJs(`document.querySelectorAll('.save-word .parent-chip').length === 2`, {
       label: "mixed parent chips",
     });
-    if (
-      (await js(
-        `return document.querySelectorAll('.save-word .parent-chip.unlinked').length;`,
-      )) !== 1
-    ) {
-      throw new Error("the cross-table root should be the one marked unlinked");
-    }
-    const unlinkedText = await js(
-      `return document.querySelector('.save-word .parent-chip.unlinked')?.textContent ?? '';`,
-    );
-    if (!unlinkedText.includes("tomo") || !unlinkedText.includes("different table")) {
-      throw new Error(`unexpected unlinked chip: ${unlinkedText}`);
-    }
-    await js(
-      `const b = document.querySelector('.save-word .parent-chip.unlinked .chip-remove');
+    const saved2 = await js(
+      `const b = [...document.querySelectorAll('.compose-builder .save-word button')]
+         .find((x) => x.textContent.includes('Save as word'));
        if (b) b.click();
        return !!b;`,
     );
-    await waitJs(`document.querySelectorAll('.save-word .parent-chip').length === 1`, {
-      label: "unlinked parent removed",
-    });
+    if (!saved2) throw new Error("no Save as word button for mixed parents");
+    await waitJs(
+      `document.querySelector('.compose-builder .save-word .muted')?.textContent.trim() === 'Saved'`,
+      { label: "mixed saved" },
+    );
+
+    // velotomo (composed in lex) lists both the same-table and the
+    // cross-table root as parents.
+    await openActivity("Dictionary");
+    await waitJs(`!!document.querySelector('.table-list')`, { label: "tables panel" });
+    await js(
+      `const b = [...document.querySelectorAll('.table-list .table-row .tree-name')]
+         .find((x) => x.textContent.trim().startsWith('lex'));
+       if (b) b.click();
+       return !!b;`,
+    );
+    await waitJs(`!!document.querySelector('.dict-grid')`, { label: "lex grid" });
+    await waitJs(
+      `[...document.querySelectorAll('.dict-grid td.wordname-col input')]
+         .some((i) => i.value === 'velotomo')`,
+      { label: "velotomo row" },
+    );
+    const mixedText = await js(
+      `const i = [...document.querySelectorAll('.dict-grid td.wordname-col input')]
+         .find((i) => i.value === 'velotomo');
+       return i?.closest('tr')?.textContent ?? '';`,
+    );
+    if (!mixedText.includes("velo") || !mixedText.includes("tomo")) {
+      throw new Error(`velotomo is missing a cross-table parent: ${mixedText}`);
+    }
   });
 
   // -- probe 74: dragging sidebar pieces onto the Inflect view ---------------

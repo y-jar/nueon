@@ -1,7 +1,7 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
 
-import { defaultTableFor, partitionParents, rootsOf } from "./compose.ts";
+import { defaultTableFor, rootsOf } from "./compose.ts";
 
 const lexicon = [
   { id: "a", table: "lex", wordname: "velo" },
@@ -48,22 +48,4 @@ test("defaultTableFor breaks ties toward the first root's table", () => {
     lexicon,
   );
   assert.equal(defaultTableFor(roots), "roots");
-});
-
-test("partitionParents flags roots from another table as not linked", () => {
-  const roots = rootsOf(
-    [
-      { kind: "word", id: "a" },
-      { kind: "word", id: "c" },
-    ],
-    lexicon,
-  );
-  assert.deepEqual(partitionParents(roots, "lex"), [
-    { root: { table: "lex", id: "a", label: "velo" }, linked: true },
-    { root: { table: "roots", id: "c", label: "paka" }, linked: false },
-  ]);
-  assert.deepEqual(
-    partitionParents(roots, "roots").map((entry) => entry.linked),
-    [false, true],
-  );
 });
