@@ -6,7 +6,8 @@ import * as api from "./api";
 import { windowLabel } from "./window";
 import { makeGroup, newId, ui, type Tab, type TabGroup } from "./store.svelte";
 import { fromSplitLayout, toSplitLayout, type SplitNode } from "./tiling";
-import { activateNeighbor, activateTab, closeTab, tr } from "./state.svelte";
+import { activateTab, closeTab, tr } from "./state.svelte";
+import { activateNeighbor } from "./tabs.svelte";
 
 let dragTimer: ReturnType<typeof setTimeout> | null = null;
 
