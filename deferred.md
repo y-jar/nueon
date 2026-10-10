@@ -90,6 +90,20 @@ hidden brackets that reveal on the cursor, and link rewriting on rename.
   but the shell never calls them, so a workspace cannot be renamed or removed
   from the UI despite the README claiming it can. (dead-code audit)
 
+## Tabs
+
+Shipped: reveal-on-activate (no scrollbar), title tooltips, `aria-selected`
+with roving tabindex and arrow/Home/End navigation, `Ctrl+Tab` /
+`Ctrl+PageDown` next and `Ctrl+PageUp` previous, close others/all, and a `+`
+new-note button.
+
+- Tab **overflow dropdown** ("all tabs", VS Code style) when the tabs exceed
+  the strip; only inline scroll + reveal exists today, so a heavily populated
+  strip gives no way to jump to a tab by name.
+- **"Close to the right"** tab action.
+- Cosmetic: the drag drop-indicators (`inset ±3px` box-shadows) can be clipped
+  at the strip's overflow edges.
+
 ## Data model
 
 - ~~**Per-tag field formatting/widget hints** on `TagDef` (`TagFormat`).~~ (D6)
