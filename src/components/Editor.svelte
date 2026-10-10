@@ -261,6 +261,7 @@
           index: ui.wordIndex,
           notePaths,
           noteHeadings: ui.noteHeadings,
+          fixesTables: ui.fixesTables,
           assetBase: ui.root ? `${ui.root}/notes` : "",
           onFollow: followLink,
           onResolveHeadings: resolveHeadings,

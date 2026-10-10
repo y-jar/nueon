@@ -170,6 +170,8 @@ export const ui = $state({
   quarantineDismissed: [] as string[],
   wordIndex: {} as api.WordIndex,
   nameById: {} as Record<string, string>,
+  /** Table names designated Fixes (morphemes), for ranking the link dropdown. */
+  fixesTables: new Set<string>(),
   /** Note path → ATX headings, cached lazily for `[[note#heading]]`. */
   noteHeadings: {} as Record<string, string[]>,
   /** Pending "scroll to this heading" request after following a link. */

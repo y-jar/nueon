@@ -31,8 +31,10 @@ import {
   wordIndexField,
 } from "./dictionary";
 import {
+  fixesTablesField,
   noteHeadingsField,
   notePathsField,
+  setFixesTables,
   setNoteHeadings,
   setNotePaths,
   wikiCompletion,
@@ -96,6 +98,8 @@ export interface EditorParams {
   notePaths: Set<string>;
   /** Note → headings, for resolving `[[note#heading]]` links. */
   noteHeadings: Record<string, string[]>;
+  /** Table names designated Fixes, so their words rank below vocab. */
+  fixesTables: Set<string>;
   /** Whether to show the line-number gutter (default true). */
   showLineNumbers?: boolean;
   /** Keybind overrides (command id → combo); missing ids use the defaults. */
@@ -254,6 +258,7 @@ export const codemirror: Action<HTMLElement, EditorParams> = (node, params) => {
         wordIndexField,
         notePathsField,
         noteHeadingsField,
+        fixesTablesField,
         livePreview(),
         blockBlocks(),
         blockLineNumbers(),
@@ -308,6 +313,7 @@ export const codemirror: Action<HTMLElement, EditorParams> = (node, params) => {
       setWordIndex.of(params.index),
       setNotePaths.of(params.notePaths),
       setNoteHeadings.of(params.noteHeadings),
+      setFixesTables.of(params.fixesTables),
     ],
   });
   setAssetBase(params.assetBase, params.path);
@@ -431,6 +437,7 @@ export const codemirror: Action<HTMLElement, EditorParams> = (node, params) => {
               setWordIndex.of(next.index),
               setNotePaths.of(next.notePaths),
               setNoteHeadings.of(next.noteHeadings),
+              setFixesTables.of(next.fixesTables),
             ],
           });
           previous.onDirty(previous.path, false);
@@ -447,6 +454,9 @@ export const codemirror: Action<HTMLElement, EditorParams> = (node, params) => {
       }
       if (next.noteHeadings !== current.noteHeadings) {
         view.dispatch({ effects: setNoteHeadings.of(next.noteHeadings) });
+      }
+      if (next.fixesTables !== current.fixesTables) {
+        view.dispatch({ effects: setFixesTables.of(next.fixesTables) });
       }
       if (next.assetBase !== current.assetBase) {
         setAssetBase(next.assetBase, next.path);

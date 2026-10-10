@@ -40,6 +40,24 @@ export async function loadWordIndex(): Promise<void> {
   }
 }
 
+/** Load the Fixes-table names (morphemes), for ranking the link dropdown. */
+export async function loadFixesTables(): Promise<void> {
+  if (!ui.root) {
+    ui.fixesTables = new Set();
+    return;
+  }
+  try {
+    const roles = await api.tableRolesGet();
+    ui.fixesTables = new Set(
+      Object.entries(roles)
+        .filter(([, config]) => config.role === "fixes")
+        .map(([name]) => name),
+    );
+  } catch {
+    ui.fixesTables = new Set();
+  }
+}
+
 export async function refreshTables(): Promise<void> {
   ui.tables = ui.root ? await api.listTables() : [];
   ui.quarantine = ui.root ? await api.quarantineWarnings().catch(() => []) : [];
@@ -75,6 +93,7 @@ export async function init(): Promise<void> {
   await refreshWorkspaces();
   await refreshTree();
   await loadWordIndex();
+  await loadFixesTables();
   await refreshTables();
   try {
     ui.suppressedConfirms = await api.suppressedConfirms();
@@ -89,6 +108,7 @@ export async function init(): Promise<void> {
       await refreshWorkspaces();
       await refreshTree();
       await loadWordIndex();
+      await loadFixesTables();
       await refreshTables();
     } else if (scope === "notes") {
       await refreshTree();
@@ -96,6 +116,8 @@ export async function init(): Promise<void> {
     } else if (scope === "dictionary") {
       await loadWordIndex();
       await refreshTables();
+    } else if (scope === "config") {
+      await loadFixesTables();
     } else if (scope === "vcs") {
       ui.vcsRevision += 1;
       await reloadOpenNotes();
@@ -120,6 +142,7 @@ export async function openWorkspace(path: string): Promise<void> {
   await refreshWorkspaces();
   await refreshTree();
   await loadWordIndex();
+  await loadFixesTables();
   await refreshTables();
   await restoreMainTiling();
   ui.status = "";
@@ -137,6 +160,7 @@ export async function createWorkspace(
   await refreshWorkspaces();
   await refreshTree();
   await loadWordIndex();
+  await loadFixesTables();
   await refreshTables();
   ui.layoutReady = true;
   ui.status = "";

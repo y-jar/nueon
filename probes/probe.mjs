@@ -5079,16 +5079,18 @@ async function main() {
       label: "type editor",
     });
     await focusEditor("type.md");
+    // "vel" selects the word "velo" (detail "lex"), so the selected row has
+    // both a label and a detail to contrast. ("kala" is renamed mid-suite.)
     await js(`${viewScript("type.md")}
       v.dispatch({
-        changes: { from: 0, insert: "[[" },
-        selection: { anchor: 2 },
+        changes: { from: 0, insert: "[[vel" },
+        selection: { anchor: 5 },
         userEvent: "input.type",
       });
       return v.state.doc.toString();`);
     await waitJs(
-      `!!document.querySelector('.cm-tooltip-autocomplete ul li[aria-selected]')`,
-      { label: "selected row" },
+      `!!document.querySelector('.cm-tooltip-autocomplete ul li[aria-selected] .cm-completionDetail')`,
+      { label: "selected row with detail" },
     );
     const contrast = await js(`
       const rgba = (s) => {
@@ -5196,6 +5198,47 @@ async function main() {
     if (!(layout.iconWidth >= 15 && layout.iconWidth <= 17)) {
       throw new Error(`word icon not 16px (${layout.iconWidth})`);
     }
+  });
+
+  // -- probe 87: Fixes morphemes rank below vocab words ----------------------
+  await probe("87-completion-fixes-ranking", async () => {
+    await openActivity("Notes");
+    await openNote("type.md");
+    await waitJs(`!!document.querySelector('.cm-host[data-note="type.md"] .cm-content')`, {
+      label: "type editor",
+    });
+    await focusEditor("type.md");
+    await js(`${viewScript("type.md")}
+      v.dispatch({
+        changes: { from: 0, insert: "[[" },
+        selection: { anchor: 2 },
+        userEvent: "input.type",
+      });
+      return v.state.doc.toString();`);
+    await waitJs(
+      `document.querySelectorAll('.cm-tooltip-autocomplete .cm-completionLabel').length >= 1`,
+      { label: "completion rows" },
+    );
+    // On an empty query the first row must be a plain word, not a morpheme.
+    const first = await js(
+      `return document.querySelector('.cm-tooltip-autocomplete .cm-completionLabel')?.textContent ?? '';`,
+    );
+    if (first.startsWith("-")) {
+      throw new Error(`Fixes morpheme ranked first (${first})`);
+    }
+    // A "-" query surfaces the Fixes morphemes instead.
+    await js(`${viewScript("type.md")}
+      v.dispatch({
+        changes: { from: 2, insert: "-" },
+        selection: { anchor: 3 },
+        userEvent: "input.type",
+      });
+      return v.state.doc.toString();`);
+    await waitJs(
+      `[...document.querySelectorAll('.cm-tooltip-autocomplete .cm-completionLabel')]
+         .some((l) => l.textContent.startsWith('-'))`,
+      { label: "fixes morpheme listed" },
+    );
   });
 }
 

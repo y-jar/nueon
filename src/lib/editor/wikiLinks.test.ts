@@ -7,6 +7,7 @@ import { CompletionContext } from "@codemirror/autocomplete";
 
 import { wordIndexField } from "./dictionary.ts";
 import {
+  fixesTablesField,
   noteHeadingsField,
   notePathsField,
   wikiCompletionSource,
@@ -20,9 +21,11 @@ function state(doc: string, pos: number) {
       wordIndexField.init(() => ({
         velo: [{ id: "1", table: "lex", wordname: "velo", senses: ["to run"], tags: [] }],
         uene: [{ id: "2", table: "lex", wordname: "uene", senses: ["person"], tags: [] }],
+        "-aha": [{ id: "3", table: "fixes", wordname: "-aha", senses: [], tags: [] }],
       })),
       notePathsField.init(() => new Set(["alpha.md"])),
       noteHeadingsField.init(() => ({ "alpha.md": ["Intro", "Nouns"] })),
+      fixesTablesField.init(() => new Set(["fixes"])),
     ],
   });
   return { state: s, pos };
@@ -35,6 +38,18 @@ test("completion source offers words and notes mixed for [[", () => {
   const labels = result!.options.map((option) => option.label);
   assert.ok(labels.includes("velo"), `labels: ${labels}`);
   assert.ok(labels.includes("alpha"), `labels: ${labels}`);
+});
+
+test("empty query ranks Fixes-table words below plain words", () => {
+  const ctx = state("[[", 2);
+  const result = wikiCompletionSource(new CompletionContext(ctx.state, ctx.pos, true));
+  assert.ok(result, "source returned a result");
+  const labels = result!.options.map((option) => option.label);
+  const fixes = labels.indexOf("-aha");
+  const velo = labels.indexOf("velo");
+  assert.ok(velo >= 0, `velo missing: ${labels}`);
+  assert.ok(fixes >= 0, `-aha missing: ${labels}`);
+  assert.ok(velo < fixes, `fixes row ranked first: ${labels}`);
 });
 
 test("a partial query matches by substring, not just prefix", () => {

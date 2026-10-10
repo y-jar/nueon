@@ -210,7 +210,7 @@ export function matchScore(query: string, name: string): number | null {
 }
 
 /** Rank candidates: prefix, word-boundary, substring, then by name. */
-export function rankCompletions<T extends { name: string }>(
+export function rankCompletions<T extends { name: string; fixes?: boolean }>(
   query: string,
   candidates: T[],
 ): T[] {
@@ -220,7 +220,10 @@ export function rankCompletions<T extends { name: string }>(
       (entry): entry is { candidate: T; score: number } => entry.score !== null,
     )
     .sort(
-      (a, b) => a.score - b.score || a.candidate.name.localeCompare(b.candidate.name),
+      (a, b) =>
+        a.score - b.score ||
+        Number(!!a.candidate.fixes) - Number(!!b.candidate.fixes) ||
+        a.candidate.name.localeCompare(b.candidate.name),
     )
     .map((entry) => entry.candidate);
 }

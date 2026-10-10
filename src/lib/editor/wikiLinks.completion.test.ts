@@ -9,7 +9,12 @@ import { markdown } from "@codemirror/lang-markdown";
 import { completionStatus, currentCompletions } from "@codemirror/autocomplete";
 
 import { wordIndexField } from "./dictionary.ts";
-import { noteHeadingsField, notePathsField, wikiCompletion } from "./wikiLinks.ts";
+import {
+  fixesTablesField,
+  noteHeadingsField,
+  notePathsField,
+  wikiCompletion,
+} from "./wikiLinks.ts";
 
 /**
  * Install a jsdom DOM onto `globalThis` before CodeMirror creates a view.
@@ -63,6 +68,7 @@ function makeView() {
       })),
       notePathsField.init(() => new Set(["alpha.md"])),
       noteHeadingsField.init(() => ({})),
+      fixesTablesField.init(() => new Set()),
       wikiCompletion(() => ({})),
     ],
   });

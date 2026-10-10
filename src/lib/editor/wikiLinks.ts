@@ -56,6 +56,20 @@ export const noteHeadingsField = StateField.define<Record<string, string[]>>({
   },
 });
 
+/** Holds the Fixes table names, updated via `setFixesTables`. */
+export const setFixesTables = StateEffect.define<Set<string>>();
+
+export const fixesTablesField = StateField.define<Set<string>>({
+  create: () => new Set(),
+  update(value, transaction) {
+    let next = value;
+    for (const effect of transaction.effects) {
+      if (effect.is(setFixesTables)) next = effect.value;
+    }
+    return next;
+  },
+});
+
 /** The `[[target]]` link whose span contains `pos`, resolved, or null. */
 function linkAt(view: EditorView, pos: number): {
   target: WikiTarget;
@@ -327,6 +341,7 @@ interface LinkCandidate {
   applyName: string;
   type: "word" | "note";
   detail: string;
+  fixes?: boolean;
 }
 
 /** Consume an auto-closed `]]` right after the match. */
@@ -369,6 +384,7 @@ export function wikiCompletionSource(
   const index = context.state.field(wordIndexField);
   const notes = context.state.field(notePathsField);
   const headings = context.state.field(noteHeadingsField);
+  const fixesTables = context.state.field(fixesTablesField);
 
   const hash = inner.indexOf("#");
   if (hash >= 0) {
@@ -407,6 +423,7 @@ export function wikiCompletionSource(
       applyName: hits[0].wordname,
       type: "word",
       detail: hits[0].table,
+      fixes: fixesTables.has(hits[0].table),
     });
   }
   const noteCandidates: LinkCandidate[] = [];

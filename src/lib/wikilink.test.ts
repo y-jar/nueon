@@ -175,6 +175,17 @@ test("rankCompletions ranks a boundary match before a substring", () => {
   assert.deepEqual(result, ["a-b", "ab", "cab"]);
 });
 
+test("rankCompletions puts fixes rows below plain words on a tie", () => {
+  const candidates = [
+    { name: "-aha", fixes: true },
+    { name: "velo" },
+    { name: "alpha" },
+  ];
+  // An empty query ties every candidate at score 0; fixes sort after plain words.
+  const result = rankCompletions("", candidates).map((candidate) => candidate.name);
+  assert.deepEqual(result, ["alpha", "velo", "-aha"]);
+});
+
 test("isLinkRevealed reveals a touched link but not a distant one", () => {
   const link = { from: 4, to: 12 };
   // Cursor inside, at either end, and an overlapping selection all reveal.
