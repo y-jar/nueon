@@ -1,6 +1,13 @@
 
 ## Project Specification Document (PSD): Conlang Management & Translation Engine (v2)
 
+> Implementation status: this is the original design brief. Most of it is
+> shipped. The dynamic schema, hidden UUIDs, live-preview editor, dictionary
+> search, misspelling guard, etymology and dependency handling, translation
+> grid, inspector and packaging all exist. Tables and config are stored as
+> plain extensionless JSON files (`dictionary/lex`, `config/translation`), as
+> described here. The translation engine is clause-level, not sentence-level.
+
 ### 1. Data Structure & Schema Design
 
 Instead of forcing a rigid linguistic structure, the application will use a highly dynamic schema.

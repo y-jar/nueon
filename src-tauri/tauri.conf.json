@@ -36,6 +36,8 @@
       "deb",
       "rpm"
     ],
+    "licenseFile": "../LICENSE",
+    "copyright": "Copyright (c) 2026 y-jar",
     "icon": [
       "icons/128x128.png",
       "icons/icon.png",

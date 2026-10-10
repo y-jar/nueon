@@ -94,3 +94,6 @@ stage that completed them: `R0`–`R8` were done during the Tauri migration,
 - Allomorphy / conditioning: pick an affix variant by the stem's shape or the
   surrounding features (e.g. `-i` after a consonant, `-y` after a vowel).
 - A declension/conjugation reference table per class in the Inspector.
+- Cross-table parent links: Compose only links roots in the chosen save table;
+  roots from another table are listed as "different table, not linked". The
+  backend already stores parents by UUID, so cross-table links are possible.

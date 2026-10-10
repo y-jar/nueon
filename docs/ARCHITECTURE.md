@@ -3,11 +3,11 @@
 nueon is a Linux desktop app built as three layers, so the domain logic is
 testable and reusable independently of any UI:
 
-1. **`nueon-core`** — a UI-agnostic Rust crate: the data model, on-disk
+1. **`nueon-core`** - a UI-agnostic Rust crate: the data model, on-disk
    storage, configuration, translation engine, and git integration.
-2. **Tauri IPC** (`nueon-tauri`, in `src-tauri/`) — a thin command/service
+2. **Tauri IPC** (`nueon-tauri`, in `src-tauri/`) - a thin command/service
    boundary over the core, plus window/bundle concerns.
-3. **Svelte 5 frontend** (`src/`) — the UI: a Svelte 5 runes store, CodeMirror 6
+3. **Svelte 5 frontend** (`src/`) - the UI: a Svelte 5 runes store, CodeMirror 6
    editor, and the grid/translation/import/export components, talking to the
    core only through `invoke()` wrappers.
 
@@ -16,13 +16,14 @@ testable and reusable independently of any UI:
 ```
 Cargo.toml                     # Cargo workspace
 crates/nueon-core/             # tier 1: domain logic
-  src/model/                   # tables, tags, entries, fields, derivation, translate
-  src/workspace/               # loading, storage, assets, trash, filenames
-  src/config/                  # language, grammar, translation, settings, layout
+  src/model/                   # tables, tags, entries, fields, derivation
+  src/model/translate/         # tokenize, morphemes, matching, render, inflect, grid
+  src/workspace/               # loading, storage, tables, entries, notes, trash, vcs, …
+  src/config/                  # language, grammar, translation, morphology, settings, layout
   src/import.rs                # delimited import (detect/preview/apply)
-  src/export_table.rs          # table export (CSV/TSV/JSON)
-  src/export.rs                # Markdown → HTML/ODT
-  src/translation/mod.rs       # syntax-grid/clause-slot model (runner is model/translate.rs)
+  src/export_table.rs          # table export (CSV/TSV/JSON/Anki)
+  src/export.rs                # Markdown -> HTML/ODT
+  src/translation/mod.rs       # syntax-grid/clause-slot model (runner is model/translate/)
   src/vcs/                     # git CLI integration + auto-check-in
   src/global.rs                # global (cross-workspace) config
 src-tauri/                     # tier 2: Tauri v2 shell
@@ -32,7 +33,12 @@ src-tauri/                     # tier 2: Tauri v2 shell
   tauri.conf.json              # window, bundle (appimage/deb/rpm)
 src/                           # tier 3: Svelte 5 frontend
   lib/api.ts                   # typed invoke() wrappers + DTOs
-  lib/state.svelte.ts          # runes store (tabs, groups, ui, data)
+  lib/state.svelte.ts          # barrel re-exporting the runes stores below
+  lib/store.svelte.ts          # shared runes state (ui, groups, docs)
+  lib/tabs.svelte.ts           # open/activate/close tabs
+  lib/layout.svelte.ts         # split/drag/persist tiling
+  lib/{data,notes,context,shell,feedback}.svelte.ts
+  lib/tiling.ts, lib/tabs.ts   # pure layout rules (unit-tested)
   lib/i18n.ts                  # translation helper
   locales/en.json              # UI strings
   lib/editor/                  # CodeMirror extensions (live preview, theme)
@@ -42,17 +48,17 @@ flake.nix                      # packages.default (source) + nueon-bin (prebuilt
 packaging/nueon.desktop        # launcher entry
 ```
 
-## Tier 1 — `nueon-core`
+## Tier 1 - `nueon-core`
 
 The authoritative domain model:
 
 - A **workspace** is a plain directory:
-  - `notes/` — Markdown files (`.md`; folders allowed).
-  - `dictionary/` — one JSON file per word table.
-  - `config/` — `language`, `grammar`, `translation`, `settings` (JSON).
-  - `assets/` — imported images/files, named by content hash.
-  - `.trash/` — recoverable deletions, git-ignored.
-  - `.git/` — optional; git is opt-in.
+  - `notes/` - Markdown files (`.md`; folders allowed).
+  - `dictionary/` - one extensionless JSON file per word table.
+  - `config/` - `language`, `grammar`, `translation`, `settings` (JSON).
+  - `assets/` - imported images/files, named by content hash.
+  - `.trash/` - recoverable deletions, git-ignored.
+  - `.git/` - optional; git is opt-in.
 - A **table** is a bin of words; a word lives in exactly one table.
 - A **tag** is a column of a table (`wordname` builtin; `definition` and
   `parent` reserved; others are user tags with a `FieldType`).
@@ -74,15 +80,18 @@ The authoritative domain model:
 - `Fixes` tables are a conlang **morpheme inventory**: any hyphen-marked row is
   a morpheme (`dictionary_morphemes`) with no English needed. A configured
   trigger column *additionally* supplies english→conlang input rules
-  (`dictionary_affixes`) — English is entirely optional.
+  (`dictionary_affixes`) - English is entirely optional.
 - The **Morphology** activity (`MorphologyPanel`/`MorphologyView`) authors
   features and endings and previews a single word: `inflect_word` composes the
   feature-driven paradigm affixes with any manually picked fixes-table
   morphemes and returns the surface plus an ordered breakdown.
 - Its **Compose** tab searches the lexicon and morphemes and combines dragged
   pieces left to right (`compose`): roots concatenate into compounds while
-  `-x`/`x-`/`-x-` morphemes attach as suffix/prefix/infix. A composed form can
-  be saved back as a lexicon word.
+  `-x`/`x-`/`-x-` morphemes attach as suffix/prefix/infix. Saving a composed
+  form records every root in the chosen table as a parent; roots from another
+  table are listed but not linked.
+- Pieces can also be dragged from the sidebar straight onto the **Inflect**
+  view: a word becomes the base, a morpheme toggles on.
 
 ### Storage rules
 
@@ -99,18 +108,18 @@ The authoritative domain model:
 
 ### Import and export
 
-- `import.rs` — `detect` (guesses delimiter/header/roles), `import_preview`
+- `import.rs` - `detect` (guesses delimiter/header/roles), `import_preview`
   (read-only report: rows, links, duplicates, warnings), and `import_apply`
   (two passes: create words, then resolve `[[…]]` links into `parent` or any
   reference tag). Empty cells write no tag; cycles are rejected.
-- `export_table.rs` — `export_table(table, Csv|Tsv|Json)`: delimited output is
+- `export_table.rs` - `export_table(table, Csv|Tsv|Json)`: delimited output is
   the inverse of the importer (round-trip tested), JSON is a lossless snapshot.
   `export_anki(table, &AnkiExportOptions)` writes an Anki-importable text file
   (file headers for separator/notetype/deck/columns, a tags column from boolean
   flags, and a stable GUID column for update-in-place re-imports).
-- `export.rs` — Markdown → HTML (for PDF printing) and a hand-built ODT writer.
+- `export.rs` - Markdown → HTML (for PDF printing) and a hand-built ODT writer.
 
-## Tier 2 — Tauri IPC (`nueon-tauri`)
+## Tier 2 - Tauri IPC (`nueon-tauri`)
 
 - **State**: `Mutex<AppState { global: GlobalConfig, workspace: Option<Workspace>, … }>`,
   managed by Tauri; every command locks it (read-only commands lock immutably).
@@ -131,7 +140,8 @@ Command groups (see `src-tauri/src/commands/`):
   `delete_note`, `note_count`)
 - trash (`trash_list`, `trash_restore`, `trash_purge`, `trash_empty`)
 - dictionary (`list_tables`, `get_table`, `create_table`, `delete_table`,
-  `rename_table`, `word_index`, `quarantine_warnings`, word CRUD
+  `rename_table`, `word_index`, `quarantine_warnings`, `class_column_get`,
+  `normalize_class_values`, word CRUD
   (`create_word`/`save_word_entry`/`set_word_value`/`set_word_definition`/
   `rename_word`/`delete_word`), tag management
   (`add_tag`/`remove_tag_preview`/`remove_tag`/`set_tag_kind`/`set_tag_format`/
@@ -147,7 +157,8 @@ Command groups (see `src-tauri/src/commands/`):
   `execute_translation`, `create_translation_word`, `translation_options`,
   `set_translation_options`, `export_presets`, `import_presets`)
 - morphology (`translation_morphology`, `set_translation_morphology`,
-  `list_morphemes`, `lexicon`, `inflect_word`, `compose`)
+  `list_morphemes`, `lexicon`, `inflect_word`, `compose`, `feature_values`,
+  `paradigm_grid`)
 - phonology (`phonology_check_words`, `phonology_segments`)
 - version control (`vcs_*` and `git_prompt_dismissed`/
   `git_prompt_dismissed_set`, `autocheckin_*`)
@@ -157,11 +168,21 @@ Command groups (see `src-tauri/src/commands/`):
 (`workspace`/`notes`/`dictionary`/`config`/`translation`/`vcs`); the frontend
 reacts by refetching the affected slice.
 
-## Tier 3 — Svelte 5 frontend
+## Tier 3 - Svelte 5 frontend
 
-- `src/lib/state.svelte.ts` is the single runes store: workspace/registry data,
-  notes tree, tables, the tab-group/split layout, the editor document state,
-  and shell UI flags. Components read/mutate it directly.
+- `src/lib/state.svelte.ts` is a barrel over focused runes modules
+  (`store`, `tabs`, `layout`, `data`, `notes`, `context`, `shell`, `feedback`):
+  workspace/registry data, notes tree, tables, the tab-group/split layout, the
+  editor document state and shell UI flags. Components read/mutate them
+  directly. Pure rules (split serialization, tab identity) live in
+  `tiling.ts`/`tabs.ts` and are unit-tested.
+- **Tabs reveal instead of duplicating.** Opening a note, table or tool tab
+  from any pane searches every pane first and activates the existing tab
+  (focusing its pane); only a genuine miss creates a tab in the active pane.
+  Tool tabs (translation, morphology, phonology) are singletons. A deliberate
+  duplicate is possible with `Ctrl`/`Cmd`+click, middle-click, or the
+  "Open in new split" context-menu item, and duplicates are collapsed on
+  session restore.
 - `src/lib/api.ts` holds typed `invoke()` wrappers and the DTO interfaces
   mirroring the Rust serde types.
 - The shell (`App.svelte`) composes an activity ribbon, a sidebar host
