@@ -256,6 +256,8 @@ pub fn rename_word(
         .map_err(|err| err.to_string())?;
     drop(state);
     changed(&app, "dictionary");
+    // The rename also rewrites `[[...]]` links in notes, so open notes reload.
+    changed(&app, "notes");
     Ok(applied)
 }
 

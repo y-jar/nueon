@@ -309,20 +309,45 @@ impl Workspace {
     /// Rename a word (its `wordname` field) without touching any other
     /// field, so it cannot clobber a concurrent edit the way sending a whole
     /// stale entry through [`Self::replace_entry`] could.
+    ///
+    /// Every `[[old]]` / `[[old|alias]]` / `![[old]]` link in the workspace's
+    /// notes is rewritten to the new name (case-insensitively), and the whole
+    /// rename is one undo step.
     pub fn rename_word(
         &mut self,
         table: &str,
         id: Uuid,
         wordname: impl Into<String>,
     ) -> Result<bool, StorageError> {
-        if self.dictionary.get_entry(table, id).is_none() {
+        let new = wordname.into();
+        let old = match self.dictionary.get_entry(table, id) {
+            Some(entry) => entry.wordname.clone(),
+            None => return Ok(false),
+        };
+        if old == new {
             return Ok(false);
         }
-        self.record();
-        if let Some(entry) = self.dictionary.get_entry_mut(table, id) {
-            entry.wordname = wordname.into();
+        let mut notes = Vec::new();
+        for note in &self.notes {
+            let content = storage::read_note(&self.notes_dir(), &note.path)?;
+            let rewritten = links::rewrite_links(&content, &old, &new);
+            if rewritten != content {
+                notes.push(history::NoteEdit {
+                    path: note.path.clone(),
+                    before: content,
+                    after: rewritten,
+                });
+            }
         }
-        self.save_entry(table, id)
+        self.record_with_notes(notes.clone());
+        if let Some(entry) = self.dictionary.get_entry_mut(table, id) {
+            entry.wordname = new;
+        }
+        self.save_entry(table, id)?;
+        for edit in &notes {
+            storage::write_existing_note(&self.notes_dir(), &edit.path, &edit.after, None)?;
+        }
+        Ok(true)
     }
 
     /// Move a word to another table and persist both tables.

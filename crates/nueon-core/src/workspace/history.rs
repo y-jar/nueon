@@ -2,10 +2,25 @@
 
 use super::*;
 
+/// A note file whose contents a step changed, with its previous and new text.
+#[derive(Debug, Clone)]
+pub(crate) struct NoteEdit {
+    pub(crate) path: PathBuf,
+    pub(crate) before: String,
+    pub(crate) after: String,
+}
+
+/// One undo/redo step: a dictionary snapshot plus the note files it rewrote.
+#[derive(Debug)]
+pub(crate) struct Step {
+    pub(crate) dictionary: Dictionary,
+    pub(crate) notes: Vec<NoteEdit>,
+}
+
 #[derive(Debug)]
 pub(crate) struct History {
-    pub(crate) undo: Vec<Dictionary>,
-    pub(crate) redo: Vec<Dictionary>,
+    pub(crate) undo: Vec<Step>,
+    pub(crate) redo: Vec<Step>,
 }
 
 impl History {
@@ -19,8 +34,11 @@ impl History {
         }
     }
 
-    pub(crate) fn record(&mut self, snapshot: Dictionary) {
-        self.undo.push(snapshot);
+    pub(crate) fn record(&mut self, snapshot: Dictionary, notes: Vec<NoteEdit>) {
+        self.undo.push(Step {
+            dictionary: snapshot,
+            notes,
+        });
         if self.undo.len() > Self::LIMIT {
             self.undo.remove(0);
         }
@@ -41,7 +59,12 @@ impl Workspace {
 
     /// Snapshot the dictionary before a mutation.
     pub(crate) fn record(&mut self) {
-        self.history.record(self.dictionary.clone());
+        self.history.record(self.dictionary.clone(), Vec::new());
+    }
+
+    /// Snapshot the dictionary and the note rewrites before a mutation.
+    pub(crate) fn record_with_notes(&mut self, notes: Vec<NoteEdit>) {
+        self.history.record(self.dictionary.clone(), notes);
     }
 
     /// Whether an undo step is available.
@@ -54,7 +77,8 @@ impl Workspace {
         self.history.can_redo()
     }
 
-    /// Restore the previous dictionary snapshot and persist it.
+    /// Restore the previous dictionary snapshot (and any notes it rewrote) and
+    /// persist it.
     pub fn undo(&mut self) -> Result<bool, StorageError> {
         let Some(previous) = self.history.undo.pop() else {
             return Ok(false);
@@ -62,28 +86,41 @@ impl Workspace {
         // Touch the disk first: if that fails the snapshot goes back on the
         // stack and memory is unchanged.
         let before = self.dictionary.clone();
-        if let Err(err) = self.write_dictionary_diff(&before, &previous) {
+        if let Err(err) = self.write_dictionary_diff(&before, &previous.dictionary) {
             self.history.undo.push(previous);
             return Err(err);
         }
-        let current = std::mem::replace(&mut self.dictionary, previous);
-        self.history.redo.push(current);
+        for edit in &previous.notes {
+            storage::write_existing_note(&self.notes_dir(), &edit.path, &edit.before, None)?;
+        }
+        let current = std::mem::replace(&mut self.dictionary, previous.dictionary);
+        self.history.redo.push(Step {
+            dictionary: current,
+            notes: previous.notes,
+        });
         self.mark_change(Instant::now(), "nueon: undo");
         Ok(true)
     }
 
-    /// Re-apply the next dictionary snapshot and persist it.
+    /// Re-apply the next dictionary snapshot (and any note rewrites) and
+    /// persist it.
     pub fn redo(&mut self) -> Result<bool, StorageError> {
         let Some(next) = self.history.redo.pop() else {
             return Ok(false);
         };
         let before = self.dictionary.clone();
-        if let Err(err) = self.write_dictionary_diff(&before, &next) {
+        if let Err(err) = self.write_dictionary_diff(&before, &next.dictionary) {
             self.history.redo.push(next);
             return Err(err);
         }
-        let current = std::mem::replace(&mut self.dictionary, next);
-        self.history.undo.push(current);
+        for edit in &next.notes {
+            storage::write_existing_note(&self.notes_dir(), &edit.path, &edit.after, None)?;
+        }
+        let current = std::mem::replace(&mut self.dictionary, next.dictionary);
+        self.history.undo.push(Step {
+            dictionary: current,
+            notes: next.notes,
+        });
         self.mark_change(Instant::now(), "nueon: redo");
         Ok(true)
     }

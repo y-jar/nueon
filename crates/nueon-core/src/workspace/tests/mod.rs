@@ -1801,3 +1801,30 @@ fn open_loads_an_existing_workspace() {
     let opened = Workspace::open(dir.path()).unwrap();
     assert!(opened.dictionary.tables.contains_key("nouns"));
 }
+
+#[test]
+fn renaming_a_word_rewrites_its_note_links_and_undo_restores_them() {
+    let dir = tempfile::tempdir().unwrap();
+    let mut ws = Workspace::new(dir.path()).unwrap();
+    ws.create_table("lex").unwrap();
+    let id = ws.create_entry("lex", "kala").unwrap().unwrap();
+    ws.create_note_with_content("lore.md", "see [[kala]] and ![[kala|dog]]")
+        .unwrap();
+
+    ws.rename_word("lex", id, "kaka").unwrap();
+    let note = ws.read_note("lore.md").unwrap();
+    assert_eq!(note, "see [[kaka]] and ![[kaka|dog]]");
+
+    assert!(ws.undo().unwrap());
+    assert_eq!(ws.dictionary.get_entry("lex", id).unwrap().wordname, "kala");
+    assert_eq!(
+        ws.read_note("lore.md").unwrap(),
+        "see [[kala]] and ![[kala|dog]]"
+    );
+
+    assert!(ws.redo().unwrap());
+    assert_eq!(
+        ws.read_note("lore.md").unwrap(),
+        "see [[kaka]] and ![[kaka|dog]]"
+    );
+}

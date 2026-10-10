@@ -4,6 +4,7 @@ mod assets;
 mod entries;
 mod history;
 mod lifecycle;
+mod links;
 mod note;
 mod notes;
 mod settings;
