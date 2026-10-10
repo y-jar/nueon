@@ -19,7 +19,8 @@ pub use morphology::{
     Feature, FeatureColumn, FeatureValue, MorphemeRef, Morphology, Paradigm, ParadigmRow, POS_TAG,
 };
 pub use phonology::{
-    check_word, segments, Phoneme, PhonemeKind, PhonologyConfig, Segment, Violation,
+    apply_rules, apply_to_word, check_word, segments, Phoneme, PhonemeKind, PhonologyConfig,
+    Segment, SoundChangeRule, Violation,
 };
 pub use profile::{Profile, PROFILE_FORMAT, PROFILE_VERSION};
 pub use settings::{GridViewState, SortSpec, UiLayout, WorkspaceSettings};
