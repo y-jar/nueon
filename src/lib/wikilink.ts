@@ -122,7 +122,7 @@ export type WikiTarget =
   | { kind: "missing" };
 
 /** Resolve `target` against the note paths, returning the matching path. */
-function resolveNotePath(target: string, notePaths: Set<string>): string | null {
+export function resolveNotePath(target: string, notePaths: Set<string>): string | null {
   if (notePaths.has(target)) return target;
   if (notePaths.has(`${target}.md`)) return `${target}.md`;
   for (const path of notePaths) {
@@ -134,6 +134,38 @@ function resolveNotePath(target: string, notePaths: Set<string>): string | null 
     if (name === base) return path;
   }
   return null;
+}
+
+/**
+ * Score a candidate name against a query for the dropdown: prefix (0) beats a
+ * word-boundary match (1), which beats a plain substring (2). `null` means no
+ * match.
+ */
+export function matchScore(query: string, name: string): number | null {
+  if (query === "") return 0;
+  const needle = query.toLowerCase();
+  const hay = name.toLowerCase();
+  if (hay.startsWith(needle)) return 0;
+  const index = hay.indexOf(needle);
+  if (index > 0 && !/[a-z0-9]/.test(hay[index - 1])) return 1;
+  if (index >= 0) return 2;
+  return null;
+}
+
+/** Rank candidates: prefix, word-boundary, substring, then by name. */
+export function rankCompletions<T extends { name: string }>(
+  query: string,
+  candidates: T[],
+): T[] {
+  return candidates
+    .map((candidate) => ({ candidate, score: matchScore(query, candidate.name) }))
+    .filter(
+      (entry): entry is { candidate: T; score: number } => entry.score !== null,
+    )
+    .sort(
+      (a, b) => a.score - b.score || a.candidate.name.localeCompare(b.candidate.name),
+    )
+    .map((entry) => entry.candidate);
 }
 
 /**

@@ -1,7 +1,12 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
 
-import { parseHeadings, parseWikiLinks, resolveWikiTarget } from "./wikilink.ts";
+import {
+  parseHeadings,
+  parseWikiLinks,
+  rankCompletions,
+  resolveWikiTarget,
+} from "./wikilink.ts";
 
 test("parses plain, aliased and embed links", () => {
   assert.deepEqual(parseWikiLinks("see [[kala]] here"), [
@@ -141,4 +146,29 @@ test("a word target with a heading ignores the heading", () => {
 
 test("reports missing targets", () => {
   assert.deepEqual(resolveWikiTarget("nope", null, {}, new Set()), { kind: "missing" });
+});
+
+test("rankCompletions orders prefix, word-boundary, then substring", () => {
+  const names = (list: { name: string }[]) => list.map((candidate) => candidate.name);
+  const candidates = [
+    { name: "uene" },
+    { name: "phonology" },
+    { name: "sound-phonology" },
+    { name: "phone" },
+  ];
+  // "phon" is a prefix of "phone" and "phonology" (alphabetical tie-break), a
+  // word-boundary match of "sound-phonology"; substring "ene" matches "uene".
+  assert.deepEqual(names(rankCompletions("phon", candidates)), [
+    "phone",
+    "phonology",
+    "sound-phonology",
+  ]);
+  assert.deepEqual(names(rankCompletions("ene", candidates)), ["uene"]);
+});
+
+test("rankCompletions ranks a boundary match before a substring", () => {
+  const candidates = [{ name: "ab" }, { name: "cab" }, { name: "a-b" }];
+  // "b" is a word-boundary match of "a-b", a substring of "ab" and "cab".
+  const result = rankCompletions("b", candidates).map((candidate) => candidate.name);
+  assert.deepEqual(result, ["a-b", "ab", "cab"]);
 });

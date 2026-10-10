@@ -1,5 +1,6 @@
 import { StateEffect, StateField } from "@codemirror/state";
 import type { Range } from "@codemirror/state";
+import { EditorSelection } from "@codemirror/state";
 import {
   autocompletion,
   type Completion,
@@ -16,7 +17,13 @@ import {
   hoverTooltip,
 } from "@codemirror/view";
 
-import { parseWikiLinks, resolveWikiTarget, type WikiTarget } from "../wikilink.ts";
+import {
+  parseWikiLinks,
+  rankCompletions,
+  resolveNotePath,
+  resolveWikiTarget,
+  type WikiTarget,
+} from "../wikilink.ts";
 import { codeLines } from "./blocks.ts";
 import { wordIndexField } from "./dictionary.ts";
 
@@ -237,55 +244,152 @@ export function wikiLinkHover() {
   });
 }
 
-/** Autocomplete words and notes as `[[name]]` while typing `[[`. */
-export function wikiCompletionSource(
-  context: CompletionContext,
-): CompletionResult | null {
-  const match = context.matchBefore(/\[\[[^\[\]\n]*/);
-  if (!match) return null;
-  const query = match.text.slice(2).toLowerCase();
-  const index = context.state.field(wordIndexField);
-  const notes = context.state.field(notePathsField);
+/** Autocomplete dependencies the app supplies (async, via IPC). */
+export interface WikiCompletionDeps {
+  /** Read a note's headings (for the `#heading` mode). */
+  getHeadings?: (path: string) => Promise<string[]>;
+  /** Create an empty note in the current note's folder (the fallback row). */
+  createNote?: (name: string) => Promise<void>;
+}
 
-  const options: Completion[] = [];
-  const seen = new Set<string>();
-  for (const [name, hits] of Object.entries(index)) {
-    if (!hits.length || seen.has(name)) continue;
-    if (name.startsWith(query)) {
-      seen.add(name);
-      options.push({
-        label: hits[0].wordname,
-        type: "keyword",
-        detail: hits[0].table,
-        apply: `[[${hits[0].wordname}]]`,
-      });
-    }
-  }
-  for (const path of notes) {
-    const label = (path.split("/").pop() ?? path).replace(/\.md$/, "");
-    if (seen.has(label.toLowerCase())) continue;
-    if (label.toLowerCase().startsWith(query)) {
-      seen.add(label.toLowerCase());
-      options.push({
-        label,
-        type: "text",
-        detail: "note",
-        apply: `[[${label}]]`,
-      });
-    }
-  }
-  if (options.length === 0) return null;
+interface LinkCandidate {
+  name: string;
+  applyName: string;
+  type: "word" | "note";
+  detail: string;
+}
 
-  // Consume the auto-closed `]]` (typed `[[` produced `[[]]`) on selection.
+/** Consume an auto-closed `]]` right after the match. */
+function consumeTo(context: CompletionContext, match: { from: number; to: number }): number {
   const after = context.state.sliceDoc(match.to, match.to + 2);
+  return after === "]]" ? match.to + 2 : match.to;
+}
+
+function optionsFor(
+  context: CompletionContext,
+  match: { from: number; to: number },
+  options: Completion[],
+): CompletionResult | null {
+  if (options.length === 0) return null;
   return {
     from: match.from,
-    to: after === "]]" ? match.to + 2 : match.to,
+    to: consumeTo(context, match),
     options,
     validFor: /^\[\[[^\[\]\n]*$/,
   };
 }
 
-export function wikiCompletion() {
-  return autocompletion({ override: [wikiCompletionSource] });
+/**
+ * The completion source: words and notes while typing a target, that note's
+ * headings after `#`, and nothing after `|` (the alias is free text). When
+ * nothing matches, a "Create note" row offers to make an empty note.
+ */
+export function wikiCompletionSource(
+  context: CompletionContext,
+  deps: WikiCompletionDeps = {},
+): CompletionResult | null | Promise<CompletionResult | null> {
+  const match = context.matchBefore(/\[\[[^\[\]\n]*/);
+  if (!match) return null;
+  const inner = match.text.slice(2);
+  if (inner.includes("|")) return null; // typing the alias
+
+  const index = context.state.field(wordIndexField);
+  const notes = context.state.field(notePathsField);
+  const headings = context.state.field(noteHeadingsField);
+
+  const hash = inner.indexOf("#");
+  if (hash >= 0) {
+    // Heading mode: list the target note's headings.
+    const target = inner.slice(0, hash).trim();
+    const query = inner.slice(hash + 1).toLowerCase();
+    const path = resolveNotePath(target, notes);
+    if (!path) return null;
+    const finish = (list: string[]): CompletionResult | null => {
+      const options = rankCompletions(
+        query,
+        list.map((text) => ({ name: text })),
+      )
+        .slice(0, 20)
+        .map((entry): Completion => ({
+          label: entry.name,
+          type: "heading",
+          apply: `[[${target}#${entry.name}]]`,
+        }));
+      return optionsFor(context, match, options);
+    };
+    const cached = headings[path];
+    if (cached) return finish(cached);
+    if (!deps.getHeadings) return null;
+    return deps.getHeadings(path).then(finish);
+  }
+
+  // Target mode: words and notes, mixed and ranked.
+  const query = inner.toLowerCase();
+  const typed = inner.trim();
+  const words: LinkCandidate[] = [];
+  for (const hits of Object.values(index)) {
+    if (!hits.length) continue;
+    words.push({
+      name: hits[0].wordname,
+      applyName: hits[0].wordname,
+      type: "word",
+      detail: hits[0].table,
+    });
+  }
+  const noteCandidates: LinkCandidate[] = [];
+  for (const path of notes) {
+    const base = (path.split("/").pop() ?? path).replace(/\.md$/, "");
+    const folder = path.includes("/")
+      ? path.split("/").slice(0, -1).join("/")
+      : "";
+    noteCandidates.push({ name: base, applyName: base, type: "note", detail: folder });
+  }
+  const all = [...words, ...noteCandidates];
+  const groups = new Map<string, LinkCandidate[]>();
+  for (const candidate of all) {
+    const key = candidate.name.toLowerCase();
+    const group = groups.get(key);
+    if (group) group.push(candidate);
+    else groups.set(key, [candidate]);
+  }
+  const disambiguated = all.map((candidate) => {
+    const group = groups.get(candidate.name.toLowerCase())!;
+    if (group.length > 1 && candidate.detail) {
+      return { ...candidate, name: `${candidate.name} (${candidate.detail})` };
+    }
+    return candidate;
+  });
+
+  const ranked = rankCompletions(query, disambiguated).slice(0, 20);
+  const options: Completion[] = ranked.map((candidate) => ({
+    label: candidate.name,
+    type: candidate.type,
+    detail: candidate.detail,
+    apply: `[[${candidate.applyName}]]`,
+  }));
+
+  if (options.length === 0 && typed && deps.createNote) {
+    options.push({
+      label: `Create note: ${typed}`,
+      type: "note",
+      apply: (view, _completion, from, to) => {
+        void deps.createNote!(typed).catch(() => {});
+        view.dispatch({
+          changes: { from, to, insert: `[[${typed}]]` },
+          selection: EditorSelection.cursor(from + typed.length + 4),
+          userEvent: "input.complete",
+        });
+      },
+    });
+  }
+
+  return optionsFor(context, match, options);
+}
+
+export function wikiCompletion(
+  getDeps: () => WikiCompletionDeps,
+) {
+  return autocompletion({
+    override: [(context) => wikiCompletionSource(context, getDeps())],
+  });
 }

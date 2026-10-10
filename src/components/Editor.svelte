@@ -85,6 +85,23 @@
     }
   }
 
+  /** Read a note's headings, caching them for `[[note#heading]]`. */
+  async function resolveHeadings(path: string): Promise<string[]> {
+    const cached = ui.noteHeadings[path];
+    if (cached) return cached;
+    const snapshot = await api.readNote(path);
+    const headings = parseHeadings(snapshot.content);
+    ui.noteHeadings = { ...ui.noteHeadings, [path]: headings };
+    return headings;
+  }
+
+  /** Create an empty note in the current note's folder (dropdown fallback). */
+  async function createLinkNote(name: string): Promise<void> {
+    const folder = (doc.selected ?? "").split("/").slice(0, -1).join("/");
+    const relative = folder ? `${folder}/${name}` : name;
+    await api.createNote(relative);
+  }
+
   /** Ask for a destination, then export the note's current text. */
   async function exportAs(format: api.ExportFormat) {
     const target = view;
@@ -246,6 +263,8 @@
           noteHeadings: ui.noteHeadings,
           assetBase: ui.root ? `${ui.root}/notes` : "",
           onFollow: followLink,
+          onResolveHeadings: resolveHeadings,
+          onCreateLinkNote: createLinkNote,
           onDirty: (path: string, dirty: boolean) => {
             if (shouldApplySave(doc.selected, path)) doc.dirty = dirty;
           },

@@ -87,6 +87,10 @@ export interface EditorParams {
   onImage?: () => void;
   /** Follow a `[[...]]` link (Ctrl/Cmd+click). */
   onFollow?: (target: WikiTarget) => void;
+  /** Resolve a note's headings, for the `[[note#heading]]` dropdown. */
+  onResolveHeadings?: (path: string) => Promise<string[]>;
+  /** Create an empty note in the current note's folder (dropdown fallback). */
+  onCreateLinkNote?: (name: string) => Promise<void>;
   /** Note paths for resolving `[[note]]` links. */
   notePaths: Set<string>;
   /** Note → headings, for resolving `[[note#heading]]` links. */
@@ -253,7 +257,10 @@ export const codemirror: Action<HTMLElement, EditorParams> = (node, params) => {
         dictionaryHover(),
         wikiLinks(() => current.onFollow),
         wikiLinkHover(),
-        wikiCompletion(),
+        wikiCompletion(() => ({
+          getHeadings: current.onResolveHeadings,
+          createNote: current.onCreateLinkNote,
+        })),
         search({ top: true }),
         highlightSelectionMatches(),
         keymapCompartment.of(editorKeymaps(params.keybinds)),

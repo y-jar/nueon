@@ -94,6 +94,63 @@
   border-radius: 4px;
 }
 
+/* [[...]] completion dropdown (CodeMirror autocomplete). */
+.cm-tooltip.cm-tooltip-autocomplete {
+  min-width: 260px;
+  max-width: 520px;
+  z-index: 3000;
+  font-size: 13px;
+}
+
+.cm-tooltip-autocomplete ul li {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 2px 8px;
+}
+
+.cm-tooltip-autocomplete .cm-completionLabel {
+  color: var(--text);
+}
+
+.cm-tooltip-autocomplete .cm-completionDetail {
+  color: var(--muted);
+  margin-left: auto;
+  font-size: 12px;
+}
+
+.cm-tooltip-autocomplete ul li[aria-selected] {
+  background: var(--accent);
+}
+
+.cm-tooltip-autocomplete ul li[aria-selected] .cm-completionLabel,
+.cm-tooltip-autocomplete ul li[aria-selected] .cm-completionDetail {
+  color: var(--panel);
+}
+
+.cm-completionIcon-word,
+.cm-completionIcon-note,
+.cm-completionIcon-heading {
+  background: none;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  color: var(--muted);
+}
+
+.cm-completionIcon-word::before {
+  content: "w";
+  color: var(--accent);
+}
+
+.cm-completionIcon-note::before {
+  content: "n";
+}
+
+.cm-completionIcon-heading::before {
+  content: "#";
+}
+
 .cm-dict-tooltip {
   padding: 6px 8px;
   max-width: 360px;
