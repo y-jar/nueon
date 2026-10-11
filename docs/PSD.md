@@ -33,6 +33,9 @@ layer (`src-tauri/`), and the Svelte 5 frontend (`src/`). See `docs/ARCHITECTURE
 - **Data.** `dictionary/<table>`, `config/<name>`, `notes/**`. A `config.toml`
   registry (outside the workspace) remembers workspaces.
 - **Invariants.** All writes are atomic; paths never escape the workspace root.
+- **Lenient config.** A missing or unparseable `config/<name>` falls back to its
+  default and surfaces a banner warning; it never prevents the workspace from
+  opening.
 - **Where.** `crates/nueon-core/src/workspace/storage.rs`, `src/lib/data.svelte.ts`.
 - **Proof.** cargo `storage`/`workspace` tests; probe 32 (setup wizard).
 

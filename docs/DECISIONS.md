@@ -36,6 +36,14 @@ The choices that are expensive to reverse or easy to forget, and why.
 - **Dynamic schema**: only `wordname` is required; every other field is a
   user-defined tag with a type. Tags are scoped to their table.
 
+## Robustness
+
+- **Config files load leniently.** A missing or unparseable `config/<name>`
+  falls back to its default and is reported in the quarantine banner instead of
+  refusing to open the workspace. Version skew (an old build reading a newer
+  config) or a hand-edit typo must never lock the user out of their notes and
+  dictionary — the same guarantee dictionary files already get.
+
 ## Git
 
 - **The system `git` CLI, never a library.** We shell out for status/log/diff/

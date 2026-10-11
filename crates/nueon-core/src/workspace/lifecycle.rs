@@ -1,6 +1,32 @@
 //! Workspace lifecycle: create, load, reload, migrate, directories and git.
 
+use std::path::Path;
+
+use serde::de::DeserializeOwned;
+
 use super::*;
+
+/// Load a config file, falling back to its default when it is missing or cannot
+/// be read or parsed, recording the failure as a warning instead of failing the
+/// whole workspace load. A config file is never a reason to refuse opening: a
+/// version skew or a hand-edit typo must not lock the user out.
+fn load_config<T: DeserializeOwned + Default>(
+    path: &Path,
+    label: &str,
+    warnings: &mut Vec<QuarantineWarning>,
+) -> T {
+    match storage::load_json::<T>(path) {
+        Ok(Some(value)) => value,
+        Ok(None) => T::default(),
+        Err(err) => {
+            warnings.push(QuarantineWarning {
+                file_name: label.to_string(),
+                reason: err.to_string(),
+            });
+            T::default()
+        }
+    }
+}
 
 impl Workspace {
     /// Create an empty workspace, creating the directory layout on disk.
@@ -63,22 +89,41 @@ impl Workspace {
         let notes = storage::scan_notes(&root_path.join(NOTES_DIR))?;
 
         let config_dir = root_path.join(CONFIG_DIR);
-        let language =
-            storage::load_json(&config_dir.join(storage::LANGUAGE_FILE))?.unwrap_or_default();
-        let grammar =
-            storage::load_json(&config_dir.join(storage::GRAMMAR_FILE))?.unwrap_or_default();
-        let translation =
-            storage::load_json(&config_dir.join(storage::TRANSLATION_FILE))?.unwrap_or_default();
-        let phonology =
-            storage::load_json(&config_dir.join(storage::PHONOLOGY_FILE))?.unwrap_or_default();
-        let settings: WorkspaceSettings =
-            storage::load_json(&config_dir.join(storage::SETTINGS_FILE))?.unwrap_or_default();
+        let mut config_warnings = Vec::new();
+        let language = load_config(
+            &config_dir.join(storage::LANGUAGE_FILE),
+            "config/language",
+            &mut config_warnings,
+        );
+        let grammar = load_config(
+            &config_dir.join(storage::GRAMMAR_FILE),
+            "config/grammar",
+            &mut config_warnings,
+        );
+        let translation = load_config(
+            &config_dir.join(storage::TRANSLATION_FILE),
+            "config/translation",
+            &mut config_warnings,
+        );
+        let phonology = load_config(
+            &config_dir.join(storage::PHONOLOGY_FILE),
+            "config/phonology",
+            &mut config_warnings,
+        );
+        let settings: WorkspaceSettings = load_config(
+            &config_dir.join(storage::SETTINGS_FILE),
+            "config/settings",
+            &mut config_warnings,
+        );
 
         let auto = AutoCheckin::new(
             settings.auto_checkin,
             Duration::from_secs(settings.auto_checkin_secs),
         );
         let vcs = GitStatus::detect(&root_path);
+
+        let mut quarantine = scan.warnings;
+        quarantine.extend(config_warnings);
 
         let mut workspace = Self {
             root_path,
@@ -91,7 +136,7 @@ impl Workspace {
             settings,
             vcs,
             table_files: scan.files,
-            quarantine: scan.warnings,
+            quarantine,
             auto,
             history: History::new(),
         };
@@ -117,16 +162,35 @@ impl Workspace {
         }
         let notes = storage::scan_notes(&self.notes_dir())?;
         let config_dir = self.config_dir();
-        let language =
-            storage::load_json(&config_dir.join(storage::LANGUAGE_FILE))?.unwrap_or_default();
-        let grammar =
-            storage::load_json(&config_dir.join(storage::GRAMMAR_FILE))?.unwrap_or_default();
-        let translation =
-            storage::load_json(&config_dir.join(storage::TRANSLATION_FILE))?.unwrap_or_default();
-        let phonology =
-            storage::load_json(&config_dir.join(storage::PHONOLOGY_FILE))?.unwrap_or_default();
-        let settings =
-            storage::load_json(&config_dir.join(storage::SETTINGS_FILE))?.unwrap_or_default();
+        let mut config_warnings = Vec::new();
+        let language = load_config(
+            &config_dir.join(storage::LANGUAGE_FILE),
+            "config/language",
+            &mut config_warnings,
+        );
+        let grammar = load_config(
+            &config_dir.join(storage::GRAMMAR_FILE),
+            "config/grammar",
+            &mut config_warnings,
+        );
+        let translation = load_config(
+            &config_dir.join(storage::TRANSLATION_FILE),
+            "config/translation",
+            &mut config_warnings,
+        );
+        let phonology = load_config(
+            &config_dir.join(storage::PHONOLOGY_FILE),
+            "config/phonology",
+            &mut config_warnings,
+        );
+        let settings = load_config(
+            &config_dir.join(storage::SETTINGS_FILE),
+            "config/settings",
+            &mut config_warnings,
+        );
+
+        let mut quarantine = scan.warnings;
+        quarantine.extend(config_warnings);
 
         self.dictionary = dictionary;
         self.notes = notes;
@@ -136,7 +200,7 @@ impl Workspace {
         self.phonology = phonology;
         self.settings = settings;
         self.table_files = scan.files;
-        self.quarantine = scan.warnings;
+        self.quarantine = quarantine;
         self.history = History::new();
         Ok(())
     }

@@ -141,7 +141,7 @@
     "closePane": "Close pane"
   },
   "quarantine": {
-    "heading": "{count} file(s) in dictionary/ could not be loaded",
+    "heading": "{count} file(s) could not be loaded",
     "dismiss": "Dismiss"
   },
   "trash": {

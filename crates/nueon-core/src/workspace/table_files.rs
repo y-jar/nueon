@@ -16,11 +16,14 @@ use sha2::{Digest, Sha256};
 use super::storage::{io_err, read_json, write_json, StorageError};
 use crate::model::WordTable;
 
-/// A file in `dictionary/` that exists but could not be loaded as a table.
+/// A file that exists but could not be loaded — either a `dictionary/` table
+/// file or a `config/` file.
 ///
-/// It is never moved, renamed or deleted by the app: it is left exactly
-/// where the user (or a crash) left it, reported so they can investigate,
-/// and its name is reserved so a new table can never be resolved onto it.
+/// It is never moved, renamed or deleted by the app: it is left exactly where
+/// the user (or a crash) left it, reported so they can investigate. A
+/// dictionary file's name is additionally reserved so a new table can never be
+/// resolved onto it; a config file simply falls back to its default so the
+/// workspace still opens.
 #[derive(Debug, Clone, Serialize)]
 pub struct QuarantineWarning {
     pub file_name: String,

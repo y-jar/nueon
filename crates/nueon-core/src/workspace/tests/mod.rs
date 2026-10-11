@@ -54,6 +54,32 @@ fn workspace_round_trips() {
 }
 
 #[test]
+fn a_malformed_config_defaults_and_warns_instead_of_failing_the_open() {
+    let dir = tempfile::tempdir().unwrap();
+    let mut ws = Workspace::new(dir.path()).unwrap();
+    ws.create_table("verbs").unwrap();
+    // Corrupt the grammar config after creation.
+    std::fs::write(dir.path().join("config").join("grammar"), "{ not json").unwrap();
+
+    let reloaded = Workspace::load(dir.path()).unwrap();
+    // The workspace still opens, the table is intact, and grammar falls back.
+    assert!(reloaded.dictionary.table("verbs").is_some());
+    assert!(reloaded.grammar.rules.is_empty());
+    assert!(reloaded
+        .quarantine
+        .iter()
+        .any(|w| w.file_name == "config/grammar"));
+
+    // Reload tolerates it too.
+    let mut again = Workspace::load(dir.path()).unwrap();
+    again.reload_disk_state().unwrap();
+    assert!(again
+        .quarantine
+        .iter()
+        .any(|w| w.file_name == "config/grammar"));
+}
+
+#[test]
 fn sparse_tag_application_writes_only_that_word() {
     let dir = tempfile::tempdir().unwrap();
     let mut ws = Workspace::new(dir.path()).unwrap();
@@ -587,17 +613,15 @@ fn failed_reload_leaves_memory_untouched() {
     ws.create_note("n").unwrap();
     ws.language.name = "In Memory".into();
 
-    // Disk now disagrees with memory everywhere, and one config file is
-    // unreadable, so the reload must fail without applying any of it.
-    let config = dir.path().join("config");
-    std::fs::write(config.join("language"), r#"{"name":"On Disk"}"#).unwrap();
-    std::fs::write(config.join("grammar"), "{ not json").unwrap();
-    std::fs::write(dir.path().join("notes/n.md"), "from disk").unwrap();
-    std::fs::write(dir.path().join("dictionary/extra"), r#"{"name":"extra"}"#).unwrap();
+    // Disk now disagrees with memory, and the notes/ path is no longer a
+    // directory, so the scan fails and the reload must fail without applying
+    // any of it.
+    std::fs::write(dir.path().join("config/language"), r#"{"name":"On Disk"}"#).unwrap();
+    std::fs::remove_dir_all(dir.path().join("notes")).unwrap();
+    std::fs::write(dir.path().join("notes"), "not a directory").unwrap();
 
     assert!(ws.reload_disk_state().is_err());
     assert_eq!(ws.language.name, "In Memory");
-    assert!(ws.dictionary.table("extra").is_none());
     assert!(ws.dictionary.table("verbs").is_some());
     assert!(ws.can_undo(), "history survives a failed reload");
 }
