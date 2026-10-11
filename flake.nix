@@ -123,7 +123,7 @@
         version = "26.10.11";
         src = pkgs.fetchurl {
           url = "https://github.com/y-jar/nueon/releases/download/v${finalAttrs.version}/nueon_${finalAttrs.version}_amd64.deb";
-          hash = "sha256-xTUqrchNreWcKDUepyExTprLrnW05RlInptCcKSwWOA=";
+          hash = "sha256-g0Qm/blprvvoYTajDdnuy3FFrcv5bVqTaofZAkvMVw0=";
         };
         nativeBuildInputs = with pkgs; [
           dpkg
