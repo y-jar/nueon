@@ -39,7 +39,9 @@
         pname = "nueon-frontend";
         version = "26.10.10";
         src = ./.;
-        npmDepsHash = "sha256-EasJiPYoBaz0bSz2E/rUYYS+KFzTqK1wyUoeG9lqBD0=";
+        # Node 22 to match the dev shell and CI (the nixpkgs default drifts).
+        nodejs = pkgs.nodejs_22;
+        npmDepsHash = "sha256-FW4IGDXPWilnFRjq8MXMM/v6vXT/I2B2wijTadSATSs=";
         npmBuildScript = "build";
         installPhase = ''
           runHook preInstall
