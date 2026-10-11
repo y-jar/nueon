@@ -13,6 +13,20 @@ The choices that are expensive to reverse or easy to forget, and why.
 - **Svelte 5 (runes)** for the frontend, with a single reactive `ui` store rather
   than many stores. See `STATE.md`.
 
+## Packaging
+
+- **Two Nix packages**: `default` (build from source) and `nueon-bin` (fetch the
+  published release `.deb`, `autoPatchelf` + `wrapGAppsHook3` it). `nueon-bin` is
+  the fast path; `default` is the dev/fallback path. Each release refreshes the
+  `.deb` hash in `flake.nix` (see `docs/RELEASING.md`).
+- **nixpkgs is pinned to a stable release** (`nixos-26.05`), not the floating
+  `"nixpkgs"` registry ref. The floating ref once resolved to an unstable rev
+  mid-glibc-bump and produced a mixed glibc-2.42/2.44 closure that broke the app
+  at runtime. The frontend also pins `nodejs_22` to match the dev shell and CI.
+- **Release builds run on Ubuntu 22.04 in CI** (single runner) for the widest
+  glibc baseline and no asset-name collision; the AppImage bundler needs an FHS
+  (`/bin/bash`) that NixOS doesn't provide, so it is built in CI, not locally.
+
 ## Data
 
 - **Plain extensionless JSON files** for tables and config, `.md` for notes. A

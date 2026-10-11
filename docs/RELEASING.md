@@ -49,6 +49,11 @@ attached.
 
 ### 4. Publish the draft
 
+> **Do not create the release by hand.** The workflow already creates a draft
+> release for the tag and uploads the packages to it. Creating your own release
+> for the same tag leaves a published-but-empty release while the real assets
+> sit in the hidden draft. Just publish the draft.
+
 In the browser: **Releases → the draft → Edit → Publish release**.
 
 Or with the `gh` CLI:
@@ -60,7 +65,7 @@ gh release edit v26.10.10 --draft=false
 The assets then appear on the public **Releases** page, which is where the
 README points users.
 
-### 5. Refresh the Nix `nueon-bin` hash (optional)
+### 5. Refresh the Nix `nueon-bin` hash (after publishing)
 
 `flake.nix`'s `nueon-bin` package fetches the published `.deb` and has a
 placeholder hash. After publishing, update it:

@@ -40,9 +40,9 @@ after a while, or before upgrading a dependency or releasing.
   and `scripts/check-version.sh` validates it in gates. The `0.1.0` placeholder
   is valid only until the first real bump.
 - The `.deb`/`.rpm`/AppImage are built by `npm run tauri build`; `nix build .#`
-  builds the source variant. `flake.nix`'s `nueon-bin` package points at a
-  GitHub release `.deb` with a placeholder hash until one is published (see
-  `README.md`).
+  builds the source variant. `flake.nix`'s `nueon-bin` package fetches the
+  published release `.deb` and patches it for Nix; after each release, refresh
+  its hash with `nix-prefetch-url` (see `docs/RELEASING.md`).
 - To build and collect a local release set, run `bundle` in the dev shell
   (`loom-bundle` / `scripts/bundle.sh [out-dir]`): it builds `.deb` and `.rpm`
   and copies each package **separately** into `~/downloads/nueon-<version>/`,
