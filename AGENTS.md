@@ -40,6 +40,7 @@ short on purpose and links to the detail.
   frontend state and on-disk formats.
 - `docs/DECISIONS.md`, `docs/MAINTENANCE.md`, `docs/UI-CONVENTIONS.md` — why,
   how to maintain, and UI contracts.
+- `docs/RELEASING.md` — the tag → CI → draft → publish release flow.
 - `README.md` — features, install, verification commands.
 
 ## Gates (run before every commit)

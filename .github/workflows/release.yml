@@ -1,25 +1,25 @@
+# Release
+#
+# Build the Linux bundles (AppImage, deb, rpm) and publish them to a GitHub
+# Release whenever a v* tag is pushed. The release is created as a draft;
+# publish it from the Releases page once the assets look right. See
+# docs/RELEASING.md for the full flow.
+#
+# A single ubuntu-22.04 runner is used so the artifacts carry the widest glibc
+# baseline (2.35) and there is no asset-name collision between jobs.
 name: Release
 
-# Build Linux bundles (AppImage, deb, rpm) on both LTS distros and publish
-# them to a GitHub Release whenever a v* tag is pushed.
 on:
   push:
     tags:
       - "v*"
-  workflow_dispatch:
 
 permissions:
   contents: write
 
 jobs:
   build:
-    strategy:
-      fail-fast: false
-      matrix:
-        os:
-          - ubuntu-22.04
-          - ubuntu-24.04
-    runs-on: ${{ matrix.os }}
+    runs-on: ubuntu-22.04
     steps:
       - uses: actions/checkout@v4
         with:
@@ -64,7 +64,14 @@ jobs:
         with:
           tagName: ${{ github.ref_name }}
           releaseName: "nueon ${{ github.ref_name }}"
-          releaseBody: "See the assets below for Linux packages (.AppImage, .deb, .rpm)."
+          releaseBody: |
+            Linux packages (.AppImage, .deb, .rpm).
+
+            Install a package, or run the portable AppImage:
+
+            - **Debian / Ubuntu** — `sudo apt install ./nueon_*.deb`
+            - **Fedora / openSUSE** — `sudo dnf install ./nueon-*.rpm`
+            - **Portable** — `chmod +x nueon_*.AppImage && ./nueon_*.AppImage`
           releaseDraft: true
           prerelease: false
           args: --bundles appimage,deb,rpm

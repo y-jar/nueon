@@ -96,7 +96,7 @@ nix-prefetch-url --type sha256 https://github.com/y-jar/nueon/releases/download/
 `.deb`, `.rpm` and `.AppImage` bundles are published on the
 [Releases](https://github.com/y-jar/nueon/releases) page for each `v*` tag.
 Install the `.deb` or `.rpm` with your package manager, or mark the AppImage
-executable and run it.
+executable and run it. (See `docs/RELEASING.md` for how releases are cut.)
 
 ### From source
 
