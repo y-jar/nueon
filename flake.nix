@@ -1,7 +1,7 @@
 {
   description = "nueon — conlang editor and creation app";
 
-  inputs.nixpkgs.url = "nixpkgs";
+  inputs.nixpkgs.url = "github:nixos/nixpkgs/nixos-26.05";
 
   outputs =
     { self, nixpkgs }:
@@ -121,10 +121,11 @@
         version = "26.10.10";
         src = pkgs.fetchurl {
           url = "https://github.com/y-jar/nueon/releases/download/v${finalAttrs.version}/nueon_${finalAttrs.version}_amd64.deb";
-          hash = pkgs.lib.fakeHash;
+          hash = "sha256-xTUqrchNreWcKDUepyExTprLrnW05RlInptCcKSwWOA=";
         };
         nativeBuildInputs = with pkgs; [
           dpkg
+          wrapGAppsHook3
           autoPatchelfHook
           makeWrapper
         ];
