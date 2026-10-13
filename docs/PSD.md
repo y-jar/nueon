@@ -163,10 +163,12 @@ layer (`src-tauri/`), and the Svelte 5 frontend (`src/`). See `docs/ARCHITECTURE
 - **Behaviour.** A tab for designing the conlang's writing system: draw glyph
   vectors in a vector editor, map them to the phonology's phonemes, preview
   words in the script (in the translator and glossing views), and export a font
-  (`.ttf`/`.otf`) plus a JSON profile. Includes a glyph grid, a "Lists of
-  Sounds" row grouped by phonology category, and a pathfinder.
+  (`.ttf`/`.otf`), SVG, plus a JSON profile. Includes a tree navigator + glyph
+  grid, a radical palette, a CJK-style composition matrix, and a pathfinder.
+  Glyphs may reference other glyphs as component instances (radicals), kept
+  acyclic and flattened only for pathfinder/CFF.
 - **Data.** `config/writing` (the writing config: direction, metrics, glyph
-  index, orthography rules, GSUB feature text) and `writing/glyphs/<id>.json`
-  (one glyph outline per file). Joins `Profile` v3, which carries the config but
-  not the outline vectors.
+  index and grouping, orthography rules, GSUB feature text) and
+  `writing/glyphs/<id>.json` (one glyph outline per file). Joins `Profile` v3,
+  which carries the config but not the outline vectors.
 - **Where.** `docs/WRITING-SYSTEM.md` (design proposal). Not implemented.

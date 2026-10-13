@@ -26,7 +26,7 @@ strings through ordered rules, previewable in the translator, and exportable as
 a usable font. It is the missing link between the phonology tab (sounds) and the
 translation tab (word strings).
 
-## The twelve decisions
+## The thirteen decisions
 
 ### 1. Storage: per-glyph files plus an index
 
@@ -75,12 +75,15 @@ translation tab (word strings).
 - **Why cubic.** CFF/OpenType and most editors are cubic-native; TrueType's
   quadratic glyf is produced at export time by a cubic-to-quadratic conversion,
   so storing cubic loses nothing and avoids committing to one output flavour.
+- **Outlines only.** Strokes are not stored: the calligraphic brush and pen
+  expand a stroke to closed contours immediately, so the outline model stays
+  contour-only and pathfinder/export never reason about centreline strokes.
 
 ### 4. Writing direction and positional forms
 
 - **Recommendation.** A writing-system-level direction of `ltr`, `rtl`, or
   `ttb`. Positional forms (isolated/initial/medial/final for joining scripts)
-  are **deferred past v1** and only designed (see stage 8).
+  are **deferred past v1** and only designed (see stage 9).
 - **Why defer.** Direction is one field and cheap; positional forms require
   contextual substitution rules, a per-glyph form set, and joining behaviour in
   the preview — a large surface that only some scripts need. Shipping
@@ -98,6 +101,10 @@ translation tab (word strings).
 - **Why.** PUA is the only portable place for invented glyphs that survive font
   install. The romanisation→glyph GSUB is what makes the exported font actually
   *usable* — otherwise users would have to type untypeable PUA code points.
+- **SVG export.** Glyphs and the whole set can also be exported as SVG — one
+  `<path>` per glyph, or a `<symbol>` sprite sheet — reusing the preview's
+  symbol table (decision 8), so a writing system can be shared or embedded on
+  the web without a font install.
 
 ### 6. Mapping and rules: glyph ↔ phoneme, many-to-many, ligatures
 
@@ -180,7 +187,7 @@ publish no `rust_version` field. Our toolchain is **Rust 1.95**.
   `cubics_to_quadratics` covers the TrueType `glyf` path, while CFF output
   keeps cubics natively. Recommend **TTF (quadratic `glyf`) as the default**
   (broadest compatibility, simplest validation) and CFF/OTF as a later option.
-- **Prototype spike (stage 6, before committing to it).** The riskiest crate is
+- **Prototype spike (stage 7, before committing to it).** The riskiest crate is
   `flo_curves` booleans on degenerate contours (self-intersection, near-zero
   area, coincident nodes). The spike is: feed two overlapping cubic contours
   through union/intersect and read the result back with `read-fonts`-style
@@ -213,6 +220,28 @@ publish no `rust_version` field. Our toolchain is **Rust 1.95**.
   symbol-keyed phoneme mapping: silent drops orphan data and make rules
   irreproducible. Keeping the reference and marking it broken is honest and
   reversible.
+
+### 13. Components (radicals)
+
+- **Recommendation.** A glyph may reference other glyphs as **component
+  instances**: a `ComponentInstance` holding a target glyph id and a transform
+  (translate, scale, rotate, mirror). Components are authored in the Radical
+  Palette and assembled into glyphs through the Composition Matrix (CJK-style
+  composition). The component graph must stay **acyclic** — a glyph cannot
+  directly or indirectly contain itself — enforced on save.
+- **Flatten when needed.** Components stay as references (like TrueType `glyf`
+  composites) while editing and exporting, keeping the font small and the
+  glyphs faithful. They are expanded to contours only when an operation needs
+  real geometry: pathfinder booleans, bounds/metric derivation, and any CFF
+  (non-composite) output path.
+- **Dependency safety.** Deleting or renaming a component glyph flags every
+  glyph that instanced it as broken, exactly as decision 12 does for rule/word
+  dependents — never silently dropped.
+- **Why.** Constructed scripts are built from a small set of recurring
+  strokes/radicals; without references, every radical edit must be manually
+  propagated to each glyph that uses it, and the font stores duplicate
+  outlines. Acyclic validation mirrors the dictionary's parent-graph discipline
+  and prevents infinite expansion on export.
 
 ## Type sketches
 
@@ -259,11 +288,31 @@ pub struct Contour {
     pub fill_rule: FillRule,
 }
 
+/// A reusable glyph referenced inside another glyph (TrueType-composite-like).
+#[derive(Debug, Clone, Copy, PartialEq, Serialize, Deserialize)]
+pub struct ComponentInstance {
+    /// Glyph id of the component.
+    pub glyph: String,
+    pub dx: f64,
+    pub dy: f64,
+    pub scale_x: f64,
+    pub scale_y: f64,
+    pub rotation: f64,
+}
+
+/// One element of a glyph: a contour or a component instance.
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[serde(tag = "kind", rename_all = "snake_case")]
+pub enum OutlineElement {
+    Contour(Contour),
+    Component(ComponentInstance),
+}
+
 /// A glyph's vector data, stored one-per-file in `writing/glyphs/<id>.json`.
 #[derive(Debug, Clone, Default, PartialEq, Serialize, Deserialize)]
 #[serde(default)]
 pub struct GlyphOutline {
-    pub contours: Vec<Contour>,
+    pub elements: Vec<OutlineElement>,
     /// Explicit advance width in font units; None derives from bounds.
     #[serde(skip_serializing_if = "Option::is_none")]
     pub advance: Option<f64>,
@@ -289,6 +338,9 @@ pub struct GlyphMeta {
     /// Display order in the glyph grid.
     #[serde(default)]
     pub order: u32,
+    /// Navigator group: a phonology category, a user folder, or `radicals`.
+    #[serde(default)]
+    pub group: String,
 }
 
 /// An ordered orthography rule: a grapheme/phoneme sequence becomes a glyph
@@ -359,8 +411,21 @@ export interface Node {
 
 export interface Contour { nodes: Node[]; closed: boolean; fillRule: FillRule; }
 
+export interface ComponentInstance {
+  glyph: string;
+  dx: number;
+  dy: number;
+  scaleX: number;
+  scaleY: number;
+  rotation: number;
+}
+
+export type OutlineElement =
+  | ({ kind: "contour" } & Contour)
+  | { kind: "component"; component: ComponentInstance };
+
 export interface GlyphOutline {
-  contours: Contour[];
+  elements: OutlineElement[];
   advance?: number | null;
   lsb?: number | null;
   rsb?: number | null;
@@ -372,6 +437,7 @@ export interface GlyphMeta {
   codepoint: number;
   phonemes: string[];
   order: number;
+  group: string;
 }
 
 export interface OrthographyRule {
@@ -428,19 +494,22 @@ in a profile is deferred and listed as a question below.
 ## Component tree
 
 ```
-WritingSystemView.svelte                (tab body; owns glyph grid + editor route)
-├── WritingHeader.svelte                Add / Export, multi-select mode + count
-├── SoundListRow.svelte                 "Lists of Sounds" grouped by category
-├── GlyphGrid.svelte                    wrapping grid of tiles
-│     └── GlyphTile.svelte              preview, left-click open, right-click menu
-└── VectorEditor.svelte                 (opened from a glyph tile)
-      ├── EditorMenuBar.svelte          File / Edit / View / Tools / Metrics / Glyphs / Export
-      ├── EditorToolbar.svelte          tool picker, zoom, snap toggle, export
-      ├── Toolbox.svelte                pen/direct-select/nodes/shapes/… + pathfinder
-      ├── GlyphCanvas.svelte            zoom/pan/grid-snap/metric guides, tool input
-      ├── GlyphMetricsPanel.svelte      name, phoneme, codepoint, LSB/RSB, advance
-      ├── GlyphMatrixDrawer.svelte      batch glyph matrix (drawer)
-      └── EditorStatusBar.svelte        active glyph, node count, canvas, snap
+WritingSystemView.svelte                 (tab body; owns config + open glyph id)
+├── GlyphNavigatorTree.svelte            left: glyph/radical tree grouped by category
+│     └── RadicalPalette.svelte          reusable components, drag into canvas
+├── WritingHeader.svelte                 Add / Export, multi-select mode + count
+├── GlyphGrid.svelte                     grid of tiles for the selected group
+│     └── GlyphTile.svelte               preview, left-click open, right-click menu
+├── CompositionMatrix.svelte             assemble glyphs from radicals (CJK-style)
+└── VectorEditor.svelte                  (opened from a tile / matrix)
+      ├── EditorMenuBar.svelte           File / Edit / View / Tools / Metrics / Glyphs / Export
+      ├── EditorToolbar.svelte           tool picker, zoom, snap toggle
+      ├── Toolbox.svelte                 pen/select/nodes/shapes/brush/transforms
+      ├── GlyphCanvas.svelte             zoom/pan/grid-snap/metric guides, tool input
+      ├── GlyphInspector.svelte          name, id, path/nodes/segments, phoneme, codepoint
+      ├── PathfinderPanel.svelte         merge/minus/exclude/intersect
+      ├── ExportHub.svelte               format (SVG/font), target, scale, compile
+      └── EditorStatusBar.svelte         active glyph, counts, canvas, snap
 ```
 
 **State ownership.** The `WritingSystemView` owns the `WritingConfig` and the
@@ -451,29 +520,35 @@ Svelte state — components call into it and render its results. On a finished
 gesture, the editor commits the glyph through one IPC call; there is no IPC on
 pointer move.
 
-**Glyph grid.** `GlyphGrid` reads `config.writing.glyphs` (ordered by `order`)
-and renders one `GlyphTile` per glyph as a `<symbol>`/`<use>` preview that wraps
-in a grid. Left-click opens the glyph in the editor; right-click opens the
-`glyph` context-menu kind (Edit, Delete, Reassign Phoneme, plus Duplicate, Set
-Metrics, Clear Codepoint — proposed additions). Multi-select toggles a
-"count selected" mode in `WritingHeader` with batch actions: Edit selected,
-Export selected, Reassign, Delete, Set metrics.
+**Navigator and glyph grid.** `GlyphNavigatorTree` groups glyphs by category
+(phonology-derived consonant/vowel groups, user folders, and the `radicals`
+group) from each glyph's `group` field; the tree marks each phoneme as "has
+glyph" or "missing" with a quick-add, like the earlier Lists-of-Sounds row.
+`GlyphGrid` renders the selected group's glyphs (ordered by `order`) as
+`<symbol>`/`<use>` tiles that wrap in a grid. Left-click opens a glyph in the
+editor; right-click opens the `glyph` context-menu kind (Edit, Delete, Reassign
+Phoneme, plus Duplicate, Set Metrics, Clear Codepoint — proposed additions).
+Multi-select toggles a "count selected" mode in `WritingHeader` with batch
+actions: Edit selected, Export selected, Reassign, Delete, Set metrics.
 
-**"Lists of Sounds" row.** `SoundListRow` groups the phonology inventory's
-phonemes by category (consonants, vowels, and finer groups the inventory
-supports) and marks each as "has glyph" or "missing", with a quick-add that
-creates a blank glyph pre-mapped to that phoneme. It is fed by the phonology
-inventory through the phoneme-id mapping.
+**Radicals and the composition matrix.** `RadicalPalette` lists the glyphs
+marked as components; dragging one into `GlyphCanvas` inserts a
+`ComponentInstance` into the open glyph. `CompositionMatrix` assembles a new
+glyph CJK-style from radicals — pick a component per cell to build up a glyph
+and save it. Components are references (decision 13): editing a radical updates
+every glyph that instances it, until the user explicitly expands an instance to
+contours.
 
 **Vector editor.** `GlyphCanvas` renders the outline as SVG paths in the view
 with zoom, pan, grid snapping and metric guide lines (baseline, x-height,
 cap-height, ascender, descender). `Toolbox` holds the tools: pen with Bezier
 handles, direct select, node modifiers, shapes (rectangle, ellipse, polygon,
 star, line), calligraphic brush, mirror/flip, eraser/knife, transforms (scale,
-rotate, shear), align/distribute, layer order; pathfinder (unite, minus front,
-intersect, exclude, shape builder). `GlyphMetricsPanel` edits name, mapped
-phoneme, codepoint, LSB, RSB, advance width. `GlyphMatrixDrawer` is the batch
-glyph matrix.
+rotate, shear), align/distribute, layer order. `PathfinderPanel` holds the
+booleans (merge, minus, exclude, intersect). `GlyphInspector` edits name, id,
+mapped phoneme, codepoint, and reports path/nodes/segments counts, LSB, RSB,
+advance width. `ExportHub` sets format (SVG/font), target, scale (1000 upem),
+and compiles the font.
 
 ## IPC commands
 
@@ -493,10 +568,18 @@ surface, with typed wrappers in `src/lib/api.ts`:
   and glossing views).
 - `writing_export_font(path, format)` — compile TTF/OTF and read it back for
   validation before returning.
+- `writing_export_svg(path, scope)` — export glyphs as SVG (one `<path>` per
+  glyph, or a `<symbol>` sprite sheet), for sharing and web embedding.
+- `writing_flatten(glyph_id)` — expand every component instance in a glyph to
+  raw contours, used before pathfinder/CFF and by the editor's "expand" action.
 - `writing_export_profile(path)` — the writing-system JSON profile.
 - `writing_path_union` / `writing_path_intersect` / `writing_path_difference` /
   `writing_path_exclude` / `writing_path_combine` — boolean ops in Rust (stage
-  6).
+  7). These (and `writing_flatten`) expand components first.
+
+Acyclic-component validation runs inside `writing_set` / `writing_glyph_set`: a
+save that would close a reference cycle is rejected with an error naming the
+cycle, rather than written.
 
 ## `data-changed` scopes
 
@@ -515,7 +598,7 @@ scope table in `docs/IPC.md` gains a `writing` row when the commands land
 
 - **Boolean operations on cubics** (decision 10) are the riskiest technical
   piece: numerical instability on degenerate contours can corrupt an outline.
-  Mitigation: the stage-6 prototype spike, winding normalisation after every op,
+  Mitigation: the stage-7 prototype spike, winding normalisation after every op,
   and read-back validation with `read-fonts`.
 - **Codepoint collisions** with other fonts or the user's own glyphs. Mitigation:
   automatic stable allocation with checks, user override, and a warning on
@@ -529,56 +612,97 @@ scope table in `docs/IPC.md` gains a `writing` row when the commands land
   Mitigation: the staged plan below ships the smallest useful slice first; each
   stage is independently shippable.
 
+## Testing & validation via probes
+
+Geometry, component graphs, and font compilation cannot be trusted to visual
+inspection alone. Alongside the usual cargo and node tests, the writing system
+gets a set of deterministic **structural probes** — the existing WebDriver probe
+harness (`probes/probe.mjs`) for the UI paths, plus Rust integration tests for
+the data-integrity checks that have no UI. Four probe categories:
+
+- **Acyclic component probes.** Inject a reference cycle (glyph A → B → A) and
+  assert that the save is rejected instantly with an error naming the cycle —
+  the same save path `writing_set`/`writing_glyph_set` uses. A cargo test,
+  because no UI is involved.
+- **SVG serialization probes.** Run headless serialization over `OutlineElement`
+  vectors containing mixed contours and component instances, and assert the
+  `<symbol>` sprite sheet and standalone `<path>` output parse without malformed
+  or `NaN` coordinates. Cargo test (serialization) plus a probe that loads the
+  exported SVG.
+- **Flattening / pathfinder probes.** Assert that a component instance expands
+  into raw contours at the correct translation, scale, and rotation before
+  `flo_curves` booleans run, and that the boolean result keeps cubic curves and
+  normalised winding. Cargo test around `writing_flatten` and the `writing_path_*`
+  commands.
+- **State-consistency (IPC) probes.** Rust integration tests verify that the
+  frontend store action → Tauri command dispatch round-trips glyph metrics
+  (advance, lsb, rsb) without dropping or reordering them, and that the
+  `data-changed` `writing` scope fires on every mutation so the frontend never
+  goes stale.
+
 ## Suggested stage plan, smallest first
 
 Each stage is independently shippable and verifiable. Tests are cargo tests
 (`crates/**`), node tests (`src/lib/**/*.test.ts`), and probes
-(`probes/probe.mjs`).
+(`probes/probe.mjs`); the four structural probe categories above are cited
+inline where they apply.
 
-1. **Data model, storage and profile.** `WritingConfig`, `GlyphOutline`, the
-   `writing/` directory, `config/writing`, `Phoneme.id` backfill, and `Profile`
-   v3 import/export.
+1. **Data model, storage, profile + component structures + SVG export pipeline.**
+   `WritingConfig`, `GlyphOutline` with `OutlineElement`/`ComponentInstance` and
+   acyclic validation, the `writing/` directory, `config/writing`,
+   `Phoneme.id` backfill, and `Profile` v3 import/export.
    - *Tests:* cargo round-trips for every type; profile v1/v2/v3 import and
      backfill; phoneme id backfill on load; per-glyph file atomic write.
-   - *Probes:* open a workspace with a hand-edited `config/writing`, see the
-     default config and a quarantine banner on a broken file.
-2. **Glyph grid, phoneme mapping, context menu.** The `WritingSystemView` tab
-   (singleton, reveal-not-duplicate), `GlyphGrid`, `SoundListRow`, and the
-   `glyph` context-menu kind with the full dismissal contract.
+   - *Probes:* acyclic-component probe; open a workspace with a hand-edited
+     `config/writing`, see the default config and a quarantine banner on a
+     broken file.
+2. **Tree navigator + glyph grid integration.** The `WritingSystemView` tab
+   (singleton, reveal-not-duplicate), `GlyphNavigatorTree`, `GlyphGrid`,
+   phoneme mapping, and the `glyph` context-menu kind with the full dismissal
+   contract.
    - *Tests:* node tests for `isSingletonTab("writing")`, duplicate-tab reveal,
-     glyph ordering; probe for Escape/outside-click/arrow dismissal of the glyph
-     menu.
-   - *Probes:* open the tab twice and reveal, right-click a tile and dismiss.
-3. **Minimal vector editor.** Pen, direct select, node edit, rectangle/ellipse,
+     grouping/ordering; probe for Escape/outside-click/arrow dismissal of the
+     glyph menu.
+   - *Probes:* open the tab twice and reveal, right-click a tile and dismiss;
+     state-consistency probe that opening the tab dispatches `writing_get`.
+3. **Radical palette, composition matrix, pathfinder panel (UI).** The three new
+   surfaces: component insert/instance/expand, CJK-style assembly, and the
+   persistent pathfinder panel wired to the stage-7 boolean commands.
+   - *Tests:* node tests for the composition-matrix assembly and component
+     insert producing the right `OutlineElement`; probe for drag-into-canvas
+     inserting a `ComponentInstance`.
+4. **Minimal vector editor.** Pen, direct select, node edit, rectangle/ellipse,
    metric guides, grid snap, and the separate undo stack.
    - *Tests:* node tests for the geometry/command layer (move node, add contour,
      undo/redo), cubic-vs-view y-flip, derived LSB/RSB from bounds.
    - *Probes:* draw a path, undo, snap to grid, verify metric guide SVG
      geometry.
-4. **Preview in the translator.** `writing_preview_word` through the rule
+5. **Preview in the translator.** `writing_preview_word` through the rule
    engine, wired into the translator and glossing views.
    - *Tests:* cargo tests for the orthography rule evaluator reusing the
      phonology tokenizer/matcher; node test for `<use>` glyph-sequence rendering.
    - *Probes:* a mapped word renders its glyph sequence; a missing glyph shows a
      placeholder.
-5. **Font export with validation.** `write-fonts` + `fea-rs` compile a TTF with
-   cmap/hmtx/GSUB; read it back with `read-fonts`/`skrifa` before returning.
+6. **Font + SVG export with validation.** `write-fonts` + `fea-rs` compile a TTF
+   with cmap/hmtx/GSUB (and composites); `writing_export_svg` emits the sprite
+   sheet; read the font back with `read-fonts`/`skrifa` before returning.
    - *Tests:* cargo tests parse the exported font and assert cmap entries,
-     advance widths and GSUB substitution; probe that the export button writes a
-     file and reports validation.
-6. **Pathfinder.** `flo_curves` booleans behind `writing_path_*` commands, with
-   the prototype spike run first.
-   - *Tests:* cargo tests union/intersect two cubics and assert the result keeps
-     curves and normalises winding.
-7. **Brush, transforms and batch tools.** Calligraphic brush, mirror/flip,
+     advance widths and GSUB substitution; SVG-serialization probe.
+   - *Probes:* the export button writes a file and reports validation;
+     state-consistency probe that metrics (advance/lsb/rsb) survive export.
+7. **Pathfinder booleans in Rust.** `flo_curves` behind `writing_path_*`, with
+   the prototype spike run first and `writing_flatten` expanding components.
+   - *Tests:* flattening/pathfinder probe — union/intersect two cubics and
+     assert the result keeps curves and normalises winding.
+8. **Brush, transforms and batch tools.** Calligraphic brush, mirror/flip,
    scale/rotate/shear, align/distribute, layer order, and the batch matrix
    drawer.
    - *Tests:* node tests for transform math and batch actions; probe for
      multi-select count and batch export.
-8. **Positional forms and substitution rules.** Contextual GSUB for joining
+9. **Positional forms and substitution rules.** Contextual GSUB for joining
    scripts, positional-form glyph sets, and their editor UI.
    - *Tests:* cargo tests for form selection by context; probe for a joining
-     script rendering the correct contextual form.
+   script rendering the correct contextual form.
 
 ## Questions to answer before code
 
@@ -591,14 +715,17 @@ Each stage is independently shippable and verifiable. Tests are cargo tests
 3. Does v1 need a romanisation-only preview toggle (phoneme symbols vs Latin
    romanisation rendered in the script), or is the romanisation always the
    preview input?
-4. Should positional forms (stage 8) ship for all joining scripts or only be
+4. Should positional forms (stage 9) ship for all joining scripts or only be
    opt-in per writing system?
 5. Is TTF (quadratic) the only v1 export, or should CFF/OTF be included from the
    start?
-6. How fine-grained should the phonology "finer groups" in the Lists-of-Sounds
-   row be (fricatives, stops, …), and should that grouping be user-defined or
-   derived from the inventory?
+6. How fine-grained should the navigator tree's phonology groups be (fricatives,
+   stops, …), and should that grouping be user-defined or derived from the
+   inventory?
 7. What is the exact set of batch actions for multi-select (the brief proposes
    edit/export/reassign/delete/set metrics — confirm or change)?
 8. Should the glyph context menu's extra items be Duplicate, Set Metrics, Clear
    Codepoint, or a different set?
+9. When is a component expanded to real contours — always at export, or keep
+   TrueType composites and flatten only for pathfinder/CFF?
+10. SVG export scope: a single glyph, the whole set as a sprite sheet, or both?
