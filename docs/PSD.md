@@ -202,7 +202,12 @@ layer (`src-tauri/`), and the Svelte 5 frontend (`src/`). See `docs/ARCHITECTURE
   but keeps the curve's shape, Ctrl+Delete removes it plainly. Arrow keys nudge
   1 unit (Shift 10), Tab/Shift+Tab step through nodes, a rubber band selects
   nodes, Ctrl constrains drags to an axis and handles to 15 degrees, Alt keeps
-  a handle's length, Space or middle-drag pans and Ctrl+wheel zooms; SVG export/import and multi-select batch actions
+  a handle's length, Space or middle-drag pans and Ctrl+wheel zooms. Component
+  instances are drawn on the canvas as tinted, dashed shapes with their
+  transform applied (`src/lib/writingComponents.ts`, mirroring the backend's
+  scale, rotate, translate order and surviving cycles and missing glyphs);
+  Direct Select picks one, Delete removes it, and Edit/Tools > Expand component
+  (Ctrl+Shift+E) replaces it in place with editable contours; SVG export/import and multi-select batch actions
   (group, advance width, export, delete) are wired. Pathfinder booleans are in
   `crates/nueon-core/src/model/pathfinder.rs` (`flo_curves`, curve-preserving)
   and component flattening in `crates/nueon-core/src/workspace/writing.rs`.
@@ -224,7 +229,8 @@ layer (`src-tauri/`), and the Svelte 5 frontend (`src/`). See `docs/ARCHITECTURE
   `writing.test.ts` (glyph grouping, sound coverage, tool registry, guide
   rails, bounds, path data), `writingCommands.test.ts` (node/handle edits,
   shapes, transforms, align/distribute, layer order, brush), `history.test.ts`,
-  `writingMenus.test.ts`, `writingBatch.test.ts`, `writingSnap.test.ts` (snap
+  `writingMenus.test.ts`, `writingBatch.test.ts`, `writingComponents.test.ts` (transform order, handles, nested/cyclic
+  flattening, dependency list, expand in place), `writingSnap.test.ts` (snap
   priority and radius, weld candidates, angle/axis constraint) and the weld,
   join, break, shape-preserving delete, nudge and box-select cases in
   `writingCommands.test.ts`.

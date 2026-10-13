@@ -54,6 +54,7 @@ import {
   type History,
 } from "./history";
 import { componentElement, type ToolId } from "./writing";
+import { componentIds, expandComponent, flattenElements } from "./writingComponents";
 import {
   constrainAngle,
   constrainAxis,
@@ -88,6 +89,10 @@ export const editor = $state({
   snapHit: null as SnapResult | null,
   /** The rubber-band rectangle in glyph space while dragging on empty canvas. */
   marquee: null as { a: Point; b: Point } | null,
+  /** Outlines of every glyph the open glyph references, for drawing component instances. */
+  library: {} as Record<string, api.GlyphOutline>,
+  /** The selected component instance (element index), if any. */
+  selectedComponent: null as number | null,
   /** Guide heights and advance, set by the canvas from the writing config. */
   guideHeights: [] as { y: number; label: string }[],
 });
@@ -126,6 +131,8 @@ export function openGlyph(id: string, meta: api.GlyphMeta): void {
   editor.status = "";
   editor.error = "";
   editor.selection = [];
+  editor.selectedComponent = null;
+  editor.library = {};
   editor.draft = null;
   editor.preview = null;
   drag = null;
@@ -141,6 +148,8 @@ export function closeGlyph(): void {
   editor.status = "";
   editor.error = "";
   editor.selection = [];
+  editor.selectedComponent = null;
+  editor.library = {};
   editor.draft = null;
   editor.preview = null;
   drag = null;
@@ -152,11 +161,76 @@ export async function loadOutline(id: string): Promise<void> {
   try {
     editor.outline = (await api.writingGlyphGet(id)) ?? emptyOutline();
     editor.error = "";
+    await refreshLibrary();
   } catch (e) {
     editor.error = String(e);
   } finally {
     editor.loading = false;
   }
+}
+
+/** Load the outlines of every glyph the open glyph references, transitively. */
+export async function refreshLibrary(): Promise<void> {
+  const outline = editor.outline;
+  if (!outline) return;
+  const library: Record<string, api.GlyphOutline> = {};
+  const lookup = (id: string) => library[id] ?? null;
+  for (let round = 0; round < 16; round++) {
+    const missing = componentIds(outline, lookup).filter((id) => !(id in library));
+    if (missing.length === 0) break;
+    await Promise.all(
+      missing.map(async (id) => {
+        try {
+          library[id] = (await api.writingGlyphGet(id)) ?? emptyOutline();
+        } catch {
+          library[id] = emptyOutline();
+        }
+      }),
+    );
+  }
+  if (editor.outline === outline) editor.library = library;
+}
+
+export function lookupGlyph(id: string): api.GlyphOutline | null {
+  return editor.library[id] ?? null;
+}
+
+/** Component instances flattened to contours for drawing. */
+export function componentContours(): { element: number; contours: api.GlyphContour[] }[] {
+  return editor.outline ? flattenElements(editor.outline, lookupGlyph) : [];
+}
+
+/** The topmost component instance whose flattened bounds contain the point. */
+function hitComponent(point: Point): number | null {
+  const found = componentContours().filter(({ contours }) =>
+    contours.some((c) => {
+      const xs = c.nodes.map((n) => n.x);
+      const ys = c.nodes.map((n) => n.y);
+      return (
+        xs.length > 0 &&
+        point.x >= Math.min(...xs) &&
+        point.x <= Math.max(...xs) &&
+        point.y >= Math.min(...ys) &&
+        point.y <= Math.max(...ys)
+      );
+    }),
+  );
+  return found.length > 0 ? found[found.length - 1].element : null;
+}
+
+/** Turn the selected component instance into ordinary editable contours. */
+export function expandSelectedComponent(): void {
+  if (!editor.outline || editor.selectedComponent === null) {
+    say("select a component to expand");
+    return;
+  }
+  const next = expandComponent(editor.outline, editor.selectedComponent, lookupGlyph);
+  if (!next) {
+    say("that element is not a component");
+    return;
+  }
+  editor.selectedComponent = null;
+  commit(next, "component expanded");
 }
 
 export function setTool(tool: ToolId): void {
@@ -209,9 +283,11 @@ export function undo(): void {
   history = step.history;
   editor.outline = step.value;
   editor.selection = [];
+  editor.selectedComponent = null;
   syncHistoryFlags();
   say("undo");
   void saveOutline();
+  void refreshLibrary();
 }
 
 export function redo(): void {
@@ -221,9 +297,11 @@ export function redo(): void {
   history = step.history;
   editor.outline = step.value;
   editor.selection = [];
+  editor.selectedComponent = null;
   syncHistoryFlags();
   say("redo");
   void saveOutline();
+  void refreshLibrary();
 }
 
 /** Update one glyph metric and persist the outline immediately. */
@@ -239,6 +317,8 @@ export function setMetric(
 export function insertComponent(glyphId: string): void {
   if (!editor.outline) return;
   commit(addElement(editor.outline, componentElement(glyphId)), "component inserted");
+  editor.selectedComponent = editor.outline.elements.length - 1;
+  void refreshLibrary();
 }
 
 /** Run a pathfinder boolean on the active glyph, then reload its outline. */
@@ -529,6 +609,14 @@ export function pointerDown(raw: Point, mods: Modifiers): void {
           }
           return;
         }
+        const component = hitComponent(raw);
+        if (component !== null) {
+          editor.selection = [];
+          editor.selectedComponent = component;
+          say("component selected");
+          return;
+        }
+        editor.selectedComponent = null;
         if (!mods.shift) editor.selection = [];
         drag = { kind: "marquee", from: raw, additive: mods.shift };
         editor.marquee = { a: raw, b: raw };
@@ -784,6 +872,11 @@ export function selectNext(step: 1 | -1): void {
 /** Delete selected nodes keeping the curve's shape; `plain` removes without refitting. */
 export function deleteNodes(plain: boolean): void {
   if (!editor.outline) return;
+  if (editor.selectedComponent !== null) {
+    commit(removeElements(editor.outline, [editor.selectedComponent]), "component removed");
+    editor.selectedComponent = null;
+    return;
+  }
   if (editor.selection.length === 0) {
     commit(removeElements(editor.outline, targets()), "shapes deleted");
     return;

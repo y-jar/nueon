@@ -3,6 +3,8 @@
   import type { GlyphContour, WritingConfig } from "../lib/api";
   import {
     breakSelected,
+    componentContours,
+    expandSelectedComponent,
     cancelGesture,
     deleteNodes,
     editor,
@@ -57,6 +59,14 @@
     editor.preview && editor.preview.kind === "contour"
       ? contourPathData(editor.preview as GlyphContour, true)
       : "",
+  );
+  const instances = $derived(
+    editor.outline && editor.library
+      ? componentContours().map(({ element, contours: parts }) => ({
+          element,
+          d: parts.map((c) => contourPathData(c, true)).join(" "),
+        }))
+      : [],
   );
   const contours = $derived(
     editor.outline
@@ -146,6 +156,9 @@
     } else if (event.key === "Tab") {
       event.preventDefault();
       selectNext(event.shiftKey ? -1 : 1);
+    } else if (mod && event.shiftKey && event.key.toLowerCase() === "e") {
+      event.preventDefault();
+      expandSelectedComponent();
     } else if (event.shiftKey && !mod && event.key.toLowerCase() === "j") {
       joinNodes();
     } else if (event.shiftKey && !mod && event.key.toLowerCase() === "b") {
@@ -225,6 +238,13 @@
         />
       {/if}
     {/if}
+    {#each instances as inst (inst.element)}
+      <path
+        class="component-instance"
+        class:component-selected={editor.selectedComponent === inst.element}
+        d={inst.d}
+      />
+    {/each}
     {#if d}<path class="outline" d={d} />{/if}
     {#if previewD}<path class="outline preview" d={previewD} />{/if}
 

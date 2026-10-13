@@ -20,6 +20,7 @@
     cycleSelectedKind,
     breakSelected,
     deleteSelection,
+    expandSelectedComponent,
     joinNodes,
     distribute,
     editor,
@@ -70,6 +71,7 @@
     canUndo: editor.canUndo,
     canRedo: editor.canRedo,
     hasSelection: editor.selection.length > 0,
+    hasComponent: editor.selectedComponent !== null,
     snap: editor.snap,
     guides: editor.showGuides,
     hasGlyph: editor.openGlyphId !== null,
@@ -180,6 +182,7 @@
       case "toggle-snap": return toggleSnap();
       case "toggle-guides": return toggleGuides();
       case "node-kind": return cycleSelectedKind();
+      case "component-expand": return expandSelectedComponent();
       case "node-join": return joinNodes();
       case "node-break": return breakSelected();
       case "finish-path": return finishPath();

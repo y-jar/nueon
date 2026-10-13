@@ -7,6 +7,7 @@ const state: MenuState = {
   canUndo: false,
   canRedo: false,
   hasSelection: false,
+  hasComponent: false,
   snap: false,
   guides: true,
   hasGlyph: true,
@@ -64,4 +65,11 @@ test("parseGuide rejects blank and non-numeric input", () => {
   assert.equal(parseGuide("-200"), -200);
   assert.equal(parseGuide(""), null);
   assert.equal(parseGuide("abc"), null);
+});
+
+test("expand component is offered only when a component instance is selected", () => {
+  const find = (s: MenuState) =>
+    menuItems("tools", s).find((item) => item.id === "component-expand");
+  assert.equal(find(state)?.disabled, true);
+  assert.equal(find({ ...state, hasComponent: true })?.disabled, false);
 });
