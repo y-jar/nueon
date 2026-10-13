@@ -8,6 +8,8 @@ import {
   guideLines,
   outlineBounds,
   contourPathData,
+  componentElement,
+  compositeOutline,
   flipY,
   UNGROUPED,
 } from "./writing.ts";
@@ -150,4 +152,23 @@ test("contourPathData starts with a move and flips y", () => {
 test("flipY negates", () => {
   assert.equal(flipY(5), -5);
   assert.equal(flipY(-200), 200);
+});
+
+test("componentElement builds a unit component reference", () => {
+  assert.deepEqual(componentElement("g-1"), {
+    kind: "component",
+    glyph: "g-1",
+    dx: 0,
+    dy: 0,
+    scale_x: 1,
+    scale_y: 1,
+    rotation: 0,
+  });
+});
+
+test("compositeOutline references two radicals side by side", () => {
+  const outline = compositeOutline("left", "right");
+  assert.equal(outline.elements.length, 2);
+  assert.deepEqual(outline.elements[0], componentElement("left"));
+  assert.deepEqual(outline.elements[1], componentElement("right", 500));
 });

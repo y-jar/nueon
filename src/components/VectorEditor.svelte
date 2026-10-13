@@ -7,8 +7,11 @@
   import EditorMenuBar from "./EditorMenuBar.svelte";
   import VectorToolbar from "./VectorToolbar.svelte";
   import Toolbox from "./Toolbox.svelte";
+  import RadicalPalette from "./RadicalPalette.svelte";
   import GlyphCanvas from "./GlyphCanvas.svelte";
+  import CompositionMatrix from "./CompositionMatrix.svelte";
   import GlyphMetricsPanel from "./GlyphMetricsPanel.svelte";
+  import PathfinderPanel from "./PathfinderPanel.svelte";
   import GlyphGridTray from "./GlyphGridTray.svelte";
   import EditorStatusBar from "./EditorStatusBar.svelte";
 
@@ -18,9 +21,10 @@
     onClose: () => void;
     onOpen: (glyph: GlyphMeta) => void;
     onAdd: () => void;
+    onCompose: (row: GlyphMeta, col: GlyphMeta) => void;
   }
 
-  let { config, phonemes, onClose, onOpen, onAdd }: Props = $props();
+  let { config, phonemes, onClose, onOpen, onAdd, onCompose }: Props = $props();
 </script>
 
 <div class="vector-editor">
@@ -34,9 +38,21 @@
   <VectorToolbar />
 
   <div class="editor-main">
-    <Toolbox />
-    <GlyphCanvas {config} />
-    <GlyphMetricsPanel {phonemes} />
+    <div class="editor-side">
+      <Toolbox />
+      <RadicalPalette glyphs={config.glyphs} />
+    </div>
+
+    {#if editor.composeOpen}
+      <CompositionMatrix glyphs={config.glyphs} {onCompose} />
+    {:else}
+      <GlyphCanvas {config} />
+    {/if}
+
+    <div class="editor-side">
+      <GlyphMetricsPanel {phonemes} />
+      <PathfinderPanel />
+    </div>
   </div>
 
   <EditorStatusBar />

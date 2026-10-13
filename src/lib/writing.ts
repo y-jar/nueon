@@ -4,6 +4,7 @@ import type {
   GlyphOutline,
   GlyphContour,
   GlyphNode,
+  GlyphComponent,
   WritingConfig,
 } from "./api";
 
@@ -156,5 +157,32 @@ export function outlinePathData(outline: GlyphOutline, yFlip: boolean): string {
     if (element.kind === "contour") d += contourPathData(element, yFlip);
   }
   return d;
+}
+
+/** A component instance referencing another glyph. */
+export function componentElement(
+  glyphId: string,
+  dx = 0,
+  dy = 0,
+): { kind: "component" } & GlyphComponent {
+  return {
+    kind: "component",
+    glyph: glyphId,
+    dx,
+    dy,
+    scale_x: 1,
+    scale_y: 1,
+    rotation: 0,
+  };
+}
+
+/** A new glyph composed of two component references (row + column radicals). */
+export function compositeOutline(rowId: string, colId: string): GlyphOutline {
+  return {
+    elements: [componentElement(rowId), componentElement(colId, 500)],
+    advance: null,
+    lsb: null,
+    rsb: null,
+  };
 }
 

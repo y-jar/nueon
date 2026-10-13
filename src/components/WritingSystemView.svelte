@@ -4,7 +4,7 @@
   import { t } from "svelte-i18n";
   import { Plus } from "@lucide/svelte";
   import * as api from "../lib/api";
-  import { groupGlyphs, soundCoverage, UNGROUPED } from "../lib/writing";
+  import { groupGlyphs, soundCoverage, compositeOutline, UNGROUPED } from "../lib/writing";
   import { openGlyphContextMenu } from "../lib/state.svelte";
   import { editor, openGlyph, closeGlyph } from "../lib/writingEditor.svelte";
   import GlyphNavigatorTree from "./GlyphNavigatorTree.svelte";
@@ -119,6 +119,26 @@
     openGlyph(glyph.id, glyph);
   }
 
+  async function composeGlyph(row: api.GlyphMeta, col: api.GlyphMeta) {
+    const meta: api.GlyphMeta = {
+      id: crypto.randomUUID(),
+      name: `${row.name}+${col.name}`,
+      codepoint: 0xe000 + config.glyphs.length,
+      phonemes: [],
+      order: config.glyphs.length,
+      group: "composed",
+    };
+    config.glyphs = [...config.glyphs, meta];
+    try {
+      await api.writingSet(config);
+      await api.writingGlyphSet(meta.id, compositeOutline(row.id, col.id));
+      error = "";
+      openGlyph(meta.id, meta);
+    } catch (e) {
+      error = String(e);
+    }
+  }
+
   function onMenu(event: MouseEvent, glyph: api.GlyphMeta) {
     openGlyphContextMenu(event.clientX, event.clientY, {
       id: glyph.id,
@@ -149,6 +169,7 @@
       onClose={closeGlyph}
       onOpen={selectGlyph}
       onAdd={addGlyph}
+      onCompose={composeGlyph}
     />
   {:else}
     {#if config.glyphs.length === 0}

@@ -198,9 +198,21 @@
   display: flex;
   flex-direction: column;
   gap: 2px;
+}
+
+.editor-side {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  min-height: 0;
   overflow-y: auto;
-  border-right: 1px solid var(--border);
   padding-right: 6px;
+}
+
+.editor-side:last-child {
+  border-left: 1px solid var(--border);
+  padding-left: 6px;
+  padding-right: 0;
 }
 
 .toolbox .tool {
@@ -231,6 +243,92 @@
 
 .toolbox .tool.active .tool-shortcut {
   color: inherit;
+}
+
+.radical-palette {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.radical-palette h2,
+.pathfinder-panel h2,
+.composition-matrix h2 {
+  font-size: 12px;
+  margin: 0;
+  color: var(--muted);
+  font-weight: 500;
+}
+
+.radical-palette .radical {
+  padding: 3px 6px;
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  background: var(--panel);
+  color: var(--text);
+  cursor: pointer;
+  font-size: 12px;
+  text-align: left;
+}
+
+.pathfinder-panel {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.pathfinder-panel button {
+  padding: 4px 6px;
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  background: var(--panel);
+  color: var(--text);
+  cursor: pointer;
+  font-size: 12px;
+  text-align: left;
+}
+
+.composition-matrix {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  min-width: 0;
+  min-height: 0;
+}
+
+.matrix-scroll {
+  overflow: auto;
+  border: 1px solid var(--border);
+  border-radius: 4px;
+}
+
+.matrix {
+  border-collapse: collapse;
+  font-size: 11px;
+}
+
+.matrix th,
+.matrix td {
+  border: 1px solid var(--border);
+  padding: 2px;
+  text-align: center;
+  min-width: 28px;
+}
+
+.matrix thead th,
+.matrix tbody th {
+  background: var(--panel);
+  color: var(--muted);
+  font-weight: 500;
+  white-space: nowrap;
+}
+
+.matrix td button {
+  width: 100%;
+  border: none;
+  background: transparent;
+  color: var(--text);
+  cursor: pointer;
 }
 
 .glyph-canvas {

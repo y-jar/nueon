@@ -943,6 +943,14 @@ export const writingGlyphSet = (
   outline: GlyphOutline,
 ): Promise<void> => invoke("writing_glyph_set", { id, outline });
 
+export type PathOperation = "union" | "difference" | "intersect" | "exclude";
+
+/** Stubbed pathfinder booleans; the geometry engine lands in a later stage. */
+export const writingPathOperation = (
+  id: string,
+  operation: PathOperation,
+): Promise<void> => invoke("writing_path_operation", { id, operation });
+
 export interface UiLayout {
   activity: string;
   sidebar_open: boolean;

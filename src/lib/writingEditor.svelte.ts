@@ -1,7 +1,7 @@
 //! Vector-editor state: the open glyph, tools, and view options.
 
 import * as api from "./api";
-import type { ToolId } from "./writing";
+import { componentElement, type ToolId } from "./writing";
 
 /** The live editor state, shared by the toolbox, canvas and metrics panel. */
 export const editor = $state({
@@ -11,6 +11,7 @@ export const editor = $state({
   activeTool: "pen" as ToolId,
   zoom: 1,
   snap: false,
+  composeOpen: false,
   loading: false,
   status: "",
   error: "",
@@ -73,6 +74,31 @@ export function setMetric(
   if (!editor.outline) return;
   editor.outline = { ...editor.outline, [field]: value };
   void saveOutline();
+}
+
+export function toggleCompose(): void {
+  editor.composeOpen = !editor.composeOpen;
+}
+
+/** Append a component reference to the active outline and persist. */
+export function insertComponent(glyphId: string): void {
+  if (!editor.outline) return;
+  editor.outline = {
+    ...editor.outline,
+    elements: [...editor.outline.elements, componentElement(glyphId)],
+  };
+  void saveOutline();
+}
+
+/** Run a (stubbed) pathfinder boolean on the active glyph. */
+export async function runPathfinder(operation: api.PathOperation): Promise<void> {
+  if (!editor.openGlyphId) return;
+  try {
+    await api.writingPathOperation(editor.openGlyphId, operation);
+    editor.status = `pathfinder ${operation} applied`;
+  } catch (e) {
+    editor.status = `pathfinder ${operation}: ${String(e)}`;
+  }
 }
 
 export async function saveOutline(): Promise<void> {

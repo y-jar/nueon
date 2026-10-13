@@ -15,6 +15,7 @@ and regenerate.
 - `ActivityBar.svelte` — Activity ribbon and workspace/settings buttons.
 - `AddWordModal.svelte` — Modal to add a new word to a table.
 - `CommandPalette.svelte` — Ctrl+P palette of recent notes, tables and actions.
+- `CompositionMatrix.svelte` — CJK-style composition matrix: combine two radicals per cell.
 - `ConfirmDialog.svelte` — Shared confirm dialog with optional suppression.
 - `ContextMenu.svelte` — The portaled context menu for all menu kinds.
 - `DeleteWordModal.svelte` — Dependent-aware word delete with reassign.
@@ -43,10 +44,12 @@ and regenerate.
 - `MorphologyPanel.svelte` — Morphology activity: classes, morphemes, paradigms.
 - `MorphologyView.svelte` — Morphology view wrapper (panel + preview).
 - `Onboarding.svelte` — First-run workspace picker/onboarding.
+- `PathfinderPanel.svelte` — Pathfinder panel: boolean operations (stubbed).
 - `PhonologyView.svelte` — Phonology: IPA chart and sound changes.
 - `PillCell.svelte` — tag_list cell as pills with suggestions.
 - `Popover.svelte` — Anchor popover with click-outside/Escape dismissal.
 - `QuarantineBanner.svelte` — Banner for unloadable dictionary files.
+- `RadicalPalette.svelte` — Radical palette: reusable components to insert into the active glyph.
 - `Settings.svelte` — Settings content: language, tables, keybinds.
 - `SettingsModal.svelte` — Settings modal shell with Escape handling.
 - `SetupWizard.svelte` — First-workspace setup wizard.
@@ -62,7 +65,7 @@ and regenerate.
 - `Translation.svelte` — Translation activity: builder + runner.
 - `TrashModal.svelte` — Trash bin modal (restore/delete).
 - `VectorEditor.svelte` — Vector editor: menu, toolbar, toolbox, canvas, metrics and tray.
-- `VectorToolbar.svelte` — Vector toolbar: zoom, snap and export/import stubs.
+- `VectorToolbar.svelte` — Vector toolbar: zoom, snap, compose and export/import stubs.
 - `WritingSystemView.svelte` — Writing System: glyph navigator, grid, and vector editor.
 
 ## `src/components/import`
