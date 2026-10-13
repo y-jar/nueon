@@ -541,7 +541,7 @@ every glyph that instances it, until the user explicitly expands an instance to
 contours.
 
 **Vector editor.** `GlyphCanvas` renders the outline as SVG paths in the view
-with zoom, pan, grid snapping and metric guide lines (baseline, x-height,
+with zoom, pan, snapping (nodes, rails, edge lines, grid) and metric guide lines (baseline, x-height,
 cap-height, ascender, descender). `Toolbox` holds the tools: pen with Bezier
 handles, direct select, node modifiers, shapes (rectangle, ellipse, polygon,
 star, line), calligraphic brush, mirror/flip, eraser/knife, transforms (scale,

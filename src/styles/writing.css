@@ -657,3 +657,58 @@
   margin: 2px 0 0;
   font-size: 11px;
 }
+
+.canvas-svg .guide.edge {
+  stroke: var(--muted);
+  stroke-dasharray: 2 4;
+}
+
+.canvas-svg .marquee {
+  fill: rgba(255, 255, 255, 0.06);
+  stroke: var(--accent);
+  stroke-dasharray: 4 3;
+  vector-effect: non-scaling-stroke;
+  pointer-events: none;
+}
+
+.canvas-svg .snap-line {
+  stroke: var(--accent);
+  stroke-width: 1;
+  vector-effect: non-scaling-stroke;
+  pointer-events: none;
+}
+
+.canvas-svg .snap-dot {
+  fill: var(--accent);
+  pointer-events: none;
+}
+
+.canvas-svg .snap-lock {
+  fill: none;
+  stroke: var(--accent);
+  stroke-width: 2;
+  vector-effect: non-scaling-stroke;
+  pointer-events: none;
+}
+
+.canvas-svg .snap-lock.weld {
+  fill: rgba(120, 200, 120, 0.25);
+  stroke: #78c878;
+  stroke-width: 3;
+}
+
+.snap-label {
+  position: absolute;
+  right: 6px;
+  bottom: 4px;
+  padding: 1px 6px;
+  border-radius: 3px;
+  background: var(--accent);
+  color: var(--bg);
+  font-size: 11px;
+  pointer-events: none;
+}
+
+.snap-label.weld {
+  background: #78c878;
+}

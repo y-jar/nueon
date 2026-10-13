@@ -140,6 +140,7 @@ and regenerate.
 - `writingEditor.svelte.ts` — Vector-editor state: the open glyph, tools, selection, history and gestures.
 - `writingMenus.ts` — Pure menu definitions for the vector editor's menu bar.
 - `writingSidebar.ts` — Pure filtering and grouping for the Writing System sidebar glyph list.
+- `writingSnap.ts` — Pure snapping: nodes, guide rails, bearing lines, edge midpoints and the grid.
 
 ## `src/lib/editor`
 

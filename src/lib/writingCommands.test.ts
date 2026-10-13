@@ -9,7 +9,14 @@ import {
   applyMatrix,
   brushContour,
   canPathfind,
+  breakNode,
   closeContour,
+  deleteNodePreservingShape,
+  joinSelected,
+  nodesInBox,
+  nudgeNodes,
+  stepSelection,
+  weldNodes,
   cycleNodeKind,
   distributeElements,
   elementBounds,
@@ -310,4 +317,125 @@ test("canPathfind needs two shapes", () => {
   const one = addElement(emptyOutline(), square(0, 0));
   assert.equal(canPathfind(one), false);
   assert.equal(canPathfind(addElement(one, square(50, 0))), true);
+});
+
+const path = (pts: [number, number][], closed = false) =>
+  newContour(pts.map(([x, y]) => ({ x, y })), closed);
+
+test("welding endpoints of two contours merges them into one open path", () => {
+  let o = addElement(emptyOutline(), path([[0, 0], [50, 0]]));
+  o = addElement(o, path([[100, 0], [150, 0]]));
+  const welded = weldNodes(o, { element: 0, node: 1 }, { element: 1, node: 0 }, { x: 75, y: 0 })!;
+  assert.equal(welded.elements.length, 1);
+  const nodes = nodesOf(welded);
+  assert.deepEqual(nodes.map((n) => [n.x, n.y]), [[0, 0], [75, 0], [150, 0]]);
+});
+
+test("welding works whichever ends are chosen (the second path is reversed as needed)", () => {
+  let o = addElement(emptyOutline(), path([[0, 0], [50, 0]]));
+  o = addElement(o, path([[150, 0], [100, 0]]));
+  const welded = weldNodes(o, { element: 0, node: 1 }, { element: 1, node: 1 }, { x: 75, y: 0 })!;
+  assert.deepEqual(nodesOf(welded).map((n) => n.x), [0, 75, 150]);
+});
+
+test("a weld keeps the handles that point away from the join", () => {
+  let o = addElement(emptyOutline(), path([[0, 0], [50, 0]]));
+  o = addElement(o, path([[100, 0], [150, 0]]));
+  o = setHandle(o, { element: 0, node: 1 }, "in", [-10, 5]);
+  o = setHandle(o, { element: 1, node: 0 }, "out", [10, -5]);
+  const nodes = nodesOf(weldNodes(o, { element: 0, node: 1 }, { element: 1, node: 0 })!);
+  assert.deepEqual(nodes[1].handle_in, [-10, 5]);
+  assert.deepEqual(nodes[1].handle_out, [10, -5]);
+  assert.equal(nodes[1].x, 75, "default is the midpoint");
+});
+
+test("welding the two ends of one open contour closes it", () => {
+  const o = addElement(emptyOutline(), path([[0, 0], [100, 0], [50, 80], [2, 1]]));
+  const welded = weldNodes(o, { element: 0, node: 0 }, { element: 0, node: 3 })!;
+  const el = welded.elements[0];
+  assert.ok(isContour(el) && el.closed);
+  assert.equal(el.nodes.length, 3, "the two end nodes became one");
+});
+
+test("welding rejects interior nodes, closed contours and the same node", () => {
+  const o = addElement(emptyOutline(), path([[0, 0], [50, 0], [100, 0]]));
+  assert.equal(weldNodes(o, { element: 0, node: 1 }, { element: 0, node: 2 }), null);
+  assert.equal(weldNodes(o, { element: 0, node: 0 }, { element: 0, node: 0 }), null);
+  const closed = addElement(emptyOutline(), square(0, 0));
+  assert.equal(weldNodes(closed, { element: 0, node: 0 }, { element: 0, node: 1 }), null);
+});
+
+test("joinSelected needs exactly two endpoints", () => {
+  let o = addElement(emptyOutline(), path([[0, 0], [50, 0]]));
+  o = addElement(o, path([[100, 0], [150, 0]]));
+  assert.ok(joinSelected(o, [{ element: 0, node: 1 }, { element: 1, node: 0 }]));
+  assert.equal(joinSelected(o, [{ element: 0, node: 1 }]), null);
+});
+
+test("breaking a closed contour opens it with a doubled node", () => {
+  const o = addElement(emptyOutline(), square(0, 0));
+  const broken = breakNode(o, { element: 0, node: 1 })!;
+  const el = broken.elements[0];
+  assert.ok(isContour(el) && !el.closed);
+  assert.equal(el.nodes.length, 5);
+  assert.deepEqual([el.nodes[0].x, el.nodes[4].x], [100, 100], "both ends sit where it broke");
+});
+
+test("breaking an interior node of an open contour splits it in two; endpoints cannot break", () => {
+  const o = addElement(emptyOutline(), path([[0, 0], [50, 0], [100, 0]]));
+  const broken = breakNode(o, { element: 0, node: 1 })!;
+  assert.equal(broken.elements.length, 2);
+  assert.equal(breakNode(o, { element: 0, node: 0 }), null);
+});
+
+test("weld then break is a round trip of positions", () => {
+  let o = addElement(emptyOutline(), path([[0, 0], [50, 0]]));
+  o = addElement(o, path([[50, 0], [100, 0]]));
+  const welded = weldNodes(o, { element: 0, node: 1 }, { element: 1, node: 0 })!;
+  const broken = breakNode(welded, { element: 0, node: 1 })!;
+  assert.equal(broken.elements.length, 2);
+  assert.deepEqual(nodesOf(broken, 0).map((n) => n.x), [0, 50]);
+  assert.deepEqual(nodesOf(broken, 1).map((n) => n.x), [50, 100]);
+});
+
+test("deleting a smooth node keeps the curve: split then delete restores the arc", () => {
+  const circle = addElement(
+    emptyOutline(),
+    shapeContour("ellipse", { x: -100, y: -100 }, { x: 100, y: 100 }),
+  );
+  const original = nodesOf(circle);
+  const split = splitSegment(circle, 0, 0, 0.5);
+  const restored = deleteNodePreservingShape(split, { element: 0, node: 1 });
+  const nodes = nodesOf(restored);
+  assert.equal(nodes.length, original.length);
+  const close = (a: [number, number] | undefined, b: [number, number] | undefined) =>
+    Math.hypot(a![0] - b![0], a![1] - b![1]) < 1e-6;
+  assert.ok(close(nodes[0].handle_out, original[0].handle_out), "outgoing handle restored");
+  assert.ok(close(nodes[1].handle_in, original[1].handle_in), "incoming handle restored");
+});
+
+test("deleting a corner node is a plain removal", () => {
+  const o = addElement(emptyOutline(), square(0, 0));
+  assert.equal(nodesOf(deleteNodePreservingShape(o, { element: 0, node: 0 })).length, 3);
+});
+
+test("nudgeNodes moves by whole steps", () => {
+  const o = addElement(emptyOutline(), square(0, 0));
+  const moved = nudgeNodes(o, [{ element: 0, node: 0 }], 10, -1);
+  assert.deepEqual([nodesOf(moved)[0].x, nodesOf(moved)[0].y], [10, -1]);
+});
+
+test("nodesInBox selects the nodes inside a rubber band in any drag direction", () => {
+  const o = addElement(emptyOutline(), square(0, 0));
+  assert.equal(nodesInBox(o, { x: -5, y: -5 }, { x: 105, y: 50 }).length, 2);
+  assert.equal(nodesInBox(o, { x: 105, y: 105 }, { x: -5, y: -5 }).length, 4);
+  assert.equal(nodesInBox(o, { x: 200, y: 200 }, { x: 300, y: 300 }).length, 0);
+});
+
+test("stepSelection walks nodes in order and wraps", () => {
+  const o = addElement(emptyOutline(), square(0, 0));
+  assert.deepEqual(stepSelection(o, null, 1), { element: 0, node: 0 });
+  assert.deepEqual(stepSelection(o, { element: 0, node: 3 }, 1), { element: 0, node: 0 });
+  assert.deepEqual(stepSelection(o, { element: 0, node: 0 }, -1), { element: 0, node: 3 });
+  assert.equal(stepSelection(emptyOutline(), null, 1), null);
 });

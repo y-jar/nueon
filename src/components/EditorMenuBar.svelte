@@ -18,7 +18,9 @@
   import {
     align,
     cycleSelectedKind,
+    breakSelected,
     deleteSelection,
+    joinNodes,
     distribute,
     editor,
     exportFont,
@@ -178,6 +180,8 @@
       case "toggle-snap": return toggleSnap();
       case "toggle-guides": return toggleGuides();
       case "node-kind": return cycleSelectedKind();
+      case "node-join": return joinNodes();
+      case "node-break": return breakSelected();
       case "finish-path": return finishPath();
       case "glyph-new": return onNewGlyph();
       case "glyph-duplicate": return onDuplicateGlyph();

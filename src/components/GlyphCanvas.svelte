@@ -2,18 +2,25 @@
 <script lang="ts">
   import type { GlyphContour, WritingConfig } from "../lib/api";
   import {
+    breakSelected,
     cancelGesture,
-    deleteSelection,
+    deleteNodes,
     editor,
     finishPath,
+    joinNodes,
+    nudge,
     pointerDown,
     pointerMove,
     pointerUp,
     redo,
     selectAll,
+    selectNext,
+    setGuideHeights,
     setTool,
+    setZoom,
     toolHint,
     undo,
+    type Modifiers,
   } from "../lib/writingEditor.svelte";
   import {
     TOOLS,
@@ -34,6 +41,9 @@
   let svg: SVGSVGElement | undefined = $state();
 
   const guides = $derived(guideLines(config));
+  $effect(() => {
+    setGuideHeights(guides.map((g) => ({ y: g.y, label: g.key.replace("_", " ") })));
+  });
   const minX = -100;
   const maxX = $derived((config.upem || 1000) + 200);
   const storageMinY = $derived(Math.min(guideHeight(config, "descender"), -200) - 100);
@@ -72,25 +82,80 @@
     return { x: local.x, y: flipY(local.y) };
   }
 
+  const mods = (event: PointerEvent | KeyboardEvent | WheelEvent): Modifiers => ({
+    shift: event.shiftKey,
+    ctrl: event.ctrlKey || event.metaKey,
+    alt: event.altKey,
+  });
+
+  let panning: { x: number; y: number } | null = null;
+  let spaceDown = false;
+
   function onDown(event: PointerEvent) {
-    if (event.button !== 0) return;
     svg?.setPointerCapture(event.pointerId);
     svg?.parentElement?.focus();
-    pointerDown(toGlyph(event), event.shiftKey);
+    if (event.button === 1 || (event.button === 0 && spaceDown)) {
+      panning = { x: event.clientX, y: event.clientY };
+      return;
+    }
+    if (event.button !== 0) return;
+    pointerDown(toGlyph(event), mods(event));
   }
 
   function onMove(event: PointerEvent) {
-    pointerMove(toGlyph(event));
+    if (panning) {
+      scroller?.scrollBy(panning.x - event.clientX, panning.y - event.clientY);
+      panning = { x: event.clientX, y: event.clientY };
+      return;
+    }
+    pointerMove(toGlyph(event), mods(event));
   }
 
   function onUp(event: PointerEvent) {
     if (svg?.hasPointerCapture(event.pointerId)) svg.releasePointerCapture(event.pointerId);
-    pointerUp(toGlyph(event));
+    if (panning) {
+      panning = null;
+      return;
+    }
+    pointerUp(toGlyph(event), mods(event));
+  }
+
+  /** Ctrl+wheel zooms by sqrt(2) per notch, like Inkscape. */
+  function onWheel(event: WheelEvent) {
+    if (!(event.ctrlKey || event.metaKey)) return;
+    event.preventDefault();
+    setZoom(editor.zoom * Math.SQRT2 ** (event.deltaY < 0 ? 1 : -1));
+  }
+
+  let scroller: HTMLElement | undefined = $state();
+
+  function onKeyUp(event: KeyboardEvent) {
+    if (event.key === " ") spaceDown = false;
   }
 
   function onKey(event: KeyboardEvent) {
     const mod = event.ctrlKey || event.metaKey;
-    if (mod && event.key.toLowerCase() === "z") {
+    if (event.key === " ") {
+      spaceDown = true;
+      event.preventDefault();
+    } else if (event.key.startsWith("Arrow") && !mod) {
+      event.preventDefault();
+      const dx = event.key === "ArrowRight" ? 1 : event.key === "ArrowLeft" ? -1 : 0;
+      const dy = event.key === "ArrowUp" ? 1 : event.key === "ArrowDown" ? -1 : 0;
+      nudge(dx, dy, event.shiftKey);
+    } else if (event.key === "Tab") {
+      event.preventDefault();
+      selectNext(event.shiftKey ? -1 : 1);
+    } else if (event.shiftKey && !mod && event.key.toLowerCase() === "j") {
+      joinNodes();
+    } else if (event.shiftKey && !mod && event.key.toLowerCase() === "b") {
+      breakSelected();
+    } else if (event.key === "1" && !mod) {
+      setZoom(1);
+    } else if (mod && event.key.toLowerCase() === "f") {
+      event.preventDefault();
+      setZoom(1);
+    } else if (mod && event.key.toLowerCase() === "z") {
       event.preventDefault();
       if (event.shiftKey) redo();
       else undo();
@@ -102,12 +167,12 @@
       selectAll();
     } else if (event.key === "Delete" || event.key === "Backspace") {
       event.preventDefault();
-      deleteSelection();
+      deleteNodes(mod);
     } else if (event.key === "Enter") {
       finishPath();
     } else if (event.key === "Escape") {
       cancelGesture();
-    } else if (!mod && !event.altKey) {
+    } else if (!mod && !event.altKey && !event.shiftKey) {
       const tool = TOOLS.find((t) => t.shortcut.toLowerCase() === event.key.toLowerCase());
       if (tool) setTool(tool.id);
     }
@@ -121,6 +186,9 @@
   aria-label="Glyph canvas"
   tabindex="0"
   onkeydown={onKey}
+  onkeyup={onKeyUp}
+  onwheel={onWheel}
+  bind:this={scroller}
 >
   <svg
     bind:this={svg}
@@ -144,6 +212,18 @@
           y2={flipY(guide.y)}
         />
       {/each}
+    {/if}
+    {#if editor.showGuides}
+      <line class="guide edge" x1={0} y1={-storageMaxY} x2={0} y2={-storageMinY} />
+      {#if editor.outline?.advance}
+        <line
+          class="guide edge"
+          x1={editor.outline.advance}
+          y1={-storageMaxY}
+          x2={editor.outline.advance}
+          y2={-storageMinY}
+        />
+      {/if}
     {/if}
     {#if d}<path class="outline" d={d} />{/if}
     {#if previewD}<path class="outline preview" d={previewD} />{/if}
@@ -192,6 +272,43 @@
         />
       {/each}
     {/each}
+    {#if editor.marquee}
+      <rect
+        class="marquee"
+        x={Math.min(editor.marquee.a.x, editor.marquee.b.x)}
+        y={flipY(Math.max(editor.marquee.a.y, editor.marquee.b.y))}
+        width={Math.abs(editor.marquee.a.x - editor.marquee.b.x)}
+        height={Math.abs(editor.marquee.a.y - editor.marquee.b.y)}
+      />
+    {/if}
+    {#if editor.snapHit}
+      {@const hit = editor.snapHit}
+      {#each hit.hits as t (t.kind + t.label)}
+        {#if t.kind === "guide"}
+          <line class="snap-line" x1={minX} y1={flipY(t.y ?? 0)} x2={maxX} y2={flipY(t.y ?? 0)} />
+        {:else if t.kind === "origin" || t.kind === "advance"}
+          <line class="snap-line" x1={t.x} y1={-storageMaxY} x2={t.x} y2={-storageMinY} />
+        {/if}
+      {/each}
+      {#if hit.locked}
+        <circle
+          class="snap-lock"
+          class:weld={!!hit.weld}
+          cx={hit.point.x}
+          cy={flipY(hit.point.y)}
+          r={(hit.weld ? 11 : 8) * handleScale}
+        />
+      {:else}
+        <circle class="snap-dot" cx={hit.point.x} cy={flipY(hit.point.y)} r={3 * handleScale} />
+      {/if}
+    {/if}
   </svg>
+  {#if editor.snapHit}
+    <div class="snap-label" class:weld={!!editor.snapHit.weld}>
+      {editor.snapHit.weld
+        ? "release to weld"
+        : editor.snapHit.hits.map((t) => t.label).join(" + ") || "grid"}
+    </div>
+  {/if}
   <div class="canvas-hint">{toolHint(editor.activeTool)}</div>
 </div>

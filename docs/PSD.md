@@ -193,7 +193,16 @@ layer (`src-tauri/`), and the Svelte 5 frontend (`src/`). See `docs/ARCHITECTURE
   (`src/lib/history.ts`) that is separate from git. The menu bar
   (`EditorMenuBar.svelte`, definitions in `src/lib/writingMenus.ts`) provides
   File, Edit, View, Tools, Metrics (guide heights saved to `config/writing`),
-  Glyphs and Export dropdowns; SVG export/import and multi-select batch actions
+  Glyphs and Export dropdowns. Placement snaps (`src/lib/writingSnap.ts`) to
+  existing nodes first, then guide rails, the x=0 line, the advance line,
+  segment midpoints and the grid, within 10 screen pixels (`10/zoom` units);
+  Shift disables snapping. Dragging an open endpoint onto another open
+  endpoint shows a green "release to weld" cue and joins them on drop; Shift+J
+  joins two selected endpoints, Shift+B breaks a node. Delete removes a node
+  but keeps the curve's shape, Ctrl+Delete removes it plainly. Arrow keys nudge
+  1 unit (Shift 10), Tab/Shift+Tab step through nodes, a rubber band selects
+  nodes, Ctrl constrains drags to an axis and handles to 15 degrees, Alt keeps
+  a handle's length, Space or middle-drag pans and Ctrl+wheel zooms; SVG export/import and multi-select batch actions
   (group, advance width, export, delete) are wired. Pathfinder booleans are in
   `crates/nueon-core/src/model/pathfinder.rs` (`flo_curves`, curve-preserving)
   and component flattening in `crates/nueon-core/src/workspace/writing.rs`.
@@ -215,4 +224,7 @@ layer (`src-tauri/`), and the Svelte 5 frontend (`src/`). See `docs/ARCHITECTURE
   `writing.test.ts` (glyph grouping, sound coverage, tool registry, guide
   rails, bounds, path data), `writingCommands.test.ts` (node/handle edits,
   shapes, transforms, align/distribute, layer order, brush), `history.test.ts`,
-  `writingMenus.test.ts` and `writingBatch.test.ts`.
+  `writingMenus.test.ts`, `writingBatch.test.ts`, `writingSnap.test.ts` (snap
+  priority and radius, weld candidates, angle/axis constraint) and the weld,
+  join, break, shape-preserving delete, nudge and box-select cases in
+  `writingCommands.test.ts`.

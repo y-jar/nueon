@@ -92,6 +92,8 @@ export function menuItems(menu: MenuId, state: MenuState): MenuItem[] {
         { id: "tool-eraser", label: "Eraser", shortcut: "E" },
         sep("s1"),
         { id: "node-kind", label: "Cycle node type", disabled: !state.hasSelection },
+        { id: "node-join", label: "Join endpoints", shortcut: "Shift+J", disabled: !state.hasSelection },
+        { id: "node-break", label: "Break node", shortcut: "Shift+B", disabled: !state.hasSelection },
         { id: "finish-path", label: "Finish path", shortcut: "Enter" },
       ];
     case "glyphs":

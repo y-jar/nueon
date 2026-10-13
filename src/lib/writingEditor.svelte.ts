@@ -29,7 +29,13 @@ import {
   setNodeKind,
   shapeContour,
   shear,
-  snapPoint,
+  breakNode,
+  deleteNodePreservingShape,
+  joinSelected,
+  nodesInBox,
+  nudgeNodes,
+  stepSelection,
+  weldNodes,
   splitSegment,
   selectedElements,
   type AlignMode,
@@ -48,6 +54,13 @@ import {
   type History,
 } from "./history";
 import { componentElement, type ToolId } from "./writing";
+import {
+  constrainAngle,
+  constrainAxis,
+  isOpenEndpoint,
+  snapPoint as snapTo,
+  type SnapResult,
+} from "./writingSnap";
 
 /** The live editor state, shared by the toolbox, canvas, menus and panels. */
 export const editor = $state({
@@ -71,11 +84,18 @@ export const editor = $state({
   nibAngle: 45,
   canUndo: false,
   canRedo: false,
+  /** The live snap result while dragging: drives the on-canvas indicator. */
+  snapHit: null as SnapResult | null,
+  /** The rubber-band rectangle in glyph space while dragging on empty canvas. */
+  marquee: null as { a: Point; b: Point } | null,
+  /** Guide heights and advance, set by the canvas from the writing config. */
+  guideHeights: [] as { y: number; label: string }[],
 });
 
 let history: History<api.GlyphOutline> = emptyHistory();
 let drag:
-  | { kind: "move"; origin: Point; last: Point; moved: boolean }
+  | { kind: "move"; origin: Point; last: Point; moved: boolean; anchor: NodeRef; axis: boolean; start: Point }
+  | { kind: "marquee"; from: Point; additive: boolean }
   | { kind: "handle"; ref: NodeRef; which: "in" | "out" }
   | { kind: "pen"; ref: NodeRef }
   | { kind: "shape"; from: Point }
@@ -261,13 +281,7 @@ export function clearSelection(): void {
 }
 
 export function deleteSelection(): void {
-  if (!editor.outline) return;
-  if (editor.selection.length > 0) {
-    commit(removeNodes(editor.outline, editor.selection), "nodes deleted");
-  } else {
-    commit(removeElements(editor.outline, targets()), "shapes deleted");
-  }
-  editor.selection = [];
+  deleteNodes(false);
 }
 
 export function cycleSelectedKind(): void {
@@ -364,8 +378,33 @@ function boundsOf(indexes: number[]): { cx: number; cy: number } | null {
   return { cx: (minX + maxX) / 2, cy: (minY + maxY) / 2 };
 }
 
-function place(point: Point): Point {
-  return editor.snap ? snapPoint(point, editor.grid) : point;
+/** Guide rails and the advance line, in the snap engine's terms. */
+export function setGuideHeights(guides: { y: number; label: string }[]): void {
+  editor.guideHeights = guides;
+}
+
+function snapAt(
+  raw: Point,
+  exclude: NodeRef[],
+  dragging: NodeRef | null,
+  disabled: boolean,
+): SnapResult {
+  if (disabled || !editor.outline) {
+    return { point: raw, hits: [], locked: false, weld: null };
+  }
+  return snapTo(
+    {
+      outline: editor.outline,
+      guides: editor.guideHeights,
+      advance: editor.outline.advance ?? null,
+      grid: editor.grid,
+      gridOn: editor.snap,
+      zoom: editor.zoom,
+      exclude,
+      dragging,
+    },
+    raw,
+  );
 }
 
 const NODE_RADIUS = 8;
@@ -395,27 +434,43 @@ export function toolHint(tool: ToolId): string {
   return TOOL_HINT[tool];
 }
 
+export interface Modifiers {
+  shift: boolean;
+  ctrl: boolean;
+  alt: boolean;
+}
+
+/** The snapped placement for a new point (pen, shapes): nodes, rails, lines, grid. */
+function placement(raw: Point, mods: Modifiers, exclude: NodeRef[] = []): Point {
+  const hit = snapAt(raw, exclude, null, mods.shift);
+  editor.snapHit = hit.hits.length > 0 ? hit : null;
+  return hit.point;
+}
+
 /** Pointer down in glyph space (y-up). */
-export function pointerDown(raw: Point, shift: boolean): void {
+export function pointerDown(raw: Point, mods: Modifiers): void {
   if (!editor.outline) return;
-  const point = place(raw);
   const outline = editor.outline;
   const radius = NODE_RADIUS / editor.zoom;
+  editor.snapHit = null;
 
   switch (editor.activeTool) {
     case "pen": {
+      const point = placement(raw, mods);
       const draft = editor.draft;
       if (draft) {
         const element = outline.elements[draft.element];
         if (element && isContour(element) && element.nodes.length > 2) {
           const first = element.nodes[0];
-          if (Math.hypot(first.x - point.x, first.y - point.y) <= radius) {
+          if (Math.hypot(first.x - raw.x, first.y - raw.y) <= radius) {
             commit(closeContour(outline, draft.element), "contour closed");
             editor.draft = null;
             return;
           }
         }
-        const next = appendNode(outline, draft.element, { x: point.x, y: point.y, kind: "smooth" });
+        const from = element && isContour(element) ? element.nodes[element.nodes.length - 1] : null;
+        const target = mods.ctrl && from ? constrainAngle(from, point) : point;
+        const next = appendNode(outline, draft.element, { x: target.x, y: target.y, kind: "smooth" });
         const element2 = next.elements[draft.element];
         history = pushHistory(history, outline);
         editor.outline = next;
@@ -447,13 +502,36 @@ export function pointerDown(raw: Point, shift: boolean): void {
       }
       const hit = hitNode(outline, raw, radius);
       if (hit) {
-        selectNode(hit, shift);
+        selectNode(hit, mods.shift);
         history = pushHistory(history, outline);
         syncHistoryFlags();
-        drag = { kind: "move", origin: raw, last: raw, moved: false };
+        const startNode = nodeAt(hit);
+        drag = {
+          kind: "move",
+          origin: raw,
+          last: raw,
+          moved: false,
+          anchor: hit,
+          axis: mods.ctrl,
+          start: startNode ? { x: startNode.x, y: startNode.y } : raw,
+        };
       } else {
-        if (!shift) editor.selection = [];
-        say(TOOL_HINT.direct);
+        const seg = nearestSegment(outline, raw, radius);
+        if (seg && mods.shift) {
+          const element = outline.elements[seg.element];
+          if (isContour(element)) {
+            const a = seg.segment;
+            const b = (seg.segment + 1) % element.nodes.length;
+            editor.selection = [
+              { element: seg.element, node: a },
+              { element: seg.element, node: b },
+            ];
+          }
+          return;
+        }
+        if (!mods.shift) editor.selection = [];
+        drag = { kind: "marquee", from: raw, additive: mods.shift };
+        editor.marquee = { a: raw, b: raw };
       }
       return;
     }
@@ -463,10 +541,15 @@ export function pointerDown(raw: Point, shift: boolean): void {
         editor.selection = [hit];
         const element = outline.elements[hit.element];
         if (isContour(element)) {
-          commit(
-            setNodeKind(outline, hit, cycleNodeKind(element.nodes[hit.node].kind)),
-            "node type changed",
-          );
+          if (mods.alt) {
+            commit(deleteNodePreservingShape(outline, hit), "node deleted");
+            editor.selection = [];
+          } else {
+            commit(
+              setNodeKind(outline, hit, cycleNodeKind(element.nodes[hit.node].kind)),
+              "node type changed",
+            );
+          }
         }
         return;
       }
@@ -481,7 +564,10 @@ export function pointerDown(raw: Point, shift: boolean): void {
     case "eraser": {
       const hit = hitNode(outline, raw, radius);
       if (hit) {
-        commit(removeNodes(outline, [hit]), "node deleted");
+        commit(
+          mods.ctrl ? removeNodes(outline, [hit]) : deleteNodePreservingShape(outline, hit),
+          "node deleted",
+        );
         editor.selection = [];
         return;
       }
@@ -494,11 +580,14 @@ export function pointerDown(raw: Point, shift: boolean): void {
       return;
     }
     case "mirror": {
-      commit(mirrorElements(outline, targets(), shift ? "v" : "h"), shift ? "flipped vertically" : "flipped horizontally");
+      commit(
+        mirrorElements(outline, targets(), mods.shift ? "v" : "h"),
+        mods.shift ? "flipped vertically" : "flipped horizontally",
+      );
       return;
     }
     case "shapes": {
-      drag = { kind: "shape", from: point };
+      drag = { kind: "shape", from: placement(raw, mods) };
       return;
     }
     case "brush": {
@@ -509,59 +598,121 @@ export function pointerDown(raw: Point, shift: boolean): void {
 }
 
 /** Pointer move in glyph space; only local state changes, never IPC. */
-export function pointerMove(raw: Point): void {
-  if (!editor.outline || !drag) return;
-  const point = place(raw);
+export function pointerMove(raw: Point, mods: Modifiers): void {
+  if (!editor.outline) return;
+  if (!drag) {
+    // Hover feedback: show what a click would snap to, without changing anything.
+    if (editor.activeTool === "pen" || editor.activeTool === "shapes") {
+      const hit = snapAt(raw, [], null, mods.shift);
+      editor.snapHit = hit.hits.length > 0 ? hit : null;
+    } else if (editor.snapHit) {
+      editor.snapHit = null;
+    }
+    return;
+  }
   if (drag.kind === "pen") {
     const element = editor.outline.elements[drag.ref.element];
     if (!element || !isContour(element)) return;
     const node = element.nodes[drag.ref.node];
-    const out: [number, number] = [point.x - node.x, point.y - node.y];
+    const point = snapAt(raw, [drag.ref], null, mods.shift).point;
+    let out: [number, number] = [point.x - node.x, point.y - node.y];
+    if (mods.ctrl) {
+      const c = constrainAngle({ x: 0, y: 0 }, { x: out[0], y: out[1] }, 15);
+      out = [c.x, c.y];
+    }
     if (Math.hypot(out[0], out[1]) > 2) {
       editor.outline = setHandle(editor.outline, drag.ref, "out", out);
     }
   } else if (drag.kind === "move") {
-    const dx = raw.x - drag.last.x;
-    const dy = raw.y - drag.last.y;
-    editor.outline = moveNodes(editor.outline, editor.selection, dx, dy);
+    const refs = editor.selection;
+    const anchorNode = nodeAt(drag.anchor);
+    if (!anchorNode) return;
+    const wanted = { x: anchorNode.x + (raw.x - drag.last.x), y: anchorNode.y + (raw.y - drag.last.y) };
+    const hit = snapAt(wanted, refs, drag.anchor, mods.shift);
+    editor.snapHit = hit.hits.length > 0 ? hit : null;
+    let target = hit.point;
+    if (mods.ctrl || drag.axis) target = constrainAxis(drag.start, target);
+    const dx = target.x - anchorNode.x;
+    const dy = target.y - anchorNode.y;
+    editor.outline = moveNodes(editor.outline, refs, dx, dy);
     drag.last = raw;
     drag.moved = true;
   } else if (drag.kind === "handle") {
     const element = editor.outline.elements[drag.ref.element];
     if (!element || !isContour(element)) return;
     const node = element.nodes[drag.ref.node];
-    editor.outline = setHandle(editor.outline, drag.ref, drag.which, [
-      point.x - node.x,
-      point.y - node.y,
-    ]);
+    let offset: [number, number] = [raw.x - node.x, raw.y - node.y];
+    if (mods.ctrl) {
+      const c = constrainAngle({ x: 0, y: 0 }, { x: offset[0], y: offset[1] }, 15);
+      offset = [c.x, c.y];
+    }
+    if (mods.alt) {
+      const current = drag.which === "in" ? node.handle_in : node.handle_out;
+      const keep = current ? Math.hypot(current[0], current[1]) : 0;
+      const length = Math.hypot(offset[0], offset[1]);
+      if (keep > 0 && length > 0) offset = [(offset[0] / length) * keep, (offset[1] / length) * keep];
+    }
+    editor.outline = setHandle(editor.outline, drag.ref, drag.which, offset);
   } else if (drag.kind === "shape") {
-    editor.preview = {
-      ...shapeContour(editor.shape, drag.from, point),
-    };
+    let point = snapAt(raw, [], null, mods.shift).point;
+    if (mods.ctrl) {
+      const side = Math.max(Math.abs(point.x - drag.from.x), Math.abs(point.y - drag.from.y));
+      point = {
+        x: drag.from.x + Math.sign(point.x - drag.from.x || 1) * side,
+        y: drag.from.y + Math.sign(point.y - drag.from.y || 1) * side,
+      };
+    }
+    editor.preview = { ...shapeContour(editor.shape, drag.from, point) };
   } else if (drag.kind === "brush") {
     drag.points.push(raw);
-    const stroke = brushContour(drag.points, editor.nibWidth, editor.nibAngle);
-    editor.preview = stroke;
+    editor.preview = brushContour(drag.points, editor.nibWidth, editor.nibAngle);
+  } else if (drag.kind === "marquee") {
+    editor.marquee = { a: drag.from, b: raw };
   }
 }
 
+function nodeAt(ref: NodeRef) {
+  const element = editor.outline?.elements[ref.element];
+  return element && isContour(element) ? element.nodes[ref.node] : null;
+}
+
 /** Pointer up: finish the gesture, record one history step, save once. */
-export function pointerUp(raw: Point): void {
+export function pointerUp(raw: Point, mods: Modifiers): void {
   const finished = drag;
   drag = null;
+  const hit = editor.snapHit;
+  editor.snapHit = null;
   if (!finished || !editor.outline) return;
-  const point = place(raw);
 
   if (finished.kind === "pen") {
-    // History was recorded on pointer down; persist the finished node.
     void saveOutline();
     say(TOOL_HINT.pen);
   } else if (finished.kind === "move") {
-    if (finished.moved) void saveOutline();
+    if (!finished.moved) return;
+    // Weld on drop: an open endpoint released on another open endpoint joins them.
+    if (hit?.weld && editor.selection.length === 1 && isOpenEndpoint(editor.outline, finished.anchor)) {
+      const welded = weldNodes(editor.outline, finished.anchor, hit.weld, hit.point);
+      if (welded) {
+        editor.outline = welded;
+        editor.selection = [];
+        say("endpoints welded");
+        void saveOutline();
+        return;
+      }
+    }
+    void saveOutline();
   } else if (finished.kind === "handle") {
     void saveOutline();
   } else if (finished.kind === "shape") {
     editor.preview = null;
+    let point = snapAt(raw, [], null, mods.shift).point;
+    if (mods.ctrl) {
+      const side = Math.max(Math.abs(point.x - finished.from.x), Math.abs(point.y - finished.from.y));
+      point = {
+        x: finished.from.x + Math.sign(point.x - finished.from.x || 1) * side,
+        y: finished.from.y + Math.sign(point.y - finished.from.y || 1) * side,
+      };
+    }
     if (Math.hypot(point.x - finished.from.x, point.y - finished.from.y) < 2) return;
     commit(
       addElement(editor.outline, shapeContour(editor.shape, finished.from, point)),
@@ -571,7 +722,81 @@ export function pointerUp(raw: Point): void {
     editor.preview = null;
     const stroke = brushContour(finished.points, editor.nibWidth, editor.nibAngle);
     if (stroke) commit(addElement(editor.outline, stroke), "stroke added");
+  } else if (finished.kind === "marquee") {
+    const box = editor.marquee;
+    editor.marquee = null;
+    if (box && Math.hypot(box.a.x - box.b.x, box.a.y - box.b.y) > 3 / editor.zoom) {
+      const inside = nodesInBox(editor.outline, box.a, box.b);
+      editor.selection = finished.additive
+        ? [
+            ...editor.selection,
+            ...inside.filter(
+              (r) => !editor.selection.some((s) => s.element === r.element && s.node === r.node),
+            ),
+          ]
+        : inside;
+      say(`${editor.selection.length} nodes selected`);
+    }
   }
+}
+
+/** Join the two selected endpoints (Shift+J). */
+export function joinNodes(): void {
+  if (!editor.outline) return;
+  const joined = joinSelected(editor.outline, editor.selection);
+  if (!joined) {
+    say("select exactly two open endpoints to join");
+    return;
+  }
+  commit(joined, "endpoints joined");
+  editor.selection = [];
+}
+
+/** Break the selected node in two (Shift+B). */
+export function breakSelected(): void {
+  if (!editor.outline || editor.selection.length !== 1) {
+    say("select one node to break");
+    return;
+  }
+  const broken = breakNode(editor.outline, editor.selection[0]);
+  if (!broken) {
+    say("that node cannot be broken");
+    return;
+  }
+  commit(broken, "node broken");
+  editor.selection = [];
+}
+
+/** Arrow-key nudge: 1 unit, 10 with Shift (FontForge's default step). */
+export function nudge(dx: number, dy: number, shift: boolean): void {
+  if (!editor.outline || editor.selection.length === 0) return;
+  const step = shift ? 10 : 1;
+  commit(nudgeNodes(editor.outline, editor.selection, dx * step, dy * step));
+}
+
+export function selectNext(step: 1 | -1): void {
+  if (!editor.outline) return;
+  const current = editor.selection.length > 0 ? editor.selection[editor.selection.length - 1] : null;
+  const next = stepSelection(editor.outline, current, step);
+  editor.selection = next ? [next] : [];
+}
+
+/** Delete selected nodes keeping the curve's shape; `plain` removes without refitting. */
+export function deleteNodes(plain: boolean): void {
+  if (!editor.outline) return;
+  if (editor.selection.length === 0) {
+    commit(removeElements(editor.outline, targets()), "shapes deleted");
+    return;
+  }
+  let outline = editor.outline;
+  const ordered = editor.selection
+    .slice()
+    .sort((a, b) => b.element - a.element || b.node - a.node);
+  for (const ref of ordered) {
+    outline = plain ? removeNodes(outline, [ref]) : deleteNodePreservingShape(outline, ref);
+  }
+  commit(outline, "nodes deleted");
+  editor.selection = [];
 }
 
 /** Finish an open pen path (Enter / double-click) without closing it. */

@@ -669,3 +669,209 @@ export function shapeCount(outline: GlyphOutline): number {
 export function canPathfind(outline: GlyphOutline | null): boolean {
   return !!outline && shapeCount(outline) >= 2;
 }
+
+function openEndpoint(contour: ContourElement, node: number): boolean {
+  return !contour.closed && (node === 0 || node === contour.nodes.length - 1);
+}
+
+/** The contour's nodes arranged so that `end` is the last node. */
+function endingAt(contour: ContourElement, node: number): GlyphNode[] {
+  return node === contour.nodes.length - 1
+    ? contour.nodes.slice()
+    : contour.nodes.slice().reverse().map(flipHandles);
+}
+
+/** The contour's nodes arranged so that `start` is the first node. */
+function startingAt(contour: ContourElement, node: number): GlyphNode[] {
+  return node === 0 ? contour.nodes.slice() : contour.nodes.slice().reverse().map(flipHandles);
+}
+
+function flipHandles(n: GlyphNode): GlyphNode {
+  return { ...n, handle_in: n.handle_out, handle_out: n.handle_in };
+}
+
+/**
+ * Weld two open endpoints into one node at `at` (default: their midpoint).
+ * Endpoints on different contours merge the contours into one open path;
+ * the two ends of one contour close it. Returns null if either is not an
+ * open endpoint, so callers can fall back to doing nothing.
+ */
+export function weldNodes(
+  outline: GlyphOutline,
+  a: NodeRef,
+  b: NodeRef,
+  at?: Point,
+): GlyphOutline | null {
+  if (a.element === b.element && a.node === b.node) return null;
+  const ea = outline.elements[a.element];
+  const eb = outline.elements[b.element];
+  if (!ea || !eb || !isContour(ea) || !isContour(eb)) return null;
+  if (!openEndpoint(ea, a.node) || !openEndpoint(eb, b.node)) return null;
+  const ax = ea.nodes[a.node];
+  const bx = eb.nodes[b.node];
+  const x = at?.x ?? (ax.x + bx.x) / 2;
+  const y = at?.y ?? (ax.y + bx.y) / 2;
+
+  if (a.element === b.element) {
+    if (ea.nodes.length < 3) return null;
+    const first = ea.nodes[0];
+    const last = ea.nodes[ea.nodes.length - 1];
+    const merged: GlyphNode = {
+      ...first,
+      x,
+      y,
+      handle_in: last.handle_in,
+      kind: first.kind === "corner" && last.kind === "corner" ? "corner" : "smooth",
+    };
+    const nodes = [merged, ...ea.nodes.slice(1, -1)];
+    return replaceElements(outline, [a.element], [{ ...ea, nodes, closed: true }]);
+  }
+
+  const head = endingAt(ea, a.node);
+  const tail = startingAt(eb, b.node);
+  const left = head[head.length - 1];
+  const right = tail[0];
+  const joined: GlyphNode = {
+    x,
+    y,
+    kind: left.kind === "corner" && right.kind === "corner" ? "corner" : "smooth",
+    handle_in: left.handle_in,
+    handle_out: right.handle_out,
+  };
+  const nodes = [...head.slice(0, -1), joined, ...tail.slice(1)];
+  const merged: ContourElement = { ...ea, nodes, closed: false };
+  const keep = Math.min(a.element, b.element);
+  const drop = Math.max(a.element, b.element);
+  const elements = outline.elements.slice();
+  elements[keep] = merged;
+  elements.splice(drop, 1);
+  return { ...outline, elements };
+}
+
+function replaceElements(
+  outline: GlyphOutline,
+  indexes: number[],
+  replacements: GlyphElement[],
+): GlyphOutline {
+  const elements = outline.elements.slice();
+  elements.splice(indexes[0], indexes.length, ...replacements);
+  return { ...outline, elements };
+}
+
+/** Join the two selected endpoints (Shift+J); null when the selection is not exactly two endpoints. */
+export function joinSelected(outline: GlyphOutline, refs: NodeRef[]): GlyphOutline | null {
+  if (refs.length !== 2) return null;
+  return weldNodes(outline, refs[0], refs[1]);
+}
+
+/**
+ * Break a node in two (Shift+B). A closed contour opens at the node; an open
+ * contour splits into two at an interior node. Endpoints cannot be broken.
+ */
+export function breakNode(outline: GlyphOutline, ref: NodeRef): GlyphOutline | null {
+  const element = outline.elements[ref.element];
+  if (!element || !isContour(element)) return null;
+  const n = element.nodes.length;
+  const node = element.nodes[ref.node];
+  if (!node) return null;
+  const endHalf: GlyphNode = { ...node, handle_out: undefined, kind: "corner" };
+  const startHalf: GlyphNode = { ...node, handle_in: undefined, kind: "corner" };
+  if (element.closed) {
+    const rotated: GlyphNode[] = [];
+    for (let k = 0; k < n; k++) rotated.push(element.nodes[(ref.node + k) % n]);
+    rotated[0] = startHalf;
+    rotated.push(endHalf);
+    return replaceElements(outline, [ref.element], [{ ...element, nodes: rotated, closed: false }]);
+  }
+  if (ref.node === 0 || ref.node === n - 1) return null;
+  const first: ContourElement = {
+    ...element,
+    nodes: [...element.nodes.slice(0, ref.node), endHalf],
+  };
+  const second: ContourElement = {
+    ...element,
+    nodes: [startHalf, ...element.nodes.slice(ref.node + 1)],
+  };
+  return replaceElements(outline, [ref.element], [first, second]);
+}
+
+/**
+ * Delete nodes while keeping the curve's shape (Inkscape's default Delete):
+ * the two segments around a smooth interior node merge into one cubic whose
+ * handles are rescaled by the chord-length ratio. Corners and endpoints fall
+ * back to a plain removal.
+ */
+export function deleteNodePreservingShape(outline: GlyphOutline, ref: NodeRef): GlyphOutline {
+  const element = outline.elements[ref.element];
+  if (!element || !isContour(element)) return outline;
+  const n = element.nodes.length;
+  const interior = element.closed ? n > 3 : ref.node > 0 && ref.node < n - 1 && n > 2;
+  const node = element.nodes[ref.node];
+  if (!interior || !node || node.kind === "corner" || !node.handle_in || !node.handle_out) {
+    return removeNodes(outline, [ref]);
+  }
+  const prevIndex = (ref.node - 1 + n) % n;
+  const nextIndex = (ref.node + 1) % n;
+  const prev = element.nodes[prevIndex];
+  const next = element.nodes[nextIndex];
+  const l1 = Math.hypot(node.x - prev.x, node.y - prev.y);
+  const l2 = Math.hypot(next.x - node.x, next.y - node.y);
+  if (l1 === 0 || l2 === 0) return removeNodes(outline, [ref]);
+  const total = l1 + l2;
+  const nodes = element.nodes.slice();
+  nodes[prevIndex] = {
+    ...prev,
+    handle_out: prev.handle_out
+      ? [prev.handle_out[0] * (total / l1), prev.handle_out[1] * (total / l1)]
+      : prev.handle_out,
+  };
+  nodes[nextIndex] = {
+    ...next,
+    handle_in: next.handle_in
+      ? [next.handle_in[0] * (total / l2), next.handle_in[1] * (total / l2)]
+      : next.handle_in,
+  };
+  nodes.splice(ref.node, 1);
+  return replaceElements(outline, [ref.element], [{ ...element, nodes }]);
+}
+
+/** Move the selected nodes by a whole-unit step (arrow keys; FontForge defaults to 1). */
+export function nudgeNodes(
+  outline: GlyphOutline,
+  refs: NodeRef[],
+  dx: number,
+  dy: number,
+): GlyphOutline {
+  return moveNodes(outline, refs, dx, dy);
+}
+
+/** Nodes inside an axis-aligned box (rubber-band selection). */
+export function nodesInBox(
+  outline: GlyphOutline,
+  a: Point,
+  b: Point,
+): NodeRef[] {
+  const minX = Math.min(a.x, b.x);
+  const maxX = Math.max(a.x, b.x);
+  const minY = Math.min(a.y, b.y);
+  const maxY = Math.max(a.y, b.y);
+  const refs: NodeRef[] = [];
+  outline.elements.forEach((element, ei) => {
+    if (!isContour(element)) return;
+    element.nodes.forEach((n, ni) => {
+      if (n.x >= minX && n.x <= maxX && n.y >= minY && n.y <= maxY) {
+        refs.push({ element: ei, node: ni });
+      }
+    });
+  });
+  return refs;
+}
+
+/** The next/previous node in drawing order, wrapping (Tab / Shift+Tab). */
+export function stepSelection(outline: GlyphOutline, current: NodeRef | null, step: 1 | -1): NodeRef | null {
+  const all = allNodeRefs(outline);
+  if (all.length === 0) return null;
+  if (!current) return all[step === 1 ? 0 : all.length - 1];
+  const at = all.findIndex((r) => r.element === current.element && r.node === current.node);
+  return all[(at + step + all.length) % all.length];
+}
