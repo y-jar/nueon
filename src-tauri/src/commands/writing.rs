@@ -126,3 +126,30 @@ pub fn read_text_file(path: String) -> Result<String, String> {
 pub fn write_text_file(path: String, text: String) -> Result<(), String> {
     std::fs::write(&path, text).map_err(|err| err.to_string())
 }
+
+/// What a font export wrote.
+#[derive(serde::Serialize)]
+pub struct FontExport {
+    pub glyphs: usize,
+    pub mapped: usize,
+    pub bytes: usize,
+}
+
+/// Compile the writing system to a TrueType font, verify it by reading it
+/// back, and write it to a path chosen in a save dialog.
+#[tauri::command]
+pub fn writing_export_font(state: State<'_, Shared>, path: String) -> Result<FontExport, String> {
+    let (bytes, report) = {
+        let state = state.lock().map_err(|_| "state poisoned".to_string())?;
+        state
+            .workspace()?
+            .compile_writing_font()
+            .map_err(|err| err.to_string())?
+    };
+    std::fs::write(&path, &bytes).map_err(|err| err.to_string())?;
+    Ok(FontExport {
+        glyphs: report.glyphs,
+        mapped: report.mapped,
+        bytes: report.bytes,
+    })
+}

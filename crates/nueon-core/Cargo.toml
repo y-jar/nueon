@@ -15,6 +15,9 @@ sha2 = "0.10"
 pulldown-cmark = { version = "0.13", default-features = false, features = ["html"] }
 zip = { version = "2", default-features = false, features = ["deflate"] }
 flo_curves = "0.8"
+write-fonts = "0.54"
+read-fonts = "0.45"
+kurbo = "0.13"
 
 [dev-dependencies]
 tempfile = "3"

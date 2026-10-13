@@ -2171,3 +2171,86 @@ fn svg_export_and_import_round_trip_a_glyph() {
 
     assert!(ws.import_glyph_svg("h", "<svg></svg>").is_err());
 }
+
+#[test]
+fn the_writing_system_compiles_to_a_valid_font() {
+    use crate::config::{
+        ComponentInstance, Contour, FillRule, GlyphMeta, GlyphOutline, Node, NodeKind,
+        OutlineElement,
+    };
+    use crate::font::read_back;
+
+    let dir = tempfile::tempdir().unwrap();
+    let mut ws = Workspace::new(dir.path()).unwrap();
+    let corner = |x: f64, y: f64| Node {
+        x,
+        y,
+        handle_in: None,
+        handle_out: None,
+        kind: NodeKind::Corner,
+    };
+    let square = |size: f64| Contour {
+        nodes: vec![
+            corner(0.0, 0.0),
+            corner(size, 0.0),
+            corner(size, size),
+            corner(0.0, size),
+        ],
+        closed: true,
+        fill_rule: FillRule::Nonzero,
+    };
+    let meta = |id: &str, codepoint: u32| GlyphMeta {
+        id: id.to_string(),
+        name: id.to_string(),
+        codepoint,
+        phonemes: vec![],
+        order: 0,
+        group: String::new(),
+    };
+    ws.save_glyph(
+        "base",
+        &GlyphOutline {
+            elements: vec![OutlineElement::Contour(square(300.0))],
+            advance: Some(400.0),
+            lsb: None,
+            rsb: None,
+        },
+    )
+    .unwrap();
+    // A composite: its component is flattened into real contours in the font.
+    ws.save_glyph(
+        "composed",
+        &GlyphOutline {
+            elements: vec![OutlineElement::Component(ComponentInstance {
+                glyph: "base".into(),
+                dx: 100.0,
+                dy: 0.0,
+                scale_x: 1.0,
+                scale_y: 1.0,
+                rotation: 0.0,
+            })],
+            ..GlyphOutline::default()
+        },
+    )
+    .unwrap();
+    ws.writing.glyphs = vec![meta("base", 0xE000), meta("composed", 0xE001)];
+
+    let (bytes, report) = ws.compile_writing_font().unwrap();
+    assert_eq!(report.glyphs, 2);
+    let check = read_back(&bytes).unwrap();
+    assert_eq!(check.mapped, vec![(0xE000, 1), (0xE001, 2)]);
+    assert_eq!(check.advances[1], 400);
+
+    ws.writing.glyphs.push(meta("clash", 0xE000));
+    ws.save_glyph("clash", &GlyphOutline::default()).unwrap();
+    assert!(
+        ws.compile_writing_font().is_err(),
+        "duplicate codepoints block export"
+    );
+
+    ws.writing.glyphs.clear();
+    assert!(
+        ws.compile_writing_font().is_err(),
+        "an empty system cannot export"
+    );
+}

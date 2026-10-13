@@ -18,6 +18,11 @@ Bundled third-party components
 - flo_curves (https://github.com/Logicalshift/flo_curves) - Apache-2.0
   License, Copyright (c) 2018-2026 Andrew Hunter. Used for glyph boolean
   geometry; linked into the Rust core (see Cargo.lock).
+- write-fonts, read-fonts and font-types (https://github.com/googlefonts/fontations)
+  and kurbo (https://github.com/linebender/kurbo) - MIT OR Apache-2.0
+  licenses, Copyright (c) The Fontations and Linebender authors. Used to
+  compile and verify the exported TrueType font; linked into the Rust core
+  (see Cargo.lock).
 
 Project assets
 

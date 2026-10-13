@@ -7,6 +7,7 @@ pub mod archive;
 pub mod config;
 pub mod export;
 pub mod export_table;
+pub mod font;
 pub mod global;
 pub mod import;
 pub mod model;

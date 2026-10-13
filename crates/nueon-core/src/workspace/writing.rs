@@ -9,6 +9,7 @@ use crate::config::{
     parse_svg_path, svg_path_data, to_svg_document, to_svg_symbol, transform_contour,
     validate_components, validate_outline, Contour, GlyphOutline, OutlineElement,
 };
+use crate::font::{compile_font, read_back, FontError, FontGlyph, FontReport, FontSettings};
 use crate::model::{pathfinder_apply, BooleanOp};
 
 /// Whether a glyph id is safe to use as a file name.
@@ -196,5 +197,52 @@ impl Workspace {
         };
         self.save_glyph(id, &outline)?;
         Ok(count)
+    }
+
+    /// Compile every glyph into a TrueType font, verify it by reading it back,
+    /// and return the bytes with a report. Nothing is written to disk here.
+    pub fn compile_writing_font(&self) -> Result<(Vec<u8>, FontReport), StorageError> {
+        let config = &self.writing;
+        let mut glyphs = Vec::with_capacity(config.glyphs.len());
+        for meta in &config.glyphs {
+            let outline = self.load_glyph(&meta.id)?.unwrap_or_default();
+            glyphs.push(FontGlyph {
+                meta: meta.clone(),
+                contours: self.flatten_glyph(&meta.id)?,
+                advance: outline.advance,
+            });
+        }
+        let settings = FontSettings {
+            family: self.language.name.clone(),
+            upem: config.upem,
+            ascender: if config.ascender != 0.0 {
+                config.ascender
+            } else {
+                800.0
+            },
+            descender: if config.descender != 0.0 {
+                config.descender
+            } else {
+                -200.0
+            },
+            x_height: config.x_height,
+            cap_height: config.cap_height,
+        };
+        let font_error = |err: FontError| StorageError::Config("font".to_string(), err.to_string());
+        let (bytes, report) = compile_font(&settings, &glyphs).map_err(font_error)?;
+        let check = read_back(&bytes).map_err(font_error)?;
+        if check.num_glyphs as usize != glyphs.len() + 1 || check.mapped.len() != glyphs.len() {
+            return Err(StorageError::Config(
+                "font".to_string(),
+                format!(
+                    "validation failed: expected {} glyphs and {} mappings, read back {} and {}",
+                    glyphs.len() + 1,
+                    glyphs.len(),
+                    check.num_glyphs,
+                    check.mapped.len()
+                ),
+            ));
+        }
+        Ok((bytes, report))
     }
 }
