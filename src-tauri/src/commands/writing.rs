@@ -68,3 +68,61 @@ pub fn writing_path_operation(
     changed(&app, "writing");
     Ok(())
 }
+
+/// One glyph as a standalone SVG document.
+#[tauri::command]
+pub fn writing_export_svg(state: State<'_, Shared>, id: String) -> Result<String, String> {
+    let state = state.lock().map_err(|_| "state poisoned".to_string())?;
+    state
+        .workspace()?
+        .export_glyph_svg(&id)
+        .map_err(|err| err.to_string())
+}
+
+/// Every glyph as one `<symbol>` sprite sheet.
+#[tauri::command]
+pub fn writing_export_sprite(state: State<'_, Shared>) -> Result<String, String> {
+    let state = state.lock().map_err(|_| "state poisoned".to_string())?;
+    state
+        .workspace()?
+        .export_sprite_svg()
+        .map_err(|err| err.to_string())
+}
+
+/// Replace a glyph's contours from SVG text; returns how many were imported.
+#[tauri::command]
+pub fn writing_import_svg(
+    app: AppHandle,
+    state: State<'_, Shared>,
+    id: String,
+    svg: String,
+) -> Result<usize, String> {
+    let state = state.lock().map_err(|_| "state poisoned".to_string())?;
+    let count = state
+        .workspace()?
+        .import_glyph_svg(&id, &svg)
+        .map_err(|err| err.to_string())?;
+    drop(state);
+    changed(&app, "writing");
+    Ok(count)
+}
+
+/// Read a user-chosen text file (SVG import); the path comes from a dialog.
+#[tauri::command]
+pub fn read_text_file(path: String) -> Result<String, String> {
+    const MAX_BYTES: u64 = 8 * 1024 * 1024;
+    let meta = std::fs::metadata(&path).map_err(|err| err.to_string())?;
+    if !meta.is_file() {
+        return Err(format!("not a regular file: {path}"));
+    }
+    if meta.len() > MAX_BYTES {
+        return Err("file is too large to import".to_string());
+    }
+    std::fs::read_to_string(&path).map_err(|err| err.to_string())
+}
+
+/// Write text to a user-chosen path (SVG export); the path comes from a dialog.
+#[tauri::command]
+pub fn write_text_file(path: String, text: String) -> Result<(), String> {
+    std::fs::write(&path, text).map_err(|err| err.to_string())
+}

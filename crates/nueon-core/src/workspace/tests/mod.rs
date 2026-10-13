@@ -2119,3 +2119,55 @@ fn renaming_a_word_rewrites_its_note_links_and_undo_restores_them() {
         "see [[kaka]] and ![[kaka|dog]]"
     );
 }
+
+#[test]
+fn svg_export_and_import_round_trip_a_glyph() {
+    use crate::config::{
+        Contour, FillRule, GlyphMeta, GlyphOutline, Node, NodeKind, OutlineElement,
+    };
+
+    let dir = tempfile::tempdir().unwrap();
+    let mut ws = Workspace::new(dir.path()).unwrap();
+    let corner = |x: f64, y: f64| Node {
+        x,
+        y,
+        handle_in: None,
+        handle_out: None,
+        kind: NodeKind::Corner,
+    };
+    ws.save_glyph(
+        "g",
+        &GlyphOutline {
+            elements: vec![OutlineElement::Contour(Contour {
+                nodes: vec![corner(0.0, 0.0), corner(100.0, 0.0), corner(100.0, 100.0)],
+                closed: true,
+                fill_rule: FillRule::Nonzero,
+            })],
+            advance: Some(600.0),
+            lsb: None,
+            rsb: None,
+        },
+    )
+    .unwrap();
+    ws.writing.glyphs.push(GlyphMeta {
+        id: "g".into(),
+        name: "g".into(),
+        codepoint: 0xE000,
+        phonemes: vec![],
+        order: 0,
+        group: String::new(),
+    });
+
+    let svg = ws.export_glyph_svg("g").unwrap();
+    assert!(svg.starts_with("<svg"), "{svg}");
+    let sprite = ws.export_sprite_svg().unwrap();
+    assert!(sprite.contains("<symbol id=\"glyph-g\""), "{sprite}");
+
+    ws.save_glyph("h", &GlyphOutline::default()).unwrap();
+    let imported = ws.import_glyph_svg("h", &svg).unwrap();
+    assert_eq!(imported, 1);
+    let back = ws.load_glyph("h").unwrap().unwrap();
+    assert_eq!(back.elements.len(), 1);
+
+    assert!(ws.import_glyph_svg("h", "<svg></svg>").is_err());
+}

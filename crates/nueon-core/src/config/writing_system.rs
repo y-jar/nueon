@@ -362,6 +362,222 @@ pub fn to_svg_symbol(name: &str, outline: &GlyphOutline) -> String {
     format!("<symbol id=\"{name}\" viewBox=\"{x} {y} {width} {height}\"><path d=\"{d}\"/></symbol>")
 }
 
+/// A standalone SVG document for one glyph (y-flipped), sized to its bounds.
+pub fn to_svg_document(outline: &GlyphOutline) -> String {
+    let (x, y, width, height) = outline_bounds(outline);
+    let d = path_data(outline, true);
+    format!(
+        "<svg xmlns=\"http://www.w3.org/2000/svg\" viewBox=\"{x} {y} {width} {height}\"><path d=\"{d}\"/></svg>"
+    )
+}
+
+/// Every `d="..."` attribute value found in an SVG document, in order.
+pub fn svg_path_data(svg: &str) -> Vec<String> {
+    let mut found = Vec::new();
+    let bytes = svg.as_bytes();
+    let mut from = 0;
+    while let Some(at) = svg[from..].find(" d=") {
+        let start = from + at + 3;
+        from = start;
+        let Some(&quote) = bytes.get(start) else {
+            break;
+        };
+        if quote != b'"' && quote != b'\'' {
+            continue;
+        }
+        if let Some(len) = svg[start + 1..].find(quote as char) {
+            found.push(svg[start + 1..start + 1 + len].to_string());
+            from = start + 1 + len;
+        }
+    }
+    found
+}
+
+struct PathScanner<'a> {
+    chars: std::iter::Peekable<std::str::Chars<'a>>,
+}
+
+impl<'a> PathScanner<'a> {
+    fn skip_separators(&mut self) {
+        while matches!(self.chars.peek(), Some(c) if c.is_whitespace() || *c == ',') {
+            self.chars.next();
+        }
+    }
+
+    fn command(&mut self) -> Option<char> {
+        self.skip_separators();
+        match self.chars.peek() {
+            Some(c) if c.is_ascii_alphabetic() => self.chars.next(),
+            _ => None,
+        }
+    }
+
+    fn has_number(&mut self) -> bool {
+        self.skip_separators();
+        matches!(self.chars.peek(), Some(c) if c.is_ascii_digit() || matches!(*c, '-' | '+' | '.'))
+    }
+
+    fn number(&mut self) -> Result<f64, String> {
+        self.skip_separators();
+        let mut text = String::new();
+        let mut seen_dot = false;
+        let mut seen_exp = false;
+        while let Some(&c) = self.chars.peek() {
+            let sign_ok = (c == '-' || c == '+')
+                && (text.is_empty() || text.ends_with('e') || text.ends_with('E'));
+            let ok = c.is_ascii_digit()
+                || sign_ok
+                || (c == '.' && !seen_dot && !seen_exp)
+                || ((c == 'e' || c == 'E') && !seen_exp && !text.is_empty());
+            if !ok {
+                break;
+            }
+            if c == '.' {
+                seen_dot = true;
+            }
+            if c == 'e' || c == 'E' {
+                seen_exp = true;
+            }
+            text.push(c);
+            self.chars.next();
+        }
+        text.parse::<f64>()
+            .ok()
+            .filter(|v| v.is_finite())
+            .ok_or_else(|| format!("invalid number in path: {text:?}"))
+    }
+}
+
+fn start_contour(contours: &mut Vec<Contour>, x: f64, y: f64) {
+    contours.push(Contour {
+        nodes: vec![Node {
+            x,
+            y,
+            handle_in: None,
+            handle_out: None,
+            kind: NodeKind::Corner,
+        }],
+        closed: false,
+        fill_rule: FillRule::Nonzero,
+    });
+}
+
+fn finish_contour(contour: &mut Contour) {
+    contour.closed = true;
+    if contour.nodes.len() > 2 {
+        let first = contour.nodes[0];
+        let last = *contour.nodes.last().expect("non-empty");
+        if (first.x - last.x).abs() < 1e-9 && (first.y - last.y).abs() < 1e-9 {
+            contour.nodes.pop();
+            contour.nodes[0].handle_in = last.handle_in;
+        }
+    }
+}
+
+/// Parse SVG path data into contours. Supports `M L H V C Q Z` (absolute and
+/// relative); y is flipped so the result is in storage (y-up) coordinates.
+pub fn parse_svg_path(d: &str) -> Result<Vec<Contour>, String> {
+    let mut scanner = PathScanner {
+        chars: d.chars().peekable(),
+    };
+    let mut contours: Vec<Contour> = Vec::new();
+    let (mut cx, mut cy) = (0.0, 0.0);
+    let (mut sx, mut sy) = (0.0, 0.0);
+    let mut command = ' ';
+
+    loop {
+        if let Some(next) = scanner.command() {
+            command = next;
+        } else if !scanner.has_number() {
+            break;
+        } else if command == ' ' {
+            return Err("path data must start with a command".to_string());
+        }
+        let relative = command.is_ascii_lowercase();
+        let (ox, oy) = if relative { (cx, cy) } else { (0.0, 0.0) };
+        match command.to_ascii_uppercase() {
+            'Z' => {
+                if let Some(last) = contours.last_mut() {
+                    finish_contour(last);
+                }
+                cx = sx;
+                cy = sy;
+                command = ' ';
+            }
+            'M' => {
+                let x = ox + scanner.number()?;
+                let y = oy + scanner.number()?;
+                start_contour(&mut contours, x, y);
+                (cx, cy, sx, sy) = (x, y, x, y);
+                command = if relative { 'l' } else { 'L' };
+            }
+            'L' | 'H' | 'V' => {
+                let (x, y) = match command.to_ascii_uppercase() {
+                    'H' => (ox + scanner.number()?, cy),
+                    'V' => (cx, oy + scanner.number()?),
+                    _ => (ox + scanner.number()?, oy + scanner.number()?),
+                };
+                push_segment(&mut contours, cx, cy, None, None, x, y);
+                (cx, cy) = (x, y);
+            }
+            'C' => {
+                let c1 = (ox + scanner.number()?, oy + scanner.number()?);
+                let c2 = (ox + scanner.number()?, oy + scanner.number()?);
+                let end = (ox + scanner.number()?, oy + scanner.number()?);
+                push_segment(&mut contours, cx, cy, Some(c1), Some(c2), end.0, end.1);
+                (cx, cy) = end;
+            }
+            'Q' => {
+                let q = (ox + scanner.number()?, oy + scanner.number()?);
+                let end = (ox + scanner.number()?, oy + scanner.number()?);
+                let c1 = (cx + 2.0 / 3.0 * (q.0 - cx), cy + 2.0 / 3.0 * (q.1 - cy));
+                let c2 = (
+                    end.0 + 2.0 / 3.0 * (q.0 - end.0),
+                    end.1 + 2.0 / 3.0 * (q.1 - end.1),
+                );
+                push_segment(&mut contours, cx, cy, Some(c1), Some(c2), end.0, end.1);
+                (cx, cy) = end;
+            }
+            other => return Err(format!("unsupported path command: {other}")),
+        }
+    }
+
+    for contour in &mut contours {
+        for node in &mut contour.nodes {
+            node.y = -node.y;
+            node.handle_in = node.handle_in.map(|(hx, hy)| (hx, -hy));
+            node.handle_out = node.handle_out.map(|(hx, hy)| (hx, -hy));
+        }
+    }
+    contours.retain(|c| c.nodes.len() >= 2);
+    Ok(contours)
+}
+
+fn push_segment(
+    contours: &mut Vec<Contour>,
+    cx: f64,
+    cy: f64,
+    c1: Option<(f64, f64)>,
+    c2: Option<(f64, f64)>,
+    x: f64,
+    y: f64,
+) {
+    if contours.is_empty() {
+        start_contour(contours, cx, cy);
+    }
+    let contour = contours.last_mut().expect("contour exists");
+    if let Some(prev) = contour.nodes.last_mut() {
+        prev.handle_out = c1.map(|(hx, hy)| (hx - prev.x, hy - prev.y));
+    }
+    contour.nodes.push(Node {
+        x,
+        y,
+        handle_in: c2.map(|(hx, hy)| (hx - x, hy - y)),
+        handle_out: None,
+        kind: NodeKind::Corner,
+    });
+}
+
 /// Rotate then scale a vector by a component transform (no translation).
 fn rot_scale(x: f64, y: f64, transform: &ComponentInstance) -> (f64, f64) {
     let (sin, cos) = transform.rotation.sin_cos();
@@ -625,5 +841,79 @@ mod tests {
         assert_eq!(transformed.nodes[0].y, -10.0);
         // A handle is a direction vector: scaled, not translated.
         assert_eq!(transformed.nodes[0].handle_out, Some((2.0, 0.0)));
+    }
+
+    #[test]
+    fn svg_document_wraps_a_path_with_a_viewbox() {
+        let outline = glyph(vec![OutlineElement::Contour(contour(&[
+            (0.0, 0.0),
+            (10.0, 0.0),
+            (10.0, 20.0),
+        ]))]);
+        let svg = to_svg_document(&outline);
+        assert!(svg.starts_with("<svg xmlns="), "{svg}");
+        assert!(svg.contains("viewBox="), "{svg}");
+        assert!(svg.contains("<path d=\"M 0 0"), "{svg}");
+        assert!(!svg.contains("NaN"), "{svg}");
+    }
+
+    #[test]
+    fn svg_path_data_finds_every_d_attribute() {
+        let svg = r#"<svg><path d="M0 0L1 1"/><g><path fill="red" d='M2 2L3 3Z'/></g></svg>"#;
+        assert_eq!(svg_path_data(svg), vec!["M0 0L1 1", "M2 2L3 3Z"]);
+        assert!(svg_path_data("<svg/>").is_empty());
+    }
+
+    #[test]
+    fn parse_svg_path_reads_lines_and_flips_y() {
+        let contours = parse_svg_path("M 0 0 L 10 0 L 10 20 Z").unwrap();
+        assert_eq!(contours.len(), 1);
+        assert!(contours[0].closed);
+        assert_eq!(contours[0].nodes.len(), 3);
+        assert_eq!(contours[0].nodes[2].y, -20.0);
+    }
+
+    #[test]
+    fn parse_svg_path_reads_cubics_and_merges_the_closing_node() {
+        let contours = parse_svg_path("M0 0C0 10 10 10 10 0C10 -10 0 -10 0 0Z").unwrap();
+        assert_eq!(
+            contours[0].nodes.len(),
+            2,
+            "closing node merges into the first"
+        );
+        assert!(contours[0].nodes[0].handle_out.is_some());
+        assert!(contours[0].nodes[0].handle_in.is_some());
+    }
+
+    #[test]
+    fn parse_svg_path_handles_relative_and_packed_numbers() {
+        let contours = parse_svg_path("m10-5l5.5.5h-3v2z").unwrap();
+        let nodes = &contours[0].nodes;
+        assert_eq!(nodes[0].x, 10.0);
+        assert_eq!(nodes[0].y, 5.0);
+        assert_eq!(nodes[1].x, 15.5);
+        assert_eq!(nodes[2].x, 12.5);
+    }
+
+    #[test]
+    fn parse_svg_path_rejects_arcs_and_junk() {
+        assert!(parse_svg_path("M0 0 A5 5 0 0 1 10 0").is_err());
+        assert!(parse_svg_path("10 10").is_err());
+        assert!(parse_svg_path("M 0 x").is_err());
+    }
+
+    #[test]
+    fn exported_svg_round_trips_through_the_parser() {
+        let outline = glyph(vec![OutlineElement::Contour(contour(&[
+            (0.0, 0.0),
+            (100.0, 0.0),
+            (100.0, 50.0),
+            (0.0, 50.0),
+        ]))]);
+        let svg = to_svg_document(&outline);
+        let parsed = parse_svg_path(&svg_path_data(&svg)[0]).unwrap();
+        assert_eq!(parsed.len(), 1);
+        let ys: Vec<f64> = parsed[0].nodes.iter().map(|n| n.y).collect();
+        assert_eq!(ys, vec![0.0, 0.0, 50.0, 50.0]);
     }
 }

@@ -6,7 +6,8 @@ use std::path::PathBuf;
 use super::storage::{self, StorageError};
 use super::Workspace;
 use crate::config::{
-    transform_contour, validate_components, validate_outline, Contour, GlyphOutline, OutlineElement,
+    parse_svg_path, svg_path_data, to_svg_document, to_svg_symbol, transform_contour,
+    validate_components, validate_outline, Contour, GlyphOutline, OutlineElement,
 };
 use crate::model::{pathfinder_apply, BooleanOp};
 
@@ -136,5 +137,64 @@ impl Workspace {
             rsb: original.rsb,
         };
         self.save_glyph(id, &outline)
+    }
+
+    /// One glyph as a standalone SVG document (components expanded).
+    pub fn export_glyph_svg(&self, id: &str) -> Result<String, StorageError> {
+        let contours = self.flatten_glyph(id)?;
+        let outline = GlyphOutline {
+            elements: contours.into_iter().map(OutlineElement::Contour).collect(),
+            ..GlyphOutline::default()
+        };
+        Ok(to_svg_document(&outline))
+    }
+
+    /// Every glyph in the writing config as one `<symbol>` sprite sheet.
+    pub fn export_sprite_svg(&self) -> Result<String, StorageError> {
+        let mut out = String::from("<svg xmlns=\"http://www.w3.org/2000/svg\">");
+        for glyph in &self.writing.glyphs {
+            let contours = self.flatten_glyph(&glyph.id)?;
+            let outline = GlyphOutline {
+                elements: contours.into_iter().map(OutlineElement::Contour).collect(),
+                ..GlyphOutline::default()
+            };
+            out.push_str(&to_svg_symbol(&format!("glyph-{}", glyph.id), &outline));
+        }
+        out.push_str("</svg>");
+        Ok(out)
+    }
+
+    /// Replace a glyph's contours with the paths found in an SVG document,
+    /// keeping its metrics. Returns how many contours were imported.
+    pub fn import_glyph_svg(&self, id: &str, svg: &str) -> Result<usize, StorageError> {
+        let paths = svg_path_data(svg);
+        if paths.is_empty() {
+            return Err(StorageError::Config(
+                id.to_string(),
+                "no <path d=\"...\"> found in the SVG".to_string(),
+            ));
+        }
+        let mut contours = Vec::new();
+        for d in &paths {
+            contours.extend(
+                parse_svg_path(d).map_err(|err| StorageError::Config(id.to_string(), err))?,
+            );
+        }
+        if contours.is_empty() {
+            return Err(StorageError::Config(
+                id.to_string(),
+                "the SVG paths contain no drawable shapes".to_string(),
+            ));
+        }
+        let count = contours.len();
+        let original = self.load_glyph(id)?.unwrap_or_default();
+        let outline = GlyphOutline {
+            elements: contours.into_iter().map(OutlineElement::Contour).collect(),
+            advance: original.advance,
+            lsb: original.lsb,
+            rsb: original.rsb,
+        };
+        self.save_glyph(id, &outline)?;
+        Ok(count)
     }
 }
