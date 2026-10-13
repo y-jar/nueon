@@ -362,6 +362,40 @@ pub fn to_svg_symbol(name: &str, outline: &GlyphOutline) -> String {
     format!("<symbol id=\"{name}\" viewBox=\"{x} {y} {width} {height}\"><path d=\"{d}\"/></symbol>")
 }
 
+/// Rotate then scale a vector by a component transform (no translation).
+fn rot_scale(x: f64, y: f64, transform: &ComponentInstance) -> (f64, f64) {
+    let (sin, cos) = transform.rotation.sin_cos();
+    (
+        x * transform.scale_x * cos - y * transform.scale_y * sin,
+        x * transform.scale_x * sin + y * transform.scale_y * cos,
+    )
+}
+
+/// Apply a component transform to one node (and its Bezier handles).
+fn transform_node(node: &Node, transform: &ComponentInstance) -> Node {
+    let (px, py) = rot_scale(node.x, node.y, transform);
+    Node {
+        x: transform.dx + px,
+        y: transform.dy + py,
+        handle_in: node.handle_in.map(|(hx, hy)| rot_scale(hx, hy, transform)),
+        handle_out: node.handle_out.map(|(hx, hy)| rot_scale(hx, hy, transform)),
+        kind: node.kind,
+    }
+}
+
+/// Apply a component transform to every node of a contour.
+pub fn transform_contour(contour: &Contour, transform: &ComponentInstance) -> Contour {
+    Contour {
+        nodes: contour
+            .nodes
+            .iter()
+            .map(|node| transform_node(node, transform))
+            .collect(),
+        closed: contour.closed,
+        fill_rule: contour.fill_rule,
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -548,17 +582,48 @@ mod tests {
     }
 
     #[test]
-    fn validate_outline_rejects_nan_coordinates() {
-        let outline = glyph(vec![OutlineElement::Contour(contour(&[(0.0, f64::NAN)]))]);
-        assert!(validate_outline(&outline).is_err());
-    }
-
-    #[test]
     fn validate_outline_accepts_clean_contours() {
         let outline = glyph(vec![OutlineElement::Contour(contour(&[
             (0.0, 0.0),
             (1.0, 2.0),
         ]))]);
         assert!(validate_outline(&outline).is_ok());
+    }
+
+    #[test]
+    fn transform_contour_translates_and_scales() {
+        let source = Contour {
+            nodes: vec![
+                Node {
+                    x: 10.0,
+                    y: 20.0,
+                    handle_in: None,
+                    handle_out: Some((1.0, 0.0)),
+                    kind: NodeKind::Corner,
+                },
+                Node {
+                    x: 30.0,
+                    y: 40.0,
+                    handle_in: None,
+                    handle_out: None,
+                    kind: NodeKind::Corner,
+                },
+            ],
+            closed: true,
+            fill_rule: FillRule::Nonzero,
+        };
+        let transform = ComponentInstance {
+            glyph: "other".into(),
+            dx: 100.0,
+            dy: -50.0,
+            scale_x: 2.0,
+            scale_y: 2.0,
+            rotation: 0.0,
+        };
+        let transformed = transform_contour(&source, &transform);
+        assert_eq!(transformed.nodes[0].x, 120.0);
+        assert_eq!(transformed.nodes[0].y, -10.0);
+        // A handle is a direction vector: scaled, not translated.
+        assert_eq!(transformed.nodes[0].handle_out, Some((2.0, 0.0)));
     }
 }

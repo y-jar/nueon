@@ -1,10 +1,14 @@
 //! Per-glyph outline files for the writing system.
 
+use std::collections::HashSet;
 use std::path::PathBuf;
 
 use super::storage::{self, StorageError};
 use super::Workspace;
-use crate::config::{validate_components, validate_outline, GlyphOutline};
+use crate::config::{
+    transform_contour, validate_components, validate_outline, Contour, GlyphOutline, OutlineElement,
+};
+use crate::model::{pathfinder_apply, BooleanOp};
 
 /// Whether a glyph id is safe to use as a file name.
 fn valid_glyph_id(id: &str) -> bool {
@@ -78,5 +82,59 @@ impl Workspace {
         validate_components(&refs).map_err(|err| StorageError::Config(id.to_string(), err))?;
 
         storage::save_json(&self.glyph_file(id), outline)
+    }
+
+    /// Expand a glyph's component instances into a flat list of contours,
+    /// applying each instance's transform. Detects reference cycles.
+    pub fn flatten_glyph(&self, id: &str) -> Result<Vec<Contour>, StorageError> {
+        let mut visiting = HashSet::new();
+        self.flatten_into(id, &mut visiting)
+    }
+
+    fn flatten_into(
+        &self,
+        id: &str,
+        visiting: &mut HashSet<String>,
+    ) -> Result<Vec<Contour>, StorageError> {
+        if !visiting.insert(id.to_string()) {
+            return Err(StorageError::Config(
+                id.to_string(),
+                "component cycle".to_string(),
+            ));
+        }
+        let outline = self.load_glyph(id)?.unwrap_or_default();
+        let mut contours = Vec::new();
+        for element in &outline.elements {
+            match element {
+                OutlineElement::Contour(contour) => contours.push(contour.clone()),
+                OutlineElement::Component(component) => {
+                    for sub in self.flatten_into(&component.glyph, visiting)? {
+                        contours.push(transform_contour(&sub, component));
+                    }
+                }
+            }
+        }
+        visiting.remove(id);
+        Ok(contours)
+    }
+
+    /// Apply a pathfinder boolean to a glyph's flattened contours and save.
+    pub fn apply_pathfinder(&self, id: &str, op: BooleanOp) -> Result<(), StorageError> {
+        let original = self.load_glyph(id)?.unwrap_or_default();
+        let contours = self.flatten_glyph(id)?;
+        if contours.is_empty() {
+            return Err(StorageError::Config(
+                id.to_string(),
+                "glyph has no geometry to operate on".to_string(),
+            ));
+        }
+        let result = pathfinder_apply(&contours, op);
+        let outline = GlyphOutline {
+            elements: result.into_iter().map(OutlineElement::Contour).collect(),
+            advance: original.advance,
+            lsb: original.lsb,
+            rsb: original.rsb,
+        };
+        self.save_glyph(id, &outline)
     }
 }

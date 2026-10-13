@@ -4,6 +4,7 @@ pub mod derivation;
 mod dictionary;
 mod entry;
 pub mod field;
+pub mod pathfinder;
 mod table;
 pub mod tag;
 pub mod translate;
@@ -15,6 +16,7 @@ pub use derivation::{
 pub use dictionary::{Dictionary, WordHit};
 pub use entry::WordEntry;
 pub use field::{FieldType, FieldValue};
+pub use pathfinder::{apply as pathfinder_apply, BooleanOp};
 pub use table::{TagKindChange, TagRemoval, WordTable};
 pub use tag::{TagDef, TagFormat, DEFINITION_TAG, PARENT_TAG, WORDNAME_TAG};
 pub use translate::{

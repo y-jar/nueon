@@ -1139,6 +1139,139 @@ fn saving_a_glyph_rejects_component_cycles() {
 }
 
 #[test]
+fn flatten_glyph_expands_components_with_transforms() {
+    use crate::config::{
+        ComponentInstance, Contour, FillRule, GlyphOutline, Node, NodeKind, OutlineElement,
+    };
+
+    let dir = tempfile::tempdir().unwrap();
+    let ws = Workspace::new(dir.path()).unwrap();
+
+    let square = |x: f64, y: f64| GlyphOutline {
+        elements: vec![OutlineElement::Contour(Contour {
+            nodes: vec![
+                Node {
+                    x,
+                    y,
+                    handle_in: None,
+                    handle_out: None,
+                    kind: NodeKind::Corner,
+                },
+                Node {
+                    x: x + 100.0,
+                    y,
+                    handle_in: None,
+                    handle_out: None,
+                    kind: NodeKind::Corner,
+                },
+                Node {
+                    x: x + 100.0,
+                    y: y + 100.0,
+                    handle_in: None,
+                    handle_out: None,
+                    kind: NodeKind::Corner,
+                },
+                Node {
+                    x,
+                    y: y + 100.0,
+                    handle_in: None,
+                    handle_out: None,
+                    kind: NodeKind::Corner,
+                },
+            ],
+            closed: true,
+            fill_rule: FillRule::Nonzero,
+        })],
+        advance: None,
+        lsb: None,
+        rsb: None,
+    };
+
+    ws.save_glyph("b", &square(0.0, 0.0)).unwrap();
+    let composite = GlyphOutline {
+        elements: vec![OutlineElement::Component(ComponentInstance {
+            glyph: "b".into(),
+            dx: 50.0,
+            dy: 0.0,
+            scale_x: 1.0,
+            scale_y: 1.0,
+            rotation: 0.0,
+        })],
+        advance: None,
+        lsb: None,
+        rsb: None,
+    };
+    ws.save_glyph("a", &composite).unwrap();
+
+    let flattened = ws.flatten_glyph("a").unwrap();
+    assert_eq!(flattened.len(), 1);
+    assert_eq!(flattened[0].nodes[0].x, 50.0);
+    assert_eq!(flattened[0].nodes[1].x, 150.0);
+}
+
+#[test]
+fn apply_pathfinder_union_merges_contours() {
+    use crate::config::{Contour, FillRule, GlyphOutline, Node, NodeKind, OutlineElement};
+    use crate::model::BooleanOp;
+
+    let dir = tempfile::tempdir().unwrap();
+    let ws = Workspace::new(dir.path()).unwrap();
+
+    let square = |x: f64, y: f64| Contour {
+        nodes: vec![
+            Node {
+                x,
+                y,
+                handle_in: None,
+                handle_out: None,
+                kind: NodeKind::Corner,
+            },
+            Node {
+                x: x + 100.0,
+                y,
+                handle_in: None,
+                handle_out: None,
+                kind: NodeKind::Corner,
+            },
+            Node {
+                x: x + 100.0,
+                y: y + 100.0,
+                handle_in: None,
+                handle_out: None,
+                kind: NodeKind::Corner,
+            },
+            Node {
+                x,
+                y: y + 100.0,
+                handle_in: None,
+                handle_out: None,
+                kind: NodeKind::Corner,
+            },
+        ],
+        closed: true,
+        fill_rule: FillRule::Nonzero,
+    };
+
+    ws.save_glyph(
+        "g",
+        &GlyphOutline {
+            elements: vec![
+                OutlineElement::Contour(square(0.0, 0.0)),
+                OutlineElement::Contour(square(50.0, 0.0)),
+            ],
+            advance: None,
+            lsb: None,
+            rsb: None,
+        },
+    )
+    .unwrap();
+
+    ws.apply_pathfinder("g", BooleanOp::Union).unwrap();
+    let merged = ws.load_glyph("g").unwrap().unwrap();
+    assert_eq!(merged.elements.len(), 1, "union produces one contour");
+}
+
+#[test]
 fn loading_backfills_persistent_phoneme_ids() {
     let dir = tempfile::tempdir().unwrap();
     let mut ws = Workspace::new(dir.path()).unwrap();

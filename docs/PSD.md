@@ -187,9 +187,13 @@ layer (`src-tauri/`), and the Svelte 5 frontend (`src/`). See `docs/ARCHITECTURE
   glyph tray — is implemented in `src/components/VectorEditor.svelte` and its
   children, backed by `src/lib/writingEditor.svelte.ts` and the
   `writing_glyph_get`/`writing_glyph_set`/`writing_path_operation` commands.
-  Drawing, preview, pathfinder geometry and export are not yet built.
-- **Proof.** cargo `writing_system`, `profile` and `workspace` tests (type
-  round-trips, profile v1/v2/v3 backfill, phoneme-id backfill, acyclic-component
-  rejection, glyph atomic save/load, SVG serialization); node `tabs.test.ts`
+  Pathfinder booleans are implemented in `crates/nueon-core/src/model/pathfinder.rs`
+  (`flo_curves`, curve-preserving union/difference/intersect/exclude) and
+  component flattening in `crates/nueon-core/src/workspace/writing.rs`. Drawing,
+  preview and export are not yet built.
+- **Proof.** cargo `writing_system`, `profile`, `pathfinder` and `workspace`
+  tests (type round-trips, profile v1/v2/v3 backfill, phoneme-id backfill,
+  acyclic-component rejection, glyph atomic save/load, SVG serialization,
+  curve-preserving booleans, component flattening); node `tabs.test.ts`
   (`isSingletonTab("writing")`) and `writing.test.ts` (glyph grouping, sound
   coverage, tool registry, guide rails, bounds, path data).

@@ -15,6 +15,9 @@ Bundled third-party components
   below. It derives from SCOWL and carries a composite permission notice.
 - Icons: @lucide/svelte (https://lucide.dev) - ISC License, Copyright (c)
   2026 Lucide Icons and Contributors.
+- flo_curves (https://github.com/Logicalshift/flo_curves) - Apache-2.0
+  License, Copyright (c) 2018-2026 Andrew Hunter. Used for glyph boolean
+  geometry; linked into the Rust core (see Cargo.lock).
 
 Project assets
 

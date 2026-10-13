@@ -5,6 +5,7 @@ use std::sync::Mutex;
 use tauri::{AppHandle, State};
 
 use nueon_core::config::GlyphOutline;
+use nueon_core::model::BooleanOp;
 
 use crate::state::AppState;
 
@@ -43,27 +44,27 @@ pub fn writing_glyph_set(
     Ok(())
 }
 
-/// Stub for the pathfinder booleans (union/difference/intersect/exclude).
-///
-/// The command surface is wired end-to-end and validates the operation and the
-/// glyph id, but the geometry engine (`flo_curves`) lands in a later stage, so
-/// it always reports "not implemented" after its checks.
+/// Apply a pathfinder boolean to a glyph's contours.
 #[tauri::command]
 pub fn writing_path_operation(
+    app: AppHandle,
     state: State<'_, Shared>,
     id: String,
     operation: String,
 ) -> Result<(), String> {
-    if !matches!(
-        operation.as_str(),
-        "union" | "difference" | "intersect" | "exclude"
-    ) {
-        return Err(format!("unknown pathfinder operation: {operation}"));
-    }
+    let op = match operation.as_str() {
+        "union" => BooleanOp::Union,
+        "difference" => BooleanOp::Difference,
+        "intersect" => BooleanOp::Intersect,
+        "exclude" => BooleanOp::Exclude,
+        other => return Err(format!("unknown pathfinder operation: {other}")),
+    };
     let state = state.lock().map_err(|_| "state poisoned".to_string())?;
     state
         .workspace()?
-        .load_glyph(&id)
+        .apply_pathfinder(&id, op)
         .map_err(|err| err.to_string())?;
-    Err(format!("pathfinder {operation} is not implemented yet"))
+    drop(state);
+    changed(&app, "writing");
+    Ok(())
 }

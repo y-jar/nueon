@@ -30,7 +30,7 @@ pub use translation::{
     TranslationOptions,
 };
 pub use writing_system::{
-    path_data, to_svg_symbol, validate_components, validate_outline, ComponentInstance, Contour,
-    FillRule, GlyphMeta, GlyphOutline, Node, NodeKind, OrthographyRule, OutlineElement,
-    WritingConfig, WritingDirection,
+    path_data, to_svg_symbol, transform_contour, validate_components, validate_outline,
+    ComponentInstance, Contour, FillRule, GlyphMeta, GlyphOutline, Node, NodeKind, OrthographyRule,
+    OutlineElement, WritingConfig, WritingDirection,
 };

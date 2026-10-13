@@ -55,9 +55,9 @@ the scope table is at the end.
 ## Writing system
 
 `writing_glyph_get`, `writing_glyph_set` (per-glyph outline load/save), and
-`writing_path_operation` (stubbed pathfinder booleans: `union`, `difference`,
-`intersect`, `exclude`). The writing config itself travels through the generic
-`config_get`/`config_set` with section `writing`.
+`writing_path_operation` (pathfinder booleans over a glyph's flattened contours:
+`union`, `difference`, `intersect`, `exclude`). The writing config itself
+travels through the generic `config_get`/`config_set` with section `writing`.
 
 ## Version control
 

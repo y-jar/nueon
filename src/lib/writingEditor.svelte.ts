@@ -90,12 +90,13 @@ export function insertComponent(glyphId: string): void {
   void saveOutline();
 }
 
-/** Run a (stubbed) pathfinder boolean on the active glyph. */
+/** Run a pathfinder boolean on the active glyph, then reload its outline. */
 export async function runPathfinder(operation: api.PathOperation): Promise<void> {
   if (!editor.openGlyphId) return;
   try {
     await api.writingPathOperation(editor.openGlyphId, operation);
     editor.status = `pathfinder ${operation} applied`;
+    await loadOutline(editor.openGlyphId);
   } catch (e) {
     editor.status = `pathfinder ${operation}: ${String(e)}`;
   }
