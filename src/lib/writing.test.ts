@@ -11,6 +11,8 @@ import {
   componentElement,
   compositeOutline,
   flipY,
+  nextCodepoint,
+  codepointConflicts,
   UNGROUPED,
 } from "./writing.ts";
 import type { GlyphMeta, GlyphOutline, WritingConfig } from "./api.ts";
@@ -171,4 +173,20 @@ test("compositeOutline references two radicals side by side", () => {
   assert.equal(outline.elements.length, 2);
   assert.deepEqual(outline.elements[0], componentElement("left"));
   assert.deepEqual(outline.elements[1], componentElement("right", 500));
+});
+
+test("nextCodepoint reuses the lowest free slot, so deleting never collides", () => {
+  const at = (cp: number) => ({ ...glyph(`g${cp}`, "g", 0), codepoint: cp });
+  assert.equal(nextCodepoint([]), 0xe000);
+  assert.equal(nextCodepoint([at(0xe000), at(0xe001)]), 0xe002);
+  assert.equal(nextCodepoint([at(0xe001), at(0xe002)]), 0xe000);
+  const full = Array.from({ length: 0xf8ff - 0xe000 + 1 }, (_, i) => at(0xe000 + i));
+  assert.equal(nextCodepoint(full), null);
+});
+
+test("codepointConflicts lists glyphs that share a codepoint", () => {
+  const at = (name: string, cp: number) => ({ ...glyph(name, "g", 0), codepoint: cp });
+  const conflicts = codepointConflicts([at("a", 1), at("b", 1), at("c", 2)]);
+  assert.deepEqual([...conflicts.entries()], [[1, ["a", "b"]]]);
+  assert.equal(codepointConflicts([at("a", 1), at("c", 2)]).size, 0);
 });

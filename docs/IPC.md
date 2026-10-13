@@ -59,7 +59,9 @@ the scope table is at the end.
 `union`, `difference`, `intersect`, `exclude`), `writing_export_svg` (one glyph
 as an SVG document), `writing_export_sprite` (every glyph as a `<symbol>`
 sprite sheet) and `writing_import_svg` (replace a glyph's contours from SVG
-text; supports `M L H V C Q Z`). `read_text_file` / `write_text_file` move SVG
+text; supports `M L H V C Q Z`) and `writing_export_font` (compile every glyph
+to a TrueType font, verify it by reading it back, write it to a chosen path;
+returns `{ glyphs, mapped, bytes }`). `read_text_file` / `write_text_file` move SVG
 text to and from paths chosen in a file dialog. The writing config itself
 travels through the generic `config_get`/`config_set` with section `writing`.
 

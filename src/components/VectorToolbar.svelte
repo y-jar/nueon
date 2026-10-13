@@ -5,6 +5,7 @@
   import { readTextFile, writeTextFile } from "../lib/files";
   import {
     editor,
+    exportFont,
     exportGlyphSvg,
     importSvg,
     redo,
@@ -28,6 +29,15 @@
     } catch (e) {
       editor.error = String(e);
     }
+  }
+
+  async function exportFontFile() {
+    const path = await saveDialog({
+      defaultPath: "script.ttf",
+      filters: [{ name: "TrueType font", extensions: ["ttf"] }],
+    });
+    if (!path) return;
+    await exportFont(path);
   }
 
   async function importFile() {
@@ -58,6 +68,7 @@
     {$t("writing.compose")}
   </button>
   <span class="grow"></span>
+  <button onclick={() => void exportFontFile()}>{$t("writing.exportFont")}</button>
   <button onclick={() => void exportSvg()}>{$t("writing.exportSvg")}</button>
   <button onclick={() => void importFile()}>{$t("writing.importSvg")}</button>
 </div>

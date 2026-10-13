@@ -186,3 +186,30 @@ export function compositeOutline(rowId: string, colId: string): GlyphOutline {
   };
 }
 
+
+/** First and last codepoints of the Private Use Area used for glyphs. */
+export const PUA_START = 0xe000;
+export const PUA_END = 0xf8ff;
+
+/** The lowest free Private Use Area codepoint, or null when the area is full. */
+export function nextCodepoint(glyphs: GlyphMeta[]): number | null {
+  const used = new Set(glyphs.map((glyph) => glyph.codepoint));
+  for (let cp = PUA_START; cp <= PUA_END; cp++) {
+    if (!used.has(cp)) return cp;
+  }
+  return null;
+}
+
+/** Codepoints used by more than one glyph, with the glyphs that share each. */
+export function codepointConflicts(glyphs: GlyphMeta[]): Map<number, string[]> {
+  const byCodepoint = new Map<number, string[]>();
+  for (const glyph of glyphs) {
+    const list = byCodepoint.get(glyph.codepoint) ?? [];
+    list.push(glyph.name);
+    byCodepoint.set(glyph.codepoint, list);
+  }
+  for (const [cp, names] of byCodepoint) {
+    if (names.length < 2) byCodepoint.delete(cp);
+  }
+  return byCodepoint;
+}

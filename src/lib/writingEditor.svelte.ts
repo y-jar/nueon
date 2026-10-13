@@ -625,3 +625,17 @@ export async function importSvg(svg: string): Promise<boolean> {
     return false;
   }
 }
+
+/** Compile the writing system to a font at `path`; reports what was written. */
+export async function exportFont(path: string): Promise<boolean> {
+  try {
+    const result = await api.writingExportFont(path);
+    say(
+      `font exported: ${result.glyphs} glyphs, ${result.mapped} mapped, ${result.bytes} bytes`,
+    );
+    return true;
+  } catch (e) {
+    editor.error = String(e);
+    return false;
+  }
+}

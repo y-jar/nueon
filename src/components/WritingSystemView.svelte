@@ -4,7 +4,13 @@
   import { t } from "svelte-i18n";
   import { Plus } from "@lucide/svelte";
   import * as api from "../lib/api";
-  import { groupGlyphs, soundCoverage, compositeOutline, UNGROUPED } from "../lib/writing";
+  import {
+    groupGlyphs,
+    soundCoverage,
+    compositeOutline,
+    nextCodepoint,
+    UNGROUPED,
+  } from "../lib/writing";
   import { confirmDialog, openGlyphContextMenu } from "../lib/state.svelte";
   import { editor, openGlyph, closeGlyph } from "../lib/writingEditor.svelte";
   import type { GuideField } from "../lib/writingMenus";
@@ -68,7 +74,7 @@
       {
         id: crypto.randomUUID(),
         name: `glyph-${config.glyphs.length + 1}`,
-        codepoint: 0xe000 + config.glyphs.length,
+        codepoint: nextCodepoint(config.glyphs) ?? 0xe000,
         phonemes: [],
         order: config.glyphs.length,
         group: UNGROUPED,
@@ -89,7 +95,7 @@
       {
         id: crypto.randomUUID(),
         name: phoneme.symbol,
-        codepoint: 0xe000 + config.glyphs.length,
+        codepoint: nextCodepoint(config.glyphs) ?? 0xe000,
         phonemes: [phoneme.id ?? phoneme.symbol],
         order: config.glyphs.length,
         group,
@@ -194,7 +200,7 @@
     const meta: api.GlyphMeta = {
       id: crypto.randomUUID(),
       name: `${row.name}+${col.name}`,
-      codepoint: 0xe000 + config.glyphs.length,
+      codepoint: nextCodepoint(config.glyphs) ?? 0xe000,
       phonemes: [],
       order: config.glyphs.length,
       group: "composed",

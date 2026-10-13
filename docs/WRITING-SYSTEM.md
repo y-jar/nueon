@@ -187,6 +187,7 @@ publish no `rust_version` field. Our toolchain is **Rust 1.95**.
   `cubics_to_quadratics` covers the TrueType `glyf` path, while CFF output
   keeps cubics natively. Recommend **TTF (quadratic `glyf`) as the default**
   (broadest compatibility, simplest validation) and CFF/OTF as a later option.
+- **Font crates (stage 6, built).** `write-fonts` 0.54, `read-fonts` 0.45 and `kurbo` 0.13 (all MIT OR Apache-2.0, MSRV 1.85 against our 1.95) compile and verify the TTF. `fea-rs` is not needed until GSUB (stage 9).
 - **Prototype spike (stage 7, before committing to it).** The riskiest crate is
   `flo_curves` booleans on degenerate contours (self-intersection, near-zero
   area, coincident nodes). The spike is: feed two overlapping cubic contours

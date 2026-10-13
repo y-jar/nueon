@@ -197,13 +197,21 @@ layer (`src-tauri/`), and the Svelte 5 frontend (`src/`). See `docs/ARCHITECTURE
   (group, advance width, export, delete) are wired. Pathfinder booleans are in
   `crates/nueon-core/src/model/pathfinder.rs` (`flo_curves`, curve-preserving)
   and component flattening in `crates/nueon-core/src/workspace/writing.rs`.
-  Font export (TTF/OTF, menu entries disabled) and translator preview are not
-  yet built.
+  TrueType export is built: `crates/nueon-core/src/font/` converts cubic
+  outlines to quadratics (`kurbo`), writes `head hhea maxp OS/2 hmtx cmap glyf
+  loca name post` (`write-fonts`), maps each glyph to its Private Use
+  codepoint, flattens components into real contours, and verifies the result by
+  reading it back (`read-fonts`) before it is written; duplicate codepoints and
+  an empty system block the export. OpenType (CFF) export, GSUB romanisation and
+  translator preview are not yet built.
 - **Proof.** cargo `writing_system`, `profile`, `pathfinder` and `workspace`
   tests (type round-trips, profile v1/v2/v3 backfill, phoneme-id backfill,
   acyclic-component rejection, glyph atomic save/load, SVG serialization,
   curve-preserving booleans, component flattening, SVG export/import
-  round-trip); node `tabs.test.ts` (`isSingletonTab("writing")`),
+  round-trip, font compilation read back through `read-fonts`, and verified
+  against FreeType via fontconfig and ImageMagick: the exported circle glyph
+  rendered with 0.785 ink coverage, pi/4, so curves survive the cubic to
+  quadratic conversion); node `tabs.test.ts` (`isSingletonTab("writing")`),
   `writing.test.ts` (glyph grouping, sound coverage, tool registry, guide
   rails, bounds, path data), `writingCommands.test.ts` (node/handle edits,
   shapes, transforms, align/distribute, layer order, brush), `history.test.ts`,

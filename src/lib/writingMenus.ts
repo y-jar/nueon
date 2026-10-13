@@ -110,7 +110,7 @@ export function menuItems(menu: MenuId, state: MenuState): MenuItem[] {
         { id: "export-svg", label: "Export glyph as SVG\u2026", disabled: !state.hasGlyph },
         { id: "export-sprite", label: "Export all as SVG sprite\u2026" },
         sep("s1"),
-        { id: "export-ttf", label: "Export font (.ttf) \u2014 coming soon", disabled: true },
+        { id: "export-ttf", label: "Export font (.ttf)\u2026" },
         { id: "export-otf", label: "Export font (.otf) \u2014 coming soon", disabled: true },
       ];
     case "metrics":

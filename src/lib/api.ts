@@ -949,6 +949,13 @@ export const writingExportSvg = (id: string): Promise<string> =>
   invoke("writing_export_svg", { id });
 export const writingExportSprite = (): Promise<string> =>
   invoke("writing_export_sprite");
+export interface FontExport {
+  glyphs: number;
+  mapped: number;
+  bytes: number;
+}
+export const writingExportFont = (path: string): Promise<FontExport> =>
+  invoke("writing_export_font", { path });
 export const writingImportSvg = (id: string, svg: string): Promise<number> =>
   invoke("writing_import_svg", { id, svg });
 

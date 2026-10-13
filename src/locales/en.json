@@ -565,6 +565,7 @@
     "nibAngle": "Nib angle",
     "importSvg": "Import SVG",
     "exportSvg": "Export SVG",
+    "exportFont": "Export font",
     "selected": "{count} selected",
     "selectMode": "Select",
     "batchDelete": "Delete selected",

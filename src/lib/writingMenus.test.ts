@@ -32,14 +32,14 @@ test("undo and redo follow the history flags", () => {
   assert.equal(edit({ ...state, canRedo: true }).find((i) => i.id === "redo")!.disabled, false);
 });
 
-test("view toggles show their state and font export is disabled", () => {
+test("view toggles show their state and only ttf font export is enabled", () => {
   const view = menuItems("view", { ...state, snap: true });
   assert.ok(view.find((i) => i.id === "toggle-snap")!.label.startsWith("\u2713"));
   assert.ok(view.find((i) => i.id === "toggle-guides")!.label.startsWith("\u2713"));
   assert.ok(!view.find((i) => i.id === "toggle-snap")!.label.startsWith("Snap"));
   const exp = menuItems("export", state);
-  assert.equal(exp.find((i) => i.id === "export-ttf")!.disabled, true);
-  assert.equal(exp.find((i) => i.id === "export-otf")!.disabled, true);
+  assert.equal(exp.find((i) => i.id === "export-ttf")!.disabled, undefined, "ttf export is live");
+  assert.equal(exp.find((i) => i.id === "export-otf")!.disabled, true, "otf stays disabled");
   assert.equal(exp.find((i) => i.id === "export-svg")!.disabled, false);
 });
 

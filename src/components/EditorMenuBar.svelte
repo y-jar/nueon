@@ -21,6 +21,7 @@
     deleteSelection,
     distribute,
     editor,
+    exportFont,
     exportGlyphSvg,
     exportSpriteSvg,
     finishPath,
@@ -127,6 +128,15 @@
     }
   }
 
+  async function exportFontFile() {
+    const path = await saveDialog({
+      defaultPath: "script.ttf",
+      filters: [{ name: "TrueType font", extensions: ["ttf"] }],
+    });
+    if (!path) return;
+    await exportFont(path);
+  }
+
   async function importFile() {
     const path = await openDialog({
       multiple: false,
@@ -179,6 +189,8 @@
         return void exportGlyphSvg().then((svg) =>
           exportText(svg, `${editor.glyphMeta?.name ?? "glyph"}.svg`, "SVG"),
         );
+      case "export-ttf":
+        return void exportFontFile();
       case "export-sprite":
         return void exportSpriteSvg().then((svg) => exportText(svg, "glyphs.svg", "SVG sprite"));
     }
