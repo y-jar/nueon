@@ -896,6 +896,53 @@ export const writingGet = (): Promise<WritingConfig> =>
 export const writingSet = (value: WritingConfig): Promise<void> =>
   configSet("writing", value);
 
+export type NodeKind = "corner" | "smooth" | "symmetric";
+export type FillRule = "nonzero" | "evenodd";
+
+/** One on-curve point with optional Bezier handles (offsets from the point). */
+export interface GlyphNode {
+  x: number;
+  y: number;
+  handle_in?: [number, number] | null;
+  handle_out?: [number, number] | null;
+  kind: NodeKind;
+}
+
+export interface GlyphContour {
+  nodes: GlyphNode[];
+  closed: boolean;
+  fill_rule: FillRule;
+}
+
+export interface GlyphComponent {
+  glyph: string;
+  dx: number;
+  dy: number;
+  scale_x: number;
+  scale_y: number;
+  rotation: number;
+}
+
+/** One element of a glyph: a contour or a component instance. */
+export type GlyphElement =
+  | ({ kind: "contour" } & GlyphContour)
+  | ({ kind: "component" } & GlyphComponent);
+
+/** A glyph's vector data, stored one-per-file in `writing/glyphs/<id>`. */
+export interface GlyphOutline {
+  elements: GlyphElement[];
+  advance?: number | null;
+  lsb?: number | null;
+  rsb?: number | null;
+}
+
+export const writingGlyphGet = (id: string): Promise<GlyphOutline | null> =>
+  invoke("writing_glyph_get", { id });
+export const writingGlyphSet = (
+  id: string,
+  outline: GlyphOutline,
+): Promise<void> => invoke("writing_glyph_set", { id, outline });
+
 export interface UiLayout {
   activity: string;
   sidebar_open: boolean;

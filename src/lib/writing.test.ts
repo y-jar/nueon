@@ -1,8 +1,17 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
 
-import { groupGlyphs, soundCoverage, UNGROUPED } from "./writing.ts";
-import type { GlyphMeta } from "./api.ts";
+import {
+  groupGlyphs,
+  soundCoverage,
+  TOOLS,
+  guideLines,
+  outlineBounds,
+  contourPathData,
+  flipY,
+  UNGROUPED,
+} from "./writing.ts";
+import type { GlyphMeta, GlyphOutline, WritingConfig } from "./api.ts";
 
 function glyph(id: string, group: string, order: number): GlyphMeta {
   return {
@@ -59,4 +68,86 @@ test("soundCoverage counts phoneme ids with a glyph", () => {
 test("soundCoverage is zero when no glyph maps a sound", () => {
   const coverage = soundCoverage([], ["p1", "p2"]);
   assert.deepEqual(coverage, { total: 2, mapped: 0 });
+});
+
+test("TOOLS lists the seven core tools with unique ids", () => {
+  const ids = TOOLS.map((tool) => tool.id);
+  assert.equal(ids.length, 7);
+  assert.equal(new Set(ids).size, ids.length);
+  assert.ok(TOOLS.every((tool) => tool.label && tool.shortcut));
+});
+
+test("guideLines orders top to bottom with the right dashed flags", () => {
+  const config = {
+    x_height: 500,
+    cap_height: 700,
+    ascender: 800,
+    descender: -200,
+  } as WritingConfig;
+  const lines = guideLines(config);
+  assert.deepEqual(
+    lines.map((line) => line.key),
+    ["ascender", "cap_height", "x_height", "baseline", "descender"],
+  );
+  assert.equal(lines[0].y, 800);
+  assert.equal(lines[2].y, 500);
+  assert.equal(lines[3].y, 0);
+  assert.equal(lines[4].y, -200);
+  assert.equal(lines[2].dashed, true);
+  assert.equal(lines[3].dashed, true);
+  assert.equal(lines[1].dashed, false);
+});
+
+test("outlineBounds spans contours and ignores components", () => {
+  const outline: GlyphOutline = {
+    elements: [
+      {
+        kind: "contour",
+        nodes: [
+          { x: 0, y: 0, kind: "corner" },
+          { x: 10, y: 20, kind: "corner" },
+        ],
+        closed: false,
+        fill_rule: "nonzero",
+      },
+      {
+        kind: "component",
+        glyph: "g",
+        dx: 0,
+        dy: 0,
+        scale_x: 1,
+        scale_y: 1,
+        rotation: 0,
+      },
+    ],
+  };
+  assert.deepEqual(outlineBounds(outline), {
+    min_x: 0,
+    min_y: 0,
+    max_x: 10,
+    max_y: 20,
+  });
+  assert.equal(outlineBounds({ elements: [] }), null);
+});
+
+test("contourPathData starts with a move and flips y", () => {
+  const d = contourPathData(
+    {
+      nodes: [
+        { x: 0, y: 0, kind: "corner" },
+        { x: 10, y: 20, kind: "corner" },
+      ],
+      closed: true,
+      fill_rule: "nonzero",
+    },
+    true,
+  );
+  assert.ok(d.startsWith("M 0 0"), d);
+  assert.ok(d.includes("L 10 -20"), d);
+  assert.ok(d.endsWith(" Z"), d);
+});
+
+test("flipY negates", () => {
+  assert.equal(flipY(5), -5);
+  assert.equal(flipY(-200), 200);
 });

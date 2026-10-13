@@ -122,3 +122,224 @@
   color: var(--muted);
   font-family: ui-monospace, monospace;
 }
+
+/* -- vector editor -------------------------------------------------------- */
+
+.vector-editor {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  flex: 1;
+  min-height: 0;
+}
+
+.editor-top {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.editor-top .back {
+  display: grid;
+  place-items: center;
+  padding: 2px 6px;
+}
+
+.editor-menubar {
+  display: flex;
+  align-items: center;
+  gap: 2px;
+  flex: 1;
+}
+
+.editor-menubar .menu-item {
+  padding: 3px 8px;
+  border: none;
+  background: transparent;
+  color: var(--text);
+  border-radius: 4px;
+  cursor: pointer;
+  font-size: 12px;
+}
+
+.editor-menubar .menu-item:hover {
+  background: var(--panel);
+}
+
+.editor-toolbar {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 2px 0;
+}
+
+.editor-toolbar .toolbar-group {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.editor-toolbar .mono {
+  font-family: ui-monospace, monospace;
+  min-width: 40px;
+  text-align: center;
+  font-size: 12px;
+}
+
+.editor-main {
+  display: grid;
+  grid-template-columns: 140px 1fr 180px;
+  gap: 6px;
+  flex: 1;
+  min-height: 0;
+}
+
+.toolbox {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  overflow-y: auto;
+  border-right: 1px solid var(--border);
+  padding-right: 6px;
+}
+
+.toolbox .tool {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 6px;
+  padding: 4px 6px;
+  border: none;
+  background: transparent;
+  color: var(--text);
+  border-radius: 4px;
+  cursor: pointer;
+  text-align: left;
+  font-size: 12px;
+}
+
+.toolbox .tool.active {
+  background: var(--accent);
+  color: var(--bg);
+}
+
+.toolbox .tool-shortcut {
+  color: var(--muted);
+  font-family: ui-monospace, monospace;
+  font-size: 11px;
+}
+
+.toolbox .tool.active .tool-shortcut {
+  color: inherit;
+}
+
+.glyph-canvas {
+  position: relative;
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  background: var(--bg);
+  min-width: 0;
+  min-height: 0;
+  overflow: hidden;
+}
+
+.canvas-svg {
+  width: 100%;
+  height: 100%;
+  cursor: crosshair;
+}
+
+.canvas-svg .guide {
+  stroke: var(--border);
+  stroke-width: 1;
+}
+
+.canvas-svg .guide.dashed {
+  stroke-dasharray: 4 3;
+}
+
+.canvas-svg .outline {
+  fill: var(--panel);
+  stroke: var(--text);
+  stroke-width: 1.5;
+}
+
+.glyph-metrics {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  border-left: 1px solid var(--border);
+  padding-left: 6px;
+  overflow-y: auto;
+}
+
+.glyph-metrics h2 {
+  font-size: 13px;
+  margin: 0;
+}
+
+.metric-block {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+}
+
+.metric-label {
+  font-size: 11px;
+  color: var(--muted);
+}
+
+.metric-block input {
+  width: 100%;
+}
+
+.glyph-metrics .chip {
+  display: inline-block;
+  padding: 1px 6px;
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  font-family: ui-monospace, monospace;
+  font-size: 12px;
+}
+
+.editor-statusbar {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 2px 0;
+  border-top: 1px solid var(--border);
+  font-size: 11px;
+}
+
+.editor-statusbar .status {
+  font-size: 11px;
+}
+
+.glyph-tray {
+  display: flex;
+  gap: 4px;
+  overflow-x: auto;
+  padding: 4px 0;
+}
+
+.tray-tile {
+  display: grid;
+  place-items: center;
+  min-width: 48px;
+  height: 36px;
+  padding: 2px 8px;
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  background: var(--panel);
+  color: var(--text);
+  cursor: pointer;
+  font-size: 12px;
+}
+
+.tray-tile.active {
+  border-color: var(--accent);
+}
+
+.tray-add {
+  color: var(--muted);
+}

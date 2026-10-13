@@ -20,12 +20,17 @@ and regenerate.
 - `DeleteWordModal.svelte` — Dependent-aware word delete with reassign.
 - `DerivationGraph.svelte` — Ancestor/descendant etymology graph.
 - `Editor.svelte` — Note editor: toolbar, codemirror, link follow.
+- `EditorMenuBar.svelte` — Editor menu bar: File/Edit/View/Tools/Metrics/Glyphs/Export.
+- `EditorStatusBar.svelte` — Editor status bar: live status, node count and canvas buttons.
 - `EditorToolbar.svelte` — Formatting toolbar for the note editor.
 - `EmptyState.svelte` — Empty pane: new note/table shortcuts.
 - `ExplorerTree.svelte` — The notes tree with inline rename and drag.
 - `FileViewer.svelte` — Image/audio/video/archive viewer.
 - `GitPanel.svelte` — Source Control: status, diff, history and check-in.
+- `GlyphCanvas.svelte` — Canvas with typographic guides and the (stubbed) pointer surface.
 - `GlyphGrid.svelte` — Wrapping grid of glyph tiles for the selected group.
+- `GlyphGridTray.svelte` — Bottom tray of glyph thumbnails.
+- `GlyphMetricsPanel.svelte` — Glyph metrics: active phonemes, side bearings and advance width.
 - `GlyphNavigatorTree.svelte` — Glyph groups and sound coverage for the writing system.
 - `GlyphTile.svelte` — One glyph tile in the writing-system grid.
 - `Grid.svelte` — The virtualized dictionary grid.
@@ -53,9 +58,12 @@ and regenerate.
 - `TabBar.svelte` — Tab bar: reveal, keyboard nav, drag, close, new.
 - `TablesPanel.svelte` — Dictionary tables sidebar list.
 - `Toast.svelte` — Transient status toast.
+- `Toolbox.svelte` — Toolbox: the drawing tools.
 - `Translation.svelte` — Translation activity: builder + runner.
 - `TrashModal.svelte` — Trash bin modal (restore/delete).
-- `WritingSystemView.svelte` — Writing System: glyph navigator and grid.
+- `VectorEditor.svelte` — Vector editor: menu, toolbar, toolbox, canvas, metrics and tray.
+- `VectorToolbar.svelte` — Vector toolbar: zoom, snap and export/import stubs.
+- `WritingSystemView.svelte` — Writing System: glyph navigator, grid, and vector editor.
 
 ## `src/components/import`
 
@@ -119,7 +127,8 @@ and regenerate.
 - `wikilink.ts` — Pure [[...]] link parsing, ranking and resolution.
 - `window.ts` — Current window label and main-window flag.
 - `words.ts` — Word creation and value editing helpers.
-- `writing.ts` — Pure writing-system helpers: glyph grouping and ordering.
+- `writing.ts` — Pure writing-system helpers: glyph grouping, ordering and geometry.
+- `writingEditor.svelte.ts` — Vector-editor state: the open glyph, tools, and view options.
 
 ## `src/lib/editor`
 

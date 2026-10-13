@@ -558,7 +558,15 @@
     "empty": "Draw glyphs for your language, mapped to the sounds in your inventory.",
     "addGlyph": "Add glyph",
     "all": "All",
+    "back": "Back to glyphs",
     "mapped": "{mapped} of {total} sounds have glyphs",
+    "metrics": {
+      "phonemes": "Active phonemes",
+      "noPhonemes": "None",
+      "lsb": "Left bearing",
+      "rsb": "Right bearing",
+      "advance": "Advance width"
+    },
     "menu": {
       "edit": "Edit",
       "duplicate": "Duplicate",

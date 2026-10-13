@@ -52,6 +52,12 @@ the scope table is at the end.
 `phonology_check_words`, `phonology_segments`, `phonology_apply_word`,
 `phonology_apply_table`.
 
+## Writing system
+
+`writing_glyph_get`, `writing_glyph_set` (per-glyph outline load/save). The
+writing config itself travels through the generic `config_get`/`config_set`
+with section `writing`.
+
 ## Version control
 
 `vcs_state`, `vcs_status`, `vcs_log`, `vcs_diff`, `vcs_show`, `vcs_branches`,
@@ -84,6 +90,7 @@ After a mutation the backend emits `data-changed` with a scope, and the frontend
 | `dictionary` | table/word/tag edits, import | reload word index + tables |
 | `config` | set table role, layout/line-number/keybind prefs | reload fixes tables (and prefs) |
 | `translation` | preset edits, morphology writes | (translation panel reloads) |
+| `writing` | glyph outline save | bump `writingRevision` (editor refetches) |
 | `vcs` | git commits/checkouts | bump revision + reload open notes |
 
 Any new mutating command must pick the scope whose consumers it affects and

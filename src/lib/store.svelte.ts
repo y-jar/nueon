@@ -196,6 +196,8 @@ export const ui = $state({
   phonologyRevision: 0,
   /** Bumped when the morphology config is written elsewhere (Morphology). */
   morphologyRevision: 0,
+  /** Bumped when a glyph outline is written (writing commands). */
+  writingRevision: 0,
   /** The table last used by the Morphology "Save as word" form (session). */
   morphologySaveTable: "",
 

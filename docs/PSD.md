@@ -182,9 +182,14 @@ layer (`src-tauri/`), and the Svelte 5 frontend (`src/`). See `docs/ARCHITECTURE
   context menu — is implemented in `src/components/WritingSystemView.svelte`,
   `GlyphNavigatorTree.svelte`, `GlyphGrid.svelte` and `GlyphTile.svelte`,
   with `src/lib/writing.ts` for the pure grouping/coverage logic. The vector
-  editor, preview, pathfinder and export are not yet built.
+  editor shell — toolbox, canvas with typographic guide rails, glyph metrics
+  panel and the bottom glyph tray — is implemented in
+  `src/components/VectorEditor.svelte` and its children, backed by
+  `src/lib/writingEditor.svelte.ts` and the `writing_glyph_get`/
+  `writing_glyph_set` commands. Drawing, preview, pathfinder and export are not
+  yet built.
 - **Proof.** cargo `writing_system`, `profile` and `workspace` tests (type
   round-trips, profile v1/v2/v3 backfill, phoneme-id backfill, acyclic-component
   rejection, glyph atomic save/load, SVG serialization); node `tabs.test.ts`
-  (`isSingletonTab("writing")`) and `writing.test.ts` (glyph grouping and sound
-  coverage).
+  (`isSingletonTab("writing")`) and `writing.test.ts` (glyph grouping, sound
+  coverage, tool registry, guide rails, bounds, path data).

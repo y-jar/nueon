@@ -252,6 +252,8 @@ pub fn run() {
             commands::phonology_segments,
             commands::phonology_apply_word,
             commands::phonology_apply_table,
+            commands::writing_glyph_get,
+            commands::writing_glyph_set,
             commands::translation_options,
             commands::set_translation_options,
             commands::export_presets,

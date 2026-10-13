@@ -13,6 +13,7 @@ mod trash;
 mod vcs;
 mod windows;
 mod workspace;
+mod writing;
 
 pub use assets::*;
 pub use dictionary::*;
@@ -27,6 +28,7 @@ pub use trash::*;
 pub use vcs::*;
 pub use windows::*;
 pub use workspace::*;
+pub use writing::*;
 
 use tauri::{AppHandle, Emitter};
 

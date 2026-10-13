@@ -118,6 +118,8 @@ export async function init(): Promise<void> {
       await refreshTables();
     } else if (scope === "config") {
       await loadFixesTables();
+    } else if (scope === "writing") {
+      ui.writingRevision += 1;
     } else if (scope === "vcs") {
       ui.vcsRevision += 1;
       await reloadOpenNotes();

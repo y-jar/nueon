@@ -1,4 +1,4 @@
-<!-- Writing System: glyph navigator and grid. -->
+<!-- Writing System: glyph navigator, grid, and vector editor. -->
 <script lang="ts">
   import { onMount } from "svelte";
   import { t } from "svelte-i18n";
@@ -6,47 +6,41 @@
   import * as api from "../lib/api";
   import { groupGlyphs, soundCoverage, UNGROUPED } from "../lib/writing";
   import { openGlyphContextMenu } from "../lib/state.svelte";
+  import { editor, openGlyph, closeGlyph } from "../lib/writingEditor.svelte";
   import GlyphNavigatorTree from "./GlyphNavigatorTree.svelte";
   import GlyphGrid from "./GlyphGrid.svelte";
+  import VectorEditor from "./VectorEditor.svelte";
 
-  let glyphs = $state<api.GlyphMeta[]>([]);
-  let direction = $state<api.WritingDirection>("ltr");
-  let upem = $state(1000);
-  let xHeight = $state(0);
-  let capHeight = $state(0);
-  let ascender = $state(0);
-  let descender = $state(0);
-  let rules = $state<api.OrthographyRule[]>([]);
-  let features = $state("");
-
+  let config = $state<api.WritingConfig>({
+    direction: "ltr",
+    upem: 1000,
+    x_height: 0,
+    cap_height: 0,
+    ascender: 0,
+    descender: 0,
+    glyphs: [],
+    rules: [],
+    features: "",
+  });
   let phonemes = $state<api.Phoneme[]>([]);
   let selectedGroup = $state<string | null>(null);
-  let selectedGlyphId = $state<string | null>(null);
   let error = $state("");
 
-  const groups = $derived(groupGlyphs(glyphs));
+  const groups = $derived(groupGlyphs(config.glyphs));
   const coverage = $derived(
     soundCoverage(
-      glyphs,
+      config.glyphs,
       phonemes.map((p) => p.id ?? p.symbol),
     ),
   );
-  const coveredIds = $derived(new Set(glyphs.flatMap((g) => g.phonemes)));
+  const coveredIds = $derived(new Set(config.glyphs.flatMap((g) => g.phonemes)));
+  const editing = $derived(editor.openGlyphId !== null);
 
   onMount(load);
 
   async function load() {
     try {
-      const config = await api.writingGet();
-      glyphs = config.glyphs ?? [];
-      direction = config.direction ?? "ltr";
-      upem = config.upem ?? 1000;
-      xHeight = config.x_height ?? 0;
-      capHeight = config.cap_height ?? 0;
-      ascender = config.ascender ?? 0;
-      descender = config.descender ?? 0;
-      rules = config.rules ?? [];
-      features = config.features ?? "";
+      config = await api.writingGet();
       const ph = await api.phonologyGet();
       phonemes = ph.phonemes ?? [];
       error = "";
@@ -57,17 +51,7 @@
 
   async function save() {
     try {
-      await api.writingSet({
-        direction,
-        upem,
-        x_height: xHeight,
-        cap_height: capHeight,
-        ascender,
-        descender,
-        glyphs,
-        rules,
-        features,
-      });
+      await api.writingSet(config);
       error = "";
     } catch (e) {
       error = String(e);
@@ -75,14 +59,14 @@
   }
 
   function addGlyph() {
-    glyphs = [
-      ...glyphs,
+    config.glyphs = [
+      ...config.glyphs,
       {
         id: crypto.randomUUID(),
-        name: `glyph-${glyphs.length + 1}`,
-        codepoint: 0xe000 + glyphs.length,
+        name: `glyph-${config.glyphs.length + 1}`,
+        codepoint: 0xe000 + config.glyphs.length,
         phonemes: [],
-        order: glyphs.length,
+        order: config.glyphs.length,
         group: UNGROUPED,
       },
     ];
@@ -96,14 +80,14 @@
         : phoneme.kind === "consonant"
           ? "consonants"
           : "other";
-    glyphs = [
-      ...glyphs,
+    config.glyphs = [
+      ...config.glyphs,
       {
         id: crypto.randomUUID(),
         name: phoneme.symbol,
-        codepoint: 0xe000 + glyphs.length,
+        codepoint: 0xe000 + config.glyphs.length,
         phonemes: [phoneme.id ?? phoneme.symbol],
-        order: glyphs.length,
+        order: config.glyphs.length,
         group,
       },
     ];
@@ -111,35 +95,35 @@
   }
 
   function duplicateGlyph(id: string) {
-    const source = glyphs.find((g) => g.id === id);
+    const source = config.glyphs.find((g) => g.id === id);
     if (!source) return;
-    glyphs = [
-      ...glyphs,
+    config.glyphs = [
+      ...config.glyphs,
       {
         ...source,
         id: crypto.randomUUID(),
         name: `${source.name} copy`,
-        order: glyphs.length,
+        order: config.glyphs.length,
       },
     ];
     void save();
   }
 
   function deleteGlyph(id: string) {
-    glyphs = glyphs.filter((g) => g.id !== id);
-    if (selectedGlyphId === id) selectedGlyphId = null;
+    config.glyphs = config.glyphs.filter((g) => g.id !== id);
+    if (editor.openGlyphId === id) closeGlyph();
     void save();
   }
 
-  function editGlyph(id: string) {
-    selectedGlyphId = id;
+  function selectGlyph(glyph: api.GlyphMeta) {
+    openGlyph(glyph.id, glyph);
   }
 
   function onMenu(event: MouseEvent, glyph: api.GlyphMeta) {
     openGlyphContextMenu(event.clientX, event.clientY, {
       id: glyph.id,
       name: glyph.name,
-      onEdit: () => editGlyph(glyph.id),
+      onEdit: () => openGlyph(glyph.id, glyph),
       onDuplicate: () => duplicateGlyph(glyph.id),
       onDelete: () => deleteGlyph(glyph.id),
     });
@@ -158,25 +142,35 @@
 
   {#if error}<p class="error">{error}</p>{/if}
 
-  {#if glyphs.length === 0}
-    <p class="muted">{$t("writing.empty")}</p>
-  {/if}
+  {#if editing}
+    <VectorEditor
+      {config}
+      {phonemes}
+      onClose={closeGlyph}
+      onOpen={selectGlyph}
+      onAdd={addGlyph}
+    />
+  {:else}
+    {#if config.glyphs.length === 0}
+      <p class="muted">{$t("writing.empty")}</p>
+    {/if}
 
-  <div class="writing-body">
-    <GlyphNavigatorTree
-      {groups}
-      {phonemes}
-      {coveredIds}
-      {selectedGroup}
-      onSelectGroup={(g) => (selectedGroup = g)}
-      onAddFor={addGlyphFor}
-    />
-    <GlyphGrid
-      glyphs={selectedGroup ? (groups.get(selectedGroup) ?? []) : glyphs}
-      {phonemes}
-      selectedId={selectedGlyphId}
-      onSelect={(g) => (selectedGlyphId = g.id)}
-      {onMenu}
-    />
-  </div>
+    <div class="writing-body">
+      <GlyphNavigatorTree
+        groups={groups}
+        {phonemes}
+        {coveredIds}
+        {selectedGroup}
+        onSelectGroup={(g) => (selectedGroup = g)}
+        onAddFor={addGlyphFor}
+      />
+      <GlyphGrid
+        glyphs={selectedGroup ? (groups.get(selectedGroup) ?? []) : config.glyphs}
+        {phonemes}
+        selectedId={editor.openGlyphId}
+        onSelect={selectGlyph}
+        {onMenu}
+      />
+    </div>
+  {/if}
 </div>
