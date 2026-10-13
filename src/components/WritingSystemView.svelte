@@ -5,8 +5,12 @@
   import { Plus } from "@lucide/svelte";
   import * as api from "../lib/api";
   import { groupGlyphs, soundCoverage, compositeOutline, UNGROUPED } from "../lib/writing";
-  import { openGlyphContextMenu } from "../lib/state.svelte";
+  import { confirmDialog, openGlyphContextMenu } from "../lib/state.svelte";
   import { editor, openGlyph, closeGlyph } from "../lib/writingEditor.svelte";
+  import type { GuideField } from "../lib/writingMenus";
+  import { deleteGlyphs, dependents, moveToGroup } from "../lib/writingBatch";
+  import { save as saveDialog } from "@tauri-apps/plugin-dialog";
+  import { writeTextFile } from "../lib/files";
   import GlyphNavigatorTree from "./GlyphNavigatorTree.svelte";
   import GlyphGrid from "./GlyphGrid.svelte";
   import VectorEditor from "./VectorEditor.svelte";
@@ -115,6 +119,73 @@
     void save();
   }
 
+  async function batchDelete(ids: string[]) {
+    const outlines: Record<string, api.GlyphOutline> = {};
+    for (const glyph of config.glyphs) {
+      const outline = await api.writingGlyphGet(glyph.id).catch(() => null);
+      if (outline) outlines[glyph.id] = outline;
+    }
+    const broken = dependents(outlines, ids)
+      .map((id) => config.glyphs.find((g) => g.id === id)?.name ?? id);
+    const confirmed = await confirmDialog({
+      title: $t("writing.batchDeleteTitle"),
+      message:
+        broken.length > 0
+          ? $t("writing.batchDeleteBroken", {
+              values: { count: ids.length, names: broken.join(", ") },
+            })
+          : $t("writing.batchDeleteMessage", { values: { count: ids.length } }),
+      confirmLabel: $t("writing.batchDelete"),
+      danger: true,
+    });
+    if (!confirmed) return;
+    config.glyphs = deleteGlyphs(config.glyphs, ids);
+    if (editor.openGlyphId && ids.includes(editor.openGlyphId)) closeGlyph();
+    await save();
+  }
+
+  async function batchGroup(ids: string[], group: string) {
+    config.glyphs = moveToGroup(config.glyphs, ids, group);
+    await save();
+  }
+
+  async function batchAdvance(ids: string[], advance: number) {
+    try {
+      for (const id of ids) {
+        const outline = (await api.writingGlyphGet(id)) ?? { elements: [] };
+        await api.writingGlyphSet(id, { ...outline, advance });
+      }
+      error = "";
+    } catch (e) {
+      error = String(e);
+    }
+  }
+
+  async function batchExport(ids: string[]) {
+    try {
+      const parts: string[] = [];
+      for (const id of ids) {
+        const svg = await api.writingExportSvg(id);
+        const name = config.glyphs.find((g) => g.id === id)?.name ?? id;
+        parts.push(`<!-- ${name.replace(/--/g, "-")} -->\n${svg}`);
+      }
+      const path = await saveDialog({
+        defaultPath: "glyphs.svg",
+        filters: [{ name: "SVG", extensions: ["svg"] }],
+      });
+      if (!path) return;
+      await writeTextFile(path, parts.join("\n"));
+      error = "";
+    } catch (e) {
+      error = String(e);
+    }
+  }
+
+  function setGuide(field: GuideField, value: number) {
+    config[field] = value;
+    void save();
+  }
+
   function selectGlyph(glyph: api.GlyphMeta) {
     openGlyph(glyph.id, glyph);
   }
@@ -170,6 +241,13 @@
       onOpen={selectGlyph}
       onAdd={addGlyph}
       onCompose={composeGlyph}
+      onDuplicate={duplicateGlyph}
+      onDelete={deleteGlyph}
+      onGuideChange={setGuide}
+      onBatchDelete={batchDelete}
+      onBatchGroup={batchGroup}
+      onBatchAdvance={batchAdvance}
+      onBatchExport={batchExport}
     />
   {:else}
     {#if config.glyphs.length === 0}

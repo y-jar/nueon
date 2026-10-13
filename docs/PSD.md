@@ -185,15 +185,26 @@ layer (`src-tauri/`), and the Svelte 5 frontend (`src/`). See `docs/ARCHITECTURE
   editor shell — toolbox, canvas with typographic guide rails, glyph metrics
   panel, radical palette, composition matrix, pathfinder panel and the bottom
   glyph tray — is implemented in `src/components/VectorEditor.svelte` and its
-  children, backed by `src/lib/writingEditor.svelte.ts` and the
-  `writing_glyph_get`/`writing_glyph_set`/`writing_path_operation` commands.
-  Pathfinder booleans are implemented in `crates/nueon-core/src/model/pathfinder.rs`
-  (`flo_curves`, curve-preserving union/difference/intersect/exclude) and
-  component flattening in `crates/nueon-core/src/workspace/writing.rs`. Drawing,
-  preview and export are not yet built.
+  children, backed by `src/lib/writingEditor.svelte.ts`. Drawing is real: pen
+  (click, drag for handles, close on the first node), direct select, node mod,
+  shapes, calligraphic brush (fixed-angle nib, mouse input), mirror/flip,
+  eraser/knife, scale/rotate/shear, align/distribute and layer order, all as
+  pure operations in `src/lib/writingCommands.ts` with an undo/redo stack
+  (`src/lib/history.ts`) that is separate from git. The menu bar
+  (`EditorMenuBar.svelte`, definitions in `src/lib/writingMenus.ts`) provides
+  File, Edit, View, Tools, Metrics (guide heights saved to `config/writing`),
+  Glyphs and Export dropdowns; SVG export/import and multi-select batch actions
+  (group, advance width, export, delete) are wired. Pathfinder booleans are in
+  `crates/nueon-core/src/model/pathfinder.rs` (`flo_curves`, curve-preserving)
+  and component flattening in `crates/nueon-core/src/workspace/writing.rs`.
+  Font export (TTF/OTF, menu entries disabled) and translator preview are not
+  yet built.
 - **Proof.** cargo `writing_system`, `profile`, `pathfinder` and `workspace`
   tests (type round-trips, profile v1/v2/v3 backfill, phoneme-id backfill,
   acyclic-component rejection, glyph atomic save/load, SVG serialization,
-  curve-preserving booleans, component flattening); node `tabs.test.ts`
-  (`isSingletonTab("writing")`) and `writing.test.ts` (glyph grouping, sound
-  coverage, tool registry, guide rails, bounds, path data).
+  curve-preserving booleans, component flattening, SVG export/import
+  round-trip); node `tabs.test.ts` (`isSingletonTab("writing")`),
+  `writing.test.ts` (glyph grouping, sound coverage, tool registry, guide
+  rails, bounds, path data), `writingCommands.test.ts` (node/handle edits,
+  shapes, transforms, align/distribute, layer order, brush), `history.test.ts`,
+  `writingMenus.test.ts` and `writingBatch.test.ts`.

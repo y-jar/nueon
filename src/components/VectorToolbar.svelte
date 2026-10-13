@@ -1,18 +1,56 @@
-<!-- Vector toolbar: zoom, snap, compose and export/import stubs. -->
+<!-- Vector toolbar: undo/redo, zoom, snap, compose and SVG import/export. -->
 <script lang="ts">
   import { t } from "svelte-i18n";
-  import { editor, setZoom, toggleSnap, toggleCompose } from "../lib/writingEditor.svelte";
+  import { open as openDialog, save as saveDialog } from "@tauri-apps/plugin-dialog";
+  import { readTextFile, writeTextFile } from "../lib/files";
+  import {
+    editor,
+    exportGlyphSvg,
+    importSvg,
+    redo,
+    setZoom,
+    toggleCompose,
+    toggleSnap,
+    undo,
+  } from "../lib/writingEditor.svelte";
 
-  function stub(label: string) {
-    editor.status = `${label} (stub)`;
+  async function exportSvg() {
+    const svg = await exportGlyphSvg();
+    if (svg === null) return;
+    const path = await saveDialog({
+      defaultPath: `${editor.glyphMeta?.name ?? "glyph"}.svg`,
+      filters: [{ name: "SVG", extensions: ["svg"] }],
+    });
+    if (!path) return;
+    try {
+      await writeTextFile(path, svg);
+      editor.status = `exported ${path}`;
+    } catch (e) {
+      editor.error = String(e);
+    }
+  }
+
+  async function importFile() {
+    const path = await openDialog({
+      multiple: false,
+      filters: [{ name: "SVG", extensions: ["svg"] }],
+    });
+    if (typeof path !== "string") return;
+    try {
+      await importSvg(await readTextFile(path));
+    } catch (e) {
+      editor.error = String(e);
+    }
   }
 </script>
 
 <div class="editor-toolbar">
+  <button disabled={!editor.canUndo} onclick={undo}>Undo</button>
+  <button disabled={!editor.canRedo} onclick={redo}>Redo</button>
   <div class="toolbar-group">
-    <button onclick={() => setZoom(Math.max(0.25, editor.zoom - 0.25))}>-</button>
+    <button onclick={() => setZoom(editor.zoom - 0.25)}>-</button>
     <span class="mono">{Math.round(editor.zoom * 100)}%</span>
-    <button onclick={() => setZoom(Math.min(4, editor.zoom + 0.25))}>+</button>
+    <button onclick={() => setZoom(editor.zoom + 0.25)}>+</button>
     <button onclick={() => setZoom(1)}>Fit</button>
   </div>
   <button class:active={editor.snap} onclick={toggleSnap}>Snap</button>
@@ -20,6 +58,6 @@
     {$t("writing.compose")}
   </button>
   <span class="grow"></span>
-  <button onclick={() => stub("Export")}>Export</button>
-  <button onclick={() => stub("Import")}>Import</button>
+  <button onclick={() => void exportSvg()}>{$t("writing.exportSvg")}</button>
+  <button onclick={() => void importFile()}>{$t("writing.importSvg")}</button>
 </div>

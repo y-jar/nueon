@@ -4,6 +4,7 @@
   import { ArrowLeft } from "@lucide/svelte";
   import type { GlyphMeta, Phoneme, WritingConfig } from "../lib/api";
   import { editor } from "../lib/writingEditor.svelte";
+  import { neighbourGlyph, type GuideField } from "../lib/writingMenus";
   import EditorMenuBar from "./EditorMenuBar.svelte";
   import VectorToolbar from "./VectorToolbar.svelte";
   import Toolbox from "./Toolbox.svelte";
@@ -22,9 +23,37 @@
     onOpen: (glyph: GlyphMeta) => void;
     onAdd: () => void;
     onCompose: (row: GlyphMeta, col: GlyphMeta) => void;
+    onDuplicate: (id: string) => void;
+    onDelete: (id: string) => void;
+    onGuideChange: (field: GuideField, value: number) => void;
+    onBatchDelete: (ids: string[]) => void;
+    onBatchGroup: (ids: string[], group: string) => void;
+    onBatchAdvance: (ids: string[], advance: number) => void;
+    onBatchExport: (ids: string[]) => void;
   }
 
-  let { config, phonemes, onClose, onOpen, onAdd, onCompose }: Props = $props();
+  let {
+    config,
+    phonemes,
+    onClose,
+    onOpen,
+    onAdd,
+    onCompose,
+    onDuplicate,
+    onDelete,
+    onGuideChange,
+    onBatchDelete,
+    onBatchGroup,
+    onBatchAdvance,
+    onBatchExport,
+  }: Props = $props();
+
+  function step(delta: 1 | -1) {
+    const ids = config.glyphs.map((g) => g.id);
+    const next = neighbourGlyph(ids, editor.openGlyphId, delta);
+    const glyph = config.glyphs.find((g) => g.id === next);
+    if (glyph) onOpen(glyph);
+  }
 </script>
 
 <div class="vector-editor">
@@ -32,7 +61,15 @@
     <button class="back" title={$t("writing.back")} onclick={onClose}>
       <ArrowLeft size={16} />
     </button>
-    <EditorMenuBar />
+    <EditorMenuBar
+      {config}
+      {onClose}
+      onNewGlyph={onAdd}
+      onDuplicateGlyph={() => editor.openGlyphId && onDuplicate(editor.openGlyphId)}
+      onDeleteGlyph={() => editor.openGlyphId && onDelete(editor.openGlyphId)}
+      onStepGlyph={step}
+      {onGuideChange}
+    />
   </div>
 
   <VectorToolbar />
@@ -56,7 +93,16 @@
   </div>
 
   <EditorStatusBar />
-  <GlyphGridTray glyphs={config.glyphs} currentId={editor.openGlyphId} {onOpen} {onAdd} />
+  <GlyphGridTray
+    glyphs={config.glyphs}
+    currentId={editor.openGlyphId}
+    {onOpen}
+    {onAdd}
+    {onBatchDelete}
+    {onBatchGroup}
+    {onBatchAdvance}
+    {onBatchExport}
+  />
 
   {#if editor.error}<p class="error">{editor.error}</p>{/if}
 </div>

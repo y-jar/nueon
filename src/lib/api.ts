@@ -945,6 +945,13 @@ export const writingGlyphSet = (
 
 export type PathOperation = "union" | "difference" | "intersect" | "exclude";
 
+export const writingExportSvg = (id: string): Promise<string> =>
+  invoke("writing_export_svg", { id });
+export const writingExportSprite = (): Promise<string> =>
+  invoke("writing_export_sprite");
+export const writingImportSvg = (id: string, svg: string): Promise<number> =>
+  invoke("writing_import_svg", { id, svg });
+
 /** Stubbed pathfinder booleans; the geometry engine lands in a later stage. */
 export const writingPathOperation = (
   id: string,

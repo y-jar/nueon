@@ -21,16 +21,16 @@ and regenerate.
 - `DeleteWordModal.svelte` — Dependent-aware word delete with reassign.
 - `DerivationGraph.svelte` — Ancestor/descendant etymology graph.
 - `Editor.svelte` — Note editor: toolbar, codemirror, link follow.
-- `EditorMenuBar.svelte` — Editor menu bar: File/Edit/View/Tools/Metrics/Glyphs/Export.
+- `EditorMenuBar.svelte` — Editor menu bar: File/Edit/View/Tools/Metrics/Glyphs/Export dropdowns.
 - `EditorStatusBar.svelte` — Editor status bar: live status, node count and canvas buttons.
 - `EditorToolbar.svelte` — Formatting toolbar for the note editor.
 - `EmptyState.svelte` — Empty pane: new note/table shortcuts.
 - `ExplorerTree.svelte` — The notes tree with inline rename and drag.
 - `FileViewer.svelte` — Image/audio/video/archive viewer.
 - `GitPanel.svelte` — Source Control: status, diff, history and check-in.
-- `GlyphCanvas.svelte` — Canvas with typographic guides and the (stubbed) pointer surface.
+- `GlyphCanvas.svelte` — Canvas with typographic guides, the drawing surface and node overlay.
 - `GlyphGrid.svelte` — Wrapping grid of glyph tiles for the selected group.
-- `GlyphGridTray.svelte` — Bottom tray of glyph thumbnails.
+- `GlyphGridTray.svelte` — Bottom tray of glyph thumbnails, with multi-select batch actions.
 - `GlyphMetricsPanel.svelte` — Glyph metrics: active phonemes, side bearings and advance width.
 - `GlyphNavigatorTree.svelte` — Glyph groups and sound coverage for the writing system.
 - `GlyphTile.svelte` — One glyph tile in the writing-system grid.
@@ -61,11 +61,11 @@ and regenerate.
 - `TabBar.svelte` — Tab bar: reveal, keyboard nav, drag, close, new.
 - `TablesPanel.svelte` — Dictionary tables sidebar list.
 - `Toast.svelte` — Transient status toast.
-- `Toolbox.svelte` — Toolbox: the drawing tools.
+- `Toolbox.svelte` — Toolbox: the drawing tools and the options of the active tool.
 - `Translation.svelte` — Translation activity: builder + runner.
 - `TrashModal.svelte` — Trash bin modal (restore/delete).
 - `VectorEditor.svelte` — Vector editor: menu, toolbar, toolbox, canvas, metrics and tray.
-- `VectorToolbar.svelte` — Vector toolbar: zoom, snap, compose and export/import stubs.
+- `VectorToolbar.svelte` — Vector toolbar: undo/redo, zoom, snap, compose and SVG import/export.
 - `WritingSystemView.svelte` — Writing System: glyph navigator, grid, and vector editor.
 
 ## `src/components/import`
@@ -111,7 +111,9 @@ and regenerate.
 - `feedback.svelte.ts` — User feedback and preferences: confirmation dialogs, toasts, suppressed
 - `fileActions.ts` — Reveal in the file manager and open in the default app.
 - `fileDrop.ts` — OS file-drop onto the workspace (the drop bridge).
+- `files.ts` — Whole-file text read/write through the Tauri backend (for SVG import/export).
 - `gridView.ts` — Grid column visibility/sort/width normalization.
+- `history.ts` — A small snapshot undo/redo stack, separate from the app's git history.
 - `i18n.ts` — Locale initialisation for svelte-i18n.
 - `ipa.ts` — IPA chart data and phoneme feature helpers.
 - `keybindings.ts` — Keybinding definitions, formatting and reserved combos.
@@ -131,7 +133,10 @@ and regenerate.
 - `window.ts` — Current window label and main-window flag.
 - `words.ts` — Word creation and value editing helpers.
 - `writing.ts` — Pure writing-system helpers: glyph grouping, ordering and geometry.
-- `writingEditor.svelte.ts` — Vector-editor state: the open glyph, tools, and view options.
+- `writingBatch.ts` — Pure batch operations over the glyph index (multi-select actions).
+- `writingCommands.ts` — Pure edit operations on glyph outlines: nodes, shapes, transforms, brush.
+- `writingEditor.svelte.ts` — Vector-editor state: the open glyph, tools, selection, history and gestures.
+- `writingMenus.ts` — Pure menu definitions for the vector editor's menu bar.
 
 ## `src/lib/editor`
 

@@ -56,7 +56,11 @@ the scope table is at the end.
 
 `writing_glyph_get`, `writing_glyph_set` (per-glyph outline load/save), and
 `writing_path_operation` (pathfinder booleans over a glyph's flattened contours:
-`union`, `difference`, `intersect`, `exclude`). The writing config itself
+`union`, `difference`, `intersect`, `exclude`), `writing_export_svg` (one glyph
+as an SVG document), `writing_export_sprite` (every glyph as a `<symbol>`
+sprite sheet) and `writing_import_svg` (replace a glyph's contours from SVG
+text; supports `M L H V C Q Z`). `read_text_file` / `write_text_file` move SVG
+text to and from paths chosen in a file dialog. The writing config itself
 travels through the generic `config_get`/`config_set` with section `writing`.
 
 ## Version control
