@@ -2,7 +2,7 @@
 
 import type { EditorView } from "@codemirror/view";
 
-import { ui, type ColumnMenuPayload } from "./store.svelte";
+import { ui, type ColumnMenuPayload, type GlyphMenuPayload } from "./store.svelte";
 
 /** The editor the open editor context menu acts on. */
 let contextEditor: EditorView | null = null;
@@ -54,6 +54,15 @@ export function openContextMenu(
 /** Open the right-click menu for a table row in the sidebar. */
 export function openTableContextMenu(x: number, y: number, name: string): void {
   ui.contextMenu = { x, y, path: "", isDir: false, kind: "table", table: name };
+}
+
+/** Open the right-click menu for a glyph tile in the writing system. */
+export function openGlyphContextMenu(
+  x: number,
+  y: number,
+  glyph: GlyphMenuPayload,
+): void {
+  ui.contextMenu = { x, y, path: "", isDir: false, kind: "glyph", glyph };
 }
 
 export function closeContextMenu(): void {

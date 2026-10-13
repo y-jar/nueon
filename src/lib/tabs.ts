@@ -25,7 +25,7 @@ export interface TabKey {
 }
 
 /** Tool tabs exist at most once per window. */
-const SINGLETON_KINDS = new Set(["translation", "morphology", "phonology"]);
+const SINGLETON_KINDS = new Set(["translation", "morphology", "phonology", "writing"]);
 
 export function isSingletonTab(kind: string): boolean {
   return SINGLETON_KINDS.has(kind);

@@ -28,6 +28,7 @@ test("singleton tool tabs match by kind alone", () => {
   assert.equal(isSingletonTab("translation"), true);
   assert.equal(isSingletonTab("morphology"), true);
   assert.equal(isSingletonTab("phonology"), true);
+  assert.equal(isSingletonTab("writing"), true);
   assert.equal(isSingletonTab("table"), false);
   assert.equal(
     tabMatches({ kind: "translation", ref: null }, { kind: "translation", ref: "x" }),

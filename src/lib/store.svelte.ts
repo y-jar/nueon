@@ -15,6 +15,7 @@ export type Activity =
   | "translation"
   | "morphology"
   | "phonology"
+  | "writing"
   | "git";
 
 /** The kind of document a center tab represents. */
@@ -24,7 +25,8 @@ export type TabKind =
   | "table"
   | "translation"
   | "morphology"
-  | "phonology";
+  | "phonology"
+  | "writing";
 
 /** A center workspace tab. */
 export interface Tab {
@@ -42,7 +44,8 @@ export type View =
   | "dictionary"
   | "translation"
   | "morphology"
-  | "phonology";
+  | "phonology"
+  | "writing";
 
 /** The loaded document for one tab group. */
 export interface DocState {
@@ -120,6 +123,15 @@ export interface ColumnMenuPayload {
   onDelete?: () => void;
 }
 
+/** A glyph tile right-click menu, with the actions the writing view owns. */
+export interface GlyphMenuPayload {
+  id: string;
+  name: string;
+  onEdit: () => void;
+  onDuplicate: () => void;
+  onDelete: () => void;
+}
+
 /** A transient message, optionally with one action (Undo). */
 export interface ToastState {
   id: number;
@@ -165,6 +177,8 @@ export const ui = $state({
   // Workspace data shared across groups.
   tree: [] as api.NoteNode[],
   status: "",
+  /** The last uncaught error/rejection (message + full stack), for the bar. */
+  lastError: null as { message: string; stack: string } | null,
   tables: [] as api.TableSummary[],
   quarantine: [] as api.QuarantineWarning[],
   /** Quarantine file names dismissed for this session only. */
@@ -192,10 +206,11 @@ export const ui = $state({
     y: number;
     path: string;
     isDir: boolean;
-    kind: "node" | "root" | "tab" | "editor" | "column" | "table";
+    kind: "node" | "root" | "tab" | "editor" | "column" | "table" | "glyph";
     tab?: { groupId: string; tabId: string };
     column?: ColumnMenuPayload;
     table?: string;
+    glyph?: GlyphMenuPayload;
   } | null,
   renameTarget: null as string | null,
   /** A table the Tables panel should flip into inline-rename mode. */

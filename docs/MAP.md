@@ -25,6 +25,9 @@ and regenerate.
 - `ExplorerTree.svelte` — The notes tree with inline rename and drag.
 - `FileViewer.svelte` — Image/audio/video/archive viewer.
 - `GitPanel.svelte` — Source Control: status, diff, history and check-in.
+- `GlyphGrid.svelte` — Wrapping grid of glyph tiles for the selected group.
+- `GlyphNavigatorTree.svelte` — Glyph groups and sound coverage for the writing system.
+- `GlyphTile.svelte` — One glyph tile in the writing-system grid.
 - `Grid.svelte` — The virtualized dictionary grid.
 - `GridCell.svelte` — One dictionary grid cell renderer.
 - `GroupBody.svelte` — The active view (editor/grid/etc) for a tab group.
@@ -52,6 +55,7 @@ and regenerate.
 - `Toast.svelte` — Transient status toast.
 - `Translation.svelte` — Translation activity: builder + runner.
 - `TrashModal.svelte` — Trash bin modal (restore/delete).
+- `WritingSystemView.svelte` — Writing System: glyph navigator and grid.
 
 ## `src/components/import`
 
@@ -115,6 +119,7 @@ and regenerate.
 - `wikilink.ts` — Pure [[...]] link parsing, ranking and resolution.
 - `window.ts` — Current window label and main-window flag.
 - `words.ts` — Word creation and value editing helpers.
+- `writing.ts` — Pure writing-system helpers: glyph grouping and ordering.
 
 ## `src/lib/editor`
 

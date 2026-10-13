@@ -1,7 +1,7 @@
 //! Shell chrome: the activity ribbon, panels and modal toggles.
 
 import { ui, type Activity } from "./store.svelte";
-import { openMorphology, openPhonology, openTranslation } from "./state.svelte";
+import { openMorphology, openPhonology, openTranslation, openWriting } from "./state.svelte";
 
 export function setActivity(activity: Activity): void {
   ui.activity = activity;
@@ -9,6 +9,7 @@ export function setActivity(activity: Activity): void {
   if (activity === "translation") openTranslation();
   if (activity === "morphology") openMorphology();
   if (activity === "phonology") openPhonology();
+  if (activity === "writing") openWriting();
 }
 
 export function toggleSidebar(): void {

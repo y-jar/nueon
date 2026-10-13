@@ -400,6 +400,29 @@
           void requestDeleteTable(name);
         }}>{$t("contextMenu.delete")}</button
       >
+    {:else if menu.kind === "glyph" && menu.glyph}
+      <button
+        onclick={() => {
+          const glyph = menu.glyph!;
+          closeContextMenu();
+          glyph.onEdit();
+        }}>{$t("writing.menu.edit")}</button
+      >
+      <button
+        onclick={() => {
+          const glyph = menu.glyph!;
+          closeContextMenu();
+          glyph.onDuplicate();
+        }}>{$t("writing.menu.duplicate")}</button
+      >
+      <button
+        class="danger"
+        onclick={() => {
+          const glyph = menu.glyph!;
+          closeContextMenu();
+          glyph.onDelete();
+        }}>{$t("writing.menu.delete")}</button
+      >
     {:else}
       {#if !menu.isDir}
         <button

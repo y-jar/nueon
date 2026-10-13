@@ -1,0 +1,124 @@
+/* -- writing system (glyph navigator + grid) ------------------------------ */
+
+.writing {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  height: 100%;
+  padding: 8px 10px;
+}
+
+.writing .writing-bar {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.writing-body {
+  display: grid;
+  grid-template-columns: 180px 1fr;
+  gap: 10px;
+  flex: 1;
+  min-height: 0;
+}
+
+.writing-nav {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  overflow-y: auto;
+  border-right: 1px solid var(--border);
+  padding-right: 8px;
+}
+
+.writing-nav h2 {
+  font-size: 12px;
+  margin: 8px 0 2px;
+  color: var(--muted);
+  font-weight: 500;
+}
+
+.nav-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 4px;
+  padding: 3px 6px;
+  border: none;
+  background: transparent;
+  color: var(--text);
+  border-radius: 4px;
+  cursor: pointer;
+  text-align: left;
+  font-size: 13px;
+}
+
+.nav-row.active {
+  background: var(--accent);
+  color: var(--bg);
+}
+
+.nav-row.active .muted {
+  color: inherit;
+}
+
+.sound-row {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  padding: 2px 6px;
+  font-size: 13px;
+}
+
+.sound-row .symbol {
+  font-family: ui-monospace, monospace;
+  flex: 1;
+}
+
+.sound-row button {
+  display: grid;
+  place-items: center;
+  padding: 0;
+  width: 16px;
+  height: 16px;
+  border: none;
+  background: transparent;
+  color: var(--muted);
+  cursor: pointer;
+}
+
+.glyph-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(96px, 1fr));
+  gap: 6px;
+  align-content: start;
+  overflow-y: auto;
+}
+
+.glyph-tile {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 2px;
+  padding: 8px 4px;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  background: var(--panel);
+  color: var(--text);
+  cursor: pointer;
+  min-height: 60px;
+}
+
+.glyph-tile.selected {
+  border-color: var(--accent);
+}
+
+.glyph-tile .glyph-name {
+  font-size: 13px;
+}
+
+.glyph-tile .glyph-symbols {
+  font-size: 11px;
+  color: var(--muted);
+  font-family: ui-monospace, monospace;
+}

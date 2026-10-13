@@ -177,7 +177,14 @@ layer (`src-tauri/`), and the Svelte 5 frontend (`src/`). See `docs/ARCHITECTURE
 - **Where.** `docs/WRITING-SYSTEM.md` (design proposal). Stage 1 — data model,
   storage, `Profile` v3 and `Phoneme.id` — is implemented in
   `crates/nueon-core/src/config/writing_system.rs` and
-  `crates/nueon-core/src/workspace/writing.rs`; the UI is not yet built.
+  `crates/nueon-core/src/workspace/writing.rs`. Stage 2 — the singleton
+  `writing` tab, the glyph navigator tree, the glyph grid, and the `glyph`
+  context menu — is implemented in `src/components/WritingSystemView.svelte`,
+  `GlyphNavigatorTree.svelte`, `GlyphGrid.svelte` and `GlyphTile.svelte`,
+  with `src/lib/writing.ts` for the pure grouping/coverage logic. The vector
+  editor, preview, pathfinder and export are not yet built.
 - **Proof.** cargo `writing_system`, `profile` and `workspace` tests (type
   round-trips, profile v1/v2/v3 backfill, phoneme-id backfill, acyclic-component
-  rejection, glyph atomic save/load, SVG serialization).
+  rejection, glyph atomic save/load, SVG serialization); node `tabs.test.ts`
+  (`isSingletonTab("writing")`) and `writing.test.ts` (glyph grouping and sound
+  coverage).

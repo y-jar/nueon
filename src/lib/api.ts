@@ -219,7 +219,14 @@ export interface GridViewState {
 
 // -- tiling layout -------------------------------------------------------
 export interface TabLayout {
-  kind: "note" | "file" | "table" | "translation" | "morphology" | "phonology";
+  kind:
+    | "note"
+    | "file"
+    | "table"
+    | "translation"
+    | "morphology"
+    | "phonology"
+    | "writing";
   ref?: string | null;
   title: string;
 }
@@ -528,7 +535,8 @@ export interface TranslationReport {
   candidates: Record<string, WordHit[]>;
   leftovers: [number, string][];
   unfilled: number[];
-  gloss: InterlinearGloss;
+  /** Omitted by older backends when there is nothing to gloss. */
+  gloss?: InterlinearGloss;
 }
 
 export const listPresets = (): Promise<SyntaxGrid[]> =>
@@ -626,7 +634,8 @@ export type WritableConfigSection =
   | "language"
   | "grammar"
   | "translation"
-  | "phonology";
+  | "phonology"
+  | "writing";
 export const configSet = <T>(
   section: WritableConfigSection,
   value: T,
@@ -796,6 +805,8 @@ export const compose = (pieces: ComposePiece[]): Promise<Inflection> =>
 export type PhonemeKind = "consonant" | "vowel" | "other";
 
 export interface Phoneme {
+  /** Stable id, backfilled by the backend on load. */
+  id?: string;
   symbol: string;
   kind: PhonemeKind;
 }
@@ -846,6 +857,44 @@ export interface PhonemeSegment {
 /** The word split into inventory phonemes, flagging unknown characters. */
 export const phonologySegments = (word: string): Promise<PhonemeSegment[]> =>
   invoke("phonology_segments", { word });
+
+// -- writing system -------------------------------------------------------
+export type WritingDirection = "ltr" | "rtl" | "ttb";
+
+/** One glyph's identity and mapping, held in `config/writing`. */
+export interface GlyphMeta {
+  id: string;
+  name: string;
+  codepoint: number;
+  phonemes: string[];
+  order: number;
+  group: string;
+}
+
+export interface OrthographyRule {
+  name?: string | null;
+  from: string;
+  to: string[];
+  left?: string | null;
+  right?: string | null;
+}
+
+export interface WritingConfig {
+  direction: WritingDirection;
+  upem: number;
+  x_height: number;
+  cap_height: number;
+  ascender: number;
+  descender: number;
+  glyphs: GlyphMeta[];
+  rules: OrthographyRule[];
+  features: string;
+}
+
+export const writingGet = (): Promise<WritingConfig> =>
+  configGet<WritingConfig>("writing");
+export const writingSet = (value: WritingConfig): Promise<void> =>
+  configSet("writing", value);
 
 export interface UiLayout {
   activity: string;

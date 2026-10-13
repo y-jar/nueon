@@ -115,6 +115,7 @@
     "translation": "Translation",
     "morphology": "Morphology",
     "phonology": "Phonology",
+    "writing": "Writing System",
     "git": "Source Control",
     "settings": "Settings",
     "toggleSidebar": "Toggle sidebar"
@@ -548,6 +549,21 @@
     "pickTable": "Pick a table",
     "applyToTable": "Apply to table",
     "applied": "Renamed {count} words."
+  },
+  "writing": {
+    "title": "Writing System",
+    "glyphs": "Glyphs",
+    "groups": "Sounds",
+    "noGlyphs": "No glyphs yet.",
+    "empty": "Draw glyphs for your language, mapped to the sounds in your inventory.",
+    "addGlyph": "Add glyph",
+    "all": "All",
+    "mapped": "{mapped} of {total} sounds have glyphs",
+    "menu": {
+      "edit": "Edit",
+      "duplicate": "Duplicate",
+      "delete": "Delete"
+    }
   },
   "derivation": {
     "title": "Derivation",

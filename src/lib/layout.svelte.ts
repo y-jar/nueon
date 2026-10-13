@@ -437,6 +437,7 @@ export async function restoreTiling(layout: api.TilingLayout): Promise<void> {
     tab.kind === "translation" ||
     tab.kind === "morphology" ||
     tab.kind === "phonology" ||
+    tab.kind === "writing" ||
     (tab.ref != null &&
       (tab.kind === "table" ? tables.has(tab.ref) : notes.has(tab.ref)));
 

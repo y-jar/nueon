@@ -100,6 +100,8 @@ export async function activateTab(
     group.doc.view = "morphology";
   } else if (tab.kind === "phonology") {
     group.doc.view = "phonology";
+  } else if (tab.kind === "writing") {
+    group.doc.view = "writing";
   } else if (tab.kind === "file" && tab.ref) {
     group.doc.view = "file";
     group.doc.selected = tab.ref;
@@ -247,6 +249,24 @@ export async function openPhonology(opts?: OpenOptions): Promise<void> {
       kind: "phonology",
       ref: null,
       title: "Phonology",
+    };
+    group.tabs = [...group.tabs, tab];
+  }
+  await activateTab(group.id, tab.id);
+}
+
+export async function openWriting(opts?: OpenOptions): Promise<void> {
+  if (!opts?.force && revealExisting({ kind: "writing", ref: null })) return;
+  const group = activeGroup();
+  let tab = opts?.force
+    ? undefined
+    : group.tabs.find((t) => t.kind === "writing");
+  if (!tab) {
+    tab = {
+      id: newId(),
+      kind: "writing",
+      ref: null,
+      title: "Writing System",
     };
     group.tabs = [...group.tabs, tab];
   }
