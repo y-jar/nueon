@@ -108,11 +108,12 @@ export async function resetKeybinds(): Promise<void> {
 
 let toastCounter = 0;
 
-/** Show a transient message (auto-dismissed after `ms`). */
+/** Show a transient message (auto-dismissed after `ms`; `null` = stay until
+ * the user dismisses it). */
 export function showToast(
   message: string,
   action?: { label: string; run: () => void },
-  ms = 10_000,
+  ms: number | null = 10_000,
 ): void {
   toastCounter += 1;
   const id = toastCounter;
@@ -122,9 +123,11 @@ export function showToast(
     actionLabel: action?.label,
     onAction: action?.run,
   };
-  setTimeout(() => {
-    if (ui.toast?.id === id) ui.toast = null;
-  }, ms);
+  if (ms !== null) {
+    setTimeout(() => {
+      if (ui.toast?.id === id) ui.toast = null;
+    }, ms);
+  }
 }
 
 export function dismissToast(): void {

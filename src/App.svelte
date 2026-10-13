@@ -14,6 +14,7 @@
     restoreMainTiling,
     restoreSecondaryTiling,
     installDragBridge,
+    showToast,
     type Activity,
   } from "./lib/state.svelte";
   import { windowLabel, isMainWindow } from "./lib/window";
@@ -47,12 +48,23 @@
     // Surface errors and unhandled rejections that would otherwise be silent
     // (a render error can leave an overlay such as a context menu stuck).
     const onError = (event: ErrorEvent) => {
-      console.error("nueon error:", event.message);
-      ui.status = `Error: ${event.message}`;
+      const message = event.message || String(event.error ?? "unknown error");
+      const stack =
+        event.error instanceof Error && event.error.stack
+          ? event.error.stack
+          : `${event.message}\n    at ${event.filename}:${event.lineno}:${event.colno}`;
+      console.error("nueon error:", event.error ?? message);
+      ui.status = `Error: ${message}`;
+      ui.lastError = { message, stack };
     };
     const onRejection = (event: PromiseRejectionEvent) => {
-      console.error("nueon unhandled rejection:", event.reason);
-      ui.status = `Error: ${String(event.reason)}`;
+      const reason = event.reason;
+      const message = reason instanceof Error ? reason.message : String(reason);
+      const stack =
+        reason instanceof Error && reason.stack ? reason.stack : String(reason);
+      console.error("nueon unhandled rejection:", reason);
+      ui.status = `Error: ${message}`;
+      ui.lastError = { message, stack };
     };
     window.addEventListener("error", onError);
     window.addEventListener("unhandledrejection", onRejection);
@@ -205,7 +217,17 @@
       <Inspector />
     {/if}
     <footer class="statusbar">
-      <span class="muted">{ui.status}</span>
+      {#if ui.lastError}
+        <button
+          class="status-error"
+          title="Click for the full stack trace"
+          onclick={() => showToast(ui.lastError!.stack, undefined, null)}
+        >
+          {ui.status}
+        </button>
+      {:else}
+        <span class="muted">{ui.status}</span>
+      {/if}
       <span class="grow"></span>
       <span class="muted">{ui.root}</span>
     </footer>

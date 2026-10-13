@@ -267,6 +267,20 @@ textarea:focus {
   overflow: hidden;
 }
 
+.status-error {
+  padding: 0;
+  border: none;
+  background: transparent;
+  color: #d6785a;
+  font: inherit;
+  font-size: 11px;
+  cursor: pointer;
+  text-align: left;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
 .pane-head {
   display: flex;
   justify-content: space-between;
@@ -953,6 +967,14 @@ button.danger:hover:not(:disabled) {
   border-radius: 8px;
   box-shadow: 0 8px 28px rgba(0, 0, 0, 0.5);
   font-size: 13px;
+}
+
+.toast-message {
+  white-space: pre-wrap;
+  max-height: 60vh;
+  overflow: auto;
+  font-family: ui-monospace, "JetBrains Mono", monospace;
+  font-size: 12px;
 }
 
 .toast-action {
