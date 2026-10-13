@@ -659,3 +659,13 @@ export function brushContour(
   const right = distinct.map((p) => ({ x: p.x - nx, y: p.y - ny })).reverse();
   return newContour([...left, ...right], true);
 }
+
+/** How many drawable shapes (contours and component instances) an outline has. */
+export function shapeCount(outline: GlyphOutline): number {
+  return outline.elements.length;
+}
+
+/** Whether a pathfinder boolean has anything to combine (it needs two shapes). */
+export function canPathfind(outline: GlyphOutline | null): boolean {
+  return !!outline && shapeCount(outline) >= 2;
+}

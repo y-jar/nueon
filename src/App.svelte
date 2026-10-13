@@ -18,6 +18,7 @@
     type Activity,
   } from "./lib/state.svelte";
   import { windowLabel, isMainWindow } from "./lib/window";
+  import { isBenignError } from "./lib/errors";
   import { installFileDrop } from "./lib/fileDrop";
   import Onboarding from "./components/Onboarding.svelte";
   import ActivityBar from "./components/ActivityBar.svelte";
@@ -49,6 +50,10 @@
     // (a render error can leave an overlay such as a context menu stuck).
     const onError = (event: ErrorEvent) => {
       const message = event.message || String(event.error ?? "unknown error");
+      if (isBenignError(message)) {
+        event.preventDefault();
+        return;
+      }
       const stack =
         event.error instanceof Error && event.error.stack
           ? event.error.stack

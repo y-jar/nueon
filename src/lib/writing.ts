@@ -103,14 +103,31 @@ export interface GuideLine {
   dashed: boolean;
 }
 
+/** FontForge's defaults for a 1000 em font: ascent 800, descent 200. */
+export const DEFAULT_GUIDES = {
+  ascender: 800,
+  cap_height: 700,
+  x_height: 500,
+  descender: -200,
+} as const;
+
+/** A guide height, falling back to the default when it is unset (0). */
+export function guideHeight(
+  config: WritingConfig,
+  key: keyof typeof DEFAULT_GUIDES,
+): number {
+  const value = config[key];
+  return value === 0 || !Number.isFinite(value) ? DEFAULT_GUIDES[key] : value;
+}
+
 /** The guide rails for a writing config, ordered top to bottom. */
 export function guideLines(config: WritingConfig): GuideLine[] {
   return [
-    { key: "ascender", y: config.ascender, dashed: false },
-    { key: "cap_height", y: config.cap_height, dashed: false },
-    { key: "x_height", y: config.x_height, dashed: true },
+    { key: "ascender", y: guideHeight(config, "ascender"), dashed: false },
+    { key: "cap_height", y: guideHeight(config, "cap_height"), dashed: false },
+    { key: "x_height", y: guideHeight(config, "x_height"), dashed: true },
     { key: "baseline", y: 0, dashed: true },
-    { key: "descender", y: config.descender, dashed: false },
+    { key: "descender", y: guideHeight(config, "descender"), dashed: false },
   ];
 }
 

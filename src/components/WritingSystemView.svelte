@@ -234,7 +234,9 @@
       {$t("writing.mapped", { values: { mapped: coverage.mapped, total: coverage.total } })}
     </span>
     <span class="grow"></span>
-    <button onclick={addGlyph}><Plus size={14} /> {$t("writing.addGlyph")}</button>
+    {#if !editing}
+      <button onclick={addGlyph}><Plus size={14} /> {$t("writing.addGlyph")}</button>
+    {/if}
   </header>
 
   {#if error}<p class="error">{error}</p>{/if}

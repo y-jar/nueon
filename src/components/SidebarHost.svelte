@@ -5,6 +5,7 @@
   import TablesPanel from "./TablesPanel.svelte";
   import MorphologyPanel from "./MorphologyPanel.svelte";
   import GitPanel from "./GitPanel.svelte";
+  import WritingPanel from "./WritingPanel.svelte";
 </script>
 
 {#if ui.activity === "notes"}
@@ -13,6 +14,8 @@
   <TablesPanel />
 {:else if ui.activity === "morphology"}
   <MorphologyPanel />
+{:else if ui.activity === "writing"}
+  <WritingPanel />
 {:else if ui.activity === "git"}
   <GitPanel />
 {:else}

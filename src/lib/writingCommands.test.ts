@@ -8,6 +8,7 @@ import {
   appendNode,
   applyMatrix,
   brushContour,
+  canPathfind,
   closeContour,
   cycleNodeKind,
   distributeElements,
@@ -301,4 +302,12 @@ test("allNodeRefs lists every node", () => {
   let outline = addElement(emptyOutline(), square(0, 0));
   outline = addElement(outline, square(10, 10));
   assert.equal(allNodeRefs(outline).length, 8);
+});
+
+test("canPathfind needs two shapes", () => {
+  assert.equal(canPathfind(null), false);
+  assert.equal(canPathfind(emptyOutline()), false);
+  const one = addElement(emptyOutline(), square(0, 0));
+  assert.equal(canPathfind(one), false);
+  assert.equal(canPathfind(addElement(one, square(50, 0))), true);
 });

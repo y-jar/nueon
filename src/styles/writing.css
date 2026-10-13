@@ -145,14 +145,14 @@
   padding: 2px 6px;
 }
 
-.editor-menubar {
+.vector-menubar {
   display: flex;
   align-items: center;
   gap: 2px;
   flex: 1;
 }
 
-.editor-menubar .menu-item {
+.vector-menubar .menu-item {
   padding: 3px 8px;
   border: none;
   background: transparent;
@@ -162,24 +162,34 @@
   font-size: 12px;
 }
 
-.editor-menubar .menu-item:hover {
+.vector-menubar .menu-item:hover {
   background: var(--panel);
 }
 
-.editor-toolbar {
+.vector-toolbar {
   display: flex;
   align-items: center;
-  gap: 8px;
-  padding: 2px 0;
+  flex-wrap: wrap;
+  gap: 6px;
+  padding: 4px 0;
 }
 
-.editor-toolbar .toolbar-group {
+.vector-toolbar button {
+  white-space: nowrap;
+}
+
+.vector-toolbar button.active {
+  border-color: var(--accent);
+  color: var(--accent);
+}
+
+.vector-toolbar .toolbar-group {
   display: flex;
   align-items: center;
   gap: 4px;
 }
 
-.editor-toolbar .mono {
+.vector-toolbar .mono {
   font-family: ui-monospace, monospace;
   min-width: 40px;
   text-align: center;
@@ -391,7 +401,7 @@
   width: 100%;
 }
 
-.glyph-metrics .chip {
+.glyph-metrics .sound-chip {
   display: inline-block;
   padding: 1px 6px;
   border: 1px solid var(--border);
@@ -467,14 +477,14 @@
   vector-effect: non-scaling-stroke;
 }
 
-.canvas-svg .node {
+.canvas-svg .glyph-node {
   fill: var(--bg);
   stroke: var(--text);
   stroke-width: 1;
   vector-effect: non-scaling-stroke;
 }
 
-.canvas-svg .node.selected {
+.canvas-svg .glyph-node.node-selected {
   fill: var(--accent);
   stroke: var(--accent);
 }
@@ -492,7 +502,7 @@
   position: relative;
 }
 
-.editor-menubar .menu-item.open {
+.vector-menubar .menu-item.open {
   background: var(--panel);
 }
 
@@ -595,4 +605,55 @@
 
 .batch-bar input {
   width: 80px;
+}
+
+.writing-sidebar {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  overflow-y: auto;
+}
+
+.sidebar-search {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 2px 6px;
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  color: var(--muted);
+}
+
+.sidebar-search input {
+  flex: 1;
+  min-width: 0;
+  border: none;
+  background: transparent;
+  padding: 2px 0;
+}
+
+.sidebar-glyph {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  width: 100%;
+  padding: 3px 8px;
+  border: none;
+  background: transparent;
+  text-align: left;
+}
+
+.sidebar-glyph:hover {
+  background: var(--faint);
+}
+
+.writing-sidebar .mono {
+  font-family: ui-monospace, monospace;
+  font-size: 11px;
+}
+
+.pathfinder-panel .hint {
+  margin: 2px 0 0;
+  font-size: 11px;
 }

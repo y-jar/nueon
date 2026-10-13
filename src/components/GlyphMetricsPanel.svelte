@@ -29,7 +29,7 @@
     <span class="metric-label">{$t("writing.metrics.phonemes")}</span>
     <div class="phoneme-chips">
       {#each symbols as symbol (symbol)}
-        <span class="chip">{symbol}</span>
+        <span class="sound-chip">{symbol}</span>
       {:else}
         <span class="muted">{$t("writing.metrics.noPhonemes")}</span>
       {/each}

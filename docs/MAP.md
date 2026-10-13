@@ -44,7 +44,7 @@ and regenerate.
 - `MorphologyPanel.svelte` — Morphology activity: classes, morphemes, paradigms.
 - `MorphologyView.svelte` — Morphology view wrapper (panel + preview).
 - `Onboarding.svelte` — First-run workspace picker/onboarding.
-- `PathfinderPanel.svelte` — Pathfinder panel: boolean operations (stubbed).
+- `PathfinderPanel.svelte` — Pathfinder panel: boolean operations over a glyph's shapes.
 - `PhonologyView.svelte` — Phonology: IPA chart and sound changes.
 - `PillCell.svelte` — tag_list cell as pills with suggestions.
 - `Popover.svelte` — Anchor popover with click-outside/Escape dismissal.
@@ -66,6 +66,7 @@ and regenerate.
 - `TrashModal.svelte` — Trash bin modal (restore/delete).
 - `VectorEditor.svelte` — Vector editor: menu, toolbar, toolbox, canvas, metrics and tray.
 - `VectorToolbar.svelte` — Vector toolbar: undo/redo, zoom, snap, compose and SVG import/export.
+- `WritingPanel.svelte` — Writing System activity: searchable glyph list with sound coverage.
 - `WritingSystemView.svelte` — Writing System: glyph navigator, grid, and vector editor.
 
 ## `src/components/import`
@@ -106,6 +107,7 @@ and regenerate.
 - `context.svelte.ts` — Context menus, inline rename/new requests and section collapsing.
 - `data.svelte.ts` — Workspace data loading: refresh, initial load and workspace switching.
 - `dictionary.ts` — Dictionary column types and part-of-speech classes.
+- `errors.ts` — Classifies browser errors that are noise and must not reach the error bar.
 - `explorer.ts` — Note-tree helpers: flattening, name stripping, unique paths.
 - `exports.ts` — Profile/workspace export and import dialogs.
 - `feedback.svelte.ts` — User feedback and preferences: confirmation dialogs, toasts, suppressed
@@ -137,6 +139,7 @@ and regenerate.
 - `writingCommands.ts` — Pure edit operations on glyph outlines: nodes, shapes, transforms, brush.
 - `writingEditor.svelte.ts` — Vector-editor state: the open glyph, tools, selection, history and gestures.
 - `writingMenus.ts` — Pure menu definitions for the vector editor's menu bar.
+- `writingSidebar.ts` — Pure filtering and grouping for the Writing System sidebar glyph list.
 
 ## `src/lib/editor`
 

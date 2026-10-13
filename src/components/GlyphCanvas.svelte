@@ -15,7 +15,14 @@
     toolHint,
     undo,
   } from "../lib/writingEditor.svelte";
-  import { TOOLS, guideLines, outlinePathData, contourPathData, flipY } from "../lib/writing";
+  import {
+    TOOLS,
+    contourPathData,
+    flipY,
+    guideHeight,
+    guideLines,
+    outlinePathData,
+  } from "../lib/writing";
   import { isContour } from "../lib/writingCommands";
 
   interface Props {
@@ -29,8 +36,8 @@
   const guides = $derived(guideLines(config));
   const minX = -100;
   const maxX = $derived((config.upem || 1000) + 200);
-  const storageMinY = $derived(Math.min(config.descender || -200, -200) - 100);
-  const storageMaxY = $derived(Math.max(config.ascender || 800, 800) + 100);
+  const storageMinY = $derived(Math.min(guideHeight(config, "descender"), -200) - 100);
+  const storageMaxY = $derived(Math.max(guideHeight(config, "ascender"), 800) + 100);
 
   const viewBox = $derived(
     `${minX} ${-storageMaxY} ${(maxX - minX) / editor.zoom} ${(storageMaxY - storageMinY) / editor.zoom}`,
@@ -174,9 +181,9 @@
           />
         {/if}
         <rect
-          class="node"
-          class:selected={isSelected(index, ni)}
-          class:smooth={node.kind !== "corner"}
+          class="glyph-node"
+          class:node-selected={isSelected(index, ni)}
+          class:node-smooth={node.kind !== "corner"}
           x={node.x - 4 * handleScale}
           y={flipY(node.y) - 4 * handleScale}
           width={8 * handleScale}

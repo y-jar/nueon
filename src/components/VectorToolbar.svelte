@@ -54,7 +54,7 @@
   }
 </script>
 
-<div class="editor-toolbar">
+<div class="vector-toolbar">
   <button disabled={!editor.canUndo} onclick={undo}>Undo</button>
   <button disabled={!editor.canRedo} onclick={redo}>Redo</button>
   <div class="toolbar-group">

@@ -202,7 +202,7 @@
   }
 </script>
 
-<div class="editor-menubar" bind:this={bar} role="menubar" aria-label={$t("writing.menuBar")}>
+<div class="vector-menubar" bind:this={bar} role="menubar" aria-label={$t("writing.menuBar")}>
   {#each MENU_ORDER as menu (menu)}
     <div class="menu-wrap">
       <button

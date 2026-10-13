@@ -13,6 +13,8 @@ import {
   flipY,
   nextCodepoint,
   codepointConflicts,
+  guideHeight,
+  DEFAULT_GUIDES,
   UNGROUPED,
 } from "./writing.ts";
 import type { GlyphMeta, GlyphOutline, WritingConfig } from "./api.ts";
@@ -189,4 +191,16 @@ test("codepointConflicts lists glyphs that share a codepoint", () => {
   const conflicts = codepointConflicts([at("a", 1), at("b", 1), at("c", 2)]);
   assert.deepEqual([...conflicts.entries()], [[1, ["a", "b"]]]);
   assert.equal(codepointConflicts([at("a", 1), at("c", 2)]).size, 0);
+});
+
+test("unset guide heights fall back to FontForge's 800/200 defaults", () => {
+  const unset = { x_height: 0, cap_height: 0, ascender: 0, descender: 0 } as WritingConfig;
+  const lines = guideLines(unset);
+  assert.deepEqual(
+    lines.map((l) => l.y),
+    [800, 700, 500, 0, -200],
+  );
+  assert.equal(new Set(lines.map((l) => l.y)).size, 5, "rails no longer stack on the baseline");
+  assert.equal(guideHeight({ ...unset, x_height: 480 } as WritingConfig, "x_height"), 480);
+  assert.equal(DEFAULT_GUIDES.ascender, 800);
 });
