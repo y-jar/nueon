@@ -15,6 +15,7 @@ mod tags;
 mod translation;
 mod trash;
 mod vcs;
+mod writing;
 
 pub use assets::{AssetKind, ImportedAsset, ASSETS_DIR};
 pub use note::NoteFile;
@@ -35,6 +36,7 @@ use crate::config::{
     AffixRule, GrammarConfig, GridViewState, LanguageConfig, LayoutState, MorphemeRef, Morphology,
     PhonologyConfig, Profile, TableRole, TableRoleConfig, TilingLayout, TranslationConfig,
     TranslationMode, TranslationOptions, UiLayout, WindowGeometry, WorkspaceSettings,
+    WritingConfig,
 };
 use crate::export_table::TableFormat;
 use crate::model::translate::{dictionary_affixes, dictionary_morphemes, Morpheme};
@@ -62,6 +64,8 @@ pub struct Workspace {
     pub translation: TranslationConfig,
     /// Phoneme inventory and syllable shapes.
     pub phonology: PhonologyConfig,
+    /// Writing-system configuration.
+    pub writing: WritingConfig,
     /// User settings.
     pub settings: WorkspaceSettings,
     /// Detected version-control state.

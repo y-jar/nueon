@@ -31,7 +31,7 @@ translation tab (word strings).
 ### 1. Storage: per-glyph files plus an index
 
 - **Recommendation.** A `writing/` directory with one JSON file per glyph
-  (`writing/glyphs/<id>.json`) holding the outline and metrics, and a small
+  (`writing/glyphs/<id>`) holding the outline and metrics, and a small
   index (`config/writing`) holding everything else — glyph identity, order,
   phoneme mapping, orthography rules, font settings, direction.
 - **Why two files.** Glyph outlines are the large, volatile data (hundreds of
@@ -308,7 +308,7 @@ pub enum OutlineElement {
     Component(ComponentInstance),
 }
 
-/// A glyph's vector data, stored one-per-file in `writing/glyphs/<id>.json`.
+/// A glyph's vector data, stored one-per-file in `writing/glyphs/<id>`.
 #[derive(Debug, Clone, Default, PartialEq, Serialize, Deserialize)]
 #[serde(default)]
 pub struct GlyphOutline {
@@ -326,7 +326,7 @@ pub struct GlyphOutline {
 /// One glyph's identity and mapping, held in `config/writing`.
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct GlyphMeta {
-    /// Stable id; the outline file is `writing/glyphs/<id>.json`.
+    /// Stable id; the outline file is `writing/glyphs/<id>`.
     pub id: String,
     /// Human-readable name.
     pub name: String,
@@ -473,7 +473,7 @@ with `$state.raw` and only the finished glyph is persisted.
 <workspace>/
   config/writing            WritingConfig: direction, metrics, glyph index,
                             rules, GSUB feature text (small, diffable).
-  writing/glyphs/<id>.json  one GlyphOutline per glyph (large, atomic per-glyph).
+  writing/glyphs/<id>  one GlyphOutline per glyph (large, atomic per-glyph).
 ```
 
 `writing/` sits beside `notes/`, `dictionary/` and `config/`. The glyph outline

@@ -9,7 +9,8 @@ the contract between the Rust core, the Tauri layer and the frontend.
 <workspace>/
   notes/                 Markdown notes (.md) and other files (images, PDFs, …)
   dictionary/            one extensionless JSON file per word table
-  config/                extensionless JSON for grammar/translation/phonology
+  config/                extensionless JSON for grammar/translation/phonology/writing
+  writing/glyphs/        one extensionless JSON file per glyph outline
 ```
 
 The app-global registry of known workspaces lives **outside** the workspace at
@@ -58,7 +59,22 @@ Reserved tags with fixed meaning: `wordname`, `definition` (a `tag_list`),
 |---|---|---|
 | `grammar` | `GrammarConfig` | `rules: [{ name, description, slots }]` — clause patterns over tag names |
 | `translation` | `TranslationConfig` | `default_rule`, `settings`, `grids` (saved clause structures), `affixes`, `morphology`, `table_roles` |
-| `phonology` | `PhonologyConfig` | `phonemes: [{ symbol, kind }]`, `syllables`, `rules` (ordered sound changes) |
+| `phonology` | `PhonologyConfig` | `phonemes: [{ id, symbol, kind }]`, `syllables`, `rules` (ordered sound changes). `id` is a stable UUID, backfilled on load for pre-id configs. |
+| `writing` | `WritingConfig` | `direction`, `upem`, metric guide heights, `glyphs` (index of `GlyphMeta`), `rules` (orthography), `features` (GSUB text) |
+
+### `writing/glyphs/<id>` detail
+
+One file per glyph outline, named by the glyph's stable id (extensionless, like
+tables and config). Holds a `GlyphOutline`: `elements` (a list of contours or
+component instances), plus optional `advance`, `lsb`, `rsb`. Component
+references form an acyclic graph, validated on save.
+
+### The profile (version 3)
+
+The profile schema version is 3. A profile bundles `language`, `phonology`,
+`grammar`, `translation` and `writing` (the config index and rules only — not
+the glyph outlines). v1 and v2 profiles still import; a v1/v2 file backfills a
+default `writing` config.
 
 ### `config/translation` detail
 

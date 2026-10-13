@@ -10,6 +10,7 @@ impl Workspace {
         storage::save_json(&dir.join(storage::GRAMMAR_FILE), &self.grammar)?;
         storage::save_json(&dir.join(storage::TRANSLATION_FILE), &self.translation)?;
         storage::save_json(&dir.join(storage::PHONOLOGY_FILE), &self.phonology)?;
+        storage::save_json(&dir.join(storage::WRITING_FILE), &self.writing)?;
         storage::save_json(&dir.join(storage::SETTINGS_FILE), &self.settings)?;
         self.mark_change(Instant::now(), "nueon: update config");
         Ok(())
@@ -21,6 +22,18 @@ impl Workspace {
             &self.config_dir().join(storage::SETTINGS_FILE),
             &self.settings,
         )
+    }
+
+    /// Assign stable ids to phonemes that lack one (migration from pre-id
+    /// configs), persisting when changed so the ids survive future loads.
+    pub fn backfill_phoneme_ids(&mut self) -> Result<(), StorageError> {
+        if self.phonology.backfill_phoneme_ids() {
+            storage::save_json(
+                &self.config_dir().join(storage::PHONOLOGY_FILE),
+                &self.phonology,
+            )?;
+        }
+        Ok(())
     }
 
     /// The persisted grid presentation state for a table (default empty).
@@ -109,6 +122,7 @@ impl Workspace {
             "grammar" => serde_json::to_value(&self.grammar),
             "translation" => serde_json::to_value(&self.translation),
             "phonology" => serde_json::to_value(&self.phonology),
+            "writing" => serde_json::to_value(&self.writing),
             "settings" => serde_json::to_value(&self.settings),
             other => {
                 return Err(StorageError::Config(
@@ -144,7 +158,12 @@ impl Workspace {
             }
             "phonology" => {
                 self.phonology = serde_json::from_value(value).map_err(invalid)?;
+                self.phonology.backfill_phoneme_ids();
                 storage::save_json(&dir.join(storage::PHONOLOGY_FILE), &self.phonology)?;
+            }
+            "writing" => {
+                self.writing = serde_json::from_value(value).map_err(invalid)?;
+                storage::save_json(&dir.join(storage::WRITING_FILE), &self.writing)?;
             }
             // The settings file also holds grid views, layout and migration
             // flags. Replacing it wholesale from the UI could wipe all of that,

@@ -158,7 +158,7 @@ layer (`src-tauri/`), and the Svelte 5 frontend (`src/`). See `docs/ARCHITECTURE
 
 - **Where.** `docs/SCRIPTING.md`. Not implemented.
 
-## Writing System (planned)
+## Writing System (in progress)
 
 - **Behaviour.** A tab for designing the conlang's writing system: draw glyph
   vectors in a vector editor, map them to the phonology's phonemes, preview
@@ -169,6 +169,15 @@ layer (`src-tauri/`), and the Svelte 5 frontend (`src/`). See `docs/ARCHITECTURE
   acyclic and flattened only for pathfinder/CFF.
 - **Data.** `config/writing` (the writing config: direction, metrics, glyph
   index and grouping, orthography rules, GSUB feature text) and
-  `writing/glyphs/<id>.json` (one glyph outline per file). Joins `Profile` v3,
-  which carries the config but not the outline vectors.
-- **Where.** `docs/WRITING-SYSTEM.md` (design proposal). Not implemented.
+  `writing/glyphs/<id>` (one glyph outline per file). Joins `Profile` v3, which
+  carries the config but not the outline vectors.
+- **Invariants.** Phonemes carry a stable `id` (backfilled on load) so glyph
+  mappings survive a symbol rename; the component graph is acyclic and every
+  reference resolves; glyph writes are atomic and validated.
+- **Where.** `docs/WRITING-SYSTEM.md` (design proposal). Stage 1 — data model,
+  storage, `Profile` v3 and `Phoneme.id` — is implemented in
+  `crates/nueon-core/src/config/writing_system.rs` and
+  `crates/nueon-core/src/workspace/writing.rs`; the UI is not yet built.
+- **Proof.** cargo `writing_system`, `profile` and `workspace` tests (type
+  round-trips, profile v1/v2/v3 backfill, phoneme-id backfill, acyclic-component
+  rejection, glyph atomic save/load, SVG serialization).

@@ -14,6 +14,10 @@ pub enum PhonemeKind {
 /// One selected sound. `symbol` is its IPA (or custom) spelling.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct Phoneme {
+    /// Stable id, independent of the symbol, so glyph mappings survive renames.
+    /// Empty until backfilled on load (`PhonologyConfig::backfill_phoneme_ids`).
+    #[serde(default)]
+    pub id: String,
     pub symbol: String,
     pub kind: PhonemeKind,
 }
@@ -57,6 +61,21 @@ impl PhonologyConfig {
     /// Whether an inventory has been defined.
     pub fn is_empty(&self) -> bool {
         self.phonemes.is_empty()
+    }
+
+    /// Assign a stable id to every phoneme that lacks one, returning whether
+    /// anything changed. Old configs (and hand-edited files) deserialize with
+    /// an empty id; this backfills them so glyph mappings keyed by id survive
+    /// a symbol rename.
+    pub fn backfill_phoneme_ids(&mut self) -> bool {
+        let mut changed = false;
+        for phoneme in &mut self.phonemes {
+            if phoneme.id.is_empty() {
+                phoneme.id = uuid::Uuid::new_v4().to_string();
+                changed = true;
+            }
+        }
+        changed
     }
 }
 
@@ -347,14 +366,34 @@ mod tests {
     }
 
     #[test]
+    fn backfill_assigns_stable_ids_only_when_missing() {
+        let mut config = PhonologyConfig {
+            phonemes: vec![consonant("k"), vowel("a")],
+            syllables: vec![],
+            rules: vec![],
+        };
+        assert!(config.backfill_phoneme_ids());
+        let first = config.phonemes[0].id.clone();
+        assert!(!first.is_empty(), "backfill assigns a non-empty id");
+        assert_ne!(config.phonemes[0].id, config.phonemes[1].id);
+
+        // A second backfill is a no-op: ids are stable.
+        let snapshot = config.clone();
+        assert!(!config.backfill_phoneme_ids());
+        assert_eq!(config, snapshot);
+    }
+
+    #[test]
     fn round_trips() {
         let config = PhonologyConfig {
             phonemes: vec![
                 Phoneme {
+                    id: String::new(),
                     symbol: "k".into(),
                     kind: PhonemeKind::Consonant,
                 },
                 Phoneme {
+                    id: String::new(),
                     symbol: "a".into(),
                     kind: PhonemeKind::Vowel,
                 },
@@ -370,6 +409,7 @@ mod tests {
 
     fn consonant(symbol: &str) -> Phoneme {
         Phoneme {
+            id: String::new(),
             symbol: symbol.into(),
             kind: PhonemeKind::Consonant,
         }
@@ -377,6 +417,7 @@ mod tests {
 
     fn vowel(symbol: &str) -> Phoneme {
         Phoneme {
+            id: String::new(),
             symbol: symbol.into(),
             kind: PhonemeKind::Vowel,
         }
@@ -464,6 +505,7 @@ mod tests {
         let cfg = config(
             vec![
                 Phoneme {
+                    id: String::new(),
                     symbol: "t͡ʃ".into(),
                     kind: PhonemeKind::Consonant,
                 },
@@ -479,6 +521,7 @@ mod tests {
         let cfg = config(
             vec![
                 Phoneme {
+                    id: String::new(),
                     symbol: "ʔ".into(),
                     kind: PhonemeKind::Other,
                 },

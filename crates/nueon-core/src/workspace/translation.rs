@@ -158,24 +158,27 @@ impl Workspace {
         Ok(removed)
     }
 
-    /// The portable profile: language metadata, phonology, grammar and the
-    /// translation setup, as one document.
+    /// The portable profile: language metadata, phonology, grammar, translation
+    /// setup and the writing system, as one document.
     pub fn profile(&self) -> Profile {
         Profile::new(
             self.language.clone(),
             self.phonology.clone(),
             self.grammar.clone(),
             self.translation.clone(),
+            self.writing.clone(),
         )
     }
 
-    /// Replace the language/phonology/grammar/translation config from a
+    /// Replace the language/phonology/grammar/translation/writing config from a
     /// profile and persist it. Dictionary tables are left untouched.
     pub fn apply_profile(&mut self, profile: Profile) -> Result<(), StorageError> {
         self.language = profile.language;
         self.phonology = profile.phonology;
         self.grammar = profile.grammar;
         self.translation = profile.translation;
+        self.writing = profile.writing;
+        self.phonology.backfill_phoneme_ids();
         self.save_config()
     }
 }

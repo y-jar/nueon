@@ -1014,6 +1014,7 @@ fn a_profile_round_trips_through_apply() {
     language.name = "Vokala".into();
     ws.language = language;
     ws.phonology.phonemes.push(Phoneme {
+        id: String::new(),
         symbol: "k".into(),
         kind: PhonemeKind::Consonant,
     });
@@ -1026,6 +1027,139 @@ fn a_profile_round_trips_through_apply() {
     ws.apply_profile(profile).unwrap();
     assert_eq!(ws.profile().language.name, "Vokala");
     assert_eq!(ws.profile().phonology.phonemes.len(), 1);
+}
+
+#[test]
+fn writing_config_persists_through_reload() {
+    let dir = tempfile::tempdir().unwrap();
+    let mut ws = Workspace::new(dir.path()).unwrap();
+    ws.writing.direction = crate::config::WritingDirection::Rtl;
+    ws.writing.cap_height = 700.0;
+    ws.save_config().unwrap();
+
+    let reloaded = Workspace::load(dir.path()).unwrap();
+    assert_eq!(
+        reloaded.writing.direction,
+        crate::config::WritingDirection::Rtl
+    );
+    assert_eq!(reloaded.writing.cap_height, 700.0);
+    assert_eq!(reloaded.writing.upem, 1000);
+}
+
+#[test]
+fn a_broken_writing_config_defaults_with_a_warning() {
+    let dir = tempfile::tempdir().unwrap();
+    let mut ws = Workspace::new(dir.path()).unwrap();
+    ws.create_table("lex").unwrap();
+    std::fs::write(dir.path().join("config").join("writing"), "{ not json").unwrap();
+
+    let reloaded = Workspace::load(dir.path()).unwrap();
+    assert!(reloaded.dictionary.table("lex").is_some());
+    assert_eq!(reloaded.writing.upem, 1000);
+    assert!(reloaded
+        .quarantine
+        .iter()
+        .any(|w| w.file_name == "config/writing"));
+}
+
+#[test]
+fn glyph_outlines_save_and_load_atomically() {
+    use crate::config::{Contour, FillRule, GlyphOutline, Node, NodeKind, OutlineElement};
+
+    let dir = tempfile::tempdir().unwrap();
+    let ws = Workspace::new(dir.path()).unwrap();
+
+    let outline = GlyphOutline {
+        elements: vec![OutlineElement::Contour(Contour {
+            nodes: vec![
+                Node {
+                    x: 0.0,
+                    y: 0.0,
+                    handle_in: None,
+                    handle_out: None,
+                    kind: NodeKind::Corner,
+                },
+                Node {
+                    x: 100.0,
+                    y: 0.0,
+                    handle_in: None,
+                    handle_out: None,
+                    kind: NodeKind::Corner,
+                },
+            ],
+            closed: true,
+            fill_rule: FillRule::Nonzero,
+        })],
+        advance: None,
+        lsb: None,
+        rsb: None,
+    };
+
+    ws.save_glyph("g-1", &outline).unwrap();
+    assert!(ws.glyph_file("g-1").is_file());
+
+    let loaded = ws.load_glyph("g-1").unwrap().unwrap();
+    assert_eq!(loaded, outline);
+    assert!(ws.load_glyph("missing").unwrap().is_none());
+}
+
+#[test]
+fn saving_a_glyph_rejects_component_cycles() {
+    use crate::config::{ComponentInstance, GlyphOutline, OutlineElement};
+
+    let dir = tempfile::tempdir().unwrap();
+    let ws = Workspace::new(dir.path()).unwrap();
+
+    let empty = GlyphOutline {
+        elements: vec![],
+        advance: None,
+        lsb: None,
+        rsb: None,
+    };
+    let component = |glyph: &str| GlyphOutline {
+        elements: vec![OutlineElement::Component(ComponentInstance {
+            glyph: glyph.to_string(),
+            dx: 0.0,
+            dy: 0.0,
+            scale_x: 1.0,
+            scale_y: 1.0,
+            rotation: 0.0,
+        })],
+        advance: None,
+        lsb: None,
+        rsb: None,
+    };
+
+    // A -> B is fine once B exists.
+    ws.save_glyph("b", &empty).unwrap();
+    ws.save_glyph("a", &component("b")).unwrap();
+
+    // Rewriting B to reference A closes the loop, which is rejected.
+    assert!(ws.save_glyph("b", &component("a")).is_err());
+}
+
+#[test]
+fn loading_backfills_persistent_phoneme_ids() {
+    let dir = tempfile::tempdir().unwrap();
+    let mut ws = Workspace::new(dir.path()).unwrap();
+    ws.create_table("lex").unwrap();
+    let raw = r#"{"phonemes":[{"symbol":"k","kind":"consonant"},{"symbol":"a","kind":"vowel"}],"syllables":[],"rules":[]}"#;
+    std::fs::write(dir.path().join("config").join("phonology"), raw).unwrap();
+
+    let loaded = Workspace::load(dir.path()).unwrap();
+    assert_eq!(loaded.phonology.phonemes.len(), 2);
+    let ids: Vec<String> = loaded
+        .phonology
+        .phonemes
+        .iter()
+        .map(|p| p.id.clone())
+        .collect();
+    assert!(ids.iter().all(|id| !id.is_empty()));
+    assert_ne!(ids[0], ids[1]);
+
+    // Reload: ids are stable because they were persisted.
+    let again = Workspace::load(dir.path()).unwrap();
+    assert_eq!(again.phonology.phonemes[0].id, ids[0]);
 }
 
 #[test]

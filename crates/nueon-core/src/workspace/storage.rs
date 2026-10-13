@@ -24,6 +24,10 @@ pub const NOTES_DIR: &str = "notes";
 pub const DICTIONARY_DIR: &str = "dictionary";
 /// Directory holding per-conlang configuration.
 pub const CONFIG_DIR: &str = "config";
+/// Directory holding the writing system's per-glyph outline files.
+pub const WRITING_DIR: &str = "writing";
+/// Subdirectory of `writing/` holding one JSON file per glyph outline.
+pub const GLYPHS_DIR: &str = "glyphs";
 
 /// `config/` file holding language metadata.
 pub const LANGUAGE_FILE: &str = "language";
@@ -35,6 +39,8 @@ pub const TRANSLATION_FILE: &str = "translation";
 pub const PHONOLOGY_FILE: &str = "phonology";
 /// `config/` file holding workspace settings.
 pub const SETTINGS_FILE: &str = "settings";
+/// `config/` file holding the writing-system configuration.
+pub const WRITING_FILE: &str = "writing";
 
 /// Extension given to notes created without one.
 pub const NOTE_EXT: &str = "md";
@@ -138,6 +144,7 @@ pub fn ensure_dirs(root: &Path) -> Result<(), StorageError> {
         root.join(NOTES_DIR),
         root.join(DICTIONARY_DIR),
         root.join(CONFIG_DIR),
+        root.join(WRITING_DIR).join(GLYPHS_DIR),
     ] {
         fs::create_dir_all(&dir).map_err(|e| io_err(&dir, e))?;
     }
@@ -186,6 +193,7 @@ pub const DEFAULT_CONFIG_FILES: &[&str] = &[
     TRANSLATION_FILE,
     PHONOLOGY_FILE,
     SETTINGS_FILE,
+    WRITING_FILE,
 ];
 
 /// Write any missing default config files (`config/<name>` = `{}`).

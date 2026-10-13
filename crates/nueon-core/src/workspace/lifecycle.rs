@@ -54,6 +54,7 @@ impl Workspace {
             grammar: GrammarConfig::default(),
             translation: TranslationConfig::default(),
             phonology: PhonologyConfig::default(),
+            writing: WritingConfig::default(),
             settings,
             vcs,
             table_files: TableFiles::default(),
@@ -110,6 +111,11 @@ impl Workspace {
             "config/phonology",
             &mut config_warnings,
         );
+        let writing = load_config(
+            &config_dir.join(storage::WRITING_FILE),
+            "config/writing",
+            &mut config_warnings,
+        );
         let settings: WorkspaceSettings = load_config(
             &config_dir.join(storage::SETTINGS_FILE),
             "config/settings",
@@ -133,6 +139,7 @@ impl Workspace {
             grammar,
             translation,
             phonology,
+            writing,
             settings,
             vcs,
             table_files: scan.files,
@@ -142,6 +149,9 @@ impl Workspace {
         };
         // Best effort: a failed migration retries on the next open.
         let _ = workspace.migrate_table_filenames_if_needed();
+        // Best effort: assign stable ids to phonemes that predate the id
+        // field, and persist them so glyph mappings survive a symbol rename.
+        let _ = workspace.backfill_phoneme_ids();
         // Expired trash is cleared on open; never a reason to fail opening.
         trash::prune(&workspace.root_path, trash::now_secs(), RETENTION_DAYS);
         Ok(workspace)
@@ -183,6 +193,11 @@ impl Workspace {
             "config/phonology",
             &mut config_warnings,
         );
+        let writing = load_config(
+            &config_dir.join(storage::WRITING_FILE),
+            "config/writing",
+            &mut config_warnings,
+        );
         let settings = load_config(
             &config_dir.join(storage::SETTINGS_FILE),
             "config/settings",
@@ -198,10 +213,12 @@ impl Workspace {
         self.grammar = grammar;
         self.translation = translation;
         self.phonology = phonology;
+        self.writing = writing;
         self.settings = settings;
         self.table_files = scan.files;
         self.quarantine = quarantine;
         self.history = History::new();
+        let _ = self.backfill_phoneme_ids();
         Ok(())
     }
 

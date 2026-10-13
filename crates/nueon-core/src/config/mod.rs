@@ -8,6 +8,7 @@ mod phonology;
 mod profile;
 mod settings;
 mod translation;
+mod writing_system;
 
 pub use grammar::{GrammarConfig, GrammarRule};
 pub use language::{LanguageConfig, TextDirection};
@@ -27,4 +28,9 @@ pub use settings::{GridViewState, SortSpec, UiLayout, WorkspaceSettings};
 pub use translation::{
     AffixKind, AffixRule, TableRole, TableRoleConfig, TranslationConfig, TranslationMode,
     TranslationOptions,
+};
+pub use writing_system::{
+    path_data, to_svg_symbol, validate_components, validate_outline, ComponentInstance, Contour,
+    FillRule, GlyphMeta, GlyphOutline, Node, NodeKind, OrthographyRule, OutlineElement,
+    WritingConfig, WritingDirection,
 };
