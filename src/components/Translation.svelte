@@ -249,6 +249,12 @@
   }
 
   async function run() {
+    if (inputText.trim() === "") {
+      report = null;
+      suggestions = {};
+      error = "";
+      return;
+    }
     try {
       report =
         mode === "direct"

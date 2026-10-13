@@ -3,7 +3,9 @@
   import { t } from "svelte-i18n";
   import type { InterlinearGloss } from "../lib/api";
 
-  let { gloss }: { gloss: InterlinearGloss } = $props();
+  let {
+    gloss = { morphemes: [], translation: "" },
+  }: { gloss?: InterlinearGloss } = $props();
   let copied = $state("");
 
   function toPlain(): string {

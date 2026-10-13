@@ -127,7 +127,9 @@
         </span>
       </div>
 
-      <InterlinearGloss gloss={report.gloss} />
+      {#if report.gloss?.morphemes?.length}
+        <InterlinearGloss gloss={report.gloss} />
+      {/if}
 
       {#if mode === "direct"}
         <div class="section-title">{$t("translation.wordForWord")}</div>

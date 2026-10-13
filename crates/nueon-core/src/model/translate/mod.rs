@@ -100,15 +100,11 @@ pub struct TranslationReport {
     /// Indices of `RequiredTag` slots that could not be filled.
     pub unfilled: Vec<usize>,
     /// Leipzig interlinear gloss (surface / morpheme gloss / translation).
-    #[serde(default, skip_serializing_if = "InterlinearGloss::is_empty")]
+    ///
+    /// Always present, so the frontend can render an empty gloss without a
+    /// null check; `morphemes` is empty when there was nothing to gloss.
+    #[serde(default)]
     pub gloss: InterlinearGloss,
-}
-
-impl InterlinearGloss {
-    /// Whether this gloss has no content.
-    pub fn is_empty(&self) -> bool {
-        self.morphemes.is_empty() && self.translation.is_empty()
-    }
 }
 
 impl TranslationReport {
