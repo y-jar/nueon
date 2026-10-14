@@ -105,6 +105,27 @@ pub struct GlyphMeta {
     /// Navigator group: a phonology category, a user folder, or `radicals`.
     #[serde(default)]
     pub group: String,
+    /// Alternate glyphs this one takes at the start, middle or end of a joined run.
+    #[serde(default, skip_serializing_if = "GlyphForms::is_empty")]
+    pub forms: GlyphForms,
+}
+
+/// Positional alternates of a glyph, by glyph id. A glyph with any form joins
+/// to its neighbours; one with none stands alone.
+#[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize)]
+pub struct GlyphForms {
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub initial: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub medial: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub final_form: Option<String>,
+}
+
+impl GlyphForms {
+    pub fn is_empty(&self) -> bool {
+        self.initial.is_none() && self.medial.is_none() && self.final_form.is_none()
+    }
 }
 
 /// An ordered orthography rule: a grapheme/phoneme sequence becomes a glyph
@@ -717,6 +738,7 @@ mod tests {
                 phonemes: vec!["p-1".into()],
                 order: 0,
                 group: "consonants".into(),
+                forms: GlyphForms::default(),
             }],
             rules: vec![OrthographyRule {
                 name: Some("ka".into()),
@@ -730,6 +752,32 @@ mod tests {
         let json = serde_json::to_string(&config).unwrap();
         let back: WritingConfig = serde_json::from_str(&json).unwrap();
         assert_eq!(back, config);
+    }
+
+    #[test]
+    fn glyph_forms_round_trip_and_old_configs_load_without_them() {
+        let old = r#"{"id":"a","name":"a","codepoint":57344,"phonemes":[],"order":0,"group":""}"#;
+        let meta: GlyphMeta = serde_json::from_str(old).unwrap();
+        assert!(meta.forms.is_empty());
+        let json = serde_json::to_string(&meta).unwrap();
+        assert!(
+            !json.contains("forms"),
+            "an empty set of forms is not written: {json}"
+        );
+
+        let with = GlyphMeta {
+            forms: GlyphForms {
+                initial: Some("i".into()),
+                medial: None,
+                final_form: Some("f".into()),
+            },
+            ..meta
+        };
+        let json = serde_json::to_string(&with).unwrap();
+        assert!(json.contains(r#""final_form":"f""#), "{json}");
+        assert!(!json.contains("medial"), "{json}");
+        let back: GlyphMeta = serde_json::from_str(&json).unwrap();
+        assert_eq!(back, with);
     }
 
     #[test]

@@ -424,6 +424,7 @@ mod tests {
                 phonemes: vec![],
                 order: 0,
                 group: String::new(),
+                forms: Default::default(),
             },
             contours,
             advance,

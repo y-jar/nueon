@@ -810,3 +810,12 @@
   font-size: 12px;
   color: var(--muted);
 }
+
+.glyph-metrics .forms .form-row {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 6px;
+  align-items: center;
+  margin: 2px 0;
+  font-size: 12px;
+}

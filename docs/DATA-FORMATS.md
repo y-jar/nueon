@@ -60,7 +60,7 @@ Reserved tags with fixed meaning: `wordname`, `definition` (a `tag_list`),
 | `grammar` | `GrammarConfig` | `rules: [{ name, description, slots }]` — clause patterns over tag names |
 | `translation` | `TranslationConfig` | `default_rule`, `settings`, `grids` (saved clause structures), `affixes`, `morphology`, `table_roles` |
 | `phonology` | `PhonologyConfig` | `phonemes: [{ id, symbol, kind }]`, `syllables`, `rules` (ordered sound changes). `id` is a stable UUID, backfilled on load for pre-id configs. |
-| `writing` | `WritingConfig` | `direction`, `upem`, metric guide heights, `glyphs` (index of `GlyphMeta`), `rules` (orthography), `features` (GSUB text) |
+| `writing` | `WritingConfig` | `direction`, `upem`, metric guide heights, `glyphs` (index of `GlyphMeta`, each with an optional `forms` of `initial`/`medial`/`final_form` glyph ids, omitted when empty), `rules` (orthography, compiled to GSUB at export), `features` (reserved, unused) |
 
 ### `writing/glyphs/<id>` detail
 

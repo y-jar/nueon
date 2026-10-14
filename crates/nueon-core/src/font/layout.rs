@@ -218,7 +218,8 @@ pub fn plan_layout(
         });
     }
 
-    if prepared.is_empty() {
+    let joining = resolve_forms(glyphs, &by_id, &mut issues);
+    if prepared.is_empty() && joining.is_empty() {
         return (Layout::default(), issues);
     }
 
@@ -352,6 +353,11 @@ pub fn plan_layout(
             lookups.push(target);
         }
     }
+    if !joining.is_empty() {
+        feature_lookups.push(lookups.len() as u16);
+        positional_lookups(&joining, &mut lookups);
+        max_context = max_context.max(3);
+    }
     if lookups.is_empty() {
         return (Layout::default(), issues);
     }
@@ -373,6 +379,224 @@ pub fn plan_layout(
         },
         issues,
     )
+}
+
+/// A glyph with positional alternates, as glyph indices.
+#[derive(Debug, Clone, Copy)]
+struct Joining {
+    base: u16,
+    initial: Option<u16>,
+    medial: Option<u16>,
+    last: Option<u16>,
+}
+
+fn resolve_forms(
+    glyphs: &[FontGlyph],
+    by_id: &HashMap<&str, u16>,
+    issues: &mut Vec<FontIssue>,
+) -> Vec<Joining> {
+    let mut joining = Vec::new();
+    for (index, glyph) in glyphs.iter().enumerate() {
+        let forms = &glyph.meta.forms;
+        if forms.is_empty() {
+            continue;
+        }
+        let base = index as u16 + 1;
+        let mut resolve = |label: &str, id: &Option<String>| -> Option<u16> {
+            let id = id.as_ref()?;
+            let found = by_id.get(id.as_str()).copied();
+            let problem = match found {
+                None => Some((
+                    Severity::Error,
+                    "form-unknown-glyph",
+                    format!("its {label} form is the glyph \"{id}\", which does not exist"),
+                )),
+                Some(g) if g == base => Some((
+                    Severity::Warning,
+                    "form-self",
+                    format!("its {label} form is the glyph itself, so nothing changes"),
+                )),
+                _ => None,
+            };
+            if let Some((severity, code, message)) = problem {
+                issues.push(FontIssue {
+                    glyph: glyph.meta.id.clone(),
+                    name: glyph.meta.name.clone(),
+                    severity,
+                    code,
+                    message,
+                });
+                return None;
+            }
+            found
+        };
+        let entry = Joining {
+            base,
+            initial: resolve("initial", &forms.initial),
+            medial: resolve("medial", &forms.medial),
+            last: resolve("final", &forms.final_form),
+        };
+        if entry.initial.is_some() || entry.medial.is_some() || entry.last.is_some() {
+            joining.push(entry);
+        }
+    }
+    let connects_ahead = joining
+        .iter()
+        .any(|j| j.initial.is_some() || j.medial.is_some());
+    let joins_behind = joining
+        .iter()
+        .any(|j| j.medial.is_some() || j.last.is_some());
+    for entry in &joining {
+        let glyph = &glyphs[entry.base as usize - 1];
+        let mut dead: Vec<&str> = Vec::new();
+        if entry.initial.is_some() && !joins_behind {
+            dead.push("initial");
+        }
+        if entry.medial.is_some() && !(connects_ahead && joins_behind) {
+            dead.push("medial");
+        }
+        if entry.last.is_some() && !connects_ahead {
+            dead.push("final");
+        }
+        if !dead.is_empty() {
+            issues.push(FontIssue {
+                glyph: glyph.meta.id.clone(),
+                name: glyph.meta.name.clone(),
+                severity: Severity::Warning,
+                code: "form-unreachable",
+                message: format!(
+                    "its {} form can never apply: no other glyph has a form to join to",
+                    dead.join(" and ")
+                ),
+            });
+        }
+    }
+    joining
+}
+
+/// Append the positional-forms lookups: one chaining lookup, then a single
+/// substitution per form. At each joining glyph, in this order and first match
+/// wins: medial (joined on both sides), final (joined behind only), initial
+/// (joined ahead only). A no-op medial subtable stops a glyph that lacks a medial
+/// form, but sits between two joiners, from falling through to the initial form. A glyph is "joined behind"
+/// when the glyph before it came out as an initial or medial form.
+fn positional_lookups(joining: &[Joining], lookups: &mut Vec<SubstitutionLookup>) {
+    let set = |pick: &dyn Fn(&Joining) -> Option<u16>| -> BTreeSet<u16> {
+        joining.iter().filter_map(pick).collect()
+    };
+    let all: BTreeSet<u16> = joining.iter().map(|j| j.base).collect();
+    let with_initial: BTreeSet<u16> = joining
+        .iter()
+        .filter(|j| j.initial.is_some())
+        .map(|j| j.base)
+        .collect();
+    let with_medial: BTreeSet<u16> = joining
+        .iter()
+        .filter(|j| j.medial.is_some())
+        .map(|j| j.base)
+        .collect();
+    let with_last: BTreeSet<u16> = joining
+        .iter()
+        .filter(|j| j.last.is_some())
+        .map(|j| j.base)
+        .collect();
+    let joins_behind: BTreeSet<u16> = with_medial.union(&with_last).copied().collect();
+    let connects_ahead: BTreeSet<u16> = set(&|j| j.initial)
+        .union(&set(&|j| j.medial))
+        .copied()
+        .collect();
+
+    let chain_at = lookups.len() as u16;
+    let mut singles: Vec<SubstitutionLookup> = Vec::new();
+    let mut single = |pairs: Vec<(u16, u16)>| -> Option<u16> {
+        if pairs.is_empty() {
+            return None;
+        }
+        let mut b = SingleSubBuilder::default();
+        for (from, to) in pairs {
+            b.insert(gid(from), gid(to));
+        }
+        singles.push(SubstitutionLookup::Single(Lookup::new(
+            LookupFlag::empty(),
+            b.build(&mut vars()),
+        )));
+        Some(chain_at + singles.len() as u16)
+    };
+    let to_initial = single(
+        joining
+            .iter()
+            .filter_map(|j| j.initial.map(|f| (j.base, f)))
+            .collect(),
+    );
+    let to_medial = single(
+        joining
+            .iter()
+            .filter_map(|j| j.medial.map(|f| (j.base, f)))
+            .collect(),
+    );
+    let to_last = single(
+        joining
+            .iter()
+            .filter_map(|j| j.last.map(|f| (j.base, f)))
+            .collect(),
+    );
+
+    let context = |behind: Option<&BTreeSet<u16>>,
+                   input: &BTreeSet<u16>,
+                   ahead: Option<&BTreeSet<u16>>,
+                   call: Option<u16>| {
+        SubstitutionChainContext::from(ChainedSequenceContext::Format3(
+            ChainedSequenceContextFormat3::new(
+                behind.map(|s| vec![coverage(s)]).unwrap_or_default(),
+                vec![coverage(input)],
+                ahead.map(|s| vec![coverage(s)]).unwrap_or_default(),
+                call.map(|l| vec![SequenceLookupRecord::new(0, l)])
+                    .unwrap_or_default(),
+            ),
+        ))
+    };
+
+    let mut tables = Vec::new();
+    let can_join = !connects_ahead.is_empty();
+    if can_join && !joins_behind.is_empty() {
+        if let Some(call) = to_medial {
+            tables.push(context(
+                Some(&connects_ahead),
+                &with_medial,
+                Some(&joins_behind),
+                Some(call),
+            ));
+        }
+        tables.push(context(
+            Some(&connects_ahead),
+            &all,
+            Some(&joins_behind),
+            None,
+        ));
+    }
+    if can_join {
+        if let Some(call) = to_last {
+            tables.push(context(Some(&connects_ahead), &with_last, None, Some(call)));
+        }
+    }
+    if !joins_behind.is_empty() {
+        if let Some(call) = to_initial {
+            tables.push(context(
+                None,
+                &with_initial,
+                Some(&joins_behind),
+                Some(call),
+            ));
+        }
+    }
+    if tables.is_empty() {
+        tables.push(context(None, &all, None, None));
+    }
+    lookups.push(SubstitutionLookup::ChainContextual(Lookup::new(
+        LookupFlag::empty(),
+        tables,
+    )));
+    lookups.extend(singles);
 }
 
 #[cfg(test)]
@@ -401,6 +625,7 @@ mod tests {
                 phonemes: vec![],
                 order: 0,
                 group: String::new(),
+                forms: Default::default(),
             },
             contours: vec![Contour {
                 nodes: vec![
@@ -758,6 +983,177 @@ mod tests {
         let (bytes, _) = compile(vec![rule("i", &["a-tall"], None, Some("kt"))]);
         assert_eq!(shape_ids(&bytes, "ikt")[0], 6, "i then k then t matches");
         assert_ne!(shape_ids(&bytes, "itk")[0], 6, "i then t then k does not");
+    }
+
+    fn with_forms(
+        mut glyph: FontGlyph,
+        initial: Option<&str>,
+        medial: Option<&str>,
+        last: Option<&str>,
+    ) -> FontGlyph {
+        glyph.meta.forms = crate::config::GlyphForms {
+            initial: initial.map(str::to_string),
+            medial: medial.map(str::to_string),
+            final_form: last.map(str::to_string),
+        };
+        glyph
+    }
+
+    // gids: A=1 B=2 Ai=3 Am=4 Af=5 Bi=6 Bm=7 Bf=8 C=9 E=10 Ei=11 Ef=12
+    const A: char = '\u{E000}';
+    const B: char = '\u{E001}';
+    const C: char = '\u{E008}';
+    const E: char = '\u{E009}';
+    const I: char = '\u{E00C}';
+
+    fn joining_glyphs() -> Vec<FontGlyph> {
+        vec![
+            with_forms(
+                glyph("A", 0xE000, 100.0),
+                Some("Ai"),
+                Some("Am"),
+                Some("Af"),
+            ),
+            with_forms(
+                glyph("B", 0xE001, 110.0),
+                Some("Bi"),
+                Some("Bm"),
+                Some("Bf"),
+            ),
+            glyph("Ai", 0xE002, 120.0),
+            glyph("Am", 0xE003, 130.0),
+            glyph("Af", 0xE004, 140.0),
+            glyph("Bi", 0xE005, 150.0),
+            glyph("Bm", 0xE006, 160.0),
+            glyph("Bf", 0xE007, 170.0),
+            glyph("C", 0xE008, 180.0),
+            with_forms(glyph("E", 0xE009, 190.0), Some("Ei"), None, Some("Ef")),
+            glyph("Ei", 0xE00A, 200.0),
+            glyph("Ef", 0xE00B, 210.0),
+            with_forms(glyph("I", 0xE00C, 220.0), Some("Ii"), None, None),
+            glyph("Ii", 0xE00D, 230.0),
+        ]
+    }
+
+    fn join(text: &str) -> Vec<u32> {
+        let (bytes, _) = compile_font(&settings(vec![]), &joining_glyphs()).unwrap();
+        shape_ids(&bytes, text)
+    }
+
+    #[test]
+    fn a_lone_joining_glyph_stands_alone() {
+        assert_eq!(join(&A.to_string()), vec![1]);
+    }
+
+    #[test]
+    fn two_joining_glyphs_take_initial_then_final() {
+        assert_eq!(join(&format!("{A}{B}")), vec![3, 8]);
+    }
+
+    #[test]
+    fn a_run_takes_initial_medial_final() {
+        assert_eq!(join(&format!("{A}{B}{A}")), vec![3, 7, 5]);
+        assert_eq!(join(&format!("{A}{B}{A}{B}")), vec![3, 7, 4, 8]);
+    }
+
+    #[test]
+    fn a_glyph_that_cannot_join_breaks_the_run() {
+        assert_eq!(join(&format!("{A}{B}{C}{A}{B}")), vec![3, 8, 9, 3, 8]);
+        assert_eq!(join(&format!("{C}{A}{B}")), vec![9, 3, 8]);
+    }
+
+    #[test]
+    fn a_space_ends_a_run() {
+        let (bytes, _) = compile_font(&settings(vec![]), &joining_glyphs()).unwrap();
+        let ids = shape_ids(&bytes, &format!("{A}{B} {A}{B}"));
+        assert_eq!(ids[0], 3);
+        assert_eq!(ids[1], 8);
+        assert_eq!(ids[3], 3);
+        assert_eq!(ids[4], 8);
+    }
+
+    #[test]
+    fn a_glyph_missing_the_form_it_needs_stays_as_it_is_and_breaks_the_join() {
+        assert_eq!(join(&format!("{A}{E}{B}")), vec![3, 10, 2]);
+    }
+
+    #[test]
+    fn a_glyph_with_only_an_initial_and_final_form_works_at_the_ends() {
+        assert_eq!(join(&format!("{E}{B}")), vec![11, 8]);
+        assert_eq!(join(&format!("{A}{E}")), vec![3, 12]);
+    }
+
+    #[test]
+    fn forms_and_rules_work_together() {
+        let mut glyphs = joining_glyphs();
+        glyphs.push(glyph("pair", 0xE00E, 100.0));
+        let rules = vec![rule("ab", &["A"], None, None)];
+        let (bytes, _) = compile_font(&settings(rules), &glyphs).unwrap();
+        assert_eq!(
+            shape_ids(&bytes, &format!("ab{B}"))[..],
+            [3, 8],
+            "ab becomes A, which then joins B"
+        );
+    }
+
+    #[test]
+    fn bad_forms_are_reported() {
+        let mut glyphs = joining_glyphs();
+        glyphs[0].meta.forms.initial = Some("nope".into());
+        glyphs[1].meta.forms.medial = Some("B".into());
+        let (_, issues) = plan_layout(&glyphs, &[], &inventory());
+        let found: Vec<(&str, Severity)> = issues.iter().map(|i| (i.code, i.severity)).collect();
+        assert!(
+            found.contains(&("form-unknown-glyph", Severity::Error)),
+            "{found:?}"
+        );
+        assert!(
+            found.contains(&("form-self", Severity::Warning)),
+            "{found:?}"
+        );
+    }
+
+    #[test]
+    fn forms_that_can_never_apply_are_reported() {
+        let glyphs = vec![
+            with_forms(glyph("A", 0xE000, 100.0), None, None, Some("Af")),
+            glyph("Af", 0xE001, 100.0),
+        ];
+        let (_, issues) = plan_layout(&glyphs, &[], &inventory());
+        assert!(
+            issues.iter().any(|i| i.code == "form-unreachable"),
+            "{issues:?}"
+        );
+    }
+
+    #[test]
+    fn no_forms_and_no_rules_writes_no_layout() {
+        let (layout, issues) = plan_layout(&user_glyphs(), &[], &inventory());
+        assert!(layout.gsub.is_none() && issues.is_empty());
+    }
+
+    #[test]
+    fn a_glyph_with_only_an_initial_form_starts_a_run_but_cannot_be_joined_onto() {
+        assert_eq!(
+            join(&format!("{A}{I}")),
+            vec![1, 13],
+            "nothing to join A to"
+        );
+        assert_eq!(
+            join(&format!("{I}{B}"))[0],
+            14,
+            "I starts a run when a joiner follows"
+        );
+        assert_eq!(join(&format!("{I}{B}"))[1], 8);
+    }
+
+    #[test]
+    fn a_new_run_can_start_right_after_a_final_form() {
+        assert_eq!(
+            join(&format!("{A}{B}{I}{B}")),
+            vec![3, 8, 14, 8],
+            "A starts, B ends; I starts again and the last B ends"
+        );
     }
 
     #[test]

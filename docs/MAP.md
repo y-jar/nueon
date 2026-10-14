@@ -142,6 +142,7 @@ and regenerate.
 - `writingCommands.ts` — Pure edit operations on glyph outlines: nodes, shapes, transforms, brush.
 - `writingComponents.ts` — Pure component resolution for the glyph canvas: transform, flatten, expand.
 - `writingEditor.svelte.ts` — Vector-editor state: the open glyph, tools, selection, history and gestures.
+- `writingForms.ts` — Pure helpers for a glyph's positional forms (initial, medial, final).
 - `writingMenus.ts` — Pure menu definitions for the vector editor's menu bar.
 - `writingRules.ts` — Pure helpers for editing orthography rules in the writing tab.
 - `writingSidebar.ts` — Pure filtering and grouping for the Writing System sidebar glyph list.

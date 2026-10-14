@@ -1,14 +1,26 @@
 <!-- Glyph metrics: active phonemes, side bearings and advance width. -->
 <script lang="ts">
   import { t } from "svelte-i18n";
-  import type { Phoneme } from "../lib/api";
+  import type { GlyphMeta, Phoneme } from "../lib/api";
   import { editor, setMetric } from "../lib/writingEditor.svelte";
+  import { FORM_KEYS, formChoices, setForm, type FormKey } from "../lib/writingForms";
 
   interface Props {
     phonemes: Phoneme[];
+    glyphs: GlyphMeta[];
+    onGlyphChange: (glyph: GlyphMeta) => void;
   }
 
-  let { phonemes }: Props = $props();
+  let { phonemes, glyphs, onGlyphChange }: Props = $props();
+
+  const choices = $derived(formChoices(glyphs, editor.glyphMeta?.id ?? ""));
+
+  function chooseForm(key: FormKey, value: string) {
+    if (!editor.glyphMeta) return;
+    const next = setForm(editor.glyphMeta, key, value || null);
+    editor.glyphMeta = next;
+    onGlyphChange(next);
+  }
 
   const byId = $derived(new Map(phonemes.map((p) => [p.id ?? p.symbol, p.symbol])));
   const symbols = $derived(
@@ -61,5 +73,24 @@
       value={editor.outline?.advance ?? ""}
       oninput={(e) => setMetric("advance", parseMetric(e.currentTarget.value))}
     />
+  </div>
+
+  <div class="metric-block forms" data-testid="glyph-forms">
+    <span class="metric-label">{$t("writing.forms.title")}</span>
+    <p class="muted">{$t("writing.forms.hint")}</p>
+    {#each FORM_KEYS as key (key)}
+      <label class="form-row">
+        <span>{$t(`writing.forms.${key}`)}</span>
+        <select
+          value={editor.glyphMeta?.forms?.[key] ?? ""}
+          onchange={(e) => chooseForm(key, e.currentTarget.value)}
+        >
+          <option value="">{$t("writing.forms.none")}</option>
+          {#each choices as choice (choice.id)}
+            <option value={choice.id}>{choice.name}</option>
+          {/each}
+        </select>
+      </label>
+    {/each}
   </div>
 </div>

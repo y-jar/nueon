@@ -2156,6 +2156,7 @@ fn svg_export_and_import_round_trip_a_glyph() {
         phonemes: vec![],
         order: 0,
         group: String::new(),
+        forms: Default::default(),
     });
 
     let svg = ws.export_glyph_svg("g").unwrap();
@@ -2206,6 +2207,7 @@ fn the_writing_system_compiles_to_a_valid_font() {
         phonemes: vec![],
         order: 0,
         group: String::new(),
+        forms: Default::default(),
     };
     ws.save_glyph(
         "base",
@@ -2285,6 +2287,7 @@ fn the_font_validation_report_names_problems_and_blocks_only_on_errors() {
         phonemes: vec![],
         order: 0,
         group: String::new(),
+        forms: Default::default(),
     };
     let save = |ws: &Workspace, id: &str, element: OutlineElement| {
         ws.save_glyph(
@@ -2390,6 +2393,7 @@ fn orthography_rules_become_gsub_and_bad_rules_are_reported() {
         phonemes: vec![],
         order: 0,
         group: String::new(),
+        forms: Default::default(),
     }];
     ws.phonology.phonemes = vec![
         Phoneme {

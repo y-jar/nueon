@@ -201,6 +201,11 @@
     void save();
   }
 
+  function changeGlyph(glyph: api.GlyphMeta) {
+    config.glyphs = config.glyphs.map((g) => (g.id === glyph.id ? glyph : g));
+    void save();
+  }
+
   function selectGlyph(glyph: api.GlyphMeta) {
     openGlyph(glyph.id, glyph);
   }
@@ -261,6 +266,7 @@
       onDuplicate={duplicateGlyph}
       onDelete={deleteGlyph}
       onGuideChange={setGuide}
+      onGlyphChange={changeGlyph}
       onBatchDelete={batchDelete}
       onBatchGroup={batchGroup}
       onBatchAdvance={batchAdvance}

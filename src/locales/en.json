@@ -588,6 +588,14 @@
     "sidebarSearch": "Filter glyphs\u2026",
     "sidebarEmpty": "No glyphs yet.",
     "sidebarCoverage": "{mapped}/{total} sounds",
+    "forms": {
+      "title": "Joining forms",
+      "hint": "Glyphs with forms join their neighbours: the glyph is swapped for another at the start, middle or end of a run. Pick other glyphs you drew for each position.",
+      "initial": "Start of a run",
+      "medial": "Middle of a run",
+      "final_form": "End of a run",
+      "none": "Same glyph"
+    },
     "rules": {
       "title": "Orthography rules",
       "hint": "Typing these letters renders the glyphs in the exported font. Rules act in the order listed, so write the longer or more specific rule first. In a context, C, V and L are consonant, vowel and other sounds, and # is a space.",

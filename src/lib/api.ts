@@ -869,6 +869,14 @@ export interface GlyphMeta {
   phonemes: string[];
   order: number;
   group: string;
+  forms?: GlyphForms;
+}
+
+/** Alternate glyph ids for the start, middle and end of a joined run. */
+export interface GlyphForms {
+  initial?: string | null;
+  medial?: string | null;
+  final_form?: string | null;
 }
 
 export interface OrthographyRule {

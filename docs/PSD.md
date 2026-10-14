@@ -237,8 +237,15 @@ layer (`src-tauri/`), and the Svelte 5 frontend (`src/`). See `docs/ARCHITECTURE
   are edited in the writing tab (`OrthographyRules.svelte`, helpers in
   `src/lib/writingRules.ts`); rules that cannot work (unknown glyph, several
   letters to several glyphs, an empty class) are skipped and reported in the
-  font check, and an unknown glyph blocks the export. OpenType (CFF) export,
-  positional forms and translator preview are not yet built.
+  font check, and an unknown glyph blocks the export. Joining scripts are supported through per-glyph
+  positional forms (`GlyphMeta.forms`: initial, medial, final alternates by
+  glyph id, set in the glyph metrics panel): a glyph with any form joins its
+  neighbours, and the same `calt` feature swaps it for its initial form at the
+  start of a run, medial in the middle, final at the end, and leaves it alone
+  when nothing joins to it. A space or a glyph with no forms ends a run. Forms
+  that point at a missing glyph block the export, and forms that can never
+  apply are reported. OpenType (CFF) export and translator preview are not yet
+  built.
 - **Proof.** cargo `writing_system`, `profile`, `pathfinder` and `workspace`
   tests (type round-trips, profile v1/v2/v3 backfill, phoneme-id backfill,
   acyclic-component rejection, glyph atomic save/load, SVG serialization,
@@ -253,7 +260,9 @@ layer (`src-tauri/`), and the Svelte 5 frontend (`src/`). See `docs/ARCHITECTURE
   `writingMenus.test.ts`, `writingBatch.test.ts`, `layout.rs` tests that compile a font and shape it through `harfrust` (ligatures,
   one-to-many, left/right/class/boundary contexts, rule order, multi-letter
   sounds) and were cross-checked against C HarfBuzz `hb-shape` on the same
-  bytes, `writingRules.test.ts`, `validate.rs` tests (winding, reversal keeps holes and handles, bow-tie
+  bytes, `writingRules.test.ts`, `writingForms.test.ts`, positional-forms tests (runs,
+  breaks, missing forms, rules combined) cross-checked against `hb-shape` on
+  ten shaped strings, `validate.rs` tests (winding, reversal keeps holes and handles, bow-tie
   detection, names, duplicates, range), `fontReport.test.ts`, a compile test
   reading the glyph back to prove clockwise output, `writingComponents.test.ts` (transform order, handles, nested/cyclic
   flattening, dependency list, expand in place), `writingSnap.test.ts` (snap

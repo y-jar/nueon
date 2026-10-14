@@ -27,6 +27,7 @@
     onDuplicate: (id: string) => void;
     onDelete: (id: string) => void;
     onGuideChange: (field: GuideField, value: number) => void;
+    onGlyphChange: (glyph: GlyphMeta) => void;
     onBatchDelete: (ids: string[]) => void;
     onBatchGroup: (ids: string[], group: string) => void;
     onBatchAdvance: (ids: string[], advance: number) => void;
@@ -43,6 +44,7 @@
     onDuplicate,
     onDelete,
     onGuideChange,
+    onGlyphChange,
     onBatchDelete,
     onBatchGroup,
     onBatchAdvance,
@@ -88,7 +90,7 @@
     {/if}
 
     <div class="editor-side">
-      <GlyphMetricsPanel {phonemes} />
+      <GlyphMetricsPanel {phonemes} glyphs={config.glyphs} {onGlyphChange} />
       <PathfinderPanel />
     </div>
   </div>
