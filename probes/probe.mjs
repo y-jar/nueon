@@ -5912,6 +5912,8 @@ async function main() {
 
   await probe("100-pen-clicks-create-nodes-and-save-to-disk", async () => {
     await click(".glyph-canvas");
+    await js(`document.querySelector('.glyph-canvas').dispatchEvent(
+      new KeyboardEvent('keydown', { key: 'p', bubbles: true })); return true;`);
     await canvasClick(0.35, 0.65);
     await canvasClick(0.65, 0.65);
     await canvasClick(0.5, 0.3);
@@ -6014,6 +6016,189 @@ async function main() {
     }
     assertEqual(rules[0]?.from, "ka", "rule persisted to config/writing");
     await screenshot("p104-orthography-rules");
+  });
+
+  // -- probes 105-: viewport, select, hand and zoom tools -------------------
+  const view = () =>
+    js(`const v = document.querySelector('.canvas-svg').getAttribute('viewBox').split(' ').map(Number);
+      const r = document.querySelector('.canvas-svg').getBoundingClientRect();
+      return { x: v[0], y: v[1], w: v[2], h: v[3], sw: r.width, sh: r.height, left: r.left, top: r.top };`);
+  const fire = (type, fx, fy, extra = {}) =>
+    js(`const svg = document.querySelector('.canvas-svg');
+      const b = svg.getBoundingClientRect();
+      svg.dispatchEvent(new PointerEvent(${JSON.stringify(type)}, Object.assign({ bubbles: true, cancelable: true,
+        pointerId: 1, button: 0, clientX: b.left + b.width * ${fx}, clientY: b.top + b.height * ${fy} }, ${JSON.stringify(extra)})));
+      return true;`);
+  const dragOnCanvas = async (from, to, extra = {}) => {
+    await fire("pointerdown", from[0], from[1], extra);
+    await fire("pointermove", (from[0] + to[0]) / 2, (from[1] + to[1]) / 2, extra);
+    await fire("pointermove", to[0], to[1], extra);
+    await fire("pointerup", to[0], to[1], extra);
+  };
+  const tool = async (key) => {
+    await click(".glyph-canvas");
+    await js(`document.querySelector('.glyph-canvas').dispatchEvent(
+      new KeyboardEvent('keydown', { key: ${JSON.stringify(key)}, bubbles: true })); return true;`);
+  };
+  const activeTool = () => js(`return document.querySelector('.toolbox .tool.active')?.dataset.tool;`);
+
+  await probe("105-glyph-opens-on-select-and-fits-the-view", async () => {
+    await js(`document.querySelector('.vector-editor .back')?.click(); return true;`);
+    await waitJs(`!!document.querySelector('.glyph-tile')`, { label: "grid" });
+    await click(".glyph-tile");
+    await waitJs(`!!document.querySelector('.canvas-svg')`, { label: "editor" });
+    assertEqual(await activeTool(), "select", "default tool");
+    const v = await view();
+    // The viewBox must match the canvas aspect so nothing is letterboxed or stretched.
+    const ratio = (v.w / v.h) / (v.sw / v.sh);
+    if (Math.abs(ratio - 1) > 0.02) throw new Error(`viewBox aspect ${v.w / v.h} vs canvas ${v.sw / v.sh}`);
+    // The glyph area from descender to ascender fits: 1000 units tall at most.
+    // Descender to ascender and the whole default advance are visible, with a sane margin.
+    if (v.y > -800 || v.y + v.h < 200) throw new Error(`rails not visible: y ${v.y}..${v.y + v.h}`);
+    if (v.x > 0 || v.x + v.w < 600) throw new Error(`advance not visible: x ${v.x}..${v.x + v.w}`);
+    if (v.w > 2400 && v.h > 2400) throw new Error(`fit is far too small: ${v.w} x ${v.h}`);
+    await screenshot("p105-select-fit");
+  });
+
+  await probe("106-ctrl-wheel-zooms-about-the-cursor", async () => {
+    const before = await view();
+    const at = { fx: 0.8, fy: 0.2 };
+    const pointBefore = {
+      x: before.x + before.w * at.fx,
+      y: before.y + before.h * at.fy,
+    };
+    await js(`const svg = document.querySelector('.canvas-svg');
+      const b = svg.getBoundingClientRect();
+      document.querySelector('.glyph-canvas').dispatchEvent(new WheelEvent('wheel', { bubbles: true, cancelable: true,
+        ctrlKey: true, deltaY: -100, clientX: b.left + b.width * ${at.fx}, clientY: b.top + b.height * ${at.fy} }));
+      return true;`);
+    await waitJs(`document.querySelector('.canvas-svg').getAttribute('viewBox').split(' ')[2] < ${before.w} - 1`, {
+      label: "zoomed in",
+    });
+    const after = await view();
+    const pointAfter = { x: after.x + after.w * at.fx, y: after.y + after.h * at.fy };
+    if (Math.abs(pointAfter.x - pointBefore.x) > 1 || Math.abs(pointAfter.y - pointBefore.y) > 1) {
+      throw new Error(`the glyph point under the cursor moved: ${JSON.stringify({ pointBefore, pointAfter })}`);
+    }
+    const ratio = before.w / after.w;
+    if (Math.abs(ratio - Math.SQRT2) > 0.02) throw new Error(`zoom step ${ratio}`);
+  });
+
+  await probe("107-space-drag-pans-the-view", async () => {
+    const before = await view();
+    await js(`document.querySelector('.glyph-canvas').dispatchEvent(new KeyboardEvent('keydown', { key: ' ', bubbles: true })); return true;`);
+    await dragOnCanvas([0.5, 0.5], [0.6, 0.55]);
+    await js(`document.querySelector('.glyph-canvas').dispatchEvent(new KeyboardEvent('keyup', { key: ' ', bubbles: true })); return true;`);
+    const after = await view();
+    const moved = after.x - before.x;
+    const expected = -before.w * 0.1;
+    if (Math.abs(moved - expected) > 2) throw new Error(`pan moved ${moved}, expected ${expected}`);
+    if (Math.abs(after.w - before.w) > 0.01) throw new Error("pan changed the zoom");
+    assertEqual(await activeTool(), "select", "tool returns after Space is released");
+  });
+
+  await probe("108-hand-tool-and-middle-drag-pan", async () => {
+    await tool("h");
+    assertEqual(await activeTool(), "hand", "H selects the hand");
+    const before = await view();
+    await dragOnCanvas([0.5, 0.5], [0.4, 0.5]);
+    const after = await view();
+    if (after.x - before.x < before.w * 0.09) throw new Error(`hand pan x moved ${after.x - before.x}`);
+    const mid = await view();
+    await dragOnCanvas([0.5, 0.5], [0.5, 0.6], { button: 1 });
+    const end = await view();
+    if (Math.abs(end.y - mid.y) < 1) throw new Error("middle-drag did not pan");
+  });
+
+  await probe("109-zoom-tool-click-alt-click-and-box", async () => {
+    await tool("0");
+    await tool("z");
+    assertEqual(await activeTool(), "zoom", "Z selects zoom");
+    const v0 = await view();
+    await fire("pointerdown", 0.5, 0.5);
+    await fire("pointerup", 0.5, 0.5);
+    const v1 = await view();
+    if (!(v1.w < v0.w)) throw new Error("click did not zoom in");
+    await fire("pointerdown", 0.5, 0.5, { altKey: true });
+    await fire("pointerup", 0.5, 0.5, { altKey: true });
+    const v2 = await view();
+    if (Math.abs(v2.w - v0.w) > 1) throw new Error(`alt-click did not undo the zoom ${v2.w} vs ${v0.w}`);
+    await dragOnCanvas([0.4, 0.4], [0.6, 0.5]);
+    const v3 = await view();
+    if (!(v3.w < v0.w * 0.5)) throw new Error(`box zoom too small a change ${v3.w}`);
+    await screenshot("p109-zoom-box");
+  });
+
+  await probe("110-zoom-range-reaches-32x-and-0_1x", async () => {
+    for (let i = 0; i < 40; i++) await js(`document.querySelector('.vector-toolbar .toolbar-group button[title="Zoom in"]').click(); return true;`);
+    const hi = await js(`return document.querySelector('[data-testid="zoom-percent"]').textContent;`);
+    assertEqual(hi, "3200%", "max zoom");
+    for (let i = 0; i < 60; i++) await js(`document.querySelector('.vector-toolbar .toolbar-group button[title="Zoom out"]').click(); return true;`);
+    const lo = await js(`return document.querySelector('[data-testid="zoom-percent"]').textContent;`);
+    assertEqual(lo, "10%", "min zoom");
+    await js(`[...document.querySelectorAll('.vector-toolbar .toolbar-group button')].find((b) => b.textContent.trim() === 'Fit').click(); return true;`);
+  });
+
+  await probe("111-select-click-marquee-move-and-delete", async () => {
+    await tool("p");
+    await click(".glyph-canvas");
+    // Draw two separate triangles with the pen.
+    const tri = async (ox) => {
+      await fire("pointerdown", ox, 0.6); await fire("pointerup", ox, 0.6);
+      await fire("pointerdown", ox + 0.12, 0.6); await fire("pointerup", ox + 0.12, 0.6);
+      await fire("pointerdown", ox + 0.06, 0.4); await fire("pointerup", ox + 0.06, 0.4);
+      await js(`document.querySelector('.glyph-canvas').dispatchEvent(new KeyboardEvent('keydown', { key: 'Enter', bubbles: true })); return true;`);
+    };
+    await tri(0.15);
+    await tri(0.55);
+    await tool("v");
+    const count = () => js(`return document.querySelectorAll('.element-selection').length;`);
+    assertEqual(await count(), 0, "nothing selected yet");
+    await fire("pointerdown", 0.21, 0.55); await fire("pointerup", 0.21, 0.55);
+    assertEqual(await count(), 1, "click selects one shape");
+    await fire("pointerdown", 0.61, 0.55, { shiftKey: true }); await fire("pointerup", 0.61, 0.55, { shiftKey: true });
+    assertEqual(await count(), 2, "shift-click adds");
+    await fire("pointerdown", 0.9, 0.9); await fire("pointerup", 0.9, 0.9);
+    assertEqual(await count(), 0, "click on empty space clears");
+    await dragOnCanvas([0.05, 0.3], [0.45, 0.8]);
+    assertEqual(await count(), 1, "marquee selects only the shape fully inside");
+    const shapes0 = await js(`return (document.querySelector('.outline').getAttribute('d').match(/M /g) || []).length;`);
+    const d0 = await js(`return document.querySelector('.outline').getAttribute('d');`);
+    await dragOnCanvas([0.21, 0.55], [0.31, 0.55]);
+    const d1 = await js(`return document.querySelector('.outline').getAttribute('d');`);
+    if (d0 === d1) throw new Error("dragging a selected shape did not move it");
+    await screenshot("p111-select-move");
+    await js(`document.querySelector('.glyph-canvas').dispatchEvent(new KeyboardEvent('keydown', { key: 'Delete', bubbles: true })); return true;`);
+    await waitJs(`(document.querySelector('.outline').getAttribute('d').match(/M /g) || []).length === ${shapes0 - 1}`, { label: "one shape deleted" });
+    await js(`document.querySelector('.glyph-canvas').dispatchEvent(new KeyboardEvent('keydown', { key: 'z', ctrlKey: true, bubbles: true })); return true;`);
+    await waitJs(`(document.querySelector('.outline').getAttribute('d').match(/M /g) || []).length === ${shapes0}`, { label: "undo restored it" });
+  });
+
+  await probe("112-ctrl-d-duplicates-and-arrow-keys-nudge", async () => {
+    await fire("pointerdown", 0.61, 0.55); await fire("pointerup", 0.61, 0.55);
+    const before = await js(`return (document.querySelector('.outline').getAttribute('d').match(/M /g) || []).length;`);
+    await js(`document.querySelector('.glyph-canvas').dispatchEvent(new KeyboardEvent('keydown', { key: 'd', ctrlKey: true, bubbles: true })); return true;`);
+    await waitJs(`(document.querySelector('.outline').getAttribute('d').match(/M /g) || []).length === ${before + 1}`, { label: "duplicated" });
+    const d0 = await js(`return document.querySelector('.outline').getAttribute('d');`);
+    await js(`document.querySelector('.glyph-canvas').dispatchEvent(new KeyboardEvent('keydown', { key: 'ArrowRight', shiftKey: true, bubbles: true })); return true;`);
+    const d1 = await js(`return document.querySelector('.outline').getAttribute('d');`);
+    if (d0 === d1) throw new Error("arrow nudge did nothing");
+  });
+
+  await probe("113-toolbox-is-grouped-with-icons-and-tooltips", async () => {
+    const info = await js(`return {
+      groups: document.querySelectorAll('.toolbox .tool-group').length,
+      seps: document.querySelectorAll('.toolbox .tool-sep').length,
+      tools: [...document.querySelectorAll('.toolbox .tool')].map((b) => [b.dataset.tool, b.title, !!b.querySelector('svg')]),
+    };`);
+    assertEqual(info.groups, 4, "four groups");
+    assertEqual(info.seps, 3, "separators between groups");
+    assertEqual(info.tools.length, 10, "ten tools");
+    for (const [id, title, icon] of info.tools) {
+      if (!icon) throw new Error(`${id} has no icon`);
+      if (!/\([A-Z]\)/.test(title)) throw new Error(`${id} tooltip lacks its shortcut: ${title}`);
+    }
+    await screenshot("p113-toolbox");
   });
 }
 

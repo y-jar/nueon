@@ -819,3 +819,28 @@
   margin: 2px 0;
   font-size: 12px;
 }
+
+.canvas-svg.tool-select { cursor: default; }
+.canvas-svg.tool-direct { cursor: default; }
+.canvas-svg.tool-hand { cursor: grab; }
+.canvas-svg.tool-hand:active, .canvas-svg.panning { cursor: grabbing; }
+.canvas-svg.tool-zoom { cursor: zoom-in; }
+
+.canvas-svg .element-selection {
+  fill: none;
+  stroke: var(--accent);
+  stroke-width: 1;
+  stroke-dasharray: 4 3;
+  vector-effect: non-scaling-stroke;
+  pointer-events: none;
+}
+
+.canvas-svg .zoom-box {
+  fill: none;
+}
+
+.toolbox .tool-group { display: flex; flex-direction: column; gap: 2px; }
+.toolbox .tool-sep { height: 1px; margin: 4px 2px; background: var(--border); }
+.toolbox .tool { justify-content: flex-start; }
+.toolbox .tool .tool-label { flex: 1; }
+.toolbox .tool:focus-visible { outline: 1px solid var(--accent); outline-offset: -1px; }

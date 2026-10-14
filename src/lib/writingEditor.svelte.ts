@@ -53,8 +53,31 @@ import {
   undoStep,
   type History,
 } from "./history";
-import { componentElement, type ToolId } from "./writing";
+import { DEFAULT_TOOL, componentElement, type ToolId } from "./writing";
 import { componentIds, expandComponent, flattenElements } from "./writingComponents";
+import {
+  clampZoom,
+  fitView,
+  panBy,
+  screenToGlyph,
+  viewBoxOf,
+  zoomAbout,
+  zoomToRect,
+  type ScreenSize,
+  type Viewport,
+} from "./writingViewport";
+import {
+  duplicateElements,
+  elementsInBox,
+  hitElement,
+  nudgeElements,
+  pruneSelection,
+  selectAllElements,
+  selectOnly,
+  toggleElement,
+  translateElements,
+  type ElementSelection,
+} from "./writingSelect";
 import {
   constrainAngle,
   constrainAxis,
@@ -68,11 +91,24 @@ export const editor = $state({
   openGlyphId: null as string | null,
   glyphMeta: null as api.GlyphMeta | null,
   outline: null as api.GlyphOutline | null,
-  activeTool: "pen" as ToolId,
-  zoom: 1,
+  activeTool: DEFAULT_TOOL as ToolId,
+  /** The canvas view: the glyph point at the centre and screen pixels per font unit. */
+  view: { cx: 500, cy: 300, scale: 0.5 } as Viewport,
+  /** The canvas size in screen pixels, reported by the canvas. */
+  canvasSize: { width: 800, height: 600 } as ScreenSize,
+  /** Zoom as screen pixels per font unit; kept for snapping and hit radii. */
+  zoom: 0.5,
+  /** Selected whole elements (Select tool); separate from the node selection. */
+  elements: [] as ElementSelection,
+  /** A temporary tool while a key is held (Space is a hand). */
+  tempTool: null as ToolId | null,
+  /** The zoom rectangle being dragged, in glyph space. */
+  zoomBox: null as { a: Point; b: Point } | null,
+  guideMetrics: { ascender: 800, descender: -200, advance: 600 },
   snap: false,
   grid: 10,
   showGuides: true,
+  showAllHandles: false,
   composeOpen: false,
   loading: false,
   status: "",
@@ -106,6 +142,10 @@ let drag:
   | { kind: "handle"; ref: NodeRef; which: "in" | "out" }
   | { kind: "pen"; ref: NodeRef }
   | { kind: "shape"; from: Point }
+  | { kind: "pan"; x: number; y: number }
+  | { kind: "zoombox"; from: Point; screen: Point }
+  | { kind: "elements-move"; origin: Point; last: Point; moved: boolean }
+  | { kind: "elements-marquee"; from: Point; additive: boolean }
   | { kind: "brush"; points: Point[] }
   | null = null;
 
@@ -127,8 +167,10 @@ function say(message: string): void {
 export function openGlyph(id: string, meta: api.GlyphMeta): void {
   editor.openGlyphId = id;
   editor.glyphMeta = meta;
-  editor.activeTool = "pen";
-  editor.zoom = 1;
+  editor.activeTool = DEFAULT_TOOL;
+  editor.tempTool = null;
+  editor.elements = [];
+  editor.zoomBox = null;
   editor.snap = false;
   editor.status = "";
   editor.error = "";
@@ -139,7 +181,7 @@ export function openGlyph(id: string, meta: api.GlyphMeta): void {
   editor.preview = null;
   drag = null;
   resetHistory();
-  void loadOutline(id);
+  void loadOutline(id).then(fitGlyph);
 }
 
 /** Leave the editor; edits are saved eagerly so nothing is lost. */
@@ -239,11 +281,79 @@ export function setTool(tool: ToolId): void {
   editor.activeTool = tool;
   editor.draft = null;
   editor.preview = null;
+  editor.zoomBox = null;
+  editor.marquee = null;
   drag = null;
 }
 
+/** The tool in effect: a held-key temporary tool wins over the chosen one. */
+export function effectiveTool(): ToolId {
+  return editor.tempTool ?? editor.activeTool;
+}
+
+/** Space (or H held) is a temporary hand; release returns to the chosen tool. */
+export function holdTool(tool: ToolId | null): void {
+  if (editor.tempTool === tool) return;
+  editor.tempTool = tool;
+  if (tool === null) drag = drag && drag.kind === "pan" ? null : drag;
+}
+
+function setView(view: Viewport): void {
+  editor.view = view;
+  editor.zoom = view.scale;
+}
+
+/** The SVG viewBox for the current view and canvas size. */
+export function currentViewBox() {
+  return viewBoxOf(editor.view, editor.canvasSize);
+}
+
+export function setCanvasSize(size: ScreenSize): void {
+  if (size.width <= 0 || size.height <= 0) return;
+  const first = editor.canvasSize.width === 800 && editor.canvasSize.height === 600;
+  editor.canvasSize = size;
+  if (first && editor.outline) fitGlyph();
+}
+
+export function setGuideMetrics(m: { ascender: number; descender: number; advance: number }): void {
+  editor.guideMetrics = m;
+}
+
+/** Show the whole glyph: descender to ascender and the advance with room. */
+export function fitGlyph(): void {
+  const m = editor.guideMetrics;
+  const advance = editor.outline?.advance ?? m.advance;
+  setView(fitView(editor.canvasSize, { ascender: m.ascender, descender: m.descender, advance }));
+}
+
+/** Zoom to an exact scale about the canvas centre. */
 export function setZoom(zoom: number): void {
-  editor.zoom = Math.min(4, Math.max(0.25, zoom));
+  const factor = clampZoom(zoom) / editor.view.scale;
+  const c = { x: editor.canvasSize.width / 2, y: editor.canvasSize.height / 2 };
+  setView(zoomAbout(editor.view, editor.canvasSize, c, factor));
+}
+
+/** 100% means one font unit per screen pixel. */
+export function zoomActual(): void {
+  setZoom(1);
+}
+
+export function zoomStep(factor: number, cursor?: Point): void {
+  const c = cursor ?? { x: editor.canvasSize.width / 2, y: editor.canvasSize.height / 2 };
+  setView(zoomAbout(editor.view, editor.canvasSize, c, factor));
+}
+
+export function panScreen(dx: number, dy: number): void {
+  setView(panBy(editor.view, dx, dy));
+}
+
+/** A pointer position in screen pixels over the canvas, for gestures that start there. */
+export function screenPoint(x: number, y: number): Point {
+  return { x, y };
+}
+
+export function glyphAtScreen(x: number, y: number): Point {
+  return screenToGlyph(editor.view, editor.canvasSize, { x, y });
 }
 
 export function toggleSnap(): void {
@@ -285,6 +395,7 @@ export function undo(): void {
   history = step.history;
   editor.outline = step.value;
   editor.selection = [];
+  editor.elements = pruneSelection(editor.elements, step.value.elements.length);
   editor.selectedComponent = null;
   syncHistoryFlags();
   say("undo");
@@ -299,6 +410,7 @@ export function redo(): void {
   history = step.history;
   editor.outline = step.value;
   editor.selection = [];
+  editor.elements = pruneSelection(editor.elements, step.value.elements.length);
   editor.selectedComponent = null;
   syncHistoryFlags();
   say("redo");
@@ -354,8 +466,26 @@ function targets(): number[] {
 
 export function selectAll(): void {
   if (!editor.outline) return;
+  if (effectiveTool() === "select") {
+    editor.selection = [];
+    editor.elements = selectAllElements(editor.outline);
+    say(`${editor.elements.length} shape(s) selected`);
+    return;
+  }
+  editor.elements = [];
   editor.selection = allNodeRefs(editor.outline);
   say(`${editor.selection.length} nodes selected`);
+}
+
+/** Ctrl+D: copy the selected shapes, offset, and select the copies. */
+export function duplicateSelection(): void {
+  if (!editor.outline || editor.elements.length === 0) {
+    say("select a shape to duplicate");
+    return;
+  }
+  const result = duplicateElements(editor.outline, editor.elements, 20);
+  commit(result.outline, "duplicated");
+  editor.elements = result.selection;
 }
 
 export function clearSelection(): void {
@@ -503,6 +633,9 @@ function selectNode(ref: NodeRef, additive: boolean): void {
 }
 
 const TOOL_HINT: Record<ToolId, string> = {
+  select: "Select: click a shape, Shift-click to add, drag to move, drag empty space to box-select",
+  hand: "Hand: drag to pan (Space also pans, as does middle-drag)",
+  zoom: "Zoom: click to zoom in, Alt-click to zoom out, drag a box to fit it",
   pen: "Pen: click to add points, drag for curves, click the first point to close",
   direct: "Direct Select: click or drag nodes and handles (Shift adds to the selection)",
   node: "Node Mod: click a node to change its type, click an edge to add a node",
@@ -520,7 +653,13 @@ export interface Modifiers {
   shift: boolean;
   ctrl: boolean;
   alt: boolean;
+  /** The pointer in canvas screen pixels; view tools work in these. */
+  screen?: Point;
+  /** Which button went down: 0 primary, 1 middle. */
+  button?: number;
 }
+
+const ZOOM_CLICK = 1.5;
 
 /** The snapped placement for a new point (pen, shapes): nodes, rails, lines, grid. */
 function placement(raw: Point, mods: Modifiers, exclude: NodeRef[] = []): Point {
@@ -536,7 +675,43 @@ export function pointerDown(raw: Point, mods: Modifiers): void {
   const radius = NODE_RADIUS / editor.zoom;
   editor.snapHit = null;
 
-  switch (editor.activeTool) {
+  if (mods.button === 1 || effectiveTool() === "hand") {
+    if (mods.screen) drag = { kind: "pan", x: mods.screen.x, y: mods.screen.y };
+    return;
+  }
+
+  switch (effectiveTool()) {
+    case "select": {
+      const lookup = lookupGlyph;
+      const hit = hitElement(outline, radius, raw, lookup);
+      if (hit !== null) {
+        editor.selection = [];
+        editor.elements = mods.shift
+          ? toggleElement(editor.elements, hit)
+          : editor.elements.includes(hit)
+            ? editor.elements
+            : selectOnly(hit);
+        if (editor.elements.includes(hit)) {
+          history = pushHistory(history, outline);
+          syncHistoryFlags();
+          drag = { kind: "elements-move", origin: raw, last: raw, moved: false };
+        }
+      } else {
+        if (!mods.shift) editor.elements = [];
+        drag = { kind: "elements-marquee", from: raw, additive: mods.shift };
+        editor.marquee = { a: raw, b: raw };
+      }
+      return;
+    }
+    case "hand":
+      return;
+    case "zoom": {
+      if (mods.screen) {
+        drag = { kind: "zoombox", from: raw, screen: mods.screen };
+        editor.zoomBox = { a: raw, b: raw };
+      }
+      return;
+    }
     case "pen": {
       const point = placement(raw, mods);
       const draft = editor.draft;
@@ -690,6 +865,28 @@ export function pointerDown(raw: Point, mods: Modifiers): void {
 /** Pointer move in glyph space; only local state changes, never IPC. */
 export function pointerMove(raw: Point, mods: Modifiers): void {
   if (!editor.outline) return;
+  if (drag && drag.kind === "pan") {
+    if (mods.screen) {
+      panScreen(mods.screen.x - drag.x, mods.screen.y - drag.y);
+      drag = { kind: "pan", x: mods.screen.x, y: mods.screen.y };
+    }
+    return;
+  }
+  if (drag && drag.kind === "elements-move") {
+    const dx = raw.x - drag.last.x;
+    const dy = raw.y - drag.last.y;
+    editor.outline = translateElements(editor.outline, editor.elements, dx, dy);
+    drag = { ...drag, last: raw, moved: true };
+    return;
+  }
+  if (drag && drag.kind === "elements-marquee") {
+    editor.marquee = { a: drag.from, b: raw };
+    return;
+  }
+  if (drag && drag.kind === "zoombox") {
+    editor.zoomBox = { a: drag.from, b: raw };
+    return;
+  }
   if (!drag) {
     // Hover feedback: show what a click would snap to, without changing anything.
     if (editor.activeTool === "pen" || editor.activeTool === "shapes") {
@@ -773,6 +970,43 @@ export function pointerUp(raw: Point, mods: Modifiers): void {
   const hit = editor.snapHit;
   editor.snapHit = null;
   if (!finished || !editor.outline) return;
+
+  if (finished.kind === "pan") return;
+  if (finished.kind === "elements-move") {
+    if (finished.moved) void saveOutline();
+    return;
+  }
+  if (finished.kind === "elements-marquee") {
+    const box = editor.marquee;
+    editor.marquee = null;
+    if (box && Math.hypot(box.a.x - box.b.x, box.a.y - box.b.y) > 3 / editor.zoom) {
+      const inside = elementsInBox(editor.outline, box.a, box.b, lookupGlyph);
+      editor.elements = finished.additive
+        ? [...new Set([...editor.elements, ...inside])].sort((a, b) => a - b)
+        : inside;
+      say(`${editor.elements.length} shape(s) selected`);
+    }
+    return;
+  }
+  if (finished.kind === "zoombox") {
+    editor.zoomBox = null;
+    const end = mods.screen;
+    if (!end) return;
+    const moved = Math.hypot(end.x - finished.screen.x, end.y - finished.screen.y);
+    if (moved < 4) {
+      zoomStep(mods.alt ? 1 / ZOOM_CLICK : ZOOM_CLICK, end);
+    } else {
+      setView(
+        zoomToRect(editor.view, editor.canvasSize, {
+          x1: finished.screen.x,
+          y1: finished.screen.y,
+          x2: end.x,
+          y2: end.y,
+        }),
+      );
+    }
+    return;
+  }
 
   if (finished.kind === "pen") {
     void saveOutline();
@@ -859,6 +1093,10 @@ export function breakSelected(): void {
 
 /** Arrow-key nudge: 1 unit, 10 with Shift (FontForge's default step). */
 export function nudge(dx: number, dy: number, shift: boolean): void {
+  if (editor.outline && editor.elements.length > 0 && editor.selection.length === 0) {
+    commit(nudgeElements(editor.outline, editor.elements, dx, dy, shift));
+    return;
+  }
   if (!editor.outline || editor.selection.length === 0) return;
   const step = shift ? 10 : 1;
   commit(nudgeNodes(editor.outline, editor.selection, dx * step, dy * step));
@@ -874,6 +1112,11 @@ export function selectNext(step: 1 | -1): void {
 /** Delete selected nodes keeping the curve's shape; `plain` removes without refitting. */
 export function deleteNodes(plain: boolean): void {
   if (!editor.outline) return;
+  if (editor.elements.length > 0 && editor.selection.length === 0) {
+    commit(removeElements(editor.outline, editor.elements), "shapes deleted");
+    editor.elements = [];
+    return;
+  }
   if (editor.selectedComponent !== null) {
     commit(removeElements(editor.outline, [editor.selectedComponent]), "component removed");
     editor.selectedComponent = null;

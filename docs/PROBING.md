@@ -296,6 +296,19 @@ capture, so it is the harness, not the app. For capture-based surfaces, dispatch
 `PointerEvent`s directly in `js()` (`pointerdown` then `pointerup`, with
 `pointerId` and `button: 0`) as the writing probes' `canvasClick` does.
 
+### Canvas probes: dispatch keys on `.glyph-canvas`, not WebDriver keys
+
+Tool shortcuts are handled by the canvas `keydown` handler. Click `.glyph-canvas`
+to focus it, then dispatch `KeyboardEvent`s on it (the `tool()` helper in the
+writing probes). A glyph now opens on Select, so a probe that draws must press
+`p` first.
+
+### Probe 22 is flaky
+
+`22-translator-loads-grammar-rule` ("clause canvas" timeout) fails about one run
+in three or four, on builds before and after the writing-system polish pass.
+Rerun before investigating; if it fails twice in a row, look at it.
+
 ### An image viewer can show a stale screenshot
 
 Probes overwrite `probes/out/<name>.png` in place. If a screenshot looks like it

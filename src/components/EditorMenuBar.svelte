@@ -36,7 +36,10 @@
     scaleSelection,
     selectAll,
     setTool,
-    setZoom,
+    fitGlyph,
+    zoomActual,
+    zoomStep,
+    duplicateSelection,
     shearSelection,
     toggleCompose,
     toggleGuides,
@@ -72,6 +75,8 @@
     canRedo: editor.canRedo,
     hasSelection: editor.selection.length > 0,
     hasComponent: editor.selectedComponent !== null,
+    hasElements: editor.elements.length > 0,
+    allHandles: editor.showAllHandles,
     snap: editor.snap,
     guides: editor.showGuides,
     hasGlyph: editor.openGlyphId !== null,
@@ -167,9 +172,12 @@
       case "shear": return shearSelection(10);
       case "distribute-h": return distribute("h");
       case "distribute-v": return distribute("v");
-      case "zoom-in": return setZoom(editor.zoom + 0.25);
-      case "zoom-out": return setZoom(editor.zoom - 0.25);
-      case "zoom-fit": return setZoom(1);
+      case "zoom-in": return zoomStep(Math.SQRT2);
+      case "zoom-out": return zoomStep(1 / Math.SQRT2);
+      case "zoom-fit": return fitGlyph();
+      case "zoom-actual": return zoomActual();
+      case "toggle-handles": return void (editor.showAllHandles = !editor.showAllHandles);
+      case "duplicate": return duplicateSelection();
       case "toggle-snap": return toggleSnap();
       case "toggle-guides": return toggleGuides();
       case "node-kind": return cycleSelectedKind();

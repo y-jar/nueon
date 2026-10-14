@@ -551,6 +551,74 @@ mapped phoneme, codepoint, and reports path/nodes/segments counts, LSB, RSB,
 advance width. `ExportHub` sets format (SVG/font), target, scale (1000 upem),
 and compiles the font.
 
+## Editor interaction model (polish pass)
+
+### Viewport
+
+The canvas keeps a view `{ cx, cy, scale }` (`src/lib/writingViewport.ts`): the
+glyph point shown at the canvas centre and screen pixels per font unit, so 100%
+means one unit per pixel. The SVG `viewBox` is derived from it and the measured
+canvas size, so it always has the canvas aspect ratio (no letterboxing, no
+stretched handles). Zoom runs 0.1 to 32 (10% to 3200%). Wheel, click and box
+zoom keep the glyph point under the cursor fixed; pan is a screen-pixel drag.
+The first version of this editor changed only the viewBox width and scrolled an
+`overflow: hidden` box, so it zoomed toward the top-left corner and Space or
+middle-drag pan did nothing; that claim in earlier notes was never verified in
+the running app. It is now covered by probes 105 to 110.
+
+### Selection state
+
+Two selections exist side by side, and only one is non-empty at a time:
+
+```ts
+editor.elements: number[]        // whole elements (contours or components), sorted
+editor.selection: NodeRef[]      // { element, node } for single nodes (Direct tool)
+```
+
+The Select tool writes `elements` and clears `selection`; the Direct tool does
+the opposite. Delete, arrow-key nudge and Ctrl+D act on whichever is non-empty.
+`editor.selectedComponent` (a single component for "Expand component") is kept
+separate for now. Indexes are pruned after undo and redo. The pure functions
+(`hitElement`, `elementsInBox`, `translateElements`, `duplicateElements`) are in
+`src/lib/writingSelect.ts`. Hit testing uses non-zero winding over the whole
+outline, so a hole is a miss, an open contour counts as filled (as the canvas
+and the font do), and the edge has a tolerance of the node radius in font units.
+
+### Tools and shortcuts
+
+| Key | Tool / action | Notes |
+| --- | --- | --- |
+| V | Select | Default when a glyph opens |
+| A | Direct Select | Nodes and handles |
+| H | Hand | Drag to pan |
+| Z | Zoom | Click in, Alt-click out, drag a box to fit it |
+| P | Pen | Ctrl constrains the segment angle to 15 degrees |
+| N | Node Mod | |
+| B | Brush | |
+| S | Shapes | |
+| M | Mirror/Flip | |
+| E | Eraser | |
+| Space (held) | Temporary Hand | Returns to the chosen tool on release |
+| Middle-drag | Pan | In any tool |
+| Ctrl+wheel | Zoom about the cursor | sqrt(2) per notch |
+| 0 | Fit glyph | Also Ctrl+F |
+| 1 | 100% | |
+| Shift+H | Show all handles | Option stored now, handle drawing changes in a later stage |
+| Arrows, Shift+Arrows | Nudge 1 or 10 units | Shapes (Select) or nodes (Direct) |
+| Tab, Shift+Tab | Step through nodes | |
+| Ctrl+A | Select all | Shapes in Select, nodes otherwise |
+| Ctrl+D | Duplicate | Offset by 20 units; the copies become the selection |
+| Delete | Delete selection | Ctrl+Delete removes a node without refitting the curve |
+| Shift+J / Shift+B | Join endpoints / break node | |
+| Ctrl+Shift+E | Expand component | |
+| Ctrl+Z, Ctrl+Shift+Z, Ctrl+Y | Undo, redo | |
+| Enter, Esc | Finish path, cancel | |
+
+Reserved for later: K knife, R measure, F freehand (stage 7). Every tool
+shortcut is a bare letter not used by another binding; `RESERVED_KEYS` and a
+test in `src/lib/writing.test.ts` guard that.
+
+
 ## IPC commands
 
 New commands in `src-tauri/src/commands/writing.rs`, mirroring the phonology

@@ -145,8 +145,10 @@ and regenerate.
 - `writingForms.ts` — Pure helpers for a glyph's positional forms (initial, medial, final).
 - `writingMenus.ts` — Pure menu definitions for the vector editor's menu bar.
 - `writingRules.ts` — Pure helpers for editing orthography rules in the writing tab.
+- `writingSelect.ts` — Element-level selection for the Select tool: hit testing, marquee, move, duplicate.
 - `writingSidebar.ts` — Pure filtering and grouping for the Writing System sidebar glyph list.
 - `writingSnap.ts` — Pure snapping: nodes, guide rails, bearing lines, edge midpoints and the grid.
+- `writingViewport.ts` — Pure viewport math for the glyph canvas: zoom about a point, pan, fit.
 
 ## `src/lib/editor`
 

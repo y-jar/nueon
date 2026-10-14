@@ -1,9 +1,40 @@
 <!-- Toolbox: the drawing tools and the options of the active tool. -->
 <script lang="ts">
   import { t } from "svelte-i18n";
+  import {
+    Brush,
+    CircleDot,
+    Eraser,
+    FlipHorizontal2,
+    Hand,
+    MousePointer,
+    MousePointer2,
+    PenTool,
+    Shapes,
+    ZoomIn,
+  } from "@lucide/svelte";
   import { editor, setNib, setShape, setTool } from "../lib/writingEditor.svelte";
-  import { TOOLS } from "../lib/writing";
+  import { TOOLS, TOOL_GROUPS, type ToolId } from "../lib/writing";
   import type { ShapeKind } from "../lib/writingCommands";
+
+  const ICONS = {
+    MousePointer2,
+    MousePointer,
+    Hand,
+    ZoomIn,
+    PenTool,
+    CircleDot,
+    Brush,
+    Shapes,
+    FlipHorizontal2,
+    Eraser,
+  } as const;
+
+  const byId = new Map(TOOLS.map((tool) => [tool.id, tool]));
+  const groups = TOOL_GROUPS.map((group) => ({
+    id: group.id,
+    tools: group.tools.map((id: ToolId) => byId.get(id)!),
+  }));
 
   const SHAPES: { id: ShapeKind; label: string }[] = [
     { id: "rect", label: "Rectangle" },
@@ -14,17 +45,27 @@
   ];
 </script>
 
-<div class="toolbox">
-  {#each TOOLS as tool (tool.id)}
-    <button
-      class="tool"
-      class:active={editor.activeTool === tool.id}
-      title={`${tool.label} (${tool.shortcut})`}
-      onclick={() => setTool(tool.id)}
-    >
-      <span class="tool-label">{tool.label}</span>
-      <span class="tool-shortcut">{tool.shortcut}</span>
-    </button>
+<div class="toolbox" role="toolbar" aria-label={$t("writing.toolbox")}>
+  {#each groups as group, gi (group.id)}
+    {#if gi > 0}<div class="tool-sep" role="separator"></div>{/if}
+    <div class="tool-group" data-group={group.id}>
+      {#each group.tools as tool (tool.id)}
+        {@const Icon = ICONS[tool.icon as keyof typeof ICONS]}
+        <button
+          class="tool"
+          class:active={editor.activeTool === tool.id}
+          data-tool={tool.id}
+          title={tool.tooltip}
+          aria-label={tool.label}
+          aria-pressed={editor.activeTool === tool.id}
+          onclick={() => setTool(tool.id)}
+        >
+          <Icon size={15} />
+          <span class="tool-label">{tool.label}</span>
+          <span class="tool-shortcut">{tool.shortcut}</span>
+        </button>
+      {/each}
+    </div>
   {/each}
 
   {#if editor.activeTool === "shapes"}

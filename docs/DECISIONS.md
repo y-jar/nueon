@@ -74,6 +74,25 @@ Every behaviour change ships as: a failing probe/test that reproduces the
 problem, the fix, then `loom-gates` + `nix build .#` + the full probe suite, one
 commit per stage. See `docs/PROBING.md`.
 
+## Writing-system editor polish pass
+
+- **Viewport is a model, not a CSS trick.** `{ cx, cy, scale }` plus the
+  measured canvas size, with pure screen/glyph transforms. Zoom about the
+  cursor, pan and zoom-to-rectangle are unit-tested; the SVG `viewBox` is
+  derived. Rejected: scrolling an oversized SVG, which cannot zoom about a
+  point and gave no way to test pan.
+- **Ctrl stays the constraint key.** An earlier draft made Ctrl+Pen switch to
+  Select. Ctrl already constrains pen segments and handle drags to 15 degrees
+  and drags to an axis, so the temporary-Select idea was dropped. Select is one
+  key away (V).
+- **Two selections, one active.** Whole elements (`editor.elements`) and nodes
+  (`editor.selection`) are separate lists; tools write one and clear the
+  other. Rejected: a single mixed list, which makes "delete" ambiguous.
+- **Open contours count as filled when hit-testing**, matching how the canvas
+  draws them and how the font fills them.
+- **Probe 22 is intermittently flaky** (translator clause canvas), on builds
+  before and after this pass; it is unrelated to the writing system.
+
 ## Deferred, not abandoned
 
 Block links, setext-heading resolution, remotes/push, sentence-level grids,

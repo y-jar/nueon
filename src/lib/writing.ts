@@ -44,8 +44,11 @@ export function soundCoverage(
 
 /** The editor's tool set, in toolbox order. */
 export type ToolId =
-  | "pen"
+  | "select"
   | "direct"
+  | "hand"
+  | "zoom"
+  | "pen"
   | "node"
   | "brush"
   | "shapes"
@@ -56,17 +59,76 @@ export interface Tool {
   id: ToolId;
   label: string;
   shortcut: string;
+  /** A lucide icon component name, resolved by the toolbox. */
+  icon: string;
+  tooltip: string;
 }
 
-export const TOOLS: Tool[] = [
-  { id: "pen", label: "Pen", shortcut: "P" },
-  { id: "direct", label: "Direct Select", shortcut: "A" },
-  { id: "node", label: "Node Mod", shortcut: "N" },
-  { id: "brush", label: "Brush", shortcut: "B" },
-  { id: "shapes", label: "Shapes", shortcut: "S" },
-  { id: "mirror", label: "Mirror/Flip", shortcut: "M" },
-  { id: "eraser", label: "Eraser", shortcut: "E" },
+/** The tool a glyph opens on. */
+export const DEFAULT_TOOL: ToolId = "select";
+
+export const TOOL_SHORTCUTS: Record<ToolId, string> = {
+  select: "V",
+  direct: "A",
+  hand: "H",
+  zoom: "Z",
+  pen: "P",
+  node: "N",
+  brush: "B",
+  shapes: "S",
+  mirror: "M",
+  eraser: "E",
+};
+
+/**
+ * Letters the canvas key handler uses for something other than a tool, in
+ * lower case. A tool shortcut must never be one of these. (Shift+H, Shift+J
+ * and Shift+B are shifted combinations and do not use the bare letter.)
+ */
+export const RESERVED_KEYS: string[] = ["0", "1"];
+
+const TOOL_META: Record<ToolId, { label: string; icon: string; what: string }> = {
+  select: { label: "Select", icon: "MousePointer2", what: "Select whole shapes" },
+  direct: { label: "Direct Select", icon: "MousePointer", what: "Edit nodes and handles" },
+  hand: { label: "Hand", icon: "Hand", what: "Drag to pan" },
+  zoom: { label: "Zoom", icon: "ZoomIn", what: "Click to zoom in, Alt-click to zoom out, drag a box to fit it" },
+  pen: { label: "Pen", icon: "PenTool", what: "Draw paths" },
+  node: { label: "Node Mod", icon: "CircleDot", what: "Change node type, add nodes" },
+  brush: { label: "Brush", icon: "Brush", what: "Calligraphic stroke" },
+  shapes: { label: "Shapes", icon: "Shapes", what: "Rectangle, ellipse, polygon, star, line" },
+  mirror: { label: "Mirror/Flip", icon: "FlipHorizontal2", what: "Flip the selection" },
+  eraser: { label: "Eraser", icon: "Eraser", what: "Delete nodes, cut edges" },
+};
+
+const ORDER: ToolId[] = [
+  "select", "direct", "hand", "zoom", "pen", "node", "brush", "shapes", "mirror", "eraser",
 ];
+
+export const TOOLS: Tool[] = ORDER.map((id) => {
+  const meta = TOOL_META[id];
+  const shortcut = TOOL_SHORTCUTS[id];
+  return {
+    id,
+    label: meta.label,
+    shortcut,
+    icon: meta.icon,
+    tooltip: `${meta.label} (${shortcut}): ${meta.what}`,
+  };
+});
+
+export const TOOL_GROUPS: { id: string; tools: ToolId[] }[] = [
+  { id: "select", tools: ["select", "direct"] },
+  { id: "view", tools: ["hand", "zoom"] },
+  { id: "draw", tools: ["pen", "brush", "shapes"] },
+  { id: "edit", tools: ["node", "mirror", "eraser"] },
+];
+
+/** The tool bound to a pressed key, ignoring case. */
+export function toolByKey(key: string): ToolId | undefined {
+  if (key.length !== 1) return undefined;
+  const upper = key.toUpperCase();
+  return ORDER.find((id) => TOOL_SHORTCUTS[id] === upper);
+}
 
 /** The y-up bounding box of a glyph's contours, or `null` when empty. */
 export interface Bounds {

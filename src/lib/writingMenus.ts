@@ -15,6 +15,8 @@ export interface MenuState {
   canRedo: boolean;
   hasSelection: boolean;
   hasComponent: boolean;
+  hasElements: boolean;
+  allHandles: boolean;
   snap: boolean;
   guides: boolean;
   hasGlyph: boolean;
@@ -49,6 +51,7 @@ export function menuItems(menu: MenuId, state: MenuState): MenuItem[] {
         { id: "redo", label: "Redo", shortcut: "Ctrl+Shift+Z", disabled: !state.canRedo },
         sep("s1"),
         { id: "select-all", label: "Select all", shortcut: "Ctrl+A" },
+        { id: "duplicate", label: "Duplicate", shortcut: "Ctrl+D", disabled: !state.hasElements },
         { id: "delete", label: "Delete", shortcut: "Del" },
         sep("s2"),
         { id: "mirror-h", label: "Flip horizontal", disabled: !state.hasGlyph },
@@ -77,15 +80,20 @@ export function menuItems(menu: MenuId, state: MenuState): MenuItem[] {
       return [
         { id: "zoom-in", label: "Zoom in" },
         { id: "zoom-out", label: "Zoom out" },
-        { id: "zoom-fit", label: "Fit to window" },
+        { id: "zoom-fit", label: "Fit glyph", shortcut: "0" },
+        { id: "zoom-actual", label: "100%", shortcut: "1" },
+        { id: "toggle-handles", label: `${state.allHandles ? "\u2713 " : ""}Show all handles`, shortcut: "Shift+H" },
         sep("s1"),
         { id: "toggle-snap", label: `${state.snap ? "\u2713 " : ""}Snap to grid` },
         { id: "toggle-guides", label: `${state.guides ? "\u2713 " : ""}Guide rails` },
       ];
     case "tools":
       return [
-        { id: "tool-pen", label: "Pen", shortcut: "P" },
+        { id: "tool-select", label: "Select", shortcut: "V" },
         { id: "tool-direct", label: "Direct Select", shortcut: "A" },
+        { id: "tool-hand", label: "Hand", shortcut: "H" },
+        { id: "tool-zoom", label: "Zoom", shortcut: "Z" },
+        { id: "tool-pen", label: "Pen", shortcut: "P" },
         { id: "tool-node", label: "Node Mod", shortcut: "N" },
         { id: "tool-brush", label: "Brush", shortcut: "B" },
         { id: "tool-shapes", label: "Shapes", shortcut: "S" },

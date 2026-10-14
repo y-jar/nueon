@@ -560,6 +560,7 @@
     "all": "All",
     "back": "Back to glyphs",
     "menuBar": "Glyph editor menus",
+    "toolbox": "Drawing tools",
     "shape": "Shape",
     "nibWidth": "Nib width",
     "nibAngle": "Nib angle",

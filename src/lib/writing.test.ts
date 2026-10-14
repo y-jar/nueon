@@ -76,13 +76,6 @@ test("soundCoverage is zero when no glyph maps a sound", () => {
   assert.deepEqual(coverage, { total: 2, mapped: 0 });
 });
 
-test("TOOLS lists the seven core tools with unique ids", () => {
-  const ids = TOOLS.map((tool) => tool.id);
-  assert.equal(ids.length, 7);
-  assert.equal(new Set(ids).size, ids.length);
-  assert.ok(TOOLS.every((tool) => tool.label && tool.shortcut));
-});
-
 test("guideLines orders top to bottom with the right dashed flags", () => {
   const config = {
     x_height: 500,
@@ -203,4 +196,65 @@ test("unset guide heights fall back to FontForge's 800/200 defaults", () => {
   assert.equal(new Set(lines.map((l) => l.y)).size, 5, "rails no longer stack on the baseline");
   assert.equal(guideHeight({ ...unset, x_height: 480 } as WritingConfig, "x_height"), 480);
   assert.equal(DEFAULT_GUIDES.ascender, 800);
+});
+
+import {
+  TOOL_GROUPS,
+  TOOL_SHORTCUTS,
+  toolByKey,
+  RESERVED_KEYS,
+  DEFAULT_TOOL,
+} from "./writing.ts";
+
+test("TOOLS now lists select, direct, hand, zoom and the drawing tools", () => {
+  const ids = TOOLS.map((t) => t.id);
+  assert.deepEqual(ids, [
+    "select", "direct", "hand", "zoom", "pen", "node", "brush", "shapes", "mirror", "eraser",
+  ]);
+  assert.equal(new Set(ids).size, ids.length);
+});
+
+test("the default tool is select", () => {
+  assert.equal(DEFAULT_TOOL, "select");
+});
+
+test("the tool shortcuts are the ones asked for", () => {
+  assert.deepEqual(TOOL_SHORTCUTS, {
+    select: "V", direct: "A", hand: "H", zoom: "Z", pen: "P",
+    node: "N", brush: "B", shapes: "S", mirror: "M", eraser: "E",
+  });
+});
+
+test("tool shortcuts are unique single letters", () => {
+  const keys = Object.values(TOOL_SHORTCUTS);
+  assert.equal(new Set(keys).size, keys.length);
+  assert.ok(keys.every((k) => /^[A-Z]$/.test(k)));
+});
+
+test("no tool shortcut collides with a key the editor already binds", () => {
+  for (const key of Object.values(TOOL_SHORTCUTS)) {
+    assert.ok(!RESERVED_KEYS.includes(key.toLowerCase()), `${key} is reserved`);
+  }
+});
+
+test("tools are grouped select / view / draw / edit with every tool exactly once", () => {
+  assert.deepEqual(TOOL_GROUPS.map((g) => g.id), ["select", "view", "draw", "edit"]);
+  const flat = TOOL_GROUPS.flatMap((g) => g.tools);
+  assert.equal(flat.length, TOOLS.length);
+  assert.deepEqual([...flat].sort(), TOOLS.map((t) => t.id).sort());
+});
+
+test("toolByKey finds a tool from a key, ignoring case, and nothing for other keys", () => {
+  assert.equal(toolByKey("v"), "select");
+  assert.equal(toolByKey("H"), "hand");
+  assert.equal(toolByKey("z"), "zoom");
+  assert.equal(toolByKey("q"), undefined);
+  assert.equal(toolByKey("Enter"), undefined);
+});
+
+test("every tool has an icon name, a label and a tooltip with the shortcut", () => {
+  for (const tool of TOOLS) {
+    assert.ok(tool.label && tool.icon, tool.id);
+    assert.ok(tool.tooltip.includes(tool.shortcut), tool.id);
+  }
 });

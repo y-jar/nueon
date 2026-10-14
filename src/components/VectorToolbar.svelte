@@ -9,7 +9,9 @@
     exportGlyphSvg,
     importSvg,
     redo,
-    setZoom,
+    fitGlyph,
+    zoomActual,
+    zoomStep,
     toggleCompose,
     toggleSnap,
     undo,
@@ -58,10 +60,11 @@
   <button disabled={!editor.canUndo} onclick={undo}>Undo</button>
   <button disabled={!editor.canRedo} onclick={redo}>Redo</button>
   <div class="toolbar-group">
-    <button onclick={() => setZoom(editor.zoom - 0.25)}>-</button>
-    <span class="mono">{Math.round(editor.zoom * 100)}%</span>
-    <button onclick={() => setZoom(editor.zoom + 0.25)}>+</button>
-    <button onclick={() => setZoom(1)}>Fit</button>
+    <button title="Zoom out" onclick={() => zoomStep(1 / Math.SQRT2)}>-</button>
+    <span class="mono" data-testid="zoom-percent">{Math.round(editor.zoom * 100)}%</span>
+    <button title="Zoom in" onclick={() => zoomStep(Math.SQRT2)}>+</button>
+    <button title="Fit glyph (0)" onclick={fitGlyph}>Fit</button>
+    <button title="100% (1)" onclick={zoomActual}>100%</button>
   </div>
   <button class:active={editor.snap} onclick={toggleSnap}>Snap</button>
   <button class:active={editor.composeOpen} onclick={toggleCompose}>

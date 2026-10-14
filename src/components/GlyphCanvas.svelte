@@ -18,14 +18,23 @@
     selectAll,
     selectNext,
     setGuideHeights,
+    setGuideMetrics,
+    setCanvasSize,
+    currentViewBox,
+    duplicateSelection,
+    lookupGlyph,
+    effectiveTool,
+    fitGlyph,
+    holdTool,
     setTool,
-    setZoom,
+    zoomActual,
+    zoomStep,
     toolHint,
     undo,
     type Modifiers,
   } from "../lib/writingEditor.svelte";
   import {
-    TOOLS,
+    toolByKey,
     contourPathData,
     flipY,
     guideHeight,
@@ -33,6 +42,7 @@
     outlinePathData,
   } from "../lib/writing";
   import { isContour } from "../lib/writingCommands";
+  import { elementPathBounds } from "../lib/writingSelect";
 
   interface Props {
     config: WritingConfig;
@@ -46,14 +56,20 @@
   $effect(() => {
     setGuideHeights(guides.map((g) => ({ y: g.y, label: g.key.replace("_", " ") })));
   });
-  const minX = -100;
-  const maxX = $derived((config.upem || 1000) + 200);
-  const storageMinY = $derived(Math.min(guideHeight(config, "descender"), -200) - 100);
-  const storageMaxY = $derived(Math.max(guideHeight(config, "ascender"), 800) + 100);
 
-  const viewBox = $derived(
-    `${minX} ${-storageMaxY} ${(maxX - minX) / editor.zoom} ${(storageMaxY - storageMinY) / editor.zoom}`,
-  );
+  const box = $derived(currentViewBox());
+  const viewBox = $derived(`${box.x} ${box.y} ${box.width} ${box.height}`);
+  const minX = $derived(box.x);
+  const maxX = $derived(box.x + box.width);
+  const storageMinY = $derived(-(box.y + box.height));
+  const storageMaxY = $derived(-box.y);
+  $effect(() => {
+    setGuideMetrics({
+      ascender: guideHeight(config, "ascender"),
+      descender: guideHeight(config, "descender"),
+      advance: editor.outline?.advance ?? config.upem * 0.6,
+    });
+  });
   const d = $derived(editor.outline ? outlinePathData(editor.outline, true) : "");
   const previewD = $derived(
     editor.preview && editor.preview.kind === "contour"
@@ -76,77 +92,104 @@
       : [],
   );
   const handleScale = $derived(1 / editor.zoom);
+  const selectedBoxes = $derived(
+    editor.outline
+      ? editor.elements.flatMap((index) => {
+          const b = elementPathBounds(editor.outline!, index, lookupGlyph);
+          return b
+            ? [{ index, x: b.minX, y: flipY(b.maxY), w: b.maxX - b.minX, h: b.maxY - b.minY }]
+            : [];
+        })
+      : [],
+  );
 
   function isSelected(element: number, node: number): boolean {
     return editor.selection.some((s) => s.element === element && s.node === node);
   }
 
-  /** Convert a pointer event to glyph (y-up) coordinates. */
-  function toGlyph(event: PointerEvent): { x: number; y: number } {
-    const ctm = svg?.getScreenCTM();
-    if (!svg || !ctm) return { x: 0, y: 0 };
-    const pt = svg.createSVGPoint();
-    pt.x = event.clientX;
-    pt.y = event.clientY;
-    const local = pt.matrixTransform(ctm.inverse());
-    return { x: local.x, y: flipY(local.y) };
+  /** The pointer in canvas pixels and in glyph (y-up) coordinates, from the live view. */
+  function locate(event: { clientX: number; clientY: number }) {
+    const rect = svg?.getBoundingClientRect();
+    const sx = event.clientX - (rect?.left ?? 0);
+    const sy = event.clientY - (rect?.top ?? 0);
+    return {
+      screen: { x: sx, y: sy },
+      glyph: {
+        x: editor.view.cx + (sx - editor.canvasSize.width / 2) / editor.view.scale,
+        y: editor.view.cy - (sy - editor.canvasSize.height / 2) / editor.view.scale,
+      },
+    };
   }
 
-  const mods = (event: PointerEvent | KeyboardEvent | WheelEvent): Modifiers => ({
+  const mods = (
+    event: PointerEvent | KeyboardEvent | WheelEvent,
+    screen?: { x: number; y: number },
+  ): Modifiers => ({
     shift: event.shiftKey,
     ctrl: event.ctrlKey || event.metaKey,
     alt: event.altKey,
+    screen,
+    button: "button" in event ? event.button : 0,
   });
 
-  let panning: { x: number; y: number } | null = null;
   let spaceDown = false;
 
   function onDown(event: PointerEvent) {
     svg?.setPointerCapture(event.pointerId);
     svg?.parentElement?.focus();
-    if (event.button === 1 || (event.button === 0 && spaceDown)) {
-      panning = { x: event.clientX, y: event.clientY };
+    if (event.button !== 0 && event.button !== 1) return;
+    const at = locate(event);
+    if (spaceDown && event.button === 0) {
+      pointerDown(at.glyph, { ...mods(event, at.screen), button: 1 });
       return;
     }
-    if (event.button !== 0) return;
-    pointerDown(toGlyph(event), mods(event));
+    pointerDown(at.glyph, mods(event, at.screen));
   }
 
   function onMove(event: PointerEvent) {
-    if (panning) {
-      scroller?.scrollBy(panning.x - event.clientX, panning.y - event.clientY);
-      panning = { x: event.clientX, y: event.clientY };
-      return;
-    }
-    pointerMove(toGlyph(event), mods(event));
+    const at = locate(event);
+    pointerMove(at.glyph, mods(event, at.screen));
   }
 
   function onUp(event: PointerEvent) {
     if (svg?.hasPointerCapture(event.pointerId)) svg.releasePointerCapture(event.pointerId);
-    if (panning) {
-      panning = null;
-      return;
-    }
-    pointerUp(toGlyph(event), mods(event));
+    const at = locate(event);
+    pointerUp(at.glyph, mods(event, at.screen));
   }
 
-  /** Ctrl+wheel zooms by sqrt(2) per notch, like Inkscape. */
+  /** Ctrl+wheel zooms about the cursor by sqrt(2) per notch, like Inkscape. */
   function onWheel(event: WheelEvent) {
     if (!(event.ctrlKey || event.metaKey)) return;
     event.preventDefault();
-    setZoom(editor.zoom * Math.SQRT2 ** (event.deltaY < 0 ? 1 : -1));
+    zoomStep(Math.SQRT2 ** (event.deltaY < 0 ? 1 : -1), locate(event).screen);
   }
 
   let scroller: HTMLElement | undefined = $state();
 
+  $effect(() => {
+    if (!scroller) return;
+    const measure = () => {
+      const r = scroller!.getBoundingClientRect();
+      setCanvasSize({ width: Math.max(1, r.width - 2), height: Math.max(1, r.height - 2) });
+    };
+    measure();
+    const observer = new ResizeObserver(measure);
+    observer.observe(scroller);
+    return () => observer.disconnect();
+  });
+
   function onKeyUp(event: KeyboardEvent) {
-    if (event.key === " ") spaceDown = false;
+    if (event.key === " ") {
+      spaceDown = false;
+      holdTool(null);
+    }
   }
 
   function onKey(event: KeyboardEvent) {
     const mod = event.ctrlKey || event.metaKey;
     if (event.key === " ") {
       spaceDown = true;
+      holdTool("hand");
       event.preventDefault();
     } else if (event.key.startsWith("Arrow") && !mod) {
       event.preventDefault();
@@ -164,10 +207,17 @@
     } else if (event.shiftKey && !mod && event.key.toLowerCase() === "b") {
       breakSelected();
     } else if (event.key === "1" && !mod) {
-      setZoom(1);
+      zoomActual();
+    } else if (event.key === "0" && !mod) {
+      fitGlyph();
     } else if (mod && event.key.toLowerCase() === "f") {
       event.preventDefault();
-      setZoom(1);
+      fitGlyph();
+    } else if (mod && event.key.toLowerCase() === "d") {
+      event.preventDefault();
+      duplicateSelection();
+    } else if (event.shiftKey && !mod && event.key.toLowerCase() === "h") {
+      editor.showAllHandles = !editor.showAllHandles;
     } else if (mod && event.key.toLowerCase() === "z") {
       event.preventDefault();
       if (event.shiftKey) redo();
@@ -186,8 +236,8 @@
     } else if (event.key === "Escape") {
       cancelGesture();
     } else if (!mod && !event.altKey && !event.shiftKey) {
-      const tool = TOOLS.find((t) => t.shortcut.toLowerCase() === event.key.toLowerCase());
-      if (tool) setTool(tool.id);
+      const tool = toolByKey(event.key);
+      if (tool) setTool(tool);
     }
   }
 </script>
@@ -205,7 +255,8 @@
 >
   <svg
     bind:this={svg}
-    class="canvas-svg"
+    class="canvas-svg tool-{effectiveTool()}"
+    class:panning={editor.tempTool === "hand"}
     aria-hidden="true"
     {viewBox}
     preserveAspectRatio="xMidYMid meet"
@@ -292,6 +343,24 @@
         />
       {/each}
     {/each}
+    {#each selectedBoxes as sb (sb.index)}
+      <rect
+        class="element-selection"
+        x={sb.x}
+        y={sb.y}
+        width={sb.w}
+        height={sb.h}
+      />
+    {/each}
+    {#if editor.zoomBox}
+      <rect
+        class="marquee zoom-box"
+        x={Math.min(editor.zoomBox.a.x, editor.zoomBox.b.x)}
+        y={flipY(Math.max(editor.zoomBox.a.y, editor.zoomBox.b.y))}
+        width={Math.abs(editor.zoomBox.a.x - editor.zoomBox.b.x)}
+        height={Math.abs(editor.zoomBox.a.y - editor.zoomBox.b.y)}
+      />
+    {/if}
     {#if editor.marquee}
       <rect
         class="marquee"
