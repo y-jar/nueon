@@ -27,6 +27,7 @@ and regenerate.
 - `EmptyState.svelte` — Empty pane: new note/table shortcuts.
 - `ExplorerTree.svelte` — The notes tree with inline rename and drag.
 - `FileViewer.svelte` — Image/audio/video/archive viewer.
+- `FontReportDialog.svelte` — Font export report: problems found per glyph, with a gated export button.
 - `GitPanel.svelte` — Source Control: status, diff, history and check-in.
 - `GlyphCanvas.svelte` — Canvas with typographic guides, the drawing surface and node overlay.
 - `GlyphGrid.svelte` — Wrapping grid of glyph tiles for the selected group.
@@ -114,6 +115,7 @@ and regenerate.
 - `fileActions.ts` — Reveal in the file manager and open in the default app.
 - `fileDrop.ts` — OS file-drop onto the workspace (the drop bridge).
 - `files.ts` — Whole-file text read/write through the Tauri backend (for SVG import/export).
+- `fontReport.ts` — Pure helpers for the font export validation report.
 - `gridView.ts` — Grid column visibility/sort/width normalization.
 - `history.ts` — A small snapshot undo/redo stack, separate from the app's git history.
 - `i18n.ts` — Locale initialisation for svelte-i18n.

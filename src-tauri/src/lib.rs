@@ -258,6 +258,7 @@ pub fn run() {
             commands::writing_export_svg,
             commands::writing_export_sprite,
             commands::writing_export_font,
+            commands::writing_validate_font,
             commands::writing_import_svg,
             commands::read_text_file,
             commands::write_text_file,

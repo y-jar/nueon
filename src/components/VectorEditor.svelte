@@ -15,6 +15,7 @@
   import PathfinderPanel from "./PathfinderPanel.svelte";
   import GlyphGridTray from "./GlyphGridTray.svelte";
   import EditorStatusBar from "./EditorStatusBar.svelte";
+  import FontReportDialog from "./FontReportDialog.svelte";
 
   interface Props {
     config: WritingConfig;
@@ -105,4 +106,5 @@
   />
 
   {#if editor.error}<p class="error">{editor.error}</p>{/if}
+  <FontReportDialog />
 </div>

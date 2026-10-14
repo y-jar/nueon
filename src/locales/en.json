@@ -588,6 +588,17 @@
     "sidebarSearch": "Filter glyphs\u2026",
     "sidebarEmpty": "No glyphs yet.",
     "sidebarCoverage": "{mapped}/{total} sounds",
+    "report": {
+      "title": "Font check",
+      "clean": "No problems found. The font is ready to export.",
+      "summary": "{errors} error(s), {warnings} warning(s), {notes} note(s).",
+      "error": "Error",
+      "warning": "Warning",
+      "info": "Note",
+      "blocked": "Fix the errors above before exporting.",
+      "close": "Close",
+      "export": "Export font\u2026"
+    },
     "pathfinderUnion": "Merge",
     "pathfinderDifference": "Minus",
     "pathfinderIntersect": "Intersect",

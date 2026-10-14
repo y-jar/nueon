@@ -91,6 +91,8 @@ export const editor = $state({
   marquee: null as { a: Point; b: Point } | null,
   /** Outlines of every glyph the open glyph references, for drawing component instances. */
   library: {} as Record<string, api.GlyphOutline>,
+  /** The font validation report; null when the dialog is closed. */
+  report: null as { issues: api.FontIssue[]; exporting: boolean } | null,
   /** The selected component instance (element index), if any. */
   selectedComponent: null as number | null,
   /** Guide heights and advance, set by the canvas from the writing config. */
@@ -945,6 +947,19 @@ export async function importSvg(svg: string): Promise<boolean> {
 }
 
 /** Compile the writing system to a font at `path`; reports what was written. */
+/** Validate the writing system and open the report; `exporting` offers the export button. */
+export async function checkFont(exporting: boolean): Promise<void> {
+  try {
+    editor.report = { issues: await api.writingValidateFont(), exporting };
+  } catch (e) {
+    editor.error = String(e);
+  }
+}
+
+export function closeReport(): void {
+  editor.report = null;
+}
+
 export async function exportFont(path: string): Promise<boolean> {
   try {
     const result = await api.writingExportFont(path);

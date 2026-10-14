@@ -2254,3 +2254,97 @@ fn the_writing_system_compiles_to_a_valid_font() {
         "an empty system cannot export"
     );
 }
+
+#[test]
+fn the_font_validation_report_names_problems_and_blocks_only_on_errors() {
+    use crate::config::{
+        Contour, FillRule, GlyphMeta, GlyphOutline, Node, NodeKind, OutlineElement,
+    };
+    use crate::font::Severity;
+
+    let dir = tempfile::tempdir().unwrap();
+    let mut ws = Workspace::new(dir.path()).unwrap();
+    let corner = |x: f64, y: f64| Node {
+        x,
+        y,
+        handle_in: None,
+        handle_out: None,
+        kind: NodeKind::Corner,
+    };
+    let contour = |points: &[(f64, f64)], closed: bool| {
+        OutlineElement::Contour(Contour {
+            nodes: points.iter().map(|&(x, y)| corner(x, y)).collect(),
+            closed,
+            fill_rule: FillRule::Nonzero,
+        })
+    };
+    let meta = |id: &str, codepoint: u32| GlyphMeta {
+        id: id.to_string(),
+        name: id.to_string(),
+        codepoint,
+        phonemes: vec![],
+        order: 0,
+        group: String::new(),
+    };
+    let save = |ws: &Workspace, id: &str, element: OutlineElement| {
+        ws.save_glyph(
+            id,
+            &GlyphOutline {
+                elements: vec![element],
+                ..GlyphOutline::default()
+            },
+        )
+        .unwrap();
+    };
+
+    save(
+        &ws,
+        "clean",
+        contour(
+            &[(0.0, 0.0), (0.0, 100.0), (100.0, 100.0), (100.0, 0.0)],
+            true,
+        ),
+    );
+    save(
+        &ws,
+        "ccw",
+        contour(
+            &[(0.0, 0.0), (100.0, 0.0), (100.0, 100.0), (0.0, 100.0)],
+            true,
+        ),
+    );
+    save(
+        &ws,
+        "open",
+        contour(&[(0.0, 0.0), (50.0, 50.0), (50.0, 0.0)], false),
+    );
+    ws.writing.glyphs = vec![
+        meta("clean", 0xE000),
+        meta("ccw", 0xE001),
+        meta("open", 0xE002),
+    ];
+
+    let issues = ws.validate_writing_font().unwrap();
+    let find = |glyph: &str| -> Vec<&str> {
+        issues
+            .iter()
+            .filter(|i| i.glyph == glyph)
+            .map(|i| i.code)
+            .collect()
+    };
+    assert!(find("clean").is_empty(), "{issues:?}");
+    assert_eq!(find("ccw"), vec!["winding"]);
+    assert_eq!(find("open"), vec!["open-contour"]);
+    assert!(issues.iter().all(|i| i.severity != Severity::Error));
+    assert!(ws.compile_writing_font().is_ok(), "warnings do not block");
+
+    ws.writing.glyphs.push(meta("clash", 0xE000));
+    save(
+        &ws,
+        "clash",
+        contour(&[(0.0, 0.0), (0.0, 10.0), (10.0, 10.0)], true),
+    );
+    let err = ws.compile_writing_font().unwrap_err().to_string();
+    assert!(err.contains("fix before exporting"), "{err}");
+    assert!(err.contains("clash"), "the offending glyph is named: {err}");
+}

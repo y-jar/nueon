@@ -5,6 +5,7 @@ use std::sync::Mutex;
 use tauri::{AppHandle, State};
 
 use nueon_core::config::GlyphOutline;
+use nueon_core::font::FontIssue;
 use nueon_core::model::BooleanOp;
 
 use crate::state::AppState;
@@ -133,6 +134,17 @@ pub struct FontExport {
     pub glyphs: usize,
     pub mapped: usize,
     pub bytes: usize,
+}
+
+/// Check the writing system for problems a font export would hit, without
+/// writing anything.
+#[tauri::command]
+pub fn writing_validate_font(state: State<'_, Shared>) -> Result<Vec<FontIssue>, String> {
+    let state = state.lock().map_err(|_| "state poisoned".to_string())?;
+    state
+        .workspace()?
+        .validate_writing_font()
+        .map_err(|err| err.to_string())
 }
 
 /// Compile the writing system to a TrueType font, verify it by reading it

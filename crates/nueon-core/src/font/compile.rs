@@ -17,6 +17,7 @@ use write_fonts::FontBuilder;
 use crate::config::{Contour, GlyphMeta};
 
 use super::outline::{glyph_from_contours, FontError};
+use super::validate::normalise_winding;
 
 /// One glyph ready to compile: its metadata, flattened contours and metrics.
 #[derive(Debug, Clone)]
@@ -126,7 +127,8 @@ pub fn compile_font(
     });
 
     for (index, glyph) in glyphs.iter().enumerate() {
-        let compiled = glyph_from_contours(&glyph.meta.name, &glyph.contours)?;
+        let oriented = normalise_winding(&glyph.contours);
+        let compiled = glyph_from_contours(&glyph.meta.name, &oriented)?;
         if let Glyph::Simple(simple) = &compiled {
             max_contours = max_contours.max(simple.contours.len() as u16);
             let points: usize = simple.contours.iter().map(|c| c.len()).sum();
@@ -447,6 +449,57 @@ mod tests {
     fn no_glyphs_is_an_error_and_garbage_does_not_read_back() {
         assert!(compile_font(&settings(), &[]).is_err());
         assert!(read_back(b"not a font").is_err());
+    }
+
+    fn compiled_area(bytes: &[u8], gid: u32) -> f64 {
+        use read_fonts::tables::glyf::Glyph as Read;
+        use read_fonts::{FontRef, TableProvider};
+        let font = FontRef::new(bytes).unwrap();
+        let glyf = font.glyf().unwrap();
+        let loca = font.loca(None).unwrap();
+        let Some(Read::Simple(simple)) = loca.get_glyf(GlyphId::new(gid), &glyf).unwrap() else {
+            panic!("glyph {gid} is not a simple glyph");
+        };
+        let points: Vec<(f64, f64)> = simple
+            .points()
+            .map(|p| (f64::from(p.x), f64::from(p.y)))
+            .collect();
+        let mut area = 0.0;
+        for i in 0..points.len() {
+            let (x1, y1) = points[i];
+            let (x2, y2) = points[(i + 1) % points.len()];
+            area += x1 * y2 - x2 * y1;
+        }
+        area / 2.0
+    }
+
+    #[test]
+    fn counter_clockwise_outlines_are_written_clockwise() {
+        let drawn = square(400.0);
+        assert!(super::super::validate::needs_reversal(&drawn));
+        let (bytes, _) = compile_font(&settings(), &[glyph("a", 0xE000, drawn, None)]).unwrap();
+        let area = compiled_area(&bytes, 1);
+        assert!(
+            (area + 160_000.0).abs() < 1.0,
+            "clockwise, same size: {area}"
+        );
+    }
+
+    #[test]
+    fn clockwise_outlines_are_left_alone() {
+        let drawn = vec![Contour {
+            nodes: vec![
+                corner(0.0, 0.0),
+                corner(0.0, 400.0),
+                corner(400.0, 400.0),
+                corner(400.0, 0.0),
+            ],
+            closed: true,
+            fill_rule: FillRule::Nonzero,
+        }];
+        let (bytes, _) = compile_font(&settings(), &[glyph("a", 0xE000, drawn, None)]).unwrap();
+        let area = compiled_area(&bytes, 1);
+        assert!((area + 160_000.0).abs() < 1.0, "{area}");
     }
 
     #[test]

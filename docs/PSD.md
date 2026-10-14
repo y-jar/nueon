@@ -216,7 +216,15 @@ layer (`src-tauri/`), and the Svelte 5 frontend (`src/`). See `docs/ARCHITECTURE
   loca name post` (`write-fonts`), maps each glyph to its Private Use
   codepoint, flattens components into real contours, and verifies the result by
   reading it back (`read-fonts`) before it is written; duplicate codepoints and
-  an empty system block the export. OpenType (CFF) export, GSUB romanisation and
+  an empty system block the export. A pre-export check
+  (`crates/nueon-core/src/font/validate.rs`, shown by Export > Check font and
+  before every export in `FontReportDialog.svelte`) lists, per glyph, errors
+  (duplicate or invalid codepoints, points beyond +/-32767), warnings (open
+  contours, contours under 3 points, self-intersection, even-odd fill, empty
+  glyph, invalid or duplicate glyph names) and notes (counter-clockwise winding,
+  points rounded to the integer grid); only errors block, and the compiler
+  reverses every contour of a counter-clockwise glyph together so the filled
+  shape and its holes are unchanged. OpenType (CFF) export, GSUB romanisation and
   translator preview are not yet built.
 - **Proof.** cargo `writing_system`, `profile`, `pathfinder` and `workspace`
   tests (type round-trips, profile v1/v2/v3 backfill, phoneme-id backfill,
@@ -229,7 +237,9 @@ layer (`src-tauri/`), and the Svelte 5 frontend (`src/`). See `docs/ARCHITECTURE
   `writing.test.ts` (glyph grouping, sound coverage, tool registry, guide
   rails, bounds, path data), `writingCommands.test.ts` (node/handle edits,
   shapes, transforms, align/distribute, layer order, brush), `history.test.ts`,
-  `writingMenus.test.ts`, `writingBatch.test.ts`, `writingComponents.test.ts` (transform order, handles, nested/cyclic
+  `writingMenus.test.ts`, `writingBatch.test.ts`, `validate.rs` tests (winding, reversal keeps holes and handles, bow-tie
+  detection, names, duplicates, range), `fontReport.test.ts`, a compile test
+  reading the glyph back to prove clockwise output, `writingComponents.test.ts` (transform order, handles, nested/cyclic
   flattening, dependency list, expand in place), `writingSnap.test.ts` (snap
   priority and radius, weld candidates, angle/axis constraint) and the weld,
   join, break, shape-preserving delete, nudge and box-select cases in

@@ -729,3 +729,53 @@
   stroke-dasharray: none;
   stroke-width: 2;
 }
+
+.modal.font-report {
+  width: min(560px, 92vw);
+}
+
+.font-report-body {
+  padding: 12px 16px;
+  overflow: auto;
+}
+
+.font-report-group h4 {
+  margin: 10px 0 4px;
+  font-size: 13px;
+}
+
+.font-report-group ul {
+  margin: 0;
+  padding-left: 0;
+  list-style: none;
+}
+
+.font-report-group li {
+  padding: 2px 0;
+  font-size: 12px;
+}
+
+.font-report .badge {
+  display: inline-block;
+  min-width: 56px;
+  margin-right: 6px;
+  padding: 0 6px;
+  border-radius: 3px;
+  font-size: 10px;
+  text-transform: uppercase;
+  background: var(--border);
+}
+
+.font-report .severity-error .badge,
+.font-report h4.severity-error {
+  color: var(--danger, #e06c6c);
+}
+
+.font-report .severity-warning .badge,
+.font-report h4.severity-warning {
+  color: #d9a441;
+}
+
+.font-report-blocked {
+  color: var(--danger, #e06c6c);
+}

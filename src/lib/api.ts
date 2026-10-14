@@ -954,6 +954,14 @@ export interface FontExport {
   mapped: number;
   bytes: number;
 }
+export interface FontIssue {
+  glyph: string;
+  name: string;
+  severity: "error" | "warning" | "info";
+  code: string;
+  message: string;
+}
+export const writingValidateFont = (): Promise<FontIssue[]> => invoke("writing_validate_font");
 export const writingExportFont = (path: string): Promise<FontExport> =>
   invoke("writing_export_font", { path });
 export const writingImportSvg = (id: string, svg: string): Promise<number> =>

@@ -19,12 +19,12 @@
     align,
     cycleSelectedKind,
     breakSelected,
+    checkFont,
     deleteSelection,
     expandSelectedComponent,
     joinNodes,
     distribute,
     editor,
-    exportFont,
     exportGlyphSvg,
     exportSpriteSvg,
     finishPath,
@@ -132,15 +132,6 @@
     }
   }
 
-  async function exportFontFile() {
-    const path = await saveDialog({
-      defaultPath: "script.ttf",
-      filters: [{ name: "TrueType font", extensions: ["ttf"] }],
-    });
-    if (!path) return;
-    await exportFont(path);
-  }
-
   async function importFile() {
     const path = await openDialog({
       multiple: false,
@@ -196,8 +187,10 @@
         return void exportGlyphSvg().then((svg) =>
           exportText(svg, `${editor.glyphMeta?.name ?? "glyph"}.svg`, "SVG"),
         );
+      case "check-font":
+        return void checkFont(false);
       case "export-ttf":
-        return void exportFontFile();
+        return void checkFont(true);
       case "export-sprite":
         return void exportSpriteSvg().then((svg) => exportText(svg, "glyphs.svg", "SVG sprite"));
     }
