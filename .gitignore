@@ -9,3 +9,7 @@
 
 # Packaged-build probe screenshots
 /probes/out/
+
+# Local scratch files
+/Prompt
+/langjar.bundle
