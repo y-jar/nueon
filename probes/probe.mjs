@@ -6380,6 +6380,64 @@ async function main() {
     console.log("POINTER-LATENCY", JSON.stringify({ medianMs: median, worstMs: worst, samples: samples.map((x) => Math.round(x)) }));
     if (median > 50) throw new Error(`pointer latency median ${median} ms, worst ${worst} ms, budget 50 ms`);
   });
+
+  // -- probes 117-: stale indexes after undo/redo/delete must never throw ----
+  const key = (k, extra = {}) =>
+    js(`document.querySelector('.glyph-canvas').dispatchEvent(new KeyboardEvent('keydown',
+      Object.assign({ key: ${JSON.stringify(k)}, bubbles: true }, ${JSON.stringify(extra)}))); return true;`);
+  const click1 = async (fx, fy, extra = {}) => {
+    await fire("pointerdown", fx, fy, extra);
+    await fire("pointerup", fx, fy, extra);
+  };
+
+  await probe("117-pen-click-after-undoing-its-first-point-does-not-throw", async () => {
+    await openFirstGlyph();
+    await tool("p");
+    await click1(0.3, 0.6);
+    await key("z", { ctrlKey: true });
+    await click1(0.5, 0.5);
+    await click1(0.6, 0.4);
+    await idle(300);
+    const nodes = await js(`return document.querySelectorAll('.glyph-node').length;`);
+    if (nodes < 1) throw new Error("the pen did not start a new path after the undo");
+  });
+
+  await probe("118-random-edit-sequences-never-throw", async () => {
+    await openFirstGlyph();
+    let seed = 12345;
+    const rnd = () => (seed = (seed * 1103515245 + 12345) & 0x7fffffff) / 0x7fffffff;
+    const tools = ["v", "a", "p", "n", "b", "s", "m", "e", "h", "z"];
+    const actions = [
+      () => key("z", { ctrlKey: true }),
+      () => key("z", { ctrlKey: true, shiftKey: true }),
+      () => key("Delete"),
+      () => key("d", { ctrlKey: true }),
+      () => key("a", { ctrlKey: true }),
+      () => key("Enter"),
+      () => key("Escape"),
+      () => key("Tab"),
+      () => key("j", { shiftKey: true }),
+      () => key("b", { shiftKey: true }),
+      () => key("ArrowRight", { shiftKey: true }),
+      () => key(tools[Math.floor(rnd() * tools.length)]),
+      () => click1(0.15 + rnd() * 0.7, 0.15 + rnd() * 0.7),
+      () => click1(0.15 + rnd() * 0.7, 0.15 + rnd() * 0.7, { shiftKey: true }),
+      () => dragOnCanvas([0.1 + rnd() * 0.8, 0.1 + rnd() * 0.8], [0.1 + rnd() * 0.8, 0.1 + rnd() * 0.8]),
+      // Draw with the pen, then undo or delete under it: the stale-draft shape of bug.
+      async () => { await key("p"); await click1(0.15 + rnd() * 0.7, 0.15 + rnd() * 0.7); },
+      async () => { await key("p"); await click1(0.15 + rnd() * 0.7, 0.15 + rnd() * 0.7); await key("z", { ctrlKey: true }); },
+      async () => { await key("p"); await click1(0.2, 0.6); await click1(0.5, 0.6); await key("z", { ctrlKey: true }); await click1(0.4, 0.4); },
+    ];
+    await key("v");
+    const log = [];
+    for (let n = 0; n < 160; n++) {
+      const which = Math.floor(rnd() * actions.length);
+      log.push(which);
+      await actions[which]();
+      const errs = await js(`return window.__probeErrors ? window.__probeErrors.slice(-1) : [];`);
+      if (errs.length) throw new Error(`step ${n} (action ${which}) after [${log.slice(-8)}]: ${errs[0]}`);
+    }
+  });
 }
 
 try {

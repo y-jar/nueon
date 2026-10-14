@@ -27,6 +27,7 @@ import {
   scaling,
   setHandle,
   setNodeKind,
+  staleDraft,
   shapeContour,
   shear,
   breakNode,
@@ -167,6 +168,14 @@ function say(message: string): void {
   editor.status = message;
 }
 
+/** Forget a pen draft whose element is gone (undo, redo, delete, reload). */
+function dropStaleDraft(): void {
+  if (editor.outline && staleDraft(editor.outline, editor.draft)) {
+    editor.draft = null;
+    if (drag && drag.kind === "pen") drag = null;
+  }
+}
+
 /** Open a glyph in the editor and load its outline from disk. */
 export function openGlyph(id: string, meta: api.GlyphMeta): void {
   editor.openGlyphId = id;
@@ -208,6 +217,7 @@ export async function loadOutline(id: string): Promise<void> {
   editor.loading = true;
   try {
     editor.outline = (await api.writingGlyphGet(id)) ?? emptyOutline();
+    editor.draft = null;
     editor.error = "";
     await refreshLibrary();
   } catch (e) {
@@ -402,6 +412,7 @@ function commit(next: api.GlyphOutline, message?: string): void {
   if (!editor.outline) return;
   history = pushHistory(history, editor.outline);
   editor.outline = next;
+  dropStaleDraft();
   syncHistoryFlags();
   if (message) say(message);
   void saveOutline();
@@ -416,6 +427,8 @@ export function undo(): void {
   editor.selection = [];
   editor.elements = pruneSelection(editor.elements, step.value.elements.length);
   editor.selectedComponent = null;
+  editor.draft = null;
+  drag = null;
   syncHistoryFlags();
   say("undo");
   void saveOutline();
@@ -431,6 +444,8 @@ export function redo(): void {
   editor.selection = [];
   editor.elements = pruneSelection(editor.elements, step.value.elements.length);
   editor.selectedComponent = null;
+  editor.draft = null;
+  drag = null;
   syncHistoryFlags();
   say("redo");
   void saveOutline();
@@ -739,6 +754,7 @@ export function pointerDown(raw: Point, mods: Modifiers): void {
     }
     case "pen": {
       const point = placement(raw, mods);
+      if (staleDraft(outline, editor.draft)) editor.draft = null;
       const draft = editor.draft;
       if (draft) {
         const element = outline.elements[draft.element];
@@ -754,12 +770,16 @@ export function pointerDown(raw: Point, mods: Modifiers): void {
         const target = mods.ctrl && from ? constrainAngle(from, point) : point;
         const next = appendNode(outline, draft.element, { x: target.x, y: target.y, kind: "smooth" });
         const element2 = next.elements[draft.element];
+        if (!isContour(element2)) {
+          editor.draft = null;
+          return;
+        }
         history = pushHistory(history, outline);
         editor.outline = next;
         syncHistoryFlags();
         drag = {
           kind: "pen",
-          ref: { element: draft.element, node: isContour(element2) ? element2.nodes.length - 1 : 0 },
+          ref: { element: draft.element, node: element2.nodes.length - 1 },
         };
       } else {
         const created = addElement(outline, newContour([point], false));

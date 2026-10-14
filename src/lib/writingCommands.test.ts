@@ -439,3 +439,32 @@ test("stepSelection walks nodes in order and wraps", () => {
   assert.deepEqual(stepSelection(o, { element: 0, node: 0 }, -1), { element: 0, node: 3 });
   assert.equal(stepSelection(emptyOutline(), null, 1), null);
 });
+
+test("isContour is false for a missing element instead of throwing", () => {
+  assert.equal(isContour(undefined as never), false);
+  assert.equal(isContour(null as never), false);
+});
+
+import { staleDraft } from "./writingCommands.ts";
+
+test("staleDraft is true when the drafted element is gone or is not a contour", () => {
+  const outline = {
+    elements: [
+      { kind: "contour" as const, closed: false, fill_rule: "nonzero" as const, nodes: [{ x: 0, y: 0, kind: "corner" as const }] },
+      { kind: "component" as const, glyph: "a", dx: 0, dy: 0, scale_x: 1, scale_y: 1, rotation: 0 },
+    ],
+  };
+  assert.equal(staleDraft(outline, { element: 0 }), false);
+  assert.equal(staleDraft(outline, { element: 1 }), true, "a component cannot be drafted");
+  assert.equal(staleDraft(outline, { element: 5 }), true, "past the end");
+  assert.equal(staleDraft({ elements: [] }, { element: 0 }), true);
+  assert.equal(staleDraft(outline, null), false, "no draft is not stale");
+});
+
+test("every command that takes an element index leaves the outline alone when the index is stale", () => {
+  const outline = { elements: [] as never[] };
+  assert.equal(appendNode(outline, 3, { x: 0, y: 0, kind: "corner" }), outline);
+  assert.equal(closeContour(outline, 3), outline);
+  assert.equal(setNodeKind(outline, { element: 3, node: 0 }, "smooth"), outline);
+  assert.equal(moveNodes(outline, [{ element: 3, node: 0 }], 1, 1), outline);
+});

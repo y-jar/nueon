@@ -27,8 +27,14 @@ export type OrderMove = "front" | "back" | "up" | "down";
 
 const KAPPA = 0.5522847498307936;
 
-export function isContour(element: GlyphElement): element is ContourElement {
-  return element.kind === "contour";
+export function isContour(element: GlyphElement | null | undefined): element is ContourElement {
+  return !!element && element.kind === "contour";
+}
+
+/** A pen draft points at an element that no longer exists, or is not a contour. */
+export function staleDraft(outline: GlyphOutline, draft: { element: number } | null): boolean {
+  if (!draft) return false;
+  return !isContour(outline.elements[draft.element]);
 }
 
 function corner(x: number, y: number): GlyphNode {
