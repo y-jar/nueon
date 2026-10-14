@@ -953,6 +953,8 @@ export interface FontExport {
   glyphs: number;
   mapped: number;
   bytes: number;
+  source_glyphs: number;
+  lookups: number;
 }
 export interface FontIssue {
   glyph: string;

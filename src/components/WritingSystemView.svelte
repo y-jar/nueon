@@ -19,6 +19,7 @@
   import { writeTextFile } from "../lib/files";
   import GlyphNavigatorTree from "./GlyphNavigatorTree.svelte";
   import GlyphGrid from "./GlyphGrid.svelte";
+  import OrthographyRules from "./OrthographyRules.svelte";
   import VectorEditor from "./VectorEditor.svelte";
 
   let config = $state<api.WritingConfig>({
@@ -66,6 +67,14 @@
     } catch (e) {
       error = String(e);
     }
+  }
+
+  let saveTimer: ReturnType<typeof setTimeout> | undefined;
+
+  function changeRules(rules: api.OrthographyRule[]) {
+    config.rules = rules;
+    clearTimeout(saveTimer);
+    saveTimer = setTimeout(() => void save(), 400);
   }
 
   function addGlyph() {
@@ -279,5 +288,6 @@
         {onMenu}
       />
     </div>
+    <OrthographyRules rules={config.rules} glyphs={config.glyphs} onChange={changeRules} />
   {/if}
 </div>

@@ -2348,3 +2348,95 @@ fn the_font_validation_report_names_problems_and_blocks_only_on_errors() {
     assert!(err.contains("fix before exporting"), "{err}");
     assert!(err.contains("clash"), "the offending glyph is named: {err}");
 }
+
+#[test]
+fn orthography_rules_become_gsub_and_bad_rules_are_reported() {
+    use crate::config::{
+        Contour, FillRule, GlyphMeta, GlyphOutline, Node, NodeKind, OrthographyRule,
+        OutlineElement, Phoneme, PhonemeKind,
+    };
+    use crate::font::Severity;
+
+    let dir = tempfile::tempdir().unwrap();
+    let mut ws = Workspace::new(dir.path()).unwrap();
+    let corner = |x: f64, y: f64| Node {
+        x,
+        y,
+        handle_in: None,
+        handle_out: None,
+        kind: NodeKind::Corner,
+    };
+    ws.save_glyph(
+        "ka",
+        &GlyphOutline {
+            elements: vec![OutlineElement::Contour(Contour {
+                nodes: vec![
+                    corner(0.0, 0.0),
+                    corner(0.0, 100.0),
+                    corner(100.0, 100.0),
+                    corner(100.0, 0.0),
+                ],
+                closed: true,
+                fill_rule: FillRule::Nonzero,
+            })],
+            ..GlyphOutline::default()
+        },
+    )
+    .unwrap();
+    ws.writing.glyphs = vec![GlyphMeta {
+        id: "ka".into(),
+        name: "ka".into(),
+        codepoint: 0xE000,
+        phonemes: vec![],
+        order: 0,
+        group: String::new(),
+    }];
+    ws.phonology.phonemes = vec![
+        Phoneme {
+            id: "k".into(),
+            symbol: "k".into(),
+            kind: PhonemeKind::Consonant,
+        },
+        Phoneme {
+            id: "a".into(),
+            symbol: "a".into(),
+            kind: PhonemeKind::Vowel,
+        },
+    ];
+    ws.writing.rules = vec![OrthographyRule {
+        name: None,
+        from: "ka".into(),
+        to: vec!["ka".into()],
+        left: None,
+        right: None,
+    }];
+
+    let (bytes, report) = ws.compile_writing_font().unwrap();
+    assert!(report.lookups >= 1);
+    assert_eq!(report.source_glyphs, 3, "space, a and k");
+    let font = read_fonts::FontRef::new(&bytes).unwrap();
+    assert!(font
+        .table_data(read_fonts::types::Tag::new(b"GSUB"))
+        .is_some());
+    assert!(ws.validate_writing_font().unwrap().is_empty());
+
+    ws.writing.rules.push(OrthographyRule {
+        name: Some("ghost".into()),
+        from: "ta".into(),
+        to: vec!["missing".into()],
+        left: None,
+        right: None,
+    });
+    let issues = ws.validate_writing_font().unwrap();
+    let bad = issues
+        .iter()
+        .find(|i| i.code == "rule-unknown-glyph")
+        .unwrap();
+    assert_eq!(bad.severity, Severity::Error);
+    assert!(bad.name.contains("ghost"), "{}", bad.name);
+    let err = ws.compile_writing_font().unwrap_err().to_string();
+    assert!(
+        err.contains("fix before exporting") && err.contains("missing"),
+        "{err}"
+    );
+}

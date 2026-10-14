@@ -20,4 +20,5 @@ read-fonts = "0.45"
 kurbo = "0.13"
 
 [dev-dependencies]
+harfrust = "0.14.0"
 tempfile = "3"

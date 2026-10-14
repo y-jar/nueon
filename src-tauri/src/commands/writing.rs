@@ -134,6 +134,8 @@ pub struct FontExport {
     pub glyphs: usize,
     pub mapped: usize,
     pub bytes: usize,
+    pub source_glyphs: usize,
+    pub lookups: usize,
 }
 
 /// Check the writing system for problems a font export would hit, without
@@ -163,5 +165,7 @@ pub fn writing_export_font(state: State<'_, Shared>, path: String) -> Result<Fon
         glyphs: report.glyphs,
         mapped: report.mapped,
         bytes: report.bytes,
+        source_glyphs: report.source_glyphs,
+        lookups: report.lookups,
     })
 }

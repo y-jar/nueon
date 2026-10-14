@@ -964,7 +964,7 @@ export async function exportFont(path: string): Promise<boolean> {
   try {
     const result = await api.writingExportFont(path);
     say(
-      `font exported: ${result.glyphs} glyphs, ${result.mapped} mapped, ${result.bytes} bytes`,
+      `font exported: ${result.glyphs} glyphs, ${result.lookups} layout lookups, ${result.bytes} bytes`,
     );
     return true;
   } catch (e) {

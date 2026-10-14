@@ -14,8 +14,9 @@ use write_fonts::tables::post::Post;
 use write_fonts::types::{FWord, Fixed, GlyphId, LongDateTime, NameId, Tag, UfWord};
 use write_fonts::FontBuilder;
 
-use crate::config::{Contour, GlyphMeta};
+use crate::config::{Contour, GlyphMeta, OrthographyRule, Phoneme};
 
+use super::layout::{plan_layout, SPACE_ADVANCE};
 use super::outline::{glyph_from_contours, FontError};
 use super::validate::normalise_winding;
 
@@ -36,6 +37,10 @@ pub struct FontSettings {
     pub descender: f64,
     pub x_height: f64,
     pub cap_height: f64,
+    /// Orthography rules compiled into GSUB, so typing the romanisation renders the script.
+    pub rules: Vec<OrthographyRule>,
+    /// The inventory, used to resolve `C`, `V` and `L` in rule contexts.
+    pub phonemes: Vec<Phoneme>,
 }
 
 /// What was written, for the caller's report and for validation.
@@ -44,6 +49,10 @@ pub struct FontReport {
     pub glyphs: usize,
     pub mapped: usize,
     pub bytes: usize,
+    /// Hidden glyphs added so the rules' letters can be typed.
+    pub source_glyphs: usize,
+    /// Lookups written to GSUB (zero when there are no usable rules).
+    pub lookups: usize,
 }
 
 const DEFAULT_ADVANCE: u16 = 600;
@@ -162,8 +171,18 @@ pub fn compile_font(
         mappings.push((codepoint(&glyph.meta)?, GlyphId::new(index as u32 + 1)));
     }
 
+    let (layout, _) = plan_layout(glyphs, &settings.rules, &settings.phonemes);
+    for (at, source) in layout.sources.iter().enumerate() {
+        add(&mut builder, &Glyph::Empty)?;
+        metrics.push(LongMetric {
+            advance: if *source == ' ' { SPACE_ADVANCE } else { 0 },
+            side_bearing: 0,
+        });
+        mappings.push((*source, GlyphId::new((glyphs.len() + 1 + at) as u32)));
+    }
+
     let (glyf, loca, loca_format) = builder.build();
-    let num_glyphs = glyphs.len() as u16 + 1;
+    let num_glyphs = (glyphs.len() + layout.sources.len()) as u16 + 1;
     let advance_max = metrics.iter().map(|m| m.advance).max().unwrap_or(0);
     let min_lsb = metrics.iter().map(|m| m.side_bearing).min().unwrap_or(0);
 
@@ -247,7 +266,7 @@ pub fn compile_font(
         s_cap_height: Some(clamp_i16(settings.cap_height)),
         us_default_char: Some(0),
         us_break_char: Some(0),
-        us_max_context: Some(1),
+        us_max_context: Some(layout.max_context.max(1)),
         ach_vend_id: Tag::new(b"NUEN"),
         ..Default::default()
     };
@@ -284,11 +303,19 @@ pub fn compile_font(
         .and_then(|b| b.add_table(&name))
         .and_then(|b| b.add_table(&post));
     tables.map_err(|err| FontError::Font(err.to_string()))?;
+    let mut lookups = 0;
+    if let Some(gsub) = &layout.gsub {
+        lookups = gsub.lookup_list.lookups.len();
+        font.add_table(gsub)
+            .map_err(|err| FontError::Font(err.to_string()))?;
+    }
     let bytes = font.build();
     let report = FontReport {
         glyphs: glyphs.len(),
         mapped: mappings.len(),
         bytes: bytes.len(),
+        source_glyphs: layout.sources.len(),
+        lookups,
     };
     Ok((bytes, report))
 }
@@ -300,6 +327,8 @@ pub struct FontCheck {
     pub units_per_em: u16,
     pub mapped: Vec<(u32, u32)>,
     pub advances: Vec<u16>,
+    /// Number of GSUB lookups, zero when the font has no GSUB table.
+    pub lookups: usize,
 }
 
 /// Parse a font with `read-fonts` and report what it contains, so an export
@@ -337,11 +366,19 @@ pub fn read_back(bytes: &[u8]) -> Result<FontCheck, FontError> {
     mapped.retain(|&(codepoint, glyph)| !(codepoint == 0xFFFF && glyph == 0));
     mapped.sort();
     mapped.dedup();
+    let lookups = match font.gsub() {
+        Ok(gsub) => gsub
+            .lookup_list()
+            .map_err(|err| FontError::Font(err.to_string()))?
+            .lookup_count() as usize,
+        Err(_) => 0,
+    };
     Ok(FontCheck {
         num_glyphs: maxp.num_glyphs(),
         units_per_em: head.units_per_em(),
         mapped,
         advances: hmtx.h_metrics().iter().map(|m| m.advance()).collect(),
+        lookups,
     })
 }
 
@@ -401,6 +438,8 @@ mod tests {
             descender: -200.0,
             x_height: 500.0,
             cap_height: 700.0,
+            rules: vec![],
+            phonemes: vec![],
         }
     }
 

@@ -23,6 +23,10 @@ Bundled third-party components
   licenses, Copyright (c) The Fontations and Linebender authors. Used to
   compile and verify the exported TrueType font; linked into the Rust core
   (see Cargo.lock).
+- harfrust (https://github.com/harfbuzz/harfrust) - MIT license, Copyright (c)
+  The HarfRust authors, a port of HarfBuzz. A development dependency only: the
+  tests shape the exported font with it to prove the orthography rules work.
+  It is not linked into the application.
 
 Project assets
 

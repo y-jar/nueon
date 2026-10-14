@@ -10,8 +10,8 @@ use crate::config::{
     validate_components, validate_outline, Contour, GlyphOutline, OutlineElement,
 };
 use crate::font::{
-    blocks_export, compile_font, read_back, validate_glyphs, FontError, FontGlyph, FontIssue,
-    FontReport, FontSettings,
+    blocks_export, compile_font, plan_layout, read_back, validate_glyphs, FontError, FontGlyph,
+    FontIssue, FontReport, FontSettings,
 };
 use crate::model::{pathfinder_apply, BooleanOp};
 
@@ -217,7 +217,11 @@ impl Workspace {
 
     /// Check every glyph for problems a font export would hit. Nothing is written.
     pub fn validate_writing_font(&self) -> Result<Vec<FontIssue>, StorageError> {
-        Ok(validate_glyphs(&self.font_glyphs()?))
+        let glyphs = self.font_glyphs()?;
+        let mut issues = validate_glyphs(&glyphs);
+        let (_, rule_issues) = plan_layout(&glyphs, &self.writing.rules, &self.phonology.phonemes);
+        issues.extend(rule_issues);
+        Ok(issues)
     }
 
     /// Compile every glyph into a TrueType font, verify it by reading it back,
@@ -240,10 +244,14 @@ impl Workspace {
             },
             x_height: config.x_height,
             cap_height: config.cap_height,
+            rules: config.rules.clone(),
+            phonemes: self.phonology.phonemes.clone(),
         };
         let font_error = |err: FontError| StorageError::Config("font".to_string(), err.to_string());
+        let (_, rule_issues) = plan_layout(&glyphs, &settings.rules, &settings.phonemes);
         let blockers: Vec<String> = validate_glyphs(&glyphs)
             .into_iter()
+            .chain(rule_issues)
             .filter(|issue| blocks_export(std::slice::from_ref(issue)))
             .map(|issue| format!("{}: {}", issue.name, issue.message))
             .collect();
@@ -255,15 +263,25 @@ impl Workspace {
         }
         let (bytes, report) = compile_font(&settings, &glyphs).map_err(font_error)?;
         let check = read_back(&bytes).map_err(font_error)?;
-        if check.num_glyphs as usize != glyphs.len() + 1 || check.mapped.len() != glyphs.len() {
+        let expected = glyphs.len() + report.source_glyphs;
+        if check.num_glyphs as usize != expected + 1 || check.mapped.len() != expected {
             return Err(StorageError::Config(
                 "font".to_string(),
                 format!(
                     "validation failed: expected {} glyphs and {} mappings, read back {} and {}",
-                    glyphs.len() + 1,
-                    glyphs.len(),
+                    expected + 1,
+                    expected,
                     check.num_glyphs,
                     check.mapped.len()
+                ),
+            ));
+        }
+        if check.lookups != report.lookups {
+            return Err(StorageError::Config(
+                "font".to_string(),
+                format!(
+                    "validation failed: wrote {} layout lookups, read back {}",
+                    report.lookups, check.lookups
                 ),
             ));
         }

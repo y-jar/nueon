@@ -588,6 +588,21 @@
     "sidebarSearch": "Filter glyphs\u2026",
     "sidebarEmpty": "No glyphs yet.",
     "sidebarCoverage": "{mapped}/{total} sounds",
+    "rules": {
+      "title": "Orthography rules",
+      "hint": "Typing these letters renders the glyphs in the exported font. Rules act in the order listed, so write the longer or more specific rule first. In a context, C, V and L are consonant, vowel and other sounds, and # is a space.",
+      "none": "No rules yet. Without rules the font only contains your glyphs at their private-use codepoints.",
+      "from": "Letters",
+      "to": "Glyph names",
+      "left": "Before",
+      "right": "After",
+      "up": "Move earlier",
+      "down": "Move later",
+      "remove": "Remove rule",
+      "add": "Add rule",
+      "order": "Order rules are applied",
+      "unknown": "No glyph named {names}."
+    },
     "report": {
       "title": "Font check",
       "clean": "No problems found. The font is ready to export.",

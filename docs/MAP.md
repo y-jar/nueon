@@ -45,6 +45,7 @@ and regenerate.
 - `MorphologyPanel.svelte` — Morphology activity: classes, morphemes, paradigms.
 - `MorphologyView.svelte` — Morphology view wrapper (panel + preview).
 - `Onboarding.svelte` — First-run workspace picker/onboarding.
+- `OrthographyRules.svelte` — Orthography rules: letters in, glyphs out, in an optional context. Order matters.
 - `PathfinderPanel.svelte` — Pathfinder panel: boolean operations over a glyph's shapes.
 - `PhonologyView.svelte` — Phonology: IPA chart and sound changes.
 - `PillCell.svelte` — tag_list cell as pills with suggestions.
@@ -142,6 +143,7 @@ and regenerate.
 - `writingComponents.ts` — Pure component resolution for the glyph canvas: transform, flatten, expand.
 - `writingEditor.svelte.ts` — Vector-editor state: the open glyph, tools, selection, history and gestures.
 - `writingMenus.ts` — Pure menu definitions for the vector editor's menu bar.
+- `writingRules.ts` — Pure helpers for editing orthography rules in the writing tab.
 - `writingSidebar.ts` — Pure filtering and grouping for the Writing System sidebar glyph list.
 - `writingSnap.ts` — Pure snapping: nodes, guide rails, bearing lines, edge midpoints and the grid.
 

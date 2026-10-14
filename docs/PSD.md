@@ -224,8 +224,21 @@ layer (`src-tauri/`), and the Svelte 5 frontend (`src/`). See `docs/ARCHITECTURE
   glyph, invalid or duplicate glyph names) and notes (counter-clockwise winding,
   points rounded to the integer grid); only errors block, and the compiler
   reverses every contour of a counter-clockwise glyph together so the filled
-  shape and its holes are unchanged. OpenType (CFF) export, GSUB romanisation and
-  translator preview are not yet built.
+  shape and its holes are unchanged. Orthography rules compile to a GSUB `calt` feature
+  (`crates/nueon-core/src/font/layout.rs`), so typing the rules' letters in
+  any application renders the glyphs: each rule becomes one lookup in the
+  order written (a single, multiple or ligature substitution, wrapped in a
+  chaining context when it has a left or right context), so an earlier rule
+  acts before a later one. `C`, `V` and `L` in a context are read from the
+  sound inventory (the last letter of a sound on the left, the first on the
+  right), `#` matches a space, and a context that looks backwards also accepts
+  the glyph an earlier rule produced for that letter. Letters that have no
+  glyph of their own get a hidden empty glyph so they can be typed. The rules
+  are edited in the writing tab (`OrthographyRules.svelte`, helpers in
+  `src/lib/writingRules.ts`); rules that cannot work (unknown glyph, several
+  letters to several glyphs, an empty class) are skipped and reported in the
+  font check, and an unknown glyph blocks the export. OpenType (CFF) export,
+  positional forms and translator preview are not yet built.
 - **Proof.** cargo `writing_system`, `profile`, `pathfinder` and `workspace`
   tests (type round-trips, profile v1/v2/v3 backfill, phoneme-id backfill,
   acyclic-component rejection, glyph atomic save/load, SVG serialization,
@@ -237,7 +250,10 @@ layer (`src-tauri/`), and the Svelte 5 frontend (`src/`). See `docs/ARCHITECTURE
   `writing.test.ts` (glyph grouping, sound coverage, tool registry, guide
   rails, bounds, path data), `writingCommands.test.ts` (node/handle edits,
   shapes, transforms, align/distribute, layer order, brush), `history.test.ts`,
-  `writingMenus.test.ts`, `writingBatch.test.ts`, `validate.rs` tests (winding, reversal keeps holes and handles, bow-tie
+  `writingMenus.test.ts`, `writingBatch.test.ts`, `layout.rs` tests that compile a font and shape it through `harfrust` (ligatures,
+  one-to-many, left/right/class/boundary contexts, rule order, multi-letter
+  sounds) and were cross-checked against C HarfBuzz `hb-shape` on the same
+  bytes, `writingRules.test.ts`, `validate.rs` tests (winding, reversal keeps holes and handles, bow-tie
   detection, names, duplicates, range), `fontReport.test.ts`, a compile test
   reading the glyph back to prove clockwise output, `writingComponents.test.ts` (transform order, handles, nested/cyclic
   flattening, dependency list, expand in place), `writingSnap.test.ts` (snap
