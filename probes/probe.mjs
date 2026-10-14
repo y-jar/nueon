@@ -893,15 +893,76 @@ exec "${APP}" "$@"
 
 const results = [];
 
-async function probe(name, fn) {
+/**
+ * Install the in-page error collector. It records window errors and unhandled
+ * rejections (the same two sources the app's own handler turns into the red
+ * status-bar text), and is safe to call again after a reload.
+ */
+async function installErrorCollector() {
+  await js(`if (!window.__probeErrors) {
+    window.__probeErrors = [];
+    window.addEventListener('error', (e) =>
+      window.__probeErrors.push('error: ' + (e.message || String(e.error))), true);
+    window.addEventListener('unhandledrejection', (e) =>
+      window.__probeErrors.push('rejection: ' + String(e.reason && e.reason.message || e.reason)), true);
+  }
+  window.__probeErrors.length = 0;
+  return true;`);
+}
+
+/** What the red error text in the status bar says right now, or null. */
+function readStatusError() {
+  // The red button stays mounted after an error until the app is reloaded, and
+  // then shows ordinary status text, so only text that is itself an error counts.
+  return js(`const b = document.querySelector('.statusbar .status-error');
+    const text = b ? b.textContent.trim() : '';
+    return /^Error:/.test(text) ? text : null;`);
+}
+
+/**
+ * Errors seen since the probe began: events caught in the page, plus a status
+ * bar error that was not already showing. A probe may list `allowErrors`
+ * (regexes) for errors it triggers on purpose; everything else fails the probe.
+ */
+async function collectProbeErrors(statusBefore, allow) {
+  await new Promise((resolve) => setTimeout(resolve, 60));
+  const events = (await js(`return window.__probeErrors ? window.__probeErrors.slice() : [];`)) ?? [];
+  const status = await readStatusError();
+  const found = [...events];
+  if (status && status !== statusBefore) found.push(`status bar: ${status}`);
+  return found.filter((text) => !allow.some((re) => re.test(text)));
+}
+
+async function probe(name, fn, options = {}) {
   // `PROBE_ONLY` runs a subset (substring match) for focused debugging.
   const only = process.env.PROBE_ONLY;
   if (only && !name.includes(only)) return;
   // `PROBE_DELAY_MS` slows each step so a human can follow it on screen.
   const delay = Number(process.env.PROBE_DELAY_MS || 0);
   if (delay > 0) await new Promise((resolve) => setTimeout(resolve, delay));
+  const allow = options.allowErrors ?? [];
+  let statusBefore = null;
+  try {
+    await installErrorCollector();
+    statusBefore = await readStatusError();
+  } catch {
+    // The page is not ready (very early probes); the check is skipped for them.
+  }
   try {
     await fn();
+    let errors = [];
+    try {
+      errors = await collectProbeErrors(statusBefore, allow);
+    } catch {
+      errors = [];
+    }
+    if (errors.length) {
+      const text = errors.join(" | ").slice(0, 400);
+      const loop = /effect_update_depth_exceeded/.test(text) ? " [infinite effect loop]" : "";
+      results.push([name, "FAIL", `errors during probe${loop}: ${text}`]);
+      console.log(`FAIL ${name}: errors during probe${loop}: ${text}`);
+      return;
+    }
     results.push([name, "PASS", ""]);
     console.log(`PASS ${name}`);
   } catch (error) {
@@ -6199,6 +6260,125 @@ async function main() {
       if (!/\([A-Z]\)/.test(title)) throw new Error(`${id} tooltip lacks its shortcut: ${title}`);
     }
     await screenshot("p113-toolbox");
+  });
+
+  // -- probes 114-: the editor must be quiet, cheap when idle, and responsive -
+  const idle = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
+  const statusText = () => js(`return document.querySelector('.statusbar')?.textContent.trim() ?? '';`);
+  const assertQuiet = async (what) => {
+    await idle(2000);
+    const status = await readStatusError();
+    if (status) throw new Error(`${what}: status bar shows an error: ${status}`);
+    const events = await js(`return window.__probeErrors ? window.__probeErrors.slice() : [];`);
+    if (events.length) throw new Error(`${what}: ${events.join(" | ").slice(0, 300)}`);
+  };
+  const openFirstGlyph = async () => {
+    await js(`document.querySelector('.vector-editor .back')?.click(); return true;`);
+    if (!(await js(`return !!document.querySelector('.writing');`))) {
+      await openActivity("Writing System");
+      await waitJs(`!!document.querySelector('.writing')`, { label: "writing view" });
+    }
+    if (!(await js(`return !!document.querySelector('.glyph-tile');`))) {
+      await click(".writing-bar button");
+    }
+    await waitJs(`!!document.querySelector('.glyph-tile')`, { label: "glyph grid" });
+    await click(".glyph-tile");
+    await waitJs(`!!document.querySelector('.canvas-svg')`, { label: "editor" });
+  };
+
+  await probe("114-editor-idle-shows-no-error-after-each-kind-of-use", async () => {
+    await openFirstGlyph();
+    await assertQuiet("after opening a glyph");
+
+    await js(`const svg = document.querySelector('.canvas-svg'); const b = svg.getBoundingClientRect();
+      document.querySelector('.glyph-canvas').dispatchEvent(new WheelEvent('wheel', { bubbles: true, cancelable: true,
+        ctrlKey: true, deltaY: -100, clientX: b.left + b.width / 2, clientY: b.top + b.height / 2 })); return true;`);
+    await assertQuiet("after zooming");
+
+    await js(`document.querySelector('.glyph-canvas').dispatchEvent(new KeyboardEvent('keydown', { key: ' ', bubbles: true })); return true;`);
+    await dragOnCanvas([0.5, 0.5], [0.6, 0.55]);
+    await js(`document.querySelector('.glyph-canvas').dispatchEvent(new KeyboardEvent('keyup', { key: ' ', bubbles: true })); return true;`);
+    await assertQuiet("after panning");
+
+    await tool("v");
+    await dragOnCanvas([0.1, 0.1], [0.9, 0.9]);
+    await assertQuiet("after a Select drag");
+
+    await openFirstGlyph();
+    await assertQuiet("after switching glyphs");
+  });
+
+  await probe("115-editor-idle-cost-is-near-zero", async () => {
+    await openFirstGlyph();
+    await idle(1500);
+    // WebKitGTK has no "longtask" entry type, so a long task is measured the
+    // way it shows up: a requestAnimationFrame gap well above one frame. A
+    // timer that should fire every 10 ms and arrives late shows main-thread
+    // blocking the same way. Both are sampled for 3 s with nobody touching the page.
+    const result = await js(`
+      return await new Promise((resolve) => {
+        const gaps = [];
+        const lates = [];
+        let lastFrame = performance.now();
+        let lastTimer = performance.now();
+        let running = true;
+        const frame = () => {
+          const now = performance.now();
+          gaps.push(now - lastFrame);
+          lastFrame = now;
+          if (running) requestAnimationFrame(frame);
+        };
+        requestAnimationFrame(frame);
+        const timer = setInterval(() => {
+          const now = performance.now();
+          lates.push(now - lastTimer - 10);
+          lastTimer = now;
+        }, 10);
+        setTimeout(() => {
+          running = false;
+          clearInterval(timer);
+          const blocked = lates.filter((x) => x > 50);
+          resolve({
+            frames: gaps.length,
+            worstFrameGapMs: Math.round(Math.max(0, ...gaps)),
+            framesOver50ms: gaps.filter((x) => x > 50).length,
+            timerLateOver50ms: blocked.length,
+            blockedMs: Math.round(blocked.reduce((a, b) => a + b, 0)),
+            worstTimerLateMs: Math.round(Math.max(0, ...lates)),
+          });
+        }, 3000);
+      });`);
+    console.log("IDLE-COST", JSON.stringify(result));
+    if (result.timerLateOver50ms > 0 || result.framesOver50ms > 0) {
+      throw new Error(
+        `idle editor blocks the main thread: ${result.framesOver50ms} frame gap(s) and ${result.timerLateOver50ms} late timer(s) over 50 ms, worst ${Math.max(result.worstFrameGapMs, result.worstTimerLateMs)} ms`,
+      );
+    }
+  });
+
+  await probe("116-pointer-latency-is-within-budget", async () => {
+    await openFirstGlyph();
+    await tool("v");
+    await idle(800);
+    const samples = [];
+    for (let i = 0; i < 12; i++) {
+      const ms = await js(`
+        return await new Promise((resolve) => {
+          const svg = document.querySelector('.canvas-svg');
+          const b = svg.getBoundingClientRect();
+          const start = performance.now();
+          svg.dispatchEvent(new PointerEvent('pointermove', { bubbles: true, pointerId: 1,
+            clientX: b.left + b.width * (0.3 + ${i} * 0.03), clientY: b.top + b.height * 0.5 }));
+          requestAnimationFrame(() => requestAnimationFrame(() => resolve(performance.now() - start)));
+        });`);
+      samples.push(ms);
+      await idle(40);
+    }
+    samples.sort((a, b) => a - b);
+    const median = Math.round(samples[Math.floor(samples.length / 2)]);
+    const worst = Math.round(samples[samples.length - 1]);
+    console.log("POINTER-LATENCY", JSON.stringify({ medianMs: median, worstMs: worst, samples: samples.map((x) => Math.round(x)) }));
+    if (median > 50) throw new Error(`pointer latency median ${median} ms, worst ${worst} ms, budget 50 ms`);
   });
 }
 
