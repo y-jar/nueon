@@ -90,6 +90,20 @@ commit per stage. See `docs/PROBING.md`.
   other. Rejected: a single mixed list, which makes "delete" ambiguous.
 - **Open contours count as filled when hit-testing**, matching how the canvas
   draws them and how the font fills them.
+- **The editor effect loop (found after stage 1a).** The canvas resize effect
+  called `setCanvasSize`, which read `editor.canvasSize` (to spot the first
+  call) and then wrote a new object to it. Read inside the effect, that made
+  the effect depend on what it wrote, so it re-ran about 17,000 times a second
+  until Svelte threw `effect_update_depth_exceeded`; the app crawled while the
+  tab was open. Measured: 53,053 runs and 52,101 `setCanvasSize` calls in 3 s,
+  one `fitGlyph`. The probes missed it because they never read the status bar.
+  Fix: the setter runs untracked, rounds the measured size to whole pixels,
+  ignores changes under a pixel and writes nothing when the size is unchanged;
+  the guide setters compare before they assign. With that, an idle editor has
+  no frame gap over 50 ms (worst 6 ms) and a pointer move takes 7 ms to paint.
+  Not changed: outline stays deep `$state` and pointer moves are not batched,
+  because a drag costs under 1 ms per move; change them only if a measurement
+  says so. Rule: see standards.md.
 - **Probe 22 is intermittently flaky** (translator clause canvas), on builds
   before and after this pass; it is unrelated to the writing system.
 

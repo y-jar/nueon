@@ -158,3 +158,18 @@ test("viewBoxOf describes exactly the visible glyph area, y flipped for SVG", ()
   near(zoomed.width, 400);
   near(zoomed.x, 300);
 });
+
+import { measuredSize, sameSize } from "./writingViewport.ts";
+
+test("measuredSize rounds to whole pixels and removes the border, never below 1", () => {
+  assert.deepEqual(measuredSize({ width: 445.4, height: 1140.6 }, 2), { width: 443, height: 1139 });
+  assert.deepEqual(measuredSize({ width: 1, height: 0 }, 2), { width: 1, height: 1 });
+  assert.deepEqual(measuredSize({ width: 800, height: 600 }, 0), { width: 800, height: 600 });
+});
+
+test("sameSize ignores changes under one pixel", () => {
+  assert.equal(sameSize({ width: 800, height: 600 }, { width: 800, height: 600 }), true);
+  assert.equal(sameSize({ width: 800, height: 600 }, { width: 800.4, height: 599.7 }), true);
+  assert.equal(sameSize({ width: 800, height: 600 }, { width: 801, height: 600 }), false);
+  assert.equal(sameSize({ width: 800, height: 600 }, { width: 800, height: 602 }), false);
+});

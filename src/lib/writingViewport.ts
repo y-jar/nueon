@@ -124,3 +124,16 @@ export function viewBoxOf(view: Viewport, size: ScreenSize) {
   const height = size.height / view.scale;
   return { x: view.cx - width / 2, y: -view.cy - height / 2, width, height };
 }
+
+/** The drawable size of a box: whole pixels, minus a border on each axis, never below 1. */
+export function measuredSize(box: ScreenSize, border: number): ScreenSize {
+  return {
+    width: Math.max(1, Math.round(box.width) - border),
+    height: Math.max(1, Math.round(box.height) - border),
+  };
+}
+
+/** Sizes within a pixel are the same size, so a re-measure never re-renders. */
+export function sameSize(a: ScreenSize, b: ScreenSize): boolean {
+  return Math.abs(a.width - b.width) < 1 && Math.abs(a.height - b.height) < 1;
+}

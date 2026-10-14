@@ -1,5 +1,6 @@
 <!-- Canvas with typographic guides, the drawing surface and node overlay. -->
 <script lang="ts">
+  import { untrack } from "svelte";
   import type { GlyphContour, WritingConfig } from "../lib/api";
   import {
     breakSelected,
@@ -43,6 +44,7 @@
   } from "../lib/writing";
   import { isContour } from "../lib/writingCommands";
   import { elementPathBounds } from "../lib/writingSelect";
+  import { measuredSize } from "../lib/writingViewport";
 
   interface Props {
     config: WritingConfig;
@@ -168,13 +170,14 @@
 
   $effect(() => {
     if (!scroller) return;
+    const target = scroller;
     const measure = () => {
-      const r = scroller!.getBoundingClientRect();
-      setCanvasSize({ width: Math.max(1, r.width - 2), height: Math.max(1, r.height - 2) });
+      const r = target.getBoundingClientRect();
+      setCanvasSize(measuredSize(r, 2));
     };
-    measure();
+    untrack(measure);
     const observer = new ResizeObserver(measure);
-    observer.observe(scroller);
+    observer.observe(target);
     return () => observer.disconnect();
   });
 

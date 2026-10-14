@@ -286,6 +286,31 @@ Also check the output path's timestamp changed (`stat -c '%y' /tmp/probe-x`).
   To test a click/drag, dispatch a synthetic DOM event in `js()`, or use the
   WebDriver pointer actions.
 
+### Every probe fails on an error (and on idle cost)
+
+`probe()` installs an in-page collector for `error` and `unhandledrejection`
+events and reads `.statusbar .status-error` (only text starting `Error:` counts,
+since the red button stays mounted afterwards). Any error seen while a probe ran
+fails it, with `[infinite effect loop]` added when the text contains
+`effect_update_depth_exceeded`. Pass `{ allowErrors: [/regex/] }` as the third
+argument only for an error the probe causes on purpose.
+
+Rule: no probe may pass with an error in the status bar, and every editor view
+needs an idle-cost probe like 115 and a latency probe like 116. WebKitGTK has no
+`longtask` entry type, so idle cost is measured as requestAnimationFrame gaps and
+late 10 ms timers over 3 s with nobody touching the page. Measured on the
+probe machine: broken build, 11-12 frame gaps over 50 ms with a worst of
+1.4-1.8 s; fixed build, none, worst frame gap 6 ms.
+
+To find which effect loops, build the frontend in Svelte dev mode
+(`svelte({ compilerOptions: { dev: true } })` in `vite.config.ts`, temporarily),
+put `$inspect.trace("name")` and a run counter in each `$effect`, and read the
+counts from the page. Revert before committing.
+
+Known old failure: `88-tab-active-revealed` triggers `null is not an object
+(evaluating 'c(s).id')`. It fails identically on builds from before the writing
+polish pass and is not related to it.
+
 ### Pointer capture swallows WebDriver pointer actions
 
 An element that calls `setPointerCapture` on `pointerdown` (the glyph canvas

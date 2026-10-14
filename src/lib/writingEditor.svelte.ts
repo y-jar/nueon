@@ -53,12 +53,14 @@ import {
   undoStep,
   type History,
 } from "./history";
+import { untrack } from "svelte";
 import { DEFAULT_TOOL, componentElement, type ToolId } from "./writing";
 import { componentIds, expandComponent, flattenElements } from "./writingComponents";
 import {
   clampZoom,
   fitView,
   panBy,
+  sameSize,
   screenToGlyph,
   viewBoxOf,
   zoomAbout,
@@ -96,6 +98,8 @@ export const editor = $state({
   view: { cx: 500, cy: 300, scale: 0.5 } as Viewport,
   /** The canvas size in screen pixels, reported by the canvas. */
   canvasSize: { width: 800, height: 600 } as ScreenSize,
+  /** False until the canvas has reported a real size once. */
+  canvasMeasured: false,
   /** Zoom as screen pixels per font unit; kept for snapping and hit radii. */
   zoom: 0.5,
   /** Selected whole elements (Select tool); separate from the node selection. */
@@ -308,15 +312,30 @@ export function currentViewBox() {
   return viewBoxOf(editor.view, editor.canvasSize);
 }
 
+/**
+ * Record the measured canvas size. Called from a ResizeObserver and from an
+ * effect, so it must never be tracked: it reads the state it writes. It writes
+ * only when the size really changed, so a repeated measure is free.
+ */
 export function setCanvasSize(size: ScreenSize): void {
-  if (size.width <= 0 || size.height <= 0) return;
-  const first = editor.canvasSize.width === 800 && editor.canvasSize.height === 600;
-  editor.canvasSize = size;
-  if (first && editor.outline) fitGlyph();
+  untrack(() => {
+    if (size.width <= 0 || size.height <= 0) return;
+    const current = editor.canvasSize;
+    if (sameSize(current, size)) return;
+    const first = !editor.canvasMeasured;
+    editor.canvasSize = size;
+    editor.canvasMeasured = true;
+    if (first && editor.outline) fitGlyph();
+  });
 }
 
+/** Guide metrics for fitting; assigned only when a value differs. */
 export function setGuideMetrics(m: { ascender: number; descender: number; advance: number }): void {
-  editor.guideMetrics = m;
+  untrack(() => {
+    const c = editor.guideMetrics;
+    if (c.ascender === m.ascender && c.descender === m.descender && c.advance === m.advance) return;
+    editor.guideMetrics = m;
+  });
 }
 
 /** Show the whole glyph: descender to ascender and the advance with room. */
@@ -592,7 +611,13 @@ function boundsOf(indexes: number[]): { cx: number; cy: number } | null {
 
 /** Guide rails and the advance line, in the snap engine's terms. */
 export function setGuideHeights(guides: { y: number; label: string }[]): void {
-  editor.guideHeights = guides;
+  untrack(() => {
+    const c = editor.guideHeights;
+    if (c.length === guides.length && c.every((g, i) => g.y === guides[i].y && g.label === guides[i].label)) {
+      return;
+    }
+    editor.guideHeights = guides;
+  });
 }
 
 function snapAt(
