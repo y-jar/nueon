@@ -2,7 +2,8 @@
 <script lang="ts">
   import { t } from "svelte-i18n";
   import type { GlyphMeta, Phoneme } from "../lib/api";
-  import { editor, setMetric } from "../lib/writingEditor.svelte";
+  import { editor, selectedKind, setMetric, setSelectedKind } from "../lib/writingEditor.svelte";
+  import type { NodeKind } from "../lib/api";
   import { FORM_KEYS, formChoices, setForm, type FormKey } from "../lib/writingForms";
 
   interface Props {
@@ -12,6 +13,9 @@
   }
 
   let { phonemes, glyphs, onGlyphChange }: Props = $props();
+
+  const KINDS: NodeKind[] = ["corner", "smooth", "symmetric"];
+  const kind = $derived(editor.selection.length > 0 ? selectedKind() : null);
 
   const choices = $derived(formChoices(glyphs, editor.glyphMeta?.id ?? ""));
 
@@ -46,6 +50,36 @@
         <span class="muted">{$t("writing.metrics.noPhonemes")}</span>
       {/each}
     </div>
+  </div>
+
+  <div class="metric-block node-type" data-testid="node-type">
+    <span class="metric-label">{$t("writing.nodeType.title")}</span>
+    {#if editor.selection.length === 0}
+      <p class="muted">{$t("writing.nodeType.none")}</p>
+    {:else}
+      <div class="node-type-buttons" role="group" aria-label={$t("writing.nodeType.title")}>
+        {#each KINDS as k (k)}
+          <button
+            class:active={kind === k}
+            aria-pressed={kind === k}
+            data-kind={k}
+            onclick={() => setSelectedKind(k)}
+          >
+            <svg viewBox="0 0 12 12" width="12" height="12" aria-hidden="true">
+              {#if k === "corner"}
+                <rect x="2" y="2" width="8" height="8" />
+              {:else if k === "smooth"}
+                <circle cx="6" cy="6" r="4" />
+              {:else}
+                <circle cx="6" cy="6" r="4" /><line x1="1" y1="6" x2="11" y2="6" />
+              {/if}
+            </svg>
+            {$t(`writing.nodeType.${k}`)}
+          </button>
+        {/each}
+      </div>
+      {#if kind === null}<p class="muted">{$t("writing.nodeType.mixed")}</p>{/if}
+    {/if}
   </div>
 
   <div class="metric-block">

@@ -40,6 +40,8 @@
     zoomActual,
     zoomStep,
     duplicateSelection,
+    openTransformDialog,
+    setSelectedKind,
     shearSelection,
     toggleCompose,
     toggleGuides,
@@ -178,6 +180,10 @@
       case "zoom-actual": return zoomActual();
       case "toggle-handles": return void (editor.showAllHandles = !editor.showAllHandles);
       case "duplicate": return duplicateSelection();
+      case "transform": return openTransformDialog();
+      case "node-corner": return setSelectedKind("corner");
+      case "node-smooth": return setSelectedKind("smooth");
+      case "node-symmetric": return setSelectedKind("symmetric");
       case "toggle-snap": return toggleSnap();
       case "toggle-guides": return toggleGuides();
       case "node-kind": return cycleSelectedKind();

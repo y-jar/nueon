@@ -202,7 +202,10 @@ layer (`src-tauri/`), and the Svelte 5 frontend (`src/`). See `docs/ARCHITECTURE
   but keeps the curve's shape, Ctrl+Delete removes it plainly. Arrow keys nudge
   1 unit (Shift 10), Tab/Shift+Tab step through nodes, V is the default
   Select tool (whole shapes: click, Shift-click, box, drag, Ctrl+D, Delete),
-  H Hand and Z Zoom tools (viewport model with zoom about the cursor,
+  a transform box on selected shapes (corner scale, outside-corner rotate,
+  edge skew, draggable pivot; one undo step per drag), Edit > Transform... with
+  numeric move/scale/rotate/skew and copy, Corner/Smooth/Symmetric node types
+  (buttons, menu, drawn shape), H Hand and Z Zoom tools (viewport model with zoom about the cursor,
   0.1 to 32), the toolbox is grouped with icons and tooltips, a rubber band selects
   nodes, Ctrl constrains drags to an axis and handles to 15 degrees, Alt keeps
   a handle's length, Space or middle-drag pans and Ctrl+wheel zooms. Component
@@ -266,7 +269,10 @@ layer (`src-tauri/`), and the Svelte 5 frontend (`src/`). See `docs/ARCHITECTURE
   bytes, `writingRules.test.ts`, `writingViewport.test.ts` (screen/glyph transforms, zoom about a point,
   pan, zoom-to-rectangle, fit, viewBox), `writingSelect.test.ts` (hit testing,
   marquee, move, nudge, duplicate), tool registry and shortcut-conflict tests
-  in `writing.test.ts`, `writingForms.test.ts`, positional-forms tests (runs,
+  in `writing.test.ts`, `writingTransform.test.ts` (matrix order, scale/rotate/skew about a pivot,
+  Shift/Alt, handle hit rules, component folding, dialog order, copy) and
+  `writingNodeType.test.ts` (handle growth, symmetric/smooth lengths, open ends),
+  both mutation-checked, `writingForms.test.ts`, positional-forms tests (runs,
   breaks, missing forms, rules combined) cross-checked against `hb-shape` on
   ten shaped strings, `validate.rs` tests (winding, reversal keeps holes and handles, bow-tie
   detection, names, duplicates, range), `fontReport.test.ts`, a compile test

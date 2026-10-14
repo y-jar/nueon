@@ -6438,6 +6438,184 @@ async function main() {
       if (errs.length) throw new Error(`step ${n} (action ${which}) after [${log.slice(-8)}]: ${errs[0]}`);
     }
   });
+
+  // -- probes 119-: transform box, Transform dialog, node types --------------
+  const bbox = () =>
+    js(`const d = document.querySelector('.outline').getAttribute('d');
+      const nums = [...d.matchAll(/(-?\\d+\\.?\\d*) (-?\\d+\\.?\\d*)/g)].map((m) => [Number(m[1]), -Number(m[2])]);
+      if (!nums.length) return null;
+      const xs = nums.map((p) => p[0]); const ys = nums.map((p) => p[1]);
+      return { minX: Math.min(...xs), maxX: Math.max(...xs), minY: Math.min(...ys), maxY: Math.max(...ys), n: nums.length };`);
+  const handleAt = (name) =>
+    js(`const svg = document.querySelector('.canvas-svg');
+      const el = document.querySelector('[data-handle=${name}]');
+      if (!el) return null;
+      const r = el.getBoundingClientRect(); const b = svg.getBoundingClientRect();
+      return { fx: (r.left + r.width / 2 - b.left) / b.width, fy: (r.top + r.height / 2 - b.top) / b.height };`);
+  const drawBox = async () => {
+    await tool("p");
+    for (const [x, y] of [[0.3, 0.6], [0.6, 0.6], [0.6, 0.4], [0.3, 0.4]]) await click1(x, y);
+    await key("Enter");
+    await tool("v");
+    await click1(0.45, 0.5);
+  };
+
+  await probe("119-transform-box-appears-with-handles-for-a-selected-shape", async () => {
+    await openFirstGlyph();
+    await key("a", { ctrlKey: true });
+    await key("Delete");
+    await drawBox();
+    await waitJs(`!!document.querySelector('.transform-box')`, { label: "transform box" });
+    const counts = await js(`return {
+      scale: document.querySelectorAll('.transform-handle.scale').length,
+      skew: document.querySelectorAll('.transform-handle.skew').length,
+      pivot: document.querySelectorAll('.transform-pivot').length };`);
+    assertEqual(counts.scale, 4, "four corner handles");
+    assertEqual(counts.skew, 4, "four edge handles");
+    assertEqual(counts.pivot, 1, "one pivot");
+    await screenshot("p119-transform-box");
+  });
+
+  await probe("120-corner-drag-scales-about-the-opposite-corner-in-one-undo-step", async () => {
+    const before = await bbox();
+    const h = await handleAt("ne");
+    await dragOnCanvas([h.fx, h.fy], [h.fx + 0.1, h.fy - 0.05]);
+    const after = await bbox();
+    if (!(after.maxX > before.maxX + 20 && after.maxY > before.maxY + 20)) {
+      throw new Error(`corner drag did not grow the shape: ${JSON.stringify({ before, after })}`);
+    }
+    if (Math.abs(after.minX - before.minX) > 0.6 || Math.abs(after.minY - before.minY) > 0.6) {
+      throw new Error(`the opposite corner moved: ${JSON.stringify({ before, after })}`);
+    }
+    await key("z", { ctrlKey: true });
+    const undone = await bbox();
+    if (Math.abs(undone.maxX - before.maxX) > 0.6 || Math.abs(undone.maxY - before.maxY) > 0.6) {
+      throw new Error(`one undo did not restore the whole drag: ${JSON.stringify({ before, undone })}`);
+    }
+  });
+
+  await probe("121-shift-corner-drag-keeps-the-aspect-ratio", async () => {
+    await click1(0.45, 0.5);
+    const before = await bbox();
+    const ratio = (before.maxX - before.minX) / (before.maxY - before.minY);
+    const h = await handleAt("se");
+    await dragOnCanvas([h.fx, h.fy], [h.fx + 0.12, h.fy + 0.02], { shiftKey: true });
+    const after = await bbox();
+    const r2 = (after.maxX - after.minX) / (after.maxY - after.minY);
+    if (Math.abs(r2 - ratio) > 0.02) throw new Error(`ratio changed ${ratio} -> ${r2}`);
+    if (!(after.maxX - after.minX > before.maxX - before.minX + 10)) throw new Error("did not scale");
+    await key("z", { ctrlKey: true });
+  });
+
+  await probe("122-dragging-outside-a-corner-rotates-the-shape", async () => {
+    await click1(0.45, 0.5);
+    const before = await bbox();
+    const h = await handleAt("ne");
+    await dragOnCanvas([h.fx + 0.015, h.fy - 0.01], [h.fx + 0.06, h.fy + 0.12]);
+    const after = await bbox();
+    // A rotated rectangle has more than four distinct x coordinates in its bounds growing.
+    const grew = (after.maxX - after.minX) !== (before.maxX - before.minX);
+    if (!grew) throw new Error(`rotation did not change the bounds: ${JSON.stringify({ before, after })}`);
+    await key("z", { ctrlKey: true });
+    const undone = await bbox();
+    if (Math.abs((undone.maxX - undone.minX) - (before.maxX - before.minX)) > 0.6) throw new Error("undo did not restore");
+  });
+
+  await probe("123-edge-drag-skews-the-shape", async () => {
+    await click1(0.45, 0.5);
+    const before = await bbox();
+    const h = await handleAt("n");
+    await dragOnCanvas([h.fx, h.fy], [h.fx + 0.08, h.fy]);
+    const after = await bbox();
+    if (!(after.maxX - after.minX > before.maxX - before.minX + 10)) {
+      throw new Error(`skew did not widen the bounds: ${JSON.stringify({ before, after })}`);
+    }
+    if (Math.abs(after.maxY - before.maxY) > 0.6 || Math.abs(after.minY - before.minY) > 0.6) {
+      throw new Error("a horizontal skew changed the height");
+    }
+    await key("z", { ctrlKey: true });
+  });
+
+  await probe("124-pivot-can-be-dragged-and-alt-scales-from-it", async () => {
+    await click1(0.45, 0.5);
+    const p0 = await handleAt("pivot");
+    await dragOnCanvas([p0.fx, p0.fy], [p0.fx - 0.05, p0.fy]);
+    const p1 = await handleAt("pivot");
+    if (!(p1.fx < p0.fx - 0.02)) throw new Error(`pivot did not move: ${p0.fx} -> ${p1.fx}`);
+    const before = await bbox();
+    const h = await handleAt("ne");
+    await dragOnCanvas([h.fx, h.fy], [h.fx + 0.06, h.fy - 0.06], { altKey: true });
+    const after = await bbox();
+    if (!(after.minX < before.minX - 5)) throw new Error(`alt did not scale from the pivot: ${JSON.stringify({ before, after })}`);
+    await key("z", { ctrlKey: true });
+  });
+
+  await probe("125-transform-dialog-applies-numbers-copy-and-escape", async () => {
+    await click1(0.45, 0.5);
+    const before = await bbox();
+    await key("m", { ctrlKey: true, shiftKey: true });
+    await waitJs(`!!document.querySelector('.transform-dialog')`, { label: "dialog" });
+    const set = (field, value) =>
+      js(`const i = document.querySelector('[data-field="${field}"]'); i.value = ${JSON.stringify(String(value))};
+        i.dispatchEvent(new Event('input', { bubbles: true })); return true;`);
+    await set("sx", 200);
+    await set("dx", 100);
+    await js(`document.querySelector('[data-action="apply-transform"]').click(); return true;`);
+    await waitJs(`!document.querySelector('.transform-dialog')`, { label: "dialog closed" });
+    const after = await bbox();
+    const w0 = before.maxX - before.minX;
+    const w1 = after.maxX - after.minX;
+    if (Math.abs(w1 - w0 * 2) > 1) throw new Error(`scale 200% gave width ${w1}, wanted ${w0 * 2}`);
+    if (Math.abs((after.minX + after.maxX) / 2 - ((before.minX + before.maxX) / 2 + 100)) > 1) {
+      throw new Error("move 100 did not shift the centre by 100");
+    }
+    await key("z", { ctrlKey: true });
+    const back = await bbox();
+    if (Math.abs(back.maxX - before.maxX) > 0.6) throw new Error("one undo did not restore the dialog transform");
+
+    const shapesBefore = await js(`return (document.querySelector('.outline').getAttribute('d').match(/M /g) || []).length;`);
+    await click1(0.45, 0.5);
+    await key("m", { ctrlKey: true, shiftKey: true });
+    await waitJs(`!!document.querySelector('.transform-dialog')`, { label: "dialog again" });
+    await set("dy", 150);
+    await js(`document.querySelector('[data-field="copy"]').click(); return true;`);
+    await js(`document.querySelector('[data-action="apply-transform"]').click(); return true;`);
+    await waitJs(`(document.querySelector('.outline').getAttribute('d').match(/M /g) || []).length === ${shapesBefore} + 1`, {
+      label: "a copy was added",
+    });
+    await key("z", { ctrlKey: true });
+    await key("m", { ctrlKey: true, shiftKey: true });
+    await waitJs(`!!document.querySelector('.transform-dialog')`, { label: "dialog third time" });
+    await key("Escape");
+    await js(`document.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true })); window.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true })); return true;`);
+    await waitJs(`!document.querySelector('.transform-dialog')`, { label: "Escape closes the dialog" });
+    await screenshot("p125-after-dialog");
+  });
+
+  await probe("126-node-type-buttons-change-the-selected-node-and-its-shape", async () => {
+    await tool("a");
+    await click1(0.3, 0.6);
+    const kinds = () => js(`return [...document.querySelectorAll('.glyph-node.node-selected')].map((n) => n.dataset.kind);`);
+    await waitJs(`document.querySelectorAll('.glyph-node.node-selected').length === 1`, { label: "a node selected" });
+    await js(`document.querySelector('[data-testid="node-type"] [data-kind="corner"]').click(); return true;`);
+    await waitJs(`document.querySelector('.glyph-node.node-selected')?.dataset.kind === 'corner'`, { label: "set to a corner" });
+    assertEqual((await kinds())[0], "corner", "now a corner");
+    const before = await js(`return document.querySelectorAll('.handle-line').length;`);
+    await js(`document.querySelector('[data-testid="node-type"] [data-kind="smooth"]').click(); return true;`);
+    await waitJs(`document.querySelector('.glyph-node.node-selected')?.dataset.kind === 'smooth'`, { label: "now smooth" });
+    const handles = await js(`return document.querySelectorAll('.handle-line').length;`);
+    if (handles <= before) throw new Error(`a smooth node should grow a handle, saw ${handles} handle lines (was ${before})`);
+    await js(`document.querySelector('[data-testid="node-type"] [data-kind="symmetric"]').click(); return true;`);
+    await waitJs(`document.querySelector('.glyph-node.node-selected')?.dataset.kind === 'symmetric'`, { label: "now symmetric" });
+    const shape = await js(`return document.querySelector('.glyph-node.node-selected').tagName;`);
+    assertEqual(shape, "polygon", "a symmetric node is drawn as a diamond");
+    await js(`document.querySelector('[data-testid="node-type"] [data-kind="corner"]').click(); return true;`);
+    await waitJs(`document.querySelector('.glyph-node.node-selected')?.dataset.kind === 'corner'`, { label: "back to a corner" });
+    await key("z", { ctrlKey: true });
+    await key("z", { ctrlKey: true });
+    await key("z", { ctrlKey: true });
+    await screenshot("p126-node-types");
+  });
 }
 
 try {

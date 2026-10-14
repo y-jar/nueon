@@ -58,6 +58,24 @@ import { untrack } from "svelte";
 import { DEFAULT_TOOL, componentElement, type ToolId } from "./writing";
 import { componentIds, expandComponent, flattenElements } from "./writingComponents";
 import {
+  IDENTITY,
+  applyTransform,
+  boxCentre,
+  dialogMatrix,
+  hitTransformHandle,
+  isIdentity,
+  rotateMatrix,
+  scaleMatrix,
+  selectionBox,
+  skewMatrix,
+  transformElements,
+  type Box,
+  type DialogValues,
+  type Matrix,
+  type TransformHandle,
+} from "./writingTransform";
+import { kindOfSelection, setKinds } from "./writingNodeType";
+import {
   clampZoom,
   fitView,
   panBy,
@@ -134,6 +152,14 @@ export const editor = $state({
   library: {} as Record<string, api.GlyphOutline>,
   /** The font validation report; null when the dialog is closed. */
   report: null as { issues: api.FontIssue[]; exporting: boolean } | null,
+  /** The transform handle under the pointer, for the cursor; written only when it changes. */
+  hoverHandle: null as string | null,
+  /** The transform box's pivot, or null for the box centre. Reset when the selection changes. */
+  pivot: null as Point | null,
+  /** The live transform while a handle is dragged; the outline is written on release. */
+  liveMatrix: null as Matrix | null,
+  /** The Transform dialog. */
+  transformOpen: false,
   /** The selected component instance (element index), if any. */
   selectedComponent: null as number | null,
   /** Guide heights and advance, set by the canvas from the writing config. */
@@ -141,6 +167,16 @@ export const editor = $state({
 });
 
 let history: History<api.GlyphOutline> = emptyHistory();
+interface TransformDrag {
+  kind: "transform";
+  handle: TransformHandle;
+  box: Box;
+  pivot: Point;
+  start: Point;
+  base: api.GlyphOutline;
+  indexes: number[];
+}
+
 let drag:
   | { kind: "move"; origin: Point; last: Point; moved: boolean; anchor: NodeRef; axis: boolean; start: Point }
   | { kind: "marquee"; from: Point; additive: boolean }
@@ -150,6 +186,8 @@ let drag:
   | { kind: "pan"; x: number; y: number }
   | { kind: "zoombox"; from: Point; screen: Point }
   | { kind: "elements-move"; origin: Point; last: Point; moved: boolean }
+  | TransformDrag
+  | { kind: "pivot"; box: Box }
   | { kind: "elements-marquee"; from: Point; additive: boolean }
   | { kind: "brush"; points: Point[] }
   | null = null;
@@ -182,7 +220,7 @@ export function openGlyph(id: string, meta: api.GlyphMeta): void {
   editor.glyphMeta = meta;
   editor.activeTool = DEFAULT_TOOL;
   editor.tempTool = null;
-  editor.elements = [];
+  setElements([]);
   editor.zoomBox = null;
   editor.snap = false;
   editor.status = "";
@@ -297,6 +335,7 @@ export function setTool(tool: ToolId): void {
   editor.preview = null;
   editor.zoomBox = null;
   editor.marquee = null;
+  editor.liveMatrix = null;
   drag = null;
 }
 
@@ -425,7 +464,7 @@ export function undo(): void {
   history = step.history;
   editor.outline = step.value;
   editor.selection = [];
-  editor.elements = pruneSelection(editor.elements, step.value.elements.length);
+  setElements(pruneSelection(editor.elements, step.value.elements.length));
   editor.selectedComponent = null;
   editor.draft = null;
   drag = null;
@@ -442,7 +481,7 @@ export function redo(): void {
   history = step.history;
   editor.outline = step.value;
   editor.selection = [];
-  editor.elements = pruneSelection(editor.elements, step.value.elements.length);
+  setElements(pruneSelection(editor.elements, step.value.elements.length));
   editor.selectedComponent = null;
   editor.draft = null;
   drag = null;
@@ -502,11 +541,11 @@ export function selectAll(): void {
   if (!editor.outline) return;
   if (effectiveTool() === "select") {
     editor.selection = [];
-    editor.elements = selectAllElements(editor.outline);
+    setElements(selectAllElements(editor.outline));
     say(`${editor.elements.length} shape(s) selected`);
     return;
   }
-  editor.elements = [];
+  setElements([]);
   editor.selection = allNodeRefs(editor.outline);
   say(`${editor.selection.length} nodes selected`);
 }
@@ -519,7 +558,7 @@ export function duplicateSelection(): void {
   }
   const result = duplicateElements(editor.outline, editor.elements, 20);
   commit(result.outline, "duplicated");
-  editor.elements = result.selection;
+  setElements(result.selection);
 }
 
 export function clearSelection(): void {
@@ -701,6 +740,32 @@ export interface Modifiers {
 
 const ZOOM_CLICK = 1.5;
 
+/** The transform box of the current element selection, or null. */
+export function currentTransformBox(): Box | null {
+  if (!editor.outline || editor.elements.length === 0) return null;
+  return selectionBox(editor.outline, editor.elements, lookupGlyph);
+}
+
+export function currentPivot(): Point | null {
+  const box = currentTransformBox();
+  if (!box) return null;
+  return editor.pivot ?? boxCentre(box);
+}
+
+/** The outline as it will look if the live transform is released now. */
+export function previewOutline(): api.GlyphOutline | null {
+  if (!editor.outline) return null;
+  if (!editor.liveMatrix || !drag || drag.kind !== "transform") return editor.outline;
+  return transformElements(drag.base, drag.indexes, editor.liveMatrix).outline;
+}
+
+export function setElements(next: number[]): void {
+  editor.elements = next;
+  editor.pivot = null;
+}
+
+
+
 /** The snapped placement for a new point (pen, shapes): nodes, rails, lines, grid. */
 function placement(raw: Point, mods: Modifiers, exclude: NodeRef[] = []): Point {
   const hit = snapAt(raw, exclude, null, mods.shift);
@@ -723,21 +788,44 @@ export function pointerDown(raw: Point, mods: Modifiers): void {
   switch (effectiveTool()) {
     case "select": {
       const lookup = lookupGlyph;
+      const box = currentTransformBox();
+      if (box && editor.elements.length > 0) {
+        const pivot = currentPivot() ?? boxCentre(box);
+        const handle = hitTransformHandle(box, pivot, raw, 1 / editor.zoom);
+        if (handle) {
+          if (handle.kind === "pivot") {
+            drag = { kind: "pivot", box };
+          } else {
+            drag = {
+              kind: "transform",
+              handle,
+              box,
+              pivot,
+              start: raw,
+              base: outline,
+              indexes: [...editor.elements],
+            };
+            editor.liveMatrix = IDENTITY;
+          }
+          return;
+        }
+      }
       const hit = hitElement(outline, radius, raw, lookup);
       if (hit !== null) {
         editor.selection = [];
-        editor.elements = mods.shift
+        const nextSel = mods.shift
           ? toggleElement(editor.elements, hit)
           : editor.elements.includes(hit)
             ? editor.elements
             : selectOnly(hit);
+        if (nextSel.join() !== editor.elements.join()) setElements(nextSel);
         if (editor.elements.includes(hit)) {
           history = pushHistory(history, outline);
           syncHistoryFlags();
           drag = { kind: "elements-move", origin: raw, last: raw, moved: false };
         }
       } else {
-        if (!mods.shift) editor.elements = [];
+        if (!mods.shift) setElements([]);
         drag = { kind: "elements-marquee", from: raw, additive: mods.shift };
         editor.marquee = { a: raw, b: raw };
       }
@@ -907,6 +995,24 @@ export function pointerDown(raw: Point, mods: Modifiers): void {
   }
 }
 
+/** The matrix for the handle being dragged. Snapping moves the pointer; Shift and Alt change the maths. */
+function liveTransform(d: TransformDrag, raw: Point, mods: Modifiers): Matrix {
+  const snapped = snapAt(raw, [], null, mods.shift);
+  editor.snapHit = snapped.hits.length > 0 ? snapped : null;
+  const pointer = snapped.point;
+  const h = d.handle;
+  if (h.kind === "scale") {
+    return scaleMatrix(d.box, h.which, pointer, {
+      keepRatio: mods.shift,
+      fromPivot: mods.alt,
+      pivot: d.pivot,
+    });
+  }
+  if (h.kind === "rotate") return rotateMatrix(d.pivot, d.start, raw, mods.shift);
+  if (h.kind === "skew") return skewMatrix(d.box, h.which, pointer, d.pivot);
+  return IDENTITY;
+}
+
 /** Pointer move in glyph space; only local state changes, never IPC. */
 export function pointerMove(raw: Point, mods: Modifiers): void {
   if (!editor.outline) return;
@@ -915,6 +1021,15 @@ export function pointerMove(raw: Point, mods: Modifiers): void {
       panScreen(mods.screen.x - drag.x, mods.screen.y - drag.y);
       drag = { kind: "pan", x: mods.screen.x, y: mods.screen.y };
     }
+    return;
+  }
+  if (drag && drag.kind === "pivot") {
+    const p = snapAt(raw, [], null, mods.shift).point;
+    editor.pivot = { x: p.x, y: p.y };
+    return;
+  }
+  if (drag && drag.kind === "transform") {
+    editor.liveMatrix = liveTransform(drag, raw, mods);
     return;
   }
   if (drag && drag.kind === "elements-move") {
@@ -931,6 +1046,17 @@ export function pointerMove(raw: Point, mods: Modifiers): void {
   if (drag && drag.kind === "zoombox") {
     editor.zoomBox = { a: drag.from, b: raw };
     return;
+  }
+  if (!drag && effectiveTool() === "select") {
+    const box = currentTransformBox();
+    let label: string | null = null;
+    if (box) {
+      const h = hitTransformHandle(box, currentPivot() ?? boxCentre(box), raw, 1 / editor.zoom);
+      label = h ? `${h.kind}-${h.which}` : null;
+    }
+    if (editor.hoverHandle !== label) editor.hoverHandle = label;
+  } else if (editor.hoverHandle !== null) {
+    editor.hoverHandle = null;
   }
   if (!drag) {
     // Hover feedback: show what a click would snap to, without changing anything.
@@ -1017,6 +1143,17 @@ export function pointerUp(raw: Point, mods: Modifiers): void {
   if (!finished || !editor.outline) return;
 
   if (finished.kind === "pan") return;
+  if (finished.kind === "pivot") return;
+  if (finished.kind === "transform") {
+    const m = editor.liveMatrix;
+    editor.liveMatrix = null;
+    if (!m || isIdentity(m)) return;
+    const result = applyTransform(finished.base, finished.indexes, m, false);
+    commit(result.outline, finished.handle.kind === "scale" ? "scaled" : finished.handle.kind === "rotate" ? "rotated" : "skewed");
+    setElements(result.selection);
+    if (result.skipped > 0) say(`${result.skipped} component(s) cannot be skewed, flipped or stretched and were left alone`);
+    return;
+  }
   if (finished.kind === "elements-move") {
     if (finished.moved) void saveOutline();
     return;
@@ -1026,9 +1163,11 @@ export function pointerUp(raw: Point, mods: Modifiers): void {
     editor.marquee = null;
     if (box && Math.hypot(box.a.x - box.b.x, box.a.y - box.b.y) > 3 / editor.zoom) {
       const inside = elementsInBox(editor.outline, box.a, box.b, lookupGlyph);
-      editor.elements = finished.additive
-        ? [...new Set([...editor.elements, ...inside])].sort((a, b) => a - b)
-        : inside;
+      setElements(
+        finished.additive
+          ? [...new Set([...editor.elements, ...inside])].sort((a, b) => a - b)
+          : inside,
+      );
       say(`${editor.elements.length} shape(s) selected`);
     }
     return;
@@ -1159,7 +1298,7 @@ export function deleteNodes(plain: boolean): void {
   if (!editor.outline) return;
   if (editor.elements.length > 0 && editor.selection.length === 0) {
     commit(removeElements(editor.outline, editor.elements), "shapes deleted");
-    editor.elements = [];
+    setElements([]);
     return;
   }
   if (editor.selectedComponent !== null) {
@@ -1196,6 +1335,8 @@ export function finishPath(): void {
 
 export function cancelGesture(): void {
   drag = null;
+  editor.liveMatrix = null;
+  editor.snapHit = null;
   editor.preview = null;
   finishPath();
 }
@@ -1259,4 +1400,63 @@ export async function exportFont(path: string): Promise<boolean> {
     editor.error = String(e);
     return false;
   }
+}
+
+
+/** Open the Transform dialog on the current selection (or the whole glyph when none). */
+export function openTransformDialog(): void {
+  if (!editor.outline) return;
+  editor.transformOpen = true;
+}
+
+export function closeTransformDialog(): void {
+  editor.transformOpen = false;
+}
+
+/** The shapes a numeric transform acts on: the selection, else every shape. */
+function transformTargets(): number[] {
+  if (!editor.outline) return [];
+  if (editor.elements.length > 0) return editor.elements;
+  return editor.outline.elements.map((_, i) => i);
+}
+
+/** The pivot the dialog uses: the pivot handle when set, else the centre of what it acts on. */
+export function dialogPivot(): Point {
+  if (editor.outline && editor.elements.length > 0 && editor.pivot) return editor.pivot;
+  const box = editor.outline ? selectionBox(editor.outline, transformTargets(), lookupGlyph) : null;
+  return box ? boxCentre(box) : { x: 0, y: 0 };
+}
+
+/** Apply the dialog's numbers as one undoable step; `copy` transforms appended copies instead. */
+export function applyDialog(values: DialogValues, copy: boolean): void {
+  if (!editor.outline) return;
+  const targets = transformTargets();
+  if (targets.length === 0) {
+    say("nothing to transform");
+    return;
+  }
+  const m = dialogMatrix(values, dialogPivot());
+  if (isIdentity(m) && !copy) {
+    say("nothing to change");
+    return;
+  }
+  const result = applyTransform(editor.outline, targets, m, copy);
+  commit(result.outline, copy ? "transformed copy" : "transformed");
+  if (editor.elements.length > 0 || copy) setElements(result.selection);
+  if (result.skipped > 0) say(`${result.skipped} component(s) cannot be skewed, flipped or stretched and were left alone`);
+}
+
+/** Set the type of the selected nodes as one undoable step. */
+export function setSelectedKind(kind: api.NodeKind): void {
+  if (!editor.outline || editor.selection.length === 0) {
+    say("select a node first");
+    return;
+  }
+  commit(setKinds(editor.outline, editor.selection, kind), `node type: ${kind}`);
+}
+
+/** The shared type of the selected nodes, or null when mixed or none selected. */
+export function selectedKind(): api.NodeKind | null {
+  if (!editor.outline) return null;
+  return kindOfSelection(editor.outline, editor.selection);
 }

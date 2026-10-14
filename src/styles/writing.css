@@ -844,3 +844,57 @@
 .toolbox .tool { justify-content: flex-start; }
 .toolbox .tool .tool-label { flex: 1; }
 .toolbox .tool:focus-visible { outline: 1px solid var(--accent); outline-offset: -1px; }
+
+.canvas-svg .transform-box {
+  fill: none;
+  stroke: var(--accent);
+  stroke-width: 1;
+  vector-effect: non-scaling-stroke;
+  pointer-events: none;
+}
+
+.canvas-svg .transform-handle {
+  fill: var(--bg);
+  stroke: var(--accent);
+  stroke-width: 1.5;
+  vector-effect: non-scaling-stroke;
+  pointer-events: none;
+}
+
+.canvas-svg .transform-handle.skew {
+  fill: var(--accent);
+}
+
+.canvas-svg .transform-pivot {
+  pointer-events: none;
+  stroke: var(--accent);
+  stroke-width: 1.5;
+  vector-effect: non-scaling-stroke;
+}
+
+.canvas-svg .transform-pivot circle {
+  fill: none;
+  vector-effect: non-scaling-stroke;
+}
+
+.canvas-svg .transform-pivot line {
+  vector-effect: non-scaling-stroke;
+}
+
+.canvas-svg[data-hover^="scale-ne"], .canvas-svg[data-hover^="scale-sw"] { cursor: nesw-resize; }
+.canvas-svg[data-hover^="scale-nw"], .canvas-svg[data-hover^="scale-se"] { cursor: nwse-resize; }
+.canvas-svg[data-hover^="skew-n"], .canvas-svg[data-hover^="skew-s"] { cursor: ew-resize; }
+.canvas-svg[data-hover^="skew-e"], .canvas-svg[data-hover^="skew-w"] { cursor: ns-resize; }
+.canvas-svg[data-hover^="rotate"] { cursor: alias; }
+.canvas-svg[data-hover^="pivot"] { cursor: move; }
+
+.modal.transform-dialog { width: min(380px, 92vw); }
+.transform-body { padding: 10px 16px; display: flex; flex-direction: column; gap: 6px; }
+.transform-row { display: grid; grid-template-columns: 1fr 96px 44px; gap: 8px; align-items: center; font-size: 12px; }
+.transform-row input { width: 100%; }
+.transform-copy { display: flex; gap: 6px; align-items: center; font-size: 12px; margin-top: 4px; }
+
+.node-type-buttons { display: flex; gap: 4px; flex-wrap: wrap; }
+.node-type-buttons button { display: inline-flex; gap: 4px; align-items: center; font-size: 11px; padding: 2px 6px; }
+.node-type-buttons button.active { background: var(--accent); color: var(--bg); }
+.node-type-buttons svg { fill: none; stroke: currentColor; stroke-width: 1.5; }

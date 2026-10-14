@@ -584,6 +584,52 @@ separate for now. Indexes are pruned after undo and redo. The pure functions
 outline, so a hole is a miss, an open contour counts as filled (as the canvas
 and the font do), and the edge has a tolerance of the node radius in font units.
 
+### Transform box
+
+With shapes selected in the Select tool, a box with handles surrounds them
+(`src/lib/writingTransform.ts`, pure and unit-tested):
+
+| Handle | Drag | Modifiers |
+| --- | --- | --- |
+| Corner square | Scale about the opposite corner | Shift keeps the ratio, Alt scales about the pivot |
+| Just outside a corner | Rotate about the pivot by the angle swept | Shift snaps the total to 15 degrees |
+| Edge circle | Skew along that edge, pivot fixed | |
+| Crosshair | Move the pivot (snaps) | |
+
+The pivot is the centre of the box until it is dragged, and resets when the
+selection changes. Reach is measured in screen pixels (scale 6, edge 6, pivot 5,
+rotate ring 22), so handles stay easy to hit at any zoom, and the rotate ring
+exists only outside the box so a click inside near a corner still moves the
+shape. While a handle is dragged the outline is not written: a live matrix is
+shown (`previewOutline`) and applied once on release, so a whole drag is one undo
+step and one save. Snapping moves the pointer used for scale and skew; rotation
+uses the raw pointer.
+
+A component instance stores only a move, a uniform scale and a rotation, so a
+skew, flip or stretch cannot be folded into it. Such components are left alone
+and the status bar says how many. Scaling a group by the same factor on both axes
+works on components.
+
+### Transform dialog
+
+Edit > Transform... (Ctrl+Shift+M) takes move, scale (percent), rotate and skew
+in degrees, applied in the order scale, skew, rotate, then move, about the pivot
+handle if it was set and otherwise the centre of the target. With nothing
+selected it acts on every shape. "Copy" transforms appended copies and keeps the
+originals. One undo step either way. Scale of 0 or an unparsable value is treated
+as 100% so a half-typed field cannot collapse the shape.
+
+### Node types
+
+Corner, Smooth and Symmetric are set with the buttons in the properties panel,
+the Tools menu, or Node Mod (click cycles). Smooth keeps each handle's length and
+keeps the pair collinear; Symmetric makes both the same length; Corner keeps
+whatever handles exist. A node with no handles grows them along the line from the
+previous to the next node, a third of the nearer neighbour's distance long, so a
+handle never reaches past the next node (an open end gets its one handle).
+Symmetric nodes are drawn as diamonds, smooth as circles, corners as squares
+(`data-kind` on each node for tests).
+
 ### Tools and shortcuts
 
 | Key | Tool / action | Notes |
@@ -611,6 +657,9 @@ and the font do), and the edge has a tolerance of the node radius in font units.
 | Delete | Delete selection | Ctrl+Delete removes a node without refitting the curve |
 | Shift+J / Shift+B | Join endpoints / break node | |
 | Ctrl+Shift+E | Expand component | |
+| Ctrl+Shift+M | Transform dialog | |
+| Shift-drag a corner | Keep ratio | Transform box |
+| Alt-drag a corner | Scale from the pivot | Transform box |
 | Ctrl+Z, Ctrl+Shift+Z, Ctrl+Y | Undo, redo | |
 | Enter, Esc | Finish path, cancel | |
 

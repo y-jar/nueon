@@ -22,8 +22,12 @@
     setGuideMetrics,
     setCanvasSize,
     currentViewBox,
+    currentPivot,
+    currentTransformBox,
     duplicateSelection,
+    openTransformDialog,
     lookupGlyph,
+    previewOutline,
     effectiveTool,
     fitGlyph,
     holdTool,
@@ -72,7 +76,8 @@
       advance: editor.outline?.advance ?? config.upem * 0.6,
     });
   });
-  const d = $derived(editor.outline ? outlinePathData(editor.outline, true) : "");
+  const shown = $derived(previewOutline());
+  const d = $derived(shown ? outlinePathData(shown, true) : "");
   const previewD = $derived(
     editor.preview && editor.preview.kind === "contour"
       ? contourPathData(editor.preview as GlyphContour, true)
@@ -94,6 +99,11 @@
       : [],
   );
   const handleScale = $derived(1 / editor.zoom);
+  const tbox = $derived(editor.liveMatrix ? null : currentTransformBox());
+  const pivot = $derived(editor.liveMatrix ? null : currentPivot());
+  const showTransformBox = $derived(
+    !!tbox && editor.elements.length > 0 && effectiveTool() === "select",
+  );
   const selectedBoxes = $derived(
     editor.outline
       ? editor.elements.flatMap((index) => {
@@ -216,6 +226,9 @@
     } else if (mod && event.key.toLowerCase() === "f") {
       event.preventDefault();
       fitGlyph();
+    } else if (mod && event.shiftKey && event.key.toLowerCase() === "m") {
+      event.preventDefault();
+      openTransformDialog();
     } else if (mod && event.key.toLowerCase() === "d") {
       event.preventDefault();
       duplicateSelection();
@@ -259,6 +272,7 @@
   <svg
     bind:this={svg}
     class="canvas-svg tool-{effectiveTool()}"
+    data-hover={editor.hoverHandle ?? ""}
     class:panning={editor.tempTool === "hand"}
     aria-hidden="true"
     {viewBox}
@@ -334,16 +348,26 @@
             r={4 * handleScale}
           />
         {/if}
-        <rect
-          class="glyph-node"
-          class:node-selected={isSelected(index, ni)}
-          class:node-smooth={node.kind !== "corner"}
-          x={node.x - 4 * handleScale}
-          y={flipY(node.y) - 4 * handleScale}
-          width={8 * handleScale}
-          height={8 * handleScale}
-          rx={node.kind === "corner" ? 0 : 4 * handleScale}
-        />
+        {#if node.kind === "symmetric"}
+          <polygon
+            class="glyph-node node-symmetric"
+            class:node-selected={isSelected(index, ni)}
+            data-kind="symmetric"
+            points="{node.x},{flipY(node.y) - 5.5 * handleScale} {node.x + 5.5 * handleScale},{flipY(node.y)} {node.x},{flipY(node.y) + 5.5 * handleScale} {node.x - 5.5 * handleScale},{flipY(node.y)}"
+          />
+        {:else}
+          <rect
+            class="glyph-node"
+            class:node-selected={isSelected(index, ni)}
+            class:node-smooth={node.kind !== "corner"}
+            data-kind={node.kind}
+            x={node.x - 4 * handleScale}
+            y={flipY(node.y) - 4 * handleScale}
+            width={8 * handleScale}
+            height={8 * handleScale}
+            rx={node.kind === "corner" ? 0 : 4 * handleScale}
+          />
+        {/if}
       {/each}
     {/each}
     {#each selectedBoxes as sb (sb.index)}
@@ -355,6 +379,49 @@
         height={sb.h}
       />
     {/each}
+    {#if showTransformBox && tbox && pivot}
+      <rect
+        class="transform-box"
+        x={tbox.minX}
+        y={flipY(tbox.maxY)}
+        width={tbox.maxX - tbox.minX}
+        height={tbox.maxY - tbox.minY}
+      />
+      {#each [
+        { w: "nw", x: tbox.minX, y: tbox.maxY },
+        { w: "ne", x: tbox.maxX, y: tbox.maxY },
+        { w: "sw", x: tbox.minX, y: tbox.minY },
+        { w: "se", x: tbox.maxX, y: tbox.minY },
+      ] as h (h.w)}
+        <rect
+          class="transform-handle scale"
+          data-handle={h.w}
+          x={h.x - 5 * handleScale}
+          y={flipY(h.y) - 5 * handleScale}
+          width={10 * handleScale}
+          height={10 * handleScale}
+        />
+      {/each}
+      {#each [
+        { w: "n", x: (tbox.minX + tbox.maxX) / 2, y: tbox.maxY },
+        { w: "s", x: (tbox.minX + tbox.maxX) / 2, y: tbox.minY },
+        { w: "e", x: tbox.maxX, y: (tbox.minY + tbox.maxY) / 2 },
+        { w: "w", x: tbox.minX, y: (tbox.minY + tbox.maxY) / 2 },
+      ] as h (h.w)}
+        <circle
+          class="transform-handle skew"
+          data-handle={h.w}
+          cx={h.x}
+          cy={flipY(h.y)}
+          r={5 * handleScale}
+        />
+      {/each}
+      <g class="transform-pivot" data-handle="pivot">
+        <circle cx={pivot.x} cy={flipY(pivot.y)} r={6 * handleScale} />
+        <line x1={pivot.x - 9 * handleScale} y1={flipY(pivot.y)} x2={pivot.x + 9 * handleScale} y2={flipY(pivot.y)} />
+        <line x1={pivot.x} y1={flipY(pivot.y) - 9 * handleScale} x2={pivot.x} y2={flipY(pivot.y) + 9 * handleScale} />
+      </g>
+    {/if}
     {#if editor.zoomBox}
       <rect
         class="marquee zoom-box"

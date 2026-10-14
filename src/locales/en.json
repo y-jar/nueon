@@ -612,6 +612,30 @@
       "order": "Order rules are applied",
       "unknown": "No glyph named {names}."
     },
+    "transform": {
+      "title": "Transform",
+      "selected": "Applies to {count} selected shape(s).",
+      "whole": "Nothing is selected, so this applies to every shape in the glyph.",
+      "dx": "Move across",
+      "dy": "Move up",
+      "sx": "Scale across",
+      "sy": "Scale up",
+      "rotate": "Rotate",
+      "skewX": "Skew across",
+      "skewY": "Skew up",
+      "copy": "Transform a copy and keep the original",
+      "reset": "Reset",
+      "cancel": "Cancel",
+      "apply": "Apply"
+    },
+    "nodeType": {
+      "title": "Node type",
+      "corner": "Corner",
+      "smooth": "Smooth",
+      "symmetric": "Symmetric",
+      "mixed": "Mixed types",
+      "none": "Select a node to change its type."
+    },
     "report": {
       "title": "Font check",
       "clean": "No problems found. The font is ready to export.",

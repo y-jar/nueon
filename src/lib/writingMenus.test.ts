@@ -92,3 +92,13 @@ test("duplicate needs a selected shape and the view menu offers fit, 100% and ha
   assert.equal(find("edit", "duplicate", { ...state, hasElements: true })?.disabled, false);
   assert.ok(find("view", "zoom-fit") && find("view", "zoom-actual") && find("view", "toggle-handles"));
 });
+
+test("Edit offers Transform and the Tools menu offers the three node types", () => {
+  const edit = menuItems("edit", state).map((i) => i.id);
+  assert.ok(edit.includes("transform"));
+  const tools = menuItems("tools", state);
+  for (const id of ["node-corner", "node-smooth", "node-symmetric"]) {
+    assert.equal(tools.find((i) => i.id === id)?.disabled, true, `${id} needs a selected node`);
+    assert.equal(menuItems("tools", { ...state, hasSelection: true }).find((i) => i.id === id)?.disabled, false);
+  }
+});

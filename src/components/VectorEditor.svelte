@@ -16,6 +16,7 @@
   import GlyphGridTray from "./GlyphGridTray.svelte";
   import EditorStatusBar from "./EditorStatusBar.svelte";
   import FontReportDialog from "./FontReportDialog.svelte";
+  import TransformDialog from "./TransformDialog.svelte";
 
   interface Props {
     config: WritingConfig;
@@ -109,4 +110,5 @@
 
   {#if editor.error}<p class="error">{editor.error}</p>{/if}
   <FontReportDialog />
+  <TransformDialog />
 </div>

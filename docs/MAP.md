@@ -64,6 +64,7 @@ and regenerate.
 - `TablesPanel.svelte` — Dictionary tables sidebar list.
 - `Toast.svelte` — Transient status toast.
 - `Toolbox.svelte` — Toolbox: the drawing tools and the options of the active tool.
+- `TransformDialog.svelte` — Transform dialog: numeric move, scale, rotate and skew, with an optional copy.
 - `Translation.svelte` — Translation activity: builder + runner.
 - `TrashModal.svelte` — Trash bin modal (restore/delete).
 - `VectorEditor.svelte` — Vector editor: menu, toolbar, toolbox, canvas, metrics and tray.
@@ -144,10 +145,12 @@ and regenerate.
 - `writingEditor.svelte.ts` — Vector-editor state: the open glyph, tools, selection, history and gestures.
 - `writingForms.ts` — Pure helpers for a glyph's positional forms (initial, medial, final).
 - `writingMenus.ts` — Pure menu definitions for the vector editor's menu bar.
+- `writingNodeType.ts` — Setting a node's type (corner, smooth, symmetric), growing handles when it has none.
 - `writingRules.ts` — Pure helpers for editing orthography rules in the writing tab.
 - `writingSelect.ts` — Element-level selection for the Select tool: hit testing, marquee, move, duplicate.
 - `writingSidebar.ts` — Pure filtering and grouping for the Writing System sidebar glyph list.
 - `writingSnap.ts` — Pure snapping: nodes, guide rails, bearing lines, edge midpoints and the grid.
+- `writingTransform.ts` — Pure transform maths for the Select tool's transform box and the Transform dialog.
 - `writingViewport.ts` — Pure viewport math for the glyph canvas: zoom about a point, pan, fit.
 
 ## `src/lib/editor`

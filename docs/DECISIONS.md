@@ -88,6 +88,18 @@ commit per stage. See `docs/PROBING.md`.
 - **Two selections, one active.** Whole elements (`editor.elements`) and nodes
   (`editor.selection`) are separate lists; tools write one and clear the
   other. Rejected: a single mixed list, which makes "delete" ambiguous.
+- **Transform drags write once.** The box applies a live matrix to a preview of
+  the outline and commits on release, rather than rewriting the outline on every
+  move. That keeps one undo step per drag and one save per drag.
+- **Components only take similarities.** A component stores dx, dy, a uniform
+  scale and a rotation. Skews, flips and stretches are not representable, so they
+  skip components and say so; expanding the component first makes it editable.
+- **Rotate ring is outside the box only**, so a click inside near a corner is a
+  move, not a rotation. Found by mutation testing the hit rule.
+- **A stale pen draft crashed the pen** (`n.kind` of undefined): undo removed the
+  drafted element but `editor.draft` still pointed at it. The draft is now dropped
+  on undo, redo, commit and reload, validated on each pen click, and `isContour`
+  accepts a missing element. A random 160-step edit probe (118) guards the family.
 - **Open contours count as filled when hit-testing**, matching how the canvas
   draws them and how the font fills them.
 - **The editor effect loop (found after stage 1a).** The canvas resize effect
