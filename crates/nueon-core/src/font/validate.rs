@@ -29,7 +29,6 @@ pub struct FontIssue {
 
 const FLATNESS: f64 = 0.5;
 const COORD_LIMIT: f64 = 32767.0;
-const MAX_NAME: usize = 31;
 
 fn issue(glyph: &FontGlyph, severity: Severity, code: &'static str, message: String) -> FontIssue {
     FontIssue {
@@ -140,16 +139,6 @@ pub fn self_intersects(contour: &Contour) -> bool {
     false
 }
 
-/// `[A-Za-z0-9._]`, at most 31 characters, not starting with a digit.
-pub fn valid_glyph_name(name: &str) -> bool {
-    !name.is_empty()
-        && name.len() <= MAX_NAME
-        && !name.starts_with(|c: char| c.is_ascii_digit())
-        && name
-            .chars()
-            .all(|c| c.is_ascii_alphanumeric() || c == '.' || c == '_')
-}
-
 fn fractional(contours: &[Contour]) -> usize {
     let off = |v: f64| (v - v.round()).abs() > 0.01;
     contours
@@ -203,18 +192,6 @@ pub fn validate_glyphs(glyphs: &[FontGlyph]) -> Vec<FontIssue> {
                 format!("U+{:X} is not a valid codepoint", glyph.meta.codepoint),
             ));
         }
-        if !valid_glyph_name(&glyph.meta.name) {
-            issues.push(issue(
-                glyph,
-                Severity::Warning,
-                "bad-name",
-                format!(
-                    "\"{}\" is not a valid font glyph name (letters, digits, . and _; at most {MAX_NAME}; no leading digit)",
-                    glyph.meta.name
-                ),
-            ));
-        }
-
         let drawn: Vec<&Contour> = glyph.contours.iter().collect();
         if drawn.is_empty() {
             issues.push(issue(
@@ -474,18 +451,6 @@ mod tests {
             fill_rule: FillRule::Nonzero,
         };
         assert!(!self_intersects(&circle));
-    }
-
-    #[test]
-    fn names_follow_font_rules() {
-        assert!(valid_glyph_name("a"));
-        assert!(valid_glyph_name("uni_E000.alt"));
-        assert!(!valid_glyph_name(""));
-        assert!(!valid_glyph_name("9lives"));
-        assert!(!valid_glyph_name("has space"));
-        assert!(!valid_glyph_name("naïve"));
-        assert!(!valid_glyph_name(&"x".repeat(32)));
-        assert!(valid_glyph_name(&"x".repeat(31)));
     }
 
     #[test]

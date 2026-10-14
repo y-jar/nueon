@@ -5867,6 +5867,154 @@ async function main() {
       throw new Error("menu did not close after Enter");
     }
   });
+
+  // -- probes 98-: the writing system tab and vector editor -----------------
+  const canvasClick = (fx, fy) =>
+    js(`const svg = document.querySelector('.canvas-svg');
+      const b = svg.getBoundingClientRect();
+      const at = { bubbles: true, cancelable: true, pointerId: 1, button: 0,
+        clientX: b.left + b.width * ${fx}, clientY: b.top + b.height * ${fy} };
+      svg.dispatchEvent(new PointerEvent('pointerdown', at));
+      svg.dispatchEvent(new PointerEvent('pointerup', at));
+      return true;`);
+  const glyphFiles = () => {
+    const dir = path.join(WORKSPACE, "writing", "glyphs");
+    return fs.existsSync(dir) ? fs.readdirSync(dir) : [];
+  };
+
+  await probe("98-writing-tab-opens-and-adds-a-glyph", async () => {
+    await openActivity("Writing System");
+    await waitJs(`!!document.querySelector('.writing')`, { label: "writing view" });
+    await click(".writing-bar button");
+    await waitJs(`document.querySelectorAll('.glyph-tile').length === 1`, {
+      label: "one glyph tile",
+    });
+    const config = JSON.parse(
+      fs.readFileSync(path.join(WORKSPACE, "config", "writing"), "utf8"),
+    );
+    assertEqual(config.glyphs.length, 1, "glyph saved to config/writing");
+    assertEqual(config.glyphs[0].codepoint, 0xe000, "first private-use codepoint");
+    await screenshot("p98-writing-tab");
+  });
+
+  await probe("99-glyph-opens-in-the-vector-editor", async () => {
+    await click(".glyph-tile");
+    await waitJs(`!!document.querySelector('.vector-editor .canvas-svg')`, {
+      label: "vector editor",
+    });
+    // The toolbar must not overlap the toolbox (a class collision once forced 28px buttons).
+    const overlap = await js(`const t = document.querySelector('.vector-toolbar').getBoundingClientRect();
+      const x = document.querySelector('.toolbox').getBoundingClientRect();
+      return t.bottom > x.top + 1 && t.top < x.bottom - 1 && t.right > x.left + 1 && t.left < x.right - 1;`);
+    assertEqual(overlap, false, "toolbar does not overlap the toolbox");
+    await screenshot("p99-vector-editor");
+  });
+
+  await probe("100-pen-clicks-create-nodes-and-save-to-disk", async () => {
+    await click(".glyph-canvas");
+    await canvasClick(0.35, 0.65);
+    await canvasClick(0.65, 0.65);
+    await canvasClick(0.5, 0.3);
+    await waitJs(`document.querySelectorAll('.glyph-node').length === 3`, {
+      label: "three nodes on the canvas",
+    });
+    await pressKey(ENTER);
+    const deadline = Date.now() + 6000;
+    let saved = null;
+    while (Date.now() < deadline) {
+      const files = glyphFiles();
+      if (files.length) {
+        saved = JSON.parse(
+          fs.readFileSync(path.join(WORKSPACE, "writing", "glyphs", files[0]), "utf8"),
+        );
+        if ((saved.elements?.[0]?.nodes ?? []).length === 3) break;
+      }
+      await new Promise((resolve) => setTimeout(resolve, 150));
+    }
+    assertEqual(saved?.elements?.[0]?.nodes?.length, 3, "three nodes persisted");
+    const size = await js(`return document.querySelector('.editor-statusbar').textContent;`);
+    if (/\\u00d7/.test(size) || !/\d+ \u00d7 \d+/.test(size)) {
+      throw new Error(`status bar size is not rendered as "W × H": ${JSON.stringify(size)}`);
+    }
+    await screenshot("p100-pen-triangle");
+  });
+
+  await probe("101-undo-removes-the-last-edit-and-redo-restores-it", async () => {
+    await click(".glyph-canvas");
+    await pressKey("z", [CTRL]);
+    await waitJs(
+      `document.querySelectorAll('.glyph-node').length < 3`,
+      { label: "undo removed a node" },
+    );
+    await pressKey("z", [CTRL, SHIFT]);
+    await waitJs(`document.querySelectorAll('.glyph-node').length === 3`, {
+      label: "redo restored the node",
+    });
+  });
+
+  await probe("102-menu-bar-opens-and-escape-closes-it", async () => {
+    await click(".menu-item");
+    await waitJs(`!!document.querySelector('.menu-panel')`, { label: "menu panel" });
+    await pressKey("\uE00C");
+    await waitJs(`!document.querySelector('.menu-panel')`, { label: "menu closed on Escape" });
+    await click(".menu-item");
+    await waitJs(`!!document.querySelector('.menu-panel')`, { label: "menu reopened" });
+    await js(`document.querySelector('.glyph-canvas').dispatchEvent(
+      new PointerEvent('pointerdown', { bubbles: true }));
+      document.body.dispatchEvent(new MouseEvent('mousedown', { bubbles: true }));
+      return true;`);
+    await waitJs(`!document.querySelector('.menu-panel')`, {
+      label: "menu closed on outside click",
+    });
+  });
+
+  await probe("103-font-check-reports-and-export-gate-follows-errors", async () => {
+    await js(`const b = [...document.querySelectorAll('.menu-item')]
+      .find((x) => x.textContent.trim() === 'Export'); b.click(); return !!b;`);
+    await waitJs(`!!document.querySelector('.menu-panel')`, { label: "export menu" });
+    await js(`const b = [...document.querySelectorAll('.menu-panel button')]
+      .find((x) => x.textContent.includes('Check font')); b.click(); return !!b;`);
+    await waitJs(`!!document.querySelector('.font-report')`, { label: "font report" });
+    const summary = await js(
+      `return document.querySelector('[data-testid="font-report-summary"]').textContent.trim();`,
+    );
+    if (!/0 error/.test(summary)) throw new Error(`unexpected summary: ${summary}`);
+    const codes = await js(`return [...document.querySelectorAll('.font-report li')].map((li) => li.dataset.code);`);
+    if (codes.includes("bad-name")) throw new Error(`glyph names are not a font problem: ${codes}`);
+    for (const code of ["open-contour", "winding", "rounding"]) {
+      if (!codes.includes(code)) throw new Error(`missing ${code} in ${codes}`);
+    }
+    await screenshot("p103-font-report");
+    await pressKey("\uE00C");
+    await waitJs(`!document.querySelector('.font-report')`, { label: "report closed" });
+  });
+
+  await probe("104-orthography-rules-save-and-reject-unknown-glyphs", async () => {
+    await click(".vector-editor .back");
+    await waitJs(`!!document.querySelector('[data-testid="orthography-rules"]')`, {
+      label: "rules editor",
+    });
+    await js(`[...document.querySelectorAll('[data-testid="orthography-rules"] button')]
+      .find((b) => b.textContent.includes('Add rule')).click(); return true;`);
+    await waitJs(`document.querySelectorAll('[data-testid="orthography-rule"]').length === 1`, {
+      label: "one rule row",
+    });
+    await js(`const inputs = document.querySelectorAll('[data-testid="orthography-rule"] input');
+      const set = (el, v) => { el.value = v; el.dispatchEvent(new Event('input', { bubbles: true })); };
+      set(inputs[0], 'ka'); set(inputs[1], 'no-such-glyph'); return true;`);
+    await waitJs(`!!document.querySelector('.orthography .rule-warning')`, {
+      label: "unknown glyph warning shown",
+    });
+    const deadline = Date.now() + 6000;
+    let rules = [];
+    while (Date.now() < deadline) {
+      rules = JSON.parse(fs.readFileSync(path.join(WORKSPACE, "config", "writing"), "utf8")).rules ?? [];
+      if (rules[0]?.from === "ka") break;
+      await new Promise((resolve) => setTimeout(resolve, 150));
+    }
+    assertEqual(rules[0]?.from, "ka", "rule persisted to config/writing");
+    await screenshot("p104-orthography-rules");
+  });
 }
 
 try {

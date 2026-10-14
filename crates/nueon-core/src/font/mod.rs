@@ -10,5 +10,5 @@ pub use layout::{plan_layout, Layout, FEATURE, SPACE_ADVANCE};
 pub use outline::{contours_to_bezpaths, glyph_from_contours, FontError};
 pub use validate::{
     blocks_export, needs_reversal, normalise_winding, reverse_contour, self_intersects,
-    valid_glyph_name, validate_glyphs, FontIssue, Severity,
+    validate_glyphs, FontIssue, Severity,
 };

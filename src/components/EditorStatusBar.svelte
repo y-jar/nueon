@@ -20,7 +20,7 @@
   <span class="muted">{nodeCount} nodes</span>
   {#if bounds}
     <span class="muted">
-      {Math.round(bounds.max_x - bounds.min_x)} \u00d7 {Math.round(bounds.max_y - bounds.min_y)}
+      {Math.round(bounds.max_x - bounds.min_x)} &times; {Math.round(bounds.max_y - bounds.min_y)}
     </span>
   {/if}
   <span class="muted">snap {editor.snap ? "on" : "off"}</span>

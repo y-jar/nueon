@@ -286,6 +286,22 @@ Also check the output path's timestamp changed (`stat -c '%y' /tmp/probe-x`).
   To test a click/drag, dispatch a synthetic DOM event in `js()`, or use the
   WebDriver pointer actions.
 
+### Pointer capture swallows WebDriver pointer actions
+
+An element that calls `setPointerCapture` on `pointerdown` (the glyph canvas
+does) never receives the matching `pointerup` from WebDriver's `pointerClick`
+under WebKitWebDriver: the press is delivered, the release is not, and the
+gesture never finishes. This was proved on a throwaway element with and without
+capture, so it is the harness, not the app. For capture-based surfaces, dispatch
+`PointerEvent`s directly in `js()` (`pointerdown` then `pointerup`, with
+`pointerId` and `button: 0`) as the writing probes' `canvasClick` does.
+
+### An image viewer can show a stale screenshot
+
+Probes overwrite `probes/out/<name>.png` in place. If a screenshot looks like it
+ignores a fix you just made, check its mtime and copy it to a new filename
+before concluding the fix failed.
+
 ---
 
 ## 6. Debugging decision tree

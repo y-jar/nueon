@@ -221,7 +221,7 @@ layer (`src-tauri/`), and the Svelte 5 frontend (`src/`). See `docs/ARCHITECTURE
   before every export in `FontReportDialog.svelte`) lists, per glyph, errors
   (duplicate or invalid codepoints, points beyond +/-32767), warnings (open
   contours, contours under 3 points, self-intersection, even-odd fill, empty
-  glyph, invalid or duplicate glyph names) and notes (counter-clockwise winding,
+  glyph, duplicate glyph names, which the rules editor resolves by name) and notes (counter-clockwise winding,
   points rounded to the integer grid); only errors block, and the compiler
   reverses every contour of a counter-clockwise glyph together so the filled
   shape and its holes are unchanged. Orthography rules compile to a GSUB `calt` feature
