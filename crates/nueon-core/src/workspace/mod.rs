@@ -22,6 +22,7 @@ pub use note::NoteFile;
 pub use storage::{StorageError, CONFIG_DIR, DICTIONARY_DIR, NOTES_DIR};
 pub use table_files::QuarantineWarning;
 pub use trash::{Restored, TrashKind, TrashRecord, RETENTION_DAYS, TRASH_DIR};
+pub use writing::MAX_BACK_IMAGE_BYTES;
 
 use std::collections::{BTreeMap, BTreeSet};
 use std::path::{Path, PathBuf};

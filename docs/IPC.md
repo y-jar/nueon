@@ -67,7 +67,14 @@ writing anything; returns `FontIssue[]` of `{ glyph, name, severity, code,
 message }`, severity `error`, `warning` or `info`). `writing_preview_shape` (shape lines of text against the compiled font for the
 type preview: takes `lines` and `rtl`, returns `{ key, glyph_ids, runs }` where each
 run lists `{ id, cluster, advance, x_offset, y_offset }` per glyph in visual order;
-the compiled font is cached by `key`). `read_text_file` / `write_text_file` move SVG
+the compiled font is cached by `key`). `writing_back_image_import` (import a
+tracing image for a glyph: takes `id`, `path` and `force`, sniffs png/jpg/webp
+bytes, copies the file into `writing/assets/` (deduping identical bytes), sets
+it as the glyph's `back_image` fitted to the em box, returns the
+`{ asset, width, x, y }` reference; files above 10 MB need `force`, which the
+UI asks about first) and `writing_back_image_path` (the absolute path of a
+glyph's back image file, or null, for the webview's asset URL). Both bump the
+`writing` data-changed scope. `read_text_file` / `write_text_file` move SVG
 text to and from paths chosen in a file dialog. The writing config itself
 travels through the generic `config_get`/`config_set` with section `writing`.
 

@@ -4,7 +4,7 @@ use std::sync::Mutex;
 
 use tauri::{AppHandle, State};
 
-use nueon_core::config::GlyphOutline;
+use nueon_core::config::{BackImage, GlyphOutline};
 use nueon_core::font::{Direction, FontIssue, ShapedRun};
 use nueon_core::model::BooleanOp;
 
@@ -68,6 +68,41 @@ pub fn writing_path_operation(
     drop(state);
     changed(&app, "writing");
     Ok(())
+}
+
+/// Import a tracing image for a glyph into `writing/assets/` and set it as
+/// the glyph's back image. Files above the limit need `force` (the UI warns
+/// first); only png, jpg and webp bytes are accepted.
+#[tauri::command]
+pub fn writing_back_image_import(
+    app: AppHandle,
+    state: State<'_, Shared>,
+    id: String,
+    path: String,
+    force: Option<bool>,
+) -> Result<BackImage, String> {
+    let state = state.lock().map_err(|_| "state poisoned".to_string())?;
+    let image = state
+        .workspace()?
+        .import_back_image(&id, std::path::Path::new(&path), force.unwrap_or(false))
+        .map_err(|err| err.to_string())?;
+    drop(state);
+    changed(&app, "writing");
+    Ok(image)
+}
+
+/// The absolute path of a glyph's back image file, or `None` when it has none.
+#[tauri::command]
+pub fn writing_back_image_path(
+    state: State<'_, Shared>,
+    id: String,
+) -> Result<Option<String>, String> {
+    let state = state.lock().map_err(|_| "state poisoned".to_string())?;
+    let path = state
+        .workspace()?
+        .back_image_path(&id)
+        .map_err(|err| err.to_string())?;
+    Ok(path.map(|p| p.to_string_lossy().into_owned()))
 }
 
 /// One glyph as a standalone SVG document.

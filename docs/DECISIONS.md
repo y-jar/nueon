@@ -132,6 +132,35 @@ commit per stage. See `docs/PROBING.md`.
 - **Preview spacing edits reuse the grid's undo log.** Dragging a gap changes two
   glyphs; the grid log already records one step across many glyphs, so the same
   undo reverses it.
+- **The back layer's images live in `writing/assets/`, not `notes/assets/`.** The
+  existing asset importer is reused (it is base-dir agnostic), but a
+  writing-scoped dir keeps the two worlds apart: sweeping an unreferenced asset
+  when a glyph is deleted can never break a note that embeds the same file in
+  Markdown, and a note attachment is never mistaken for tracing material. The
+  glyph file stores only the imported, sanitized file name — never a path — plus
+  a font-unit centre and width; the height follows the file's aspect ratio at
+  draw time, so the stored data never depends on pixel size.
+- **Formats are sniffed from magic bytes, and SVG is deferred.** png, jpg and
+  webp are accepted by content (a `.png`-named text file is rejected); SVG would
+  need sanitising before it enters a webview, so it is left out until that
+  exists.
+- **The 10 MB limit warns rather than refuses.** The import command rejects
+  files above it unless `force`; the UI asks first with the shared confirm
+  dialog, so an accidental 40 MB scan is a question, not a dead end, and the
+  guard is probe-testable without a native dialog.
+- **Clearing an image keeps the asset file; deleting the glyph sweeps it.** A
+  clear is just an outline edit, so undo must restore the image — that requires
+  the file to still exist. The sweep runs when glyph metas vanish from the
+  writing config (the app's own delete path), deleting the outline file and any
+  asset no remaining outline references; identical imports shared the file, so
+  the last reference decides.
+- **Editor-only material never touches the font.** The font key and the compiled
+  font read only glyphs' metadata, contours and advances, so a tracing image
+  cannot invalidate the preview cache or change an export — both are tested
+  byte-for-byte.
+- **A hidden Fore layer blocks editing, not viewing.** Editing invisible
+  outlines would be blind luck, so every tool except the view tools waits; the
+  back image stays reachable so a scan can be inspected alone.
 - **Bearings follow FontForge.** The left bearing moves the ink and the advance
   together; the right bearing and the advance change only the advance. Only the
   advance is stored: the left bearing is the ink's left edge and the right bearing

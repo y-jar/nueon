@@ -11,6 +11,7 @@ the contract between the Rust core, the Tauri layer and the frontend.
   dictionary/            one extensionless JSON file per word table
   config/                extensionless JSON for grammar/translation/phonology/writing
   writing/glyphs/        one extensionless JSON file per glyph outline
+  writing/assets/        tracing images for the back layer (png/jpg/webp)
 ```
 
 The app-global registry of known workspaces lives **outside** the workspace at
@@ -70,8 +71,25 @@ bearing is the leftmost node, right bearing is `advance` minus the rightmost); t
 
 One file per glyph outline, named by the glyph's stable id (extensionless, like
 tables and config). Holds a `GlyphOutline`: `elements` (a list of contours or
-component instances), plus optional `advance`, `lsb`, `rsb`. Component
-references form an acyclic graph, validated on save.
+component instances), plus optional `advance`, `lsb`, `rsb`, and an optional
+`back_image` — a tracing image on the back layer:
+
+```json
+{ "back_image": { "asset": "scan 2.png", "width": 1000, "x": 500, "y": 300 } }
+```
+
+`asset` is a bare file name inside `writing/assets/` — never a path — as the
+importer wrote it; `width` is the drawn width in font units and `(x, y)` the
+image's centre, y up; the height follows the file's aspect ratio, so the stored
+data never depends on the image's pixel size. Files written before the field
+existed load with none. The image is editor-only: the font an export writes,
+its font key and the type preview all ignore it (tested byte-for-byte).
+
+Importing copies the file into `writing/assets/`, deduping identical bytes (two
+glyphs tracing the same scan share one file). Files above 10 MB import only
+after the UI confirms. Deleting a glyph from the config drops its outline file
+and any back-image asset no remaining outline references; clearing the image
+keeps the file, so an undo restores it.
 
 ### The profile (version 3)
 

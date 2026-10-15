@@ -836,6 +836,33 @@ Pure logic is in `src/lib/writingBezier.ts`.
   else the selected shapes, else every shape), by exact subdivision, so the shape
   is unchanged and each new node has a horizontal or vertical tangent.
 
+### Layers
+
+The canvas composes three layers, each with a visibility toggle in the toolbox
+(`data-layer="guide|back|fore"`, mirrored in the View menu) and in
+`editor.layers`:
+
+- **Guide** — the metric rails, guides and bearing lines (`showGuides` before
+  the layers model).
+- **Back** — a tracing image behind everything: a scan or sketch imported for
+  one glyph (`writing_back_image_import`), stored as a bare asset name plus a
+  font-unit placement (centre and width; the height follows the file's aspect
+  ratio) in the glyph's own file, and served to the webview by the asset
+  protocol. Identical imports dedupe into one `writing/assets/` file.
+- **Fore** — the outline being drawn: contours, nodes, handles, the transform
+  box. Hidden, it cannot be edited blind: every editing tool except Hand and
+  Zoom waits until Fore is shown again (the info bar says so); the view tools
+  and the back image stay available, so a scan can be inspected alone.
+
+With the Back layer visible, the pointer tools (Select, Direct) reach the
+image once nothing on the fore layer takes the click: a click selects it
+(dashed box and four corner handles), a drag moves its centre, a corner drag
+scales it with the opposite corner anchored and the aspect ratio kept exactly
+(`scaleByCorner` in `src/lib/writingLayers.ts`, mutation-checked). Delete on
+the selected image clears the reference as one undo step — the asset file
+stays until the glyph is deleted, so the undo restores the image. Every image
+gesture is one history step, like a node drag.
+
 ### Tools and shortcuts
 
 | Key | Tool / action | Notes |
@@ -867,7 +894,7 @@ Pure logic is in `src/lib/writingBezier.ts`.
 | Tab, Shift+Tab | Step through nodes | |
 | Ctrl+A | Select all | Shapes in Select, nodes otherwise |
 | Ctrl+D | Duplicate | Offset by 20 units; the copies become the selection |
-| Delete | Delete selection | Ctrl+Delete removes a node without refitting the curve |
+| Delete | Delete selection | Ctrl+Delete removes a node without refitting the curve; with the tracing image selected and nothing else, it clears the image |
 | Shift+J / Shift+B | Join endpoints / break node | |
 | Ctrl+Shift+E | Expand component | |
 | Ctrl+Shift+M | Transform dialog | |

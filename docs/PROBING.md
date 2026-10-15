@@ -373,6 +373,29 @@ writing probes). A glyph now opens on Select, so a probe that draws must press
 in three or four, on builds before and after the writing-system polish pass.
 Rerun before investigating; if it fails twice in a row, look at it.
 
+### A probe section appended after the last probe lands in the `finally` block
+
+`main()` ends before the top-level `try { await main() } catch { } finally { }`.
+Pasting a new probe section in front of the tail (`if (sessionId) { ... }`) puts
+it inside that `finally`, outside `main()`: every helper const (`writeGrid`,
+`click`, ...) is then out of scope and the probes fail with `X is not defined`
+even though `node --check` passes. Insert before the `}` that closes `main()`
+(probe 170's closing `});`).
+
+### A menu closes after its item runs
+
+Clicking a menu item runs the action and closes the menu. A probe that clicks
+two items in the same panel (toggle, toggle back) must reopen the menu between
+them, or the second `find(...)` returns nothing.
+
+### A failed probe leaves its state for the next one
+
+A probe that toggles something and then throws leaves it toggled; the next
+probe inherits it (a hidden layer made the next probes' image assertions time
+out even though their own code was right). Probes that assert on shared view
+state must set it straight first (the `ensureLayers` helper), like `freshGlyph`
+resets the outline.
+
 ### A probe must not assert on a state an earlier probe left drawn
 
 Probes run in sequence and share state (see "Seed state through IPC"). A probe

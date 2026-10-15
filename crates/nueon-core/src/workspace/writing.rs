@@ -9,7 +9,7 @@ use super::storage::{self, StorageError};
 use super::Workspace;
 use crate::config::{
     parse_svg_path, svg_path_data, to_svg_document, to_svg_symbol, transform_contour,
-    validate_components, validate_outline, Contour, GlyphOutline, OutlineElement,
+    validate_components, validate_outline, BackImage, Contour, GlyphOutline, OutlineElement,
 };
 use crate::font::{
     blocks_export, compile_font, plan_layout, read_back, shape_text, validate_glyphs, Direction,
@@ -21,6 +21,10 @@ use crate::model::{pathfinder_apply, BooleanOp};
 fn valid_glyph_id(id: &str) -> bool {
     !id.is_empty() && id.chars().all(|c| c.is_ascii_alphanumeric() || c == '-')
 }
+
+/// Largest tracing image accepted on the back layer; larger files import only
+/// after the UI has warned about them (`force`).
+pub const MAX_BACK_IMAGE_BYTES: u64 = 10 * 1024 * 1024;
 
 impl Workspace {
     /// The directory holding per-glyph outline files.
@@ -91,6 +95,132 @@ impl Workspace {
         storage::save_json(&self.glyph_file(id), outline)
     }
 
+    /// The directory holding back-layer tracing images.
+    pub fn writing_assets_dir(&self) -> PathBuf {
+        self.root_path
+            .join(storage::WRITING_DIR)
+            .join(super::assets::ASSETS_DIR)
+    }
+
+    /// Read the first `n` bytes of a file, or fewer when it is shorter.
+    fn read_head(source: &std::path::Path, n: usize) -> Result<Vec<u8>, StorageError> {
+        use std::io::Read;
+        let mut file = std::fs::File::open(source).map_err(|e| storage::io_err(source, e))?;
+        let mut head = vec![0u8; n];
+        let mut filled = 0;
+        while filled < n {
+            let read = file
+                .read(&mut head[filled..])
+                .map_err(|e| storage::io_err(source, e))?;
+            if read == 0 {
+                break;
+            }
+            filled += read;
+        }
+        head.truncate(filled);
+        Ok(head)
+    }
+
+    /// Whether the bytes look like a raster format the back layer accepts.
+    /// SVG is deliberately not sniffed in: it would need sanitising first.
+    fn looks_like_raster(head: &[u8]) -> bool {
+        head.starts_with(&[0x89, b'P', b'N', b'G', 0x0D, 0x0A, 0x1A, 0x0A])
+            || head.starts_with(&[0xFF, 0xD8, 0xFF])
+            || (head.len() >= 12
+                && &head[..4] == b"RIFF".as_slice()
+                && &head[8..12] == b"WEBP".as_slice())
+    }
+
+    /// Import a tracing image for one glyph into `writing/assets/` and set it
+    /// as the glyph's back image, fitted to the em box by default. The asset
+    /// store dedupes identical bytes, so two glyphs sharing a scan share one
+    /// file. `force` lets a file above [`MAX_BACK_IMAGE_BYTES`] through.
+    pub fn import_back_image(
+        &self,
+        id: &str,
+        source: &std::path::Path,
+        force: bool,
+    ) -> Result<BackImage, StorageError> {
+        if !valid_glyph_id(id) {
+            return Err(StorageError::UnsafePath(PathBuf::from(id)));
+        }
+        let meta = std::fs::metadata(source).map_err(|e| storage::io_err(source, e))?;
+        if !meta.is_file() {
+            return Err(StorageError::NotAFile(source.to_path_buf()));
+        }
+        if meta.len() > MAX_BACK_IMAGE_BYTES && !force {
+            return Err(StorageError::TooLarge(source.to_path_buf()));
+        }
+        if !Self::looks_like_raster(&Self::read_head(source, 12)?) {
+            return Err(StorageError::Config(
+                "writing".to_string(),
+                format!(
+                    "unsupported back-image format (png, jpg or webp): {}",
+                    source.display()
+                ),
+            ));
+        }
+        let imported =
+            super::assets::import_asset(&self.root_path.join(storage::WRITING_DIR), source)?;
+        let mut outline = self.load_glyph(id)?.unwrap_or_default();
+        let settings = self.font_settings();
+        let image = BackImage {
+            asset: imported.name,
+            width: f64::from(self.writing.upem),
+            x: f64::from(self.writing.upem) / 2.0,
+            y: (settings.ascender + settings.descender) / 2.0,
+        };
+        outline.back_image = Some(image.clone());
+        self.save_glyph(id, &outline)?;
+        Ok(image)
+    }
+
+    /// The absolute path of a glyph's back image file, or `None`.
+    pub fn back_image_path(&self, id: &str) -> Result<Option<PathBuf>, StorageError> {
+        if !valid_glyph_id(id) {
+            return Err(StorageError::UnsafePath(PathBuf::from(id)));
+        }
+        Ok(self
+            .load_glyph(id)?
+            .and_then(|outline| outline.back_image)
+            .map(|image| self.writing_assets_dir().join(image.asset)))
+    }
+
+    /// Drop the outline files of glyphs whose metas vanished from the writing
+    /// config, and any back-image asset no remaining outline still references.
+    /// Called from the writing `config_set` arm, so the UI's delete flows sweep
+    /// through the same path.
+    pub fn sweep_deleted_glyphs(&self, previous_ids: &[String]) {
+        let current: HashSet<&str> = self.writing.glyphs.iter().map(|g| g.id.as_str()).collect();
+        let vanished: Vec<&String> = previous_ids
+            .iter()
+            .filter(|id| !current.contains(id.as_str()))
+            .collect();
+        if vanished.is_empty() {
+            return;
+        }
+        let mut orphan_assets: Vec<String> = Vec::new();
+        for id in vanished {
+            if let Ok(Some(outline)) = self.load_glyph(id) {
+                if let Some(image) = outline.back_image {
+                    orphan_assets.push(image.asset);
+                }
+            }
+            let _ = std::fs::remove_file(self.glyph_file(id));
+        }
+        let referenced: HashSet<String> = self
+            .scan_glyphs()
+            .unwrap_or_default()
+            .iter()
+            .filter_map(|(_, outline)| outline.back_image.as_ref().map(|image| image.asset.clone()))
+            .collect();
+        for asset in orphan_assets {
+            if !referenced.contains(&asset) {
+                let _ = std::fs::remove_file(self.writing_assets_dir().join(asset));
+            }
+        }
+    }
+
     /// Expand a glyph's component instances into a flat list of contours,
     /// applying each instance's transform. Detects reference cycles.
     pub fn flatten_glyph(&self, id: &str) -> Result<Vec<Contour>, StorageError> {
@@ -137,6 +267,7 @@ impl Workspace {
         }
         let result = pathfinder_apply(&contours, op);
         let outline = GlyphOutline {
+            back_image: None,
             elements: result.into_iter().map(OutlineElement::Contour).collect(),
             advance: original.advance,
             lsb: original.lsb,
@@ -149,6 +280,7 @@ impl Workspace {
     pub fn export_glyph_svg(&self, id: &str) -> Result<String, StorageError> {
         let contours = self.flatten_glyph(id)?;
         let outline = GlyphOutline {
+            back_image: None,
             elements: contours.into_iter().map(OutlineElement::Contour).collect(),
             ..GlyphOutline::default()
         };
@@ -161,6 +293,7 @@ impl Workspace {
         for glyph in &self.writing.glyphs {
             let contours = self.flatten_glyph(&glyph.id)?;
             let outline = GlyphOutline {
+                back_image: None,
                 elements: contours.into_iter().map(OutlineElement::Contour).collect(),
                 ..GlyphOutline::default()
             };
@@ -195,6 +328,7 @@ impl Workspace {
         let count = contours.len();
         let original = self.load_glyph(id)?.unwrap_or_default();
         let outline = GlyphOutline {
+            back_image: None,
             elements: contours.into_iter().map(OutlineElement::Contour).collect(),
             advance: original.advance,
             lsb: original.lsb,

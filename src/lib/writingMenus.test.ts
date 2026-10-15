@@ -12,6 +12,8 @@ const state: MenuState = {
   allHandles: false,
   snap: false,
   guides: true,
+  back: true,
+  fore: false,
   hasGlyph: true,
 };
 
@@ -39,6 +41,8 @@ test("view toggles show their state and only ttf font export is enabled", () => 
   const view = menuItems("view", { ...state, snap: true });
   assert.ok(view.find((i) => i.id === "toggle-snap")!.label.startsWith("\u2713"));
   assert.ok(view.find((i) => i.id === "toggle-guides")!.label.startsWith("\u2713"));
+  assert.ok(view.find((i) => i.id === "toggle-back")!.label.startsWith("\u2713"), "back shown");
+  assert.ok(!view.find((i) => i.id === "toggle-fore")!.label.startsWith("\u2713"), "fore hidden");
   assert.ok(!view.find((i) => i.id === "toggle-snap")!.label.startsWith("Snap"));
   const exp = menuItems("export", state);
   assert.equal(exp.find((i) => i.id === "export-ttf")!.disabled, undefined, "ttf export is live");

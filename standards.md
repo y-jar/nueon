@@ -57,6 +57,13 @@ docs: module headers + generated source map
   (see `DerivationGraph`'s `reload`). Without the guard, the write schedules an
   update on a destroyed subtree and reads a just-destroyed branch's props, which
   is how `88` used to throw.
+- **A generation token compared against deep `$state` must be read back from the
+  state, not the raw object.** Assigning into a deep `$state` proxy wraps the
+  object, so `editor.outline === rawObject` is always false and the guard
+  silently rejects every load (the back image drew only after the probe proved
+  the sync had never completed). Capture the stored value after the assignment —
+  `const stored = editor.outline` — and compare against that, as
+  `refreshLibrary` already does.
   is how `88` used to throw.
 
 ## Docs

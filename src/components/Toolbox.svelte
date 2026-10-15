@@ -7,13 +7,18 @@
     Eraser,
     FlipHorizontal2,
     Hand,
+    Image,
+    ImagePlus,
     MousePointer,
     MousePointer2,
+    PenLine,
     PenTool,
+    Ruler,
     Shapes,
     ZoomIn,
   } from "@lucide/svelte";
-  import { editor, setNib, setShape, setTool } from "../lib/writingEditor.svelte";
+  import { addBackImage, editor, setNib, setShape, setTool, toggleLayer } from "../lib/writingEditor.svelte";
+  import type { LayerId } from "../lib/writingLayers";
   import { TOOLS, TOOL_GROUPS, type ToolId } from "../lib/writing";
   import type { ShapeKind } from "../lib/writingCommands";
 
@@ -43,6 +48,12 @@
     { id: "star", label: "Star" },
     { id: "line", label: "Line" },
   ];
+
+  const LAYERS: { id: LayerId; label: string; tooltip: string; icon: typeof Ruler }[] = [
+    { id: "guide", label: "Guide", tooltip: "Guide rails: metric lines and guides", icon: Ruler },
+    { id: "back", label: "Back", tooltip: "Back layer: the tracing image behind the drawing", icon: Image },
+    { id: "fore", label: "Fore", tooltip: "Fore layer: the outline being drawn", icon: PenLine },
+  ];
 </script>
 
 <div class="toolbox" role="toolbar" aria-label={$t("writing.toolbox")}>
@@ -67,6 +78,34 @@
       {/each}
     </div>
   {/each}
+
+  <div class="tool-sep" role="separator"></div>
+  <div class="tool-group" data-group="layers">
+    {#each LAYERS as layer (layer.id)}
+      {@const LayerIcon = layer.icon}
+      <button
+        class="tool layer-toggle"
+        class:active={editor.layers[layer.id]}
+        data-layer={layer.id}
+        title={layer.tooltip}
+        aria-label={layer.label}
+        aria-pressed={editor.layers[layer.id]}
+        onclick={() => toggleLayer(layer.id)}
+      >
+        <LayerIcon size={15} />
+        <span class="tool-label">{layer.label}</span>
+      </button>
+    {/each}
+    <button
+      class="tool"
+      data-action="back-image-add"
+      title="Add tracing image (png, jpg or webp) behind the drawing"
+      aria-label="Add tracing image"
+      onclick={() => void addBackImage()}
+    >
+      <ImagePlus size={15} />
+    </button>
+  </div>
 
   {#if editor.activeTool === "shapes"}
     <label class="tool-option">

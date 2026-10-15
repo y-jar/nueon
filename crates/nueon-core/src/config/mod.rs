@@ -31,7 +31,7 @@ pub use translation::{
 };
 pub use writing_system::{
     parse_svg_path, path_data, svg_path_data, to_svg_document, to_svg_symbol, transform_contour,
-    validate_components, validate_outline, ComponentInstance, Contour, FillRule, GlyphForms,
-    GlyphMeta, GlyphOutline, Node, NodeKind, OrthographyRule, OutlineElement, WritingConfig,
-    WritingDirection,
+    validate_components, validate_outline, BackImage, ComponentInstance, Contour, FillRule,
+    GlyphForms, GlyphMeta, GlyphOutline, Node, NodeKind, OrthographyRule, OutlineElement,
+    WritingConfig, WritingDirection,
 };

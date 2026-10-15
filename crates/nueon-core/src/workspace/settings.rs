@@ -162,8 +162,13 @@ impl Workspace {
                 storage::save_json(&dir.join(storage::PHONOLOGY_FILE), &self.phonology)?;
             }
             "writing" => {
+                let previous_ids: Vec<String> =
+                    self.writing.glyphs.iter().map(|g| g.id.clone()).collect();
                 self.writing = serde_json::from_value(value).map_err(invalid)?;
                 storage::save_json(&dir.join(storage::WRITING_FILE), &self.writing)?;
+                // Glyph metas that vanished mean the glyph was deleted: drop
+                // its outline file and any back-image asset left orphaned.
+                self.sweep_deleted_glyphs(&previous_ids);
             }
             // The settings file also holds grid views, layout and migration
             // flags. Replacing it wholesale from the UI could wipe all of that,

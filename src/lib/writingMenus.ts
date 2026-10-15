@@ -19,6 +19,8 @@ export interface MenuState {
   allHandles: boolean;
   snap: boolean;
   guides: boolean;
+  back: boolean;
+  fore: boolean;
   hasGlyph: boolean;
 }
 
@@ -87,6 +89,8 @@ export function menuItems(menu: MenuId, state: MenuState): MenuItem[] {
         sep("s1"),
         { id: "toggle-snap", label: `${state.snap ? "\u2713 " : ""}Snap to grid` },
         { id: "toggle-guides", label: `${state.guides ? "\u2713 " : ""}Guide rails` },
+        { id: "toggle-back", label: `${state.back ? "\u2713 " : ""}Back layer` },
+        { id: "toggle-fore", label: `${state.fore ? "\u2713 " : ""}Fore layer` },
       ];
     case "tools":
       return [

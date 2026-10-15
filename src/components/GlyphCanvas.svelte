@@ -7,6 +7,8 @@
     componentContours,
     expandSelectedComponent,
     cancelGesture,
+    clearBackImage,
+    currentBackRect,
     deleteNodes,
     editor,
     finishPath,
@@ -51,6 +53,7 @@
     outlinePathData,
   } from "../lib/writing";
   import { isContour } from "../lib/writingCommands";
+  import { backRectCorners } from "../lib/writingLayers";
   import { elementPathBounds } from "../lib/writingSelect";
   import { measuredSize } from "../lib/writingViewport";
   import { segmentPathData, visibleHandles } from "../lib/writingBezier";
@@ -65,6 +68,7 @@
   let svg: SVGSVGElement | undefined = $state();
 
   const guides = $derived(guideLines(config));
+  const backRect = $derived(currentBackRect());
   $effect(() => {
     setGuideHeights(guides.map((g) => ({ y: g.y, label: g.key.replace("_", " ") })));
   });
@@ -305,7 +309,11 @@
       selectAll();
     } else if (event.key === "Delete" || event.key === "Backspace") {
       event.preventDefault();
-      deleteNodes(mod);
+      if (editor.imageSelected && editor.selection.length === 0 && editor.elements.length === 0) {
+        clearBackImage();
+      } else {
+        deleteNodes(mod);
+      }
     } else if (event.key === "Enter") {
       finishPath();
     } else if (event.key === "Escape") {
@@ -343,7 +351,37 @@
     onpointerup={onUp}
     ondblclick={onDouble}
   >
-    {#if editor.showGuides}
+    {#if editor.layers.back && backRect && editor.backImage}
+      <image
+        class="back-image"
+        data-back-image
+        href={editor.backImage.url}
+        x={backRect.x}
+        y={flipY(backRect.y + backRect.h)}
+        width={backRect.w}
+        height={backRect.h}
+        preserveAspectRatio="none"
+      />
+      {#if editor.imageSelected}
+        <rect
+          class="image-box"
+          x={backRect.x}
+          y={flipY(backRect.y + backRect.h)}
+          width={backRect.w}
+          height={backRect.h}
+        />
+        {#each Object.entries(backRectCorners(backRect)) as [id, corner] (id)}
+          <circle
+            class="image-handle"
+            data-image-handle={id}
+            cx={corner.x}
+            cy={flipY(corner.y)}
+            r={6 * handleScale}
+          />
+        {/each}
+      {/if}
+    {/if}
+    {#if editor.layers.guide}
       {#each guides as guide (guide.key)}
         <line
           class="guide"
@@ -355,7 +393,7 @@
         />
       {/each}
     {/if}
-    {#if editor.showGuides}
+    {#if editor.layers.guide}
       {#each guides as guide (guide.key)}
         {@const label = guideLabelPlacement(guide.key, guide.y, minX)}
         <text
@@ -430,13 +468,14 @@
         />
       {/if}
     {/if}
-    {#each instances as inst (inst.element)}
-      <path
-        class="component-instance"
-        class:component-selected={editor.selectedComponent === inst.element}
-        d={inst.d}
-      />
-    {/each}
+    {#if editor.layers.fore}
+      {#each instances as inst (inst.element)}
+        <path
+          class="component-instance"
+          class:component-selected={editor.selectedComponent === inst.element}
+          d={inst.d}
+        />
+      {/each}
     {#if d}<path class="outline" d={d} />{/if}
     {#if previewD}<path class="outline preview" d={previewD} />{/if}
 
@@ -589,6 +628,7 @@
         <line x1={pivot.x - 9 * handleScale} y1={flipY(pivot.y)} x2={pivot.x + 9 * handleScale} y2={flipY(pivot.y)} />
         <line x1={pivot.x} y1={flipY(pivot.y) - 9 * handleScale} x2={pivot.x} y2={flipY(pivot.y) + 9 * handleScale} />
       </g>
+    {/if}
     {/if}
     {#if editor.zoomBox}
       <rect

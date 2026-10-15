@@ -415,6 +415,29 @@
   stroke-width: 1;
 }
 
+.canvas-svg .back-image {
+  pointer-events: none;
+}
+
+.canvas-svg .image-box {
+  fill: none;
+  stroke: var(--accent);
+  stroke-dasharray: 4 3;
+  vector-effect: non-scaling-stroke;
+  pointer-events: none;
+}
+
+.canvas-svg .image-handle {
+  fill: var(--bg);
+  stroke: var(--accent);
+  vector-effect: non-scaling-stroke;
+  pointer-events: none;
+}
+
+.toolbox .layer-toggle:not(.active) .tool-label {
+  color: var(--muted);
+}
+
 .canvas-svg .guide.dashed {
   stroke-dasharray: 4 3;
 }

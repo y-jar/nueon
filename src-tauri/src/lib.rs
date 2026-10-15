@@ -254,6 +254,8 @@ pub fn run() {
             commands::phonology_apply_table,
             commands::writing_glyph_get,
             commands::writing_glyph_set,
+            commands::writing_back_image_import,
+            commands::writing_back_image_path,
             commands::writing_path_operation,
             commands::writing_export_svg,
             commands::writing_export_sprite,

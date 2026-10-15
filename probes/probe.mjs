@@ -6280,15 +6280,26 @@ async function main() {
     const info = await js(`return {
       groups: document.querySelectorAll('.toolbox .tool-group').length,
       seps: document.querySelectorAll('.toolbox .tool-sep').length,
-      tools: [...document.querySelectorAll('.toolbox .tool')].map((b) => [b.dataset.tool, b.title, !!b.querySelector('svg')]),
+      tools: [...document.querySelectorAll('.toolbox .tool[data-tool]')].map((b) => [b.dataset.tool, b.title, !!b.querySelector('svg')]),
+      layers: [...document.querySelectorAll('.toolbox .layer-toggle')].map((b) => [b.dataset.layer, b.getAttribute('aria-pressed'), !!b.querySelector('svg')]),
+      addImage: !!document.querySelector('.toolbox [data-action="back-image-add"]'),
     };`);
-    assertEqual(info.groups, 4, "four groups");
-    assertEqual(info.seps, 3, "separators between groups");
+    assertEqual(info.groups, 5, "five groups: the tools and the layers");
+    assertEqual(info.seps, 4, "separators between groups");
     assertEqual(info.tools.length, 10, "ten tools");
     for (const [id, title, icon] of info.tools) {
       if (!icon) throw new Error(`${id} has no icon`);
       if (!/\([A-Z]\)/.test(title)) throw new Error(`${id} tooltip lacks its shortcut: ${title}`);
     }
+    assertEqual(
+      JSON.stringify(info.layers.map((l) => [l[0], l[1]])),
+      JSON.stringify([["guide", "true"], ["back", "true"], ["fore", "true"]]),
+      "guide, back and fore toggles, all on",
+    );
+    for (const [, , icon] of info.layers) {
+      if (!icon) throw new Error("a layer toggle has no icon");
+    }
+    assertEqual(info.addImage, true, "the add-tracing-image button sits with the layers");
     await screenshot("p113-toolbox");
   });
 
@@ -7670,6 +7681,319 @@ async function main() {
     assertEqual(a.advance, 400, "ka's advance is back");
     assertEqual(t.advance, 250, "tu's advance is back: both glyphs undone in one step");
     await setMode(false);
+  });
+
+  // -- probes 171-: back layer, tracing images, layer visibility -----------
+
+  const SCAN_PNG = path.join(ROOT, "probe-scan.png");
+  fs.writeFileSync(
+    SCAN_PNG,
+    Buffer.from(
+      "iVBORw0KGgoAAAANSUhEUgAAAAIAAAABCAIAAAB7QOjdAAAADUlEQVR4nGP4z8AARAAI/gH/xp559wAAAABJRU5ErkJggg==",
+      "base64",
+    ),
+  );
+  const seedImageGlyph = async () => {
+    const mk = (id, name, order) => ({ id, name, codepoint: 0xe010 + order, phonemes: [], order, group: "" });
+    await writeGrid(
+      [mk("im-a", "ima", 0), mk("im-b", "imb", 1)],
+      [],
+      {
+        "im-a": { elements: [sq(50, 0, 300, 700)], advance: 400 },
+        "im-b": { elements: [sq(30, 0, 200, 500)], advance: 250 },
+      },
+    );
+    // Rules left by earlier probes can name glyphs this seed removed, which
+    // would block the font export; the image probes want none.
+    const cfg = await invokeAsync("config_get", { section: "writing" });
+    await invokeAsync("config_set", { section: "writing", value: { ...cfg, rules: [] } });
+    await reopenGrid();
+    await waitJs(`!!document.querySelector('.glyph-tile[data-kind="glyph"]')`, { label: "seeded tiles" });
+    await click('.glyph-tile[data-kind="glyph"]');
+    await waitJs(`!!document.querySelector('.canvas-svg')`, { label: "editor" });
+    await tool("v");
+  };
+  const storageToCanvas = (x, y) =>
+    js(`const v = document.querySelector('.canvas-svg').getAttribute('viewBox').split(' ').map(Number);
+      const r = document.querySelector('.canvas-svg').getBoundingClientRect();
+      return { fx: (${x} - v[0]) / v[2], fy: (${-y} - v[1]) / v[3] };`);
+  const importScan = (id = "im-a", force = false) =>
+    invokeAsync("writing_back_image_import", { id, path: SCAN_PNG, force });
+  // An earlier probe may have left a layer hidden; the drawing probes need
+  // all three visible, so set them straight before asserting on the canvas.
+  const ensureLayers = async () => {
+    for (const id of ["guide", "back", "fore"]) {
+      const on = await js(`return document.querySelector('[data-layer="${id}"]')?.getAttribute('aria-pressed');`);
+      if (on === "false") {
+        await js(`document.querySelector('[data-layer="${id}"]').click(); return true;`);
+      }
+    }
+  };
+  // The editor keeps its own copy of the outline: after an import through IPC,
+  // reopen the glyph so the freshly written file (and image) is picked up.
+  const reopenGlyph = async () => {
+    await js(`document.querySelector('.vector-editor .back')?.click(); return true;`);
+    await waitJs(`!document.querySelector('.canvas-svg') && !!document.querySelector('.glyph-tile[data-kind="glyph"]')`, { label: "grid back" });
+    await click('.glyph-tile[data-kind="glyph"]');
+    await waitJs(`!!document.querySelector('.canvas-svg')`, { label: "editor reopened" });
+    await tool("v");
+  };
+
+  await probe("171-layers-toggle-guide-back-fore-and-hidden-fore-blocks-edits", async () => {
+    await seedImageGlyph();
+    await ensureLayers();
+    const image = await importScan();
+    await reopenGlyph();
+    await ensureLayers();
+    assertEqual(image.asset, "probe-scan.png", "the imported asset name");
+    assertEqual(image.width, 1000, "fitted to the em box by default");
+    assertEqual(image.x, 500, "centred on the em box");
+    assertEqual(image.y, 300, "between ascender and descender");
+    await waitJs(`!!document.querySelector('[data-back-image]')`, { label: "the image is drawn" });
+    const drawn = await js(`const im = document.querySelector('[data-back-image]');
+      return [Number(im.getAttribute('x')), Number(im.getAttribute('y')), Number(im.getAttribute('width')), Number(im.getAttribute('height'))];`);
+    assertEqual(JSON.stringify(drawn), JSON.stringify([0, -550, 1000, 500]), "a 2:1 scan at the default placement, y flipped");
+    assertEqual(
+      await js(`return document.querySelector('[data-back-image]').getAttribute('href').startsWith('asset://') || document.querySelector('[data-back-image]').getAttribute('href').startsWith('http');`),
+      true,
+      "the webview URL comes from the backend's absolute path",
+    );
+
+    for (const id of ["guide", "back", "fore"]) {
+      assertEqual(
+        await js(`return document.querySelector('[data-layer="${id}"]')?.getAttribute('aria-pressed');`),
+        "true",
+        `the ${id} layer starts visible`,
+      );
+    }
+    await js(`document.querySelector('[data-layer="back"]').click(); return true;`);
+    await waitJs(`!document.querySelector('[data-back-image]')`, { label: "back layer hidden" });
+    await js(`document.querySelector('[data-layer="back"]').click(); return true;`);
+    await waitJs(`!!document.querySelector('[data-back-image]')`, { label: "back layer shown again" });
+
+    const guides = () => js(`return document.querySelectorAll('.canvas-svg .guide').length;`);
+    const guides0 = await guides();
+    await js(`document.querySelector('[data-layer="guide"]').click(); return true;`);
+    assertEqual(await guides(), 0, "guide rails hide");
+    await js(`document.querySelector('[data-layer="guide"]').click(); return true;`);
+    assertEqual(await guides(), guides0, "guide rails return");
+
+    await drawSquare();
+    const nodes = () => js(`return document.querySelectorAll('.glyph-node').length;`);
+    const nodes0 = await nodes();
+    const elements0 = (await invokeAsync("writing_glyph_get", { id: "im-a" })).elements.length;
+    await js(`document.querySelector('[data-layer="fore"]').click(); return true;`);
+    await waitJs(`!document.querySelector('.canvas-svg .outline')`, { label: "the drawing hides with the fore layer" });
+    assertEqual(await nodes(), 0, "nodes and handles hide too");
+    await tool("p");
+    await click1(0.4, 0.5);
+    await click1(0.6, 0.5);
+    await click1(0.6, 0.4);
+    const stored = await invokeAsync("writing_glyph_get", { id: "im-a" });
+    assertEqual(stored.elements.length, elements0, "a hidden fore layer accepts no edits");
+    await tool("v");
+    await js(`document.querySelector('[data-layer="fore"]').click(); return true;`);
+    await waitJs(`!!document.querySelector('.canvas-svg .outline')`, { label: "fore layer shown again" });
+    assertEqual(await nodes(), nodes0, "the drawing is back, untouched");
+
+    // The View menu offers the same three toggles.
+    await js(`const b = [...document.querySelectorAll('.menu-item')]
+      .find((x) => x.textContent.trim() === 'View'); if (!b) return false; b.click(); return true;`);
+    await waitJs(`!!document.querySelector('.menu-panel')`, { label: "view menu open" });
+    const labels = await js(`return [...document.querySelectorAll('.menu-panel button')].map((b) => b.textContent.trim());`);
+    if (!labels.some((l) => l.includes("Back layer")) || !labels.some((l) => l.includes("Fore layer"))) {
+      throw new Error(`the View menu lacks the layer toggles: ${JSON.stringify(labels)}`);
+    }
+    const openViewMenu = () =>
+      js(`const b = [...document.querySelectorAll('.menu-item')]
+        .find((x) => x.textContent.trim() === 'View'); if (!b) return false; b.click(); return true;`);
+    const clickLayerItem = () =>
+      js(`const b = [...document.querySelectorAll('.menu-panel button')]
+        .find((x) => x.textContent.trim().includes('Back layer')); if (!b) return false; b.click(); return true;`);
+    if (!(await clickLayerItem())) throw new Error("no Back layer item to click");
+    await waitJs(`!document.querySelector('[data-back-image]')`, { label: "the menu toggles the layer" });
+    // A menu closes after its item runs: open it again for the return trip.
+    if (!(await openViewMenu())) throw new Error("no View menu to reopen");
+    await waitJs(`!!document.querySelector('.menu-panel')`, { label: "view menu reopened" });
+    if (!(await clickLayerItem())) throw new Error("no Back layer item to click back");
+    await waitJs(`!!document.querySelector('[data-back-image]')`, { label: "and back" });
+    await pressKey("\uE00C");
+    await screenshot("p171-layers");
+  });
+
+  await probe("172-the-tracing-image-moves-and-scales-as-one-undo-step-each", async () => {
+    await seedImageGlyph();
+    await ensureLayers();
+    await importScan();
+    await reopenGlyph();
+    await ensureLayers();
+    await waitJs(`!!document.querySelector('[data-back-image]')`, { label: "image drawn" });
+
+    // Clicking the image selects it; its corner handles appear.
+    const centre = await storageToCanvas(500, 300);
+    await click1(centre.fx, centre.fy);
+    await waitJs(`document.querySelectorAll('[data-image-handle]').length === 4`, { label: "four corner handles" });
+    assertEqual(
+      await js(`return !!document.querySelector('.canvas-svg .image-box');`),
+      true,
+      "the selection box is drawn",
+    );
+
+    // Drag the body: both centres move by the drag delta.
+    const to = await storageToCanvas(700, 380);
+    const from = await storageToCanvas(500, 300);
+    await dragOnCanvas([from.fx, from.fy], [to.fx, to.fy]);
+    await idle(400);
+    let stored = await invokeAsync("writing_glyph_get", { id: "im-a" });
+    if (Math.abs(stored.back_image.x - 700) > 4 || Math.abs(stored.back_image.y - 380) > 4) {
+      throw new Error(`the image did not move to (700, 380): ${JSON.stringify(stored.back_image)}`);
+    }
+    await key("z", { ctrlKey: true });
+    await idle(400);
+    stored = await invokeAsync("writing_glyph_get", { id: "im-a" });
+    if (Math.abs(stored.back_image.x - 500) > 4 || Math.abs(stored.back_image.y - 300) > 4) {
+      throw new Error(`undo did not restore the placement: ${JSON.stringify(stored.back_image)}`);
+    }
+
+    // Drag the se corner: the opposite corner stays anchored, the aspect is kept.
+    const anchor = await storageToCanvas(0, 550);
+    const corner0 = await storageToCanvas(1000, 50);
+    const corner1 = await storageToCanvas(1500, -450);
+    await dragOnCanvas([corner0.fx, corner0.fy], [corner1.fx, corner1.fy]);
+    await idle(400);
+    stored = await invokeAsync("writing_glyph_get", { id: "im-a" });
+    const width = stored.back_image.width;
+    const expected = Math.hypot(1500 - 0, -450 - 550) / Math.sqrt(1 + 1 / 4);
+    if (Math.abs(width - expected) > 6) {
+      throw new Error(`the corner drag scaled to ${width}, want ~${Math.round(expected)} (aspect 2 kept)`);
+    }
+    if (Math.abs(stored.back_image.x - (width / 2 + 0)) > 6 || Math.abs(stored.back_image.y - (550 - width / 4)) > 6) {
+      throw new Error(`the nw corner did not stay anchored: ${JSON.stringify(stored.back_image)}`);
+    }
+    await key("z", { ctrlKey: true });
+    await idle(400);
+    stored = await invokeAsync("writing_glyph_get", { id: "im-a" });
+    if (Math.abs(stored.back_image.width - 1000) > 4) {
+      throw new Error(`undo did not restore the width: ${JSON.stringify(stored.back_image)}`);
+    }
+    await screenshot("p172-image-drag");
+  });
+
+  await probe("173-clearing-and-deleting-sweep-the-asset-only-when-unreferenced", async () => {
+    await seedImageGlyph();
+    await ensureLayers();
+    await importScan();
+    await reopenGlyph();
+    await ensureLayers();
+    await waitJs(`!!document.querySelector('[data-back-image]')`, { label: "image drawn" });
+
+    // Delete on the selected image clears the reference; undo restores it; the
+    // asset file stays (only deleting the glyph sweeps it).
+    const centre = await storageToCanvas(500, 300);
+    await click1(centre.fx, centre.fy);
+    await waitJs(`document.querySelectorAll('[data-image-handle]').length === 4`, { label: "image selected" });
+    await key("Delete");
+    await waitJs(`!document.querySelector('[data-back-image]')`, { label: "image cleared" });
+    await idle(400);
+    let stored = await invokeAsync("writing_glyph_get", { id: "im-a" });
+    assertEqual(stored.back_image ?? null, null, "the file holds no reference");
+    assertEqual(fs.existsSync(path.join(WORKSPACE, "writing", "assets", "probe-scan.png")), true, "the asset file survives a clear");
+    await key("z", { ctrlKey: true });
+    await waitJs(`!!document.querySelector('[data-back-image]')`, { label: "undo restored the image" });
+    assertEqual(fs.existsSync(path.join(WORKSPACE, "writing", "assets", "probe-scan.png")), true, "still there after undo");
+
+    // A second glyph sharing the same bytes shares the one asset file.
+    await importScan("im-b");
+    const b = await invokeAsync("writing_glyph_get", { id: "im-b" });
+    assertEqual(b.back_image.asset, "probe-scan.png", "identical bytes dedupe to one file");
+    assertEqual(fs.readdirSync(path.join(WORKSPACE, "writing", "assets")).length, 1, "one asset on disk");
+
+    // Deleting im-a through the app's own config path sweeps its outline but
+    // keeps the shared asset; deleting im-b too sweeps the file.
+    const cfg = await invokeAsync("config_get", { section: "writing" });
+    await invokeAsync("config_set", {
+      section: "writing",
+      value: { ...cfg, glyphs: cfg.glyphs.filter((g) => g.id !== "im-a") },
+    });
+    await idle(400);
+    assertEqual(fs.existsSync(path.join(WORKSPACE, "writing", "glyphs", "im-a")), false, "the outline file is swept");
+    assertEqual(fs.existsSync(path.join(WORKSPACE, "writing", "assets", "probe-scan.png")), true, "im-b still references the asset");
+    const cfg2 = await invokeAsync("config_get", { section: "writing" });
+    await invokeAsync("config_set", {
+      section: "writing",
+      value: { ...cfg2, glyphs: cfg2.glyphs.filter((g) => g.id !== "im-b") },
+    });
+    await idle(400);
+    assertEqual(fs.existsSync(path.join(WORKSPACE, "writing", "assets", "probe-scan.png")), false, "the last reference is gone");
+    assertEqual(glyphFiles().includes("im-b"), false, "both outline files are swept");
+  });
+
+  await probe("174-the-tracing-image-rejects-other-formats-and-warns-above-10-mb", async () => {
+    await seedImageGlyph();
+    const rejected = async (file, why) => {
+      try {
+        await invokeAsync("writing_back_image_import", { id: "im-a", path: file, force: false });
+        throw new Error(`${why}: the import unexpectedly succeeded`);
+      } catch (e) {
+        if (!/png, jpg or webp|too large/.test(String(e))) {
+          throw new Error(`${why}: unexpected rejection ${String(e)}`);
+        }
+        return String(e);
+      }
+    };
+    const textFile = path.join(ROOT, "probe-scan.txt");
+    fs.writeFileSync(textFile, "not an image");
+    const msg = await rejected(textFile, "a text file");
+    if (!/png, jpg or webp/.test(msg)) throw new Error(`wrong reason: ${msg}`);
+    const svgFile = path.join(ROOT, "probe-scan.svg");
+    fs.writeFileSync(svgFile, "<svg xmlns='http://www.w3.org/2000/svg'/>");
+    await rejected(svgFile, "an svg is deferred");
+
+    const head = fs.readFileSync(SCAN_PNG);
+    const huge = Buffer.concat([head, Buffer.alloc(10 * 1024 * 1024 + 1)]);
+    const hugeFile = path.join(ROOT, "probe-huge.png");
+    fs.writeFileSync(hugeFile, huge);
+    const big = await rejected(hugeFile, "a file above 10 MB");
+    if (!/too large/.test(big)) throw new Error(`wrong reason: ${big}`);
+    const forced = await invokeAsync("writing_back_image_import", { id: "im-a", path: hugeFile, force: true });
+    assertEqual(forced.asset, "probe-huge.png", "force imports it anyway");
+    // The glyph file stores the reference, never the bytes.
+    const glyphJson = fs.readFileSync(path.join(WORKSPACE, "writing", "glyphs", "im-a"), "utf8");
+    assertEqual(glyphJson.includes('"back_image"'), true, "the glyph file holds the reference");
+    assertEqual(glyphJson.includes("/"), false, "only the bare asset name, never a path");
+    const after = fs.statSync(path.join(WORKSPACE, "writing", "glyphs", "im-a")).size;
+    assertEqual(after < 2048, true, "a 10 MB asset did not leak into the glyph file");
+    await screenshot("p174-guards");
+  });
+
+  await probe("175-the-font-key-and-the-exported-bytes-ignore-the-back-image", async () => {
+    await seedImageGlyph();
+    await js(`document.querySelector('.vector-editor .back')?.click(); return true;`);
+    await waitJs(`!!document.querySelector('[data-page="preview"]')`, { label: "back at the grid" });
+    await js(`document.querySelector('[data-page="preview"]').click(); return true;`);
+    await waitJs(`!!document.querySelector('[data-testid="type-preview"]')`, { label: "preview open" });
+    await typeInPreview("\ue010\ue011");
+    await idle(600);
+    const key0 = await js(`return document.querySelector('[data-testid="preview-scroll"]').dataset.key;`);
+    const export0 = path.join(ROOT, "probe-font-0.ttf");
+    await invokeAsync("writing_export_font", { path: export0 });
+    assertEqual(fs.existsSync(export0), true, "the first export landed");
+
+    // The import itself happens through IPC, then the revision bump the
+    // backend fires makes the preview re-shape (probe 166 covers that path).
+    await importScan();
+    await idle(900);
+    const key1 = await js(`return document.querySelector('[data-testid="preview-scroll"]').dataset.key;`);
+    assertEqual(key1, key0, "the preview's font key is unchanged by editor-only material");
+    const export1 = path.join(ROOT, "probe-font-1.ttf");
+    await invokeAsync("writing_export_font", { path: export1 });
+    assertEqual(
+      fs.readFileSync(export1).equals(fs.readFileSync(export0)),
+      true,
+      "the exported TTF is byte-identical with a tracing image set",
+    );
+    const check = await invokeAsync("writing_validate_font", {});
+    assertEqual(check.some((i) => i.severity === "error"), false, "no export blocker appeared");
   });
 }
 

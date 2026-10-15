@@ -132,6 +132,20 @@ import {
   isOpenEndpoint,
   type SnapResult,
 } from "./writingSnap";
+import {
+  backImageRect,
+  backRectCorners,
+  DEFAULT_LAYERS,
+  editsBlocked,
+  rectContains,
+  scaleByCorner,
+  toggleLayer as flipLayer,
+  type CornerId,
+  type LayerId,
+} from "./writingLayers";
+import { confirmDialog } from "./feedback.svelte";
+import { convertFileSrc } from "@tauri-apps/api/core";
+import { open as openDialog } from "@tauri-apps/plugin-dialog";
 
 /** The live editor state, shared by the toolbox, canvas, menus and panels. */
 export const editor = $state({
@@ -156,7 +170,12 @@ export const editor = $state({
   guideMetrics: { ascender: 800, descender: -200, advance: 600 },
   snap: false,
   grid: 10,
-  showGuides: true,
+  /** Layer visibility: guide rails, the back layer, the fore layer. */
+  layers: { ...DEFAULT_LAYERS },
+  /** The loaded back image: a webview URL and its natural aspect ratio. */
+  backImage: null as { url: string; aspect: number } | null,
+  /** Whether the back image (not a contour) is the selected thing. */
+  imageSelected: false,
   showAllHandles: false,
   /** Clean spots offered on the hovered line in Node Mod while Shift is held. */
   spots: [] as Spot[],
@@ -227,6 +246,8 @@ let drag:
   | { kind: "shape"; from: Point }
   | { kind: "pan"; x: number; y: number }
   | { kind: "bearing"; line: BearingLine; base: api.GlyphOutline; moved: boolean }
+  | { kind: "image-move"; base: api.GlyphOutline; from: Point; moved: boolean }
+  | { kind: "image-scale"; corner: CornerId; base: api.GlyphOutline; moved: boolean }
   | { kind: "zoombox"; from: Point; screen: Point }
   | { kind: "elements-move"; origin: Point; last: Point; moved: boolean }
   | TransformDrag
@@ -273,6 +294,8 @@ export function openGlyph(id: string, meta: api.GlyphMeta): void {
   editor.library = {};
   editor.draft = null;
   editor.preview = null;
+  editor.imageSelected = false;
+  editor.backImage = null;
   drag = null;
   resetHistory();
   void loadOutline(id).then(fitGlyph);
@@ -290,6 +313,8 @@ export function closeGlyph(): void {
   editor.library = {};
   editor.draft = null;
   editor.preview = null;
+  editor.imageSelected = false;
+  editor.backImage = null;
   drag = null;
   resetHistory();
 }
@@ -297,15 +322,80 @@ export function closeGlyph(): void {
 export async function loadOutline(id: string): Promise<void> {
   editor.loading = true;
   try {
-    editor.outline = (await api.writingGlyphGet(id)) ?? emptyOutline();
+    const outline = (await api.writingGlyphGet(id)) ?? emptyOutline();
+    editor.outline = outline;
+    // Read the stored value back: a deep `$state` proxy wraps the assigned
+    // object, and the sync's generation token must be the same proxy that
+    // `editor.outline` reads back (see `refreshLibrary`'s check).
+    const stored = editor.outline;
     editor.draft = null;
     editor.error = "";
+    void syncBackImage(id, stored);
     await refreshLibrary();
   } catch (e) {
     editor.error = String(e);
   } finally {
     editor.loading = false;
   }
+}
+
+/**
+ * Load the back image's URL and aspect ratio for the outline just loaded. The
+ * outline identity is the generation token: a load that started before a
+ * newer one never writes the display state (see `standards.md`).
+ */
+async function syncBackImage(id: string, outline: api.GlyphOutline): Promise<void> {
+  if (!outline.back_image) {
+    if (editor.outline === outline) editor.backImage = null;
+    return;
+  }
+  try {
+    const absolute = await api.writingBackImagePath(id);
+    if (editor.outline !== outline || !absolute) return;
+    const url = convertFileSrc(absolute);
+    const aspect = await imageAspect(url);
+    if (editor.outline !== outline) return;
+    editor.backImage = { url, aspect };
+  } catch {
+    if (editor.outline === outline) editor.backImage = null;
+  }
+}
+
+/** The natural aspect ratio of an image file, as width over height. */
+function imageAspect(url: string): Promise<number> {
+  return new Promise((resolve, reject) => {
+    const image = new Image();
+    image.onload = () => resolve(image.naturalWidth / image.naturalHeight || 1);
+    image.onerror = () => reject(new Error("tracing image failed to load"));
+    image.src = url;
+  });
+}
+
+/** The back image's on-canvas rectangle, or null when it cannot be drawn. */
+export function currentBackRect() {
+  if (!editor.outline?.back_image || !editor.backImage) return null;
+  return backImageRect(editor.outline.back_image, editor.backImage.aspect);
+}
+
+/** Whether a pointer press lands on the back image. */
+function hitBackImage(raw: Point): boolean {
+  if (!editor.layers.back) return false;
+  const rect = currentBackRect();
+  return rect !== null && rectContains(rect, raw);
+}
+
+/** Whether a pointer press lands on a corner handle of the selected image. */
+function hitImageHandle(raw: Point): CornerId | null {
+  if (!editor.imageSelected) return null;
+  const rect = currentBackRect();
+  if (!rect) return null;
+  const corners = backRectCorners(rect);
+  const radius = NODE_RADIUS / editor.zoom;
+  for (const id of ["nw", "ne", "se", "sw"] as const) {
+    const corner = corners[id];
+    if (Math.hypot(corner.x - raw.x, corner.y - raw.y) <= radius) return id;
+  }
+  return null;
 }
 
 /** Load the outlines of every glyph the open glyph references, transitively. */
@@ -471,8 +561,8 @@ export function toggleSnap(): void {
   editor.snap = !editor.snap;
 }
 
-export function toggleGuides(): void {
-  editor.showGuides = !editor.showGuides;
+export function toggleLayer(which: LayerId): void {
+  editor.layers = flipLayer(editor.layers, which);
 }
 
 export function toggleCompose(): void {
@@ -855,12 +945,17 @@ export function pointerDown(raw: Point, mods: Modifiers): void {
   if (!editor.outline) return;
   const outline = editor.outline;
   const radius = NODE_RADIUS / editor.zoom;
+  const tool = effectiveTool();
+  // With the fore layer hidden nothing on it may be edited (or selected
+  // blind); the view tools and the back image stay available.
+  const blocked = editsBlocked(editor.layers, tool);
   editor.snapHit = null;
   editor.gestureFrom = { x: Math.round(raw.x), y: Math.round(raw.y) };
 
   if (
     mods.button !== 1 &&
-    (effectiveTool() === "select" || effectiveTool() === "direct") &&
+    !blocked &&
+    (tool === "select" || tool === "direct") &&
     !mods.alt
   ) {
     const line = hitBearingLine(outline, raw, editor.zoom, lookupGlyph);
@@ -873,59 +968,96 @@ export function pointerDown(raw: Point, mods: Modifiers): void {
     }
   }
 
-  if (mods.button === 1 || effectiveTool() === "hand") {
+  if (mods.button === 1 || tool === "hand") {
     if (mods.screen) drag = { kind: "pan", x: mods.screen.x, y: mods.screen.y };
     return;
   }
 
-  switch (effectiveTool()) {
+  if (blocked && tool !== "select" && tool !== "direct") {
+    say("show the Fore layer to edit");
+    return;
+  }
+
+  // The pointer tools reach the back image once nothing on the fore layer
+  // (or a corner handle of the selected image) takes the click first.
+  const startImageGesture = (theOutline: api.GlyphOutline): boolean => {
+    const handle = hitImageHandle(raw);
+    if (handle) {
+      editor.selection = [];
+      setElements([]);
+      history = pushHistory(history, theOutline);
+      syncHistoryFlags();
+      drag = { kind: "image-scale", corner: handle, base: theOutline, moved: false };
+      return true;
+    }
+    if (hitBackImage(raw)) {
+      editor.selection = [];
+      setElements([]);
+      editor.selectedComponent = null;
+      editor.imageSelected = true;
+      history = pushHistory(history, theOutline);
+      syncHistoryFlags();
+      drag = { kind: "image-move", base: theOutline, from: raw, moved: false };
+      return true;
+    }
+    return false;
+  };
+
+  switch (tool) {
     case "select": {
       const lookup = lookupGlyph;
-      const box = currentTransformBox();
-      if (box && editor.elements.length > 0) {
-        const pivot = currentPivot() ?? boxCentre(box);
-        const handle = hitTransformHandle(box, pivot, raw, 1 / editor.zoom);
-        if (handle) {
-          if (handle.kind === "pivot") {
-            drag = { kind: "pivot", box };
-          } else {
-            drag = {
-              kind: "transform",
-              handle,
-              box,
-              pivot,
-              start: raw,
-              base: outline,
-              indexes: [...editor.elements],
-            };
-            editor.liveMatrix = IDENTITY;
+      if (!blocked) {
+        const box = currentTransformBox();
+        if (box && editor.elements.length > 0) {
+          const pivot = currentPivot() ?? boxCentre(box);
+          const handle = hitTransformHandle(box, pivot, raw, 1 / editor.zoom);
+          if (handle) {
+            if (handle.kind === "pivot") {
+              drag = { kind: "pivot", box };
+            } else {
+              drag = {
+                kind: "transform",
+                handle,
+                box,
+                pivot,
+                start: raw,
+                base: outline,
+                indexes: [...editor.elements],
+              };
+              editor.liveMatrix = IDENTITY;
+            }
+            return;
+          }
+        }
+        const hit = hitElement(outline, radius, raw, lookup);
+        if (hit !== null) {
+          editor.selection = [];
+          editor.imageSelected = false;
+          const nextSel = mods.shift
+            ? toggleElement(editor.elements, hit)
+            : editor.elements.includes(hit)
+              ? editor.elements
+              : selectOnly(hit);
+          if (nextSel.join() !== editor.elements.join()) setElements(nextSel);
+          if (editor.elements.includes(hit)) {
+            history = pushHistory(history, outline);
+            syncHistoryFlags();
+            drag = { kind: "elements-move", origin: raw, last: raw, moved: false };
           }
           return;
         }
       }
-      const hit = hitElement(outline, radius, raw, lookup);
-      if (hit !== null) {
-        editor.selection = [];
-        const nextSel = mods.shift
-          ? toggleElement(editor.elements, hit)
-          : editor.elements.includes(hit)
-            ? editor.elements
-            : selectOnly(hit);
-        if (nextSel.join() !== editor.elements.join()) setElements(nextSel);
-        if (editor.elements.includes(hit)) {
-          history = pushHistory(history, outline);
-          syncHistoryFlags();
-          drag = { kind: "elements-move", origin: raw, last: raw, moved: false };
-        }
-      } else {
-        if (!mods.shift) setElements([]);
-        drag = { kind: "elements-marquee", from: raw, additive: mods.shift };
-        editor.marquee = { a: raw, b: raw };
+      if (startImageGesture(outline)) return;
+      if (blocked) {
+        say("show the Fore layer to edit");
+        return;
       }
+      if (!mods.shift) setElements([]);
+      editor.imageSelected = false;
+      drag = { kind: "elements-marquee", from: raw, additive: mods.shift };
+      editor.marquee = { a: raw, b: raw };
       return;
     }
-    case "hand":
-      return;
     case "zoom": {
       if (mods.screen) {
         drag = { kind: "zoombox", from: raw, screen: mods.screen };
@@ -976,8 +1108,11 @@ export function pointerDown(raw: Point, mods: Modifiers): void {
       return;
     }
     case "direct": {
-      const target = hitTarget(outline, editor.selection, raw, editor.zoom, editor.showAllHandles);
+      const target = blocked
+        ? null
+        : hitTarget(outline, editor.selection, raw, editor.zoom, editor.showAllHandles);
       editor.selectedComponent = null;
+      if (target) editor.imageSelected = false;
       if (target?.kind === "handle") {
         history = pushHistory(history, outline);
         syncHistoryFlags();
@@ -1029,14 +1164,17 @@ export function pointerDown(raw: Point, mods: Modifiers): void {
         };
         return;
       }
-      const component = hitComponent(raw);
+      const component = blocked ? null : hitComponent(raw);
       if (component !== null) {
         editor.selection = [];
         editor.selectedComponent = component;
+        editor.imageSelected = false;
         say("component selected");
         return;
       }
+      if (startImageGesture(outline)) return;
       if (!mods.shift) editor.selection = [];
+      editor.imageSelected = false;
       drag = { kind: "marquee", from: raw, additive: mods.shift };
       editor.marquee = { a: raw, b: raw };
       return;
@@ -1161,6 +1299,35 @@ export function pointerMove(raw: Point, mods: Modifiers): void {
   if (drag && drag.kind === "bearing") {
     editor.outline = dragBearing(drag.base, drag.line, raw.x, editor.snap, editor.grid, lookupGlyph);
     drag.moved = true;
+    return;
+  }
+  if (drag && drag.kind === "image-move") {
+    const image = drag.base.back_image;
+    if (image) {
+      editor.outline = {
+        ...drag.base,
+        back_image: {
+          ...image,
+          x: image.x + (raw.x - drag.from.x),
+          y: image.y + (raw.y - drag.from.y),
+        },
+      };
+      drag.moved = true;
+    }
+    return;
+  }
+  if (drag && drag.kind === "image-scale") {
+    const image = drag.base.back_image;
+    if (image && editor.backImage) {
+      editor.outline = {
+        ...drag.base,
+        back_image: {
+          ...image,
+          ...scaleByCorner(image, drag.corner, raw, editor.backImage.aspect),
+        },
+      };
+      drag.moved = true;
+    }
     return;
   }
   if (!drag && (effectiveTool() === "select" || effectiveTool() === "direct")) {
@@ -1388,6 +1555,11 @@ export function pointerUp(raw: Point, mods: Modifiers): void {
     if (finished.moved) void saveOutline();
     return;
   }
+  if (finished.kind === "image-move" || finished.kind === "image-scale") {
+    if (!finished.moved) editor.outline = finished.base;
+    else void saveOutline();
+    return;
+  }
   if (finished.kind === "pivot") return;
   if (finished.kind === "transform") {
     const m = editor.liveMatrix;
@@ -1588,7 +1760,60 @@ export function cancelGesture(): void {
   editor.liveMatrix = null;
   editor.snapHit = null;
   editor.preview = null;
+  editor.imageSelected = false;
   finishPath();
+}
+
+/**
+ * Pick a tracing image, import it through the backend (which dedupes the
+ * bytes into `writing/assets/`), and set it as the glyph's back image. A file
+ * above the backend's limit is only imported after a warning is confirmed.
+ */
+export async function addBackImage(): Promise<void> {
+  const id = editor.openGlyphId;
+  const outline = editor.outline;
+  if (!id || !outline) return;
+  const picked = await openDialog({
+    multiple: false,
+    filters: [{ name: "Images", extensions: ["png", "jpg", "jpeg", "webp"] }],
+  });
+  if (typeof picked !== "string") return;
+  const importImage = (force: boolean) => api.writingBackImageImport(id, picked, force);
+  let image: api.BackImage;
+  try {
+    image = await importImage(false);
+  } catch (e) {
+    const message = String(e);
+    if (!/too large/i.test(message)) {
+      editor.error = message;
+      return;
+    }
+    const confirmed = await confirmDialog({
+      title: "Large tracing image",
+      message: "The file is larger than 10 MB. Import it anyway?",
+      confirmLabel: "Import",
+    });
+    if (!confirmed) return;
+    try {
+      image = await importImage(true);
+    } catch (e2) {
+      editor.error = String(e2);
+      return;
+    }
+  }
+  const next = { ...outline, back_image: image };
+  commit(next, "tracing image added");
+  editor.imageSelected = true;
+  if (editor.outline) await syncBackImage(id, editor.outline);
+}
+
+/** Remove the glyph's back image reference as one undoable edit. The asset
+ * file itself stays until the glyph is deleted, so an undo restores it. */
+export function clearBackImage(): void {
+  const outline = editor.outline;
+  if (!outline?.back_image) return;
+  editor.imageSelected = false;
+  commit({ ...outline, back_image: null }, "tracing image removed");
 }
 
 export async function exportGlyphSvg(): Promise<string | null> {

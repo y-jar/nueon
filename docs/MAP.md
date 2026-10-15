@@ -153,6 +153,7 @@ and regenerate.
 - `writingForms.ts` — Pure helpers for a glyph's positional forms (initial, medial, final).
 - `writingGrid.ts` — Pure logic for the glyph grid: cells, filters, progress, cell geometry and the virtual window.
 - `writingInfo.ts` — Pure helpers for the editor's visual language: guide labels, the info bar, contour direction.
+- `writingLayers.ts` — Back-layer and layer-visibility maths for the vector editor, pure so it can
 - `writingMenus.ts` — Pure menu definitions for the vector editor's menu bar.
 - `writingNodeType.ts` — Setting a node's type (corner, smooth, symmetric), growing handles when it has none.
 - `writingRules.ts` — Pure helpers for editing orthography rules in the writing tab.

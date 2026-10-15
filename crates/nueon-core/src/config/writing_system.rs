@@ -72,6 +72,20 @@ pub enum OutlineElement {
     Component(ComponentInstance),
 }
 
+/// A tracing image on the back layer of a glyph. The file lives in
+/// `writing/assets/`; only its name is stored here, never a path. It is
+/// editor-only material: no font an export writes ever contains it.
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+pub struct BackImage {
+    /// File name inside `writing/assets/`, as the importer wrote it.
+    pub asset: String,
+    /// Drawn width in font units; the height follows the file's aspect ratio.
+    pub width: f64,
+    /// Centre of the image in font units, y up.
+    pub x: f64,
+    pub y: f64,
+}
+
 /// A glyph's vector data, stored one-per-file in `writing/glyphs/<id>.json`.
 #[derive(Debug, Clone, Default, PartialEq, Serialize, Deserialize)]
 #[serde(default)]
@@ -85,6 +99,37 @@ pub struct GlyphOutline {
     pub lsb: Option<f64>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub rsb: Option<f64>,
+    /// Tracing image on the back layer; never part of an exported font.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub back_image: Option<BackImage>,
+}
+
+/// A file name as `import_asset` writes it: one plain name, no separators.
+fn valid_asset_name(name: &str) -> bool {
+    !name.is_empty()
+        && name != "."
+        && name != ".."
+        && name
+            .chars()
+            .all(|c| c.is_ascii_alphanumeric() || matches!(c, '_' | '.' | '-' | ' '))
+        && !name.starts_with('.')
+}
+
+/// Validate a back image's reference and placement.
+pub fn validate_back_image(image: &BackImage) -> Result<(), String> {
+    if !valid_asset_name(&image.asset) {
+        return Err(format!("unsafe back-image asset name: {image:?}"));
+    }
+    if !image.width.is_finite() || image.width <= 0.0 {
+        return Err(format!(
+            "back-image width must be positive: {}",
+            image.width
+        ));
+    }
+    if !image.x.is_finite() || !image.y.is_finite() {
+        return Err("non-finite back-image placement".to_string());
+    }
+    Ok(())
 }
 
 /// One glyph's identity and mapping, held in `config/writing`.
@@ -191,6 +236,9 @@ impl Default for WritingConfig {
 /// Reject an outline whose coordinates are not finite. Returns a description of
 /// the first offending value, or `Ok` when the outline is clean.
 pub fn validate_outline(outline: &GlyphOutline) -> Result<(), String> {
+    if let Some(image) = &outline.back_image {
+        validate_back_image(image)?;
+    }
     for element in &outline.elements {
         match element {
             OutlineElement::Contour(contour) => {
@@ -668,6 +716,7 @@ mod tests {
 
     fn glyph(elements: Vec<OutlineElement>) -> GlyphOutline {
         GlyphOutline {
+            back_image: None,
             elements,
             advance: None,
             lsb: None,

@@ -942,10 +942,32 @@ export interface GlyphOutline {
   advance?: number | null;
   lsb?: number | null;
   rsb?: number | null;
+  /** Tracing image on the back layer; never part of an exported font. */
+  back_image?: BackImage | null;
+}
+
+/** A tracing image on the back layer of one glyph: a file in `writing/assets/`. */
+export interface BackImage {
+  /** File name inside `writing/assets/`; never an absolute path. */
+  asset: string;
+  /** Drawn width in font units; the height follows the file's aspect ratio. */
+  width: number;
+  /** Centre of the image in font units, y up. */
+  x: number;
+  y: number;
 }
 
 export const writingGlyphGet = (id: string): Promise<GlyphOutline | null> =>
   invoke("writing_glyph_get", { id });
+export const writingBackImageImport = (
+  id: string,
+  path: string,
+  force = false,
+): Promise<BackImage> => invoke("writing_back_image_import", { id, path, force });
+
+export const writingBackImagePath = (id: string): Promise<string | null> =>
+  invoke("writing_back_image_path", { id });
+
 export const writingGlyphSet = (
   id: string,
   outline: GlyphOutline,

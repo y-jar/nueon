@@ -45,7 +45,7 @@
     setSelectedKind,
     shearSelection,
     toggleCompose,
-    toggleGuides,
+    toggleLayer,
     toggleSnap,
     undo,
   } from "../lib/writingEditor.svelte";
@@ -81,7 +81,9 @@
     hasElements: editor.elements.length > 0,
     allHandles: editor.showAllHandles,
     snap: editor.snap,
-    guides: editor.showGuides,
+    guides: editor.layers.guide,
+    back: editor.layers.back,
+    fore: editor.layers.fore,
     hasGlyph: editor.openGlyphId !== null,
   });
 
@@ -187,7 +189,9 @@
       case "node-smooth": return setSelectedKind("smooth");
       case "node-symmetric": return setSelectedKind("symmetric");
       case "toggle-snap": return toggleSnap();
-      case "toggle-guides": return toggleGuides();
+      case "toggle-guides": return toggleLayer("guide");
+      case "toggle-back": return toggleLayer("back");
+      case "toggle-fore": return toggleLayer("fore");
       case "node-kind": return cycleSelectedKind();
       case "component-expand": return expandSelectedComponent();
       case "node-join": return joinNodes();

@@ -205,6 +205,12 @@ layer (`src-tauri/`), and the Svelte 5 frontend (`src/`). See `docs/ARCHITECTURE
   a type preview (text set in the script, shaped by the same font the export
   writes, 12 to 300 px, typed text / lexicon words / all glyphs / pairs, metric
   lines and advance boxes, and a gap drag that edits the neighbouring bearings),
+  layers (guide/back/fore visibility toggles in the toolbox and View menu; a
+  tracing image per glyph imported into `writing/assets/`, placed in font units,
+  selected, moved and corner-scaled with the aspect kept, one undo step per
+  gesture, cleared by Delete with the file kept for undo, swept when the glyph
+  is deleted, never in the font, the key or the export; a hidden fore layer
+  blocks editing),
   spacing (derived bearings, draggable bearing lines in the editor, a grid
   Spacing mode with a test-pair popover, copy-from and batch bearings, undo),
   Shift snapping (alignment with other nodes, 45/135 degree lines, clean node spots
@@ -287,7 +293,10 @@ layer (`src-tauri/`), and the Svelte 5 frontend (`src/`). See `docs/ARCHITECTURE
   in `writing.test.ts`, `writingTransform.test.ts` (matrix order, scale/rotate/skew about a pivot,
   Shift/Alt, handle hit rules, component folding, dialog order, copy) and
   `writingNodeType.test.ts` (handle growth, symmetric/smooth lengths, open ends),
-  both mutation-checked, `typePreview.test.ts` (size range, placement and wrapping, sample text, gap hit
+  both mutation-checked, `writingLayers.test.ts` (layer toggles, the
+  hidden-fore edit block, the image rectangle, corner hits, corner scaling
+  with the anchor and aspect and the min clamp; every mutation caught),
+  `typePreview.test.ts` (size range, placement and wrapping, sample text, gap hit
   and drag; mutation-checked), Rust tests for `shape.rs` (cross-checked with
   `hb-shape`), the preview font equalling the exported font, the font key and the
   preview cache, and `writingSpacing.test.ts` (bearings from ink, left/right/advance edits, line hit

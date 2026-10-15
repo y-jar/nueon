@@ -1070,6 +1070,7 @@ fn glyph_outlines_save_and_load_atomically() {
     let ws = Workspace::new(dir.path()).unwrap();
 
     let outline = GlyphOutline {
+        back_image: None,
         elements: vec![OutlineElement::Contour(Contour {
             nodes: vec![
                 Node {
@@ -1111,12 +1112,14 @@ fn saving_a_glyph_rejects_component_cycles() {
     let ws = Workspace::new(dir.path()).unwrap();
 
     let empty = GlyphOutline {
+        back_image: None,
         elements: vec![],
         advance: None,
         lsb: None,
         rsb: None,
     };
     let component = |glyph: &str| GlyphOutline {
+        back_image: None,
         elements: vec![OutlineElement::Component(ComponentInstance {
             glyph: glyph.to_string(),
             dx: 0.0,
@@ -1148,6 +1151,7 @@ fn flatten_glyph_expands_components_with_transforms() {
     let ws = Workspace::new(dir.path()).unwrap();
 
     let square = |x: f64, y: f64| GlyphOutline {
+        back_image: None,
         elements: vec![OutlineElement::Contour(Contour {
             nodes: vec![
                 Node {
@@ -1189,6 +1193,7 @@ fn flatten_glyph_expands_components_with_transforms() {
 
     ws.save_glyph("b", &square(0.0, 0.0)).unwrap();
     let composite = GlyphOutline {
+        back_image: None,
         elements: vec![OutlineElement::Component(ComponentInstance {
             glyph: "b".into(),
             dx: 50.0,
@@ -1255,6 +1260,7 @@ fn apply_pathfinder_union_merges_contours() {
     ws.save_glyph(
         "g",
         &GlyphOutline {
+            back_image: None,
             elements: vec![
                 OutlineElement::Contour(square(0.0, 0.0)),
                 OutlineElement::Contour(square(50.0, 0.0)),
@@ -2138,6 +2144,7 @@ fn svg_export_and_import_round_trip_a_glyph() {
     ws.save_glyph(
         "g",
         &GlyphOutline {
+            back_image: None,
             elements: vec![OutlineElement::Contour(Contour {
                 nodes: vec![corner(0.0, 0.0), corner(100.0, 0.0), corner(100.0, 100.0)],
                 closed: true,
@@ -2212,6 +2219,7 @@ fn the_writing_system_compiles_to_a_valid_font() {
     ws.save_glyph(
         "base",
         &GlyphOutline {
+            back_image: None,
             elements: vec![OutlineElement::Contour(square(300.0))],
             advance: Some(400.0),
             lsb: None,
@@ -2223,6 +2231,7 @@ fn the_writing_system_compiles_to_a_valid_font() {
     ws.save_glyph(
         "composed",
         &GlyphOutline {
+            back_image: None,
             elements: vec![OutlineElement::Component(ComponentInstance {
                 glyph: "base".into(),
                 dx: 100.0,
@@ -2293,6 +2302,7 @@ fn the_font_validation_report_names_problems_and_blocks_only_on_errors() {
         ws.save_glyph(
             id,
             &GlyphOutline {
+                back_image: None,
                 elements: vec![element],
                 ..GlyphOutline::default()
             },
@@ -2372,6 +2382,7 @@ fn orthography_rules_become_gsub_and_bad_rules_are_reported() {
     ws.save_glyph(
         "ka",
         &GlyphOutline {
+            back_image: None,
             elements: vec![OutlineElement::Contour(Contour {
                 nodes: vec![
                     corner(0.0, 0.0),
@@ -2463,6 +2474,7 @@ fn preview_workspace() -> (tempfile::TempDir, Workspace) {
         ws.save_glyph(
             id,
             &GlyphOutline {
+                back_image: None,
                 elements: vec![OutlineElement::Contour(Contour {
                     nodes: vec![
                         corner(0.0, 0.0),
@@ -2594,6 +2606,7 @@ fn the_font_key_changes_when_the_font_would_and_not_otherwise() {
     ws.save_glyph(
         "tu",
         &GlyphOutline {
+            back_image: None,
             elements: vec![OutlineElement::Contour(Contour {
                 nodes: vec![
                     corner(0.0, 0.0),
@@ -2681,5 +2694,261 @@ fn a_changed_inventory_changes_the_key_and_the_shaping_when_a_rule_reads_it() {
         shaped(&after),
         with_k_as_consonant,
         "k stopped being a consonant, so `a` after k is no longer rewritten"
+    );
+}
+
+// -- back-layer tracing images ----------------------------------------------
+
+use crate::config::{BackImage, GlyphMeta, GlyphOutline};
+
+/// Bytes whose header sniffs as the given raster format.
+fn raster_bytes(format: &str) -> Vec<u8> {
+    let mut bytes = match format {
+        "png" => vec![0x89, b'P', b'N', b'G', 0x0D, 0x0A, 0x1A, 0x0A],
+        "jpg" => vec![0xFF, 0xD8, 0xFF],
+        "webp" => vec![b'R', b'I', b'F', b'F', 0, 0, 0, 0, b'W', b'E', b'B', b'P'],
+        _ => unreachable!(),
+    };
+    bytes.extend_from_slice(b"body");
+    bytes
+}
+
+fn back_meta(id: &str, codepoint: u32) -> GlyphMeta {
+    GlyphMeta {
+        id: id.to_string(),
+        name: id.to_string(),
+        codepoint,
+        phonemes: vec![],
+        order: 0,
+        group: String::new(),
+        forms: Default::default(),
+    }
+}
+
+#[test]
+fn back_images_round_trip_and_old_files_load_without_one() {
+    let dir = tempfile::tempdir().unwrap();
+    let ws = Workspace::new(dir.path()).unwrap();
+    let outline = GlyphOutline {
+        back_image: Some(BackImage {
+            asset: "scan.png".to_string(),
+            width: 900.0,
+            x: 120.0,
+            y: 300.0,
+        }),
+        ..GlyphOutline::default()
+    };
+    ws.save_glyph("g-1", &outline).unwrap();
+    assert_eq!(ws.load_glyph("g-1").unwrap().unwrap(), outline);
+
+    let text = std::fs::read_to_string(ws.glyph_file("g-1")).unwrap();
+    assert!(text.contains("\"back_image\""));
+    assert!(text.contains("\"scan.png\""));
+    assert!(!text.contains(dir.path().to_string_lossy().as_ref()));
+
+    // A glyph file written before the field existed loads with none.
+    let dir2 = tempfile::tempdir().unwrap();
+    let ws2 = Workspace::new(dir2.path()).unwrap();
+    std::fs::write(ws2.glyph_file("legacy"), r#"{"elements":[],"advance":400}"#).unwrap();
+    assert_eq!(ws2.load_glyph("legacy").unwrap().unwrap().back_image, None);
+}
+
+#[test]
+fn importing_a_back_image_sniffs_formats_and_defaults_the_placement() {
+    let dir = tempfile::tempdir().unwrap();
+    let mut ws = Workspace::new(dir.path()).unwrap();
+    ws.writing.glyphs.push(back_meta("a", 0xE000));
+
+    let src = dir.path().join("scan.png");
+    std::fs::write(&src, raster_bytes("png")).unwrap();
+    let image = ws.import_back_image("a", &src, false).unwrap();
+    assert_eq!(image.asset, "scan.png");
+    assert_eq!(image.width, 1000.0, "fitted to the em box by default");
+    assert_eq!(image.x, 500.0);
+    assert_eq!(image.y, 300.0, "centred between ascender and descender");
+    assert!(ws.writing_assets_dir().join("scan.png").is_file());
+    assert_eq!(
+        ws.load_glyph("a").unwrap().unwrap().back_image,
+        Some(image.clone())
+    );
+
+    let again = ws.import_back_image("a", &src, false).unwrap();
+    assert_eq!(again.asset, "scan.png", "identical bytes dedupe");
+
+    for format in ["jpg", "webp"] {
+        let src = dir.path().join(format!("scan.{format}"));
+        std::fs::write(&src, raster_bytes(format)).unwrap();
+        assert!(ws.import_back_image("a", &src, false).is_ok());
+    }
+
+    let text = dir.path().join("note.txt");
+    std::fs::write(&text, b"hello").unwrap();
+    let err = ws.import_back_image("a", &text, false).unwrap_err();
+    assert!(err.to_string().contains("png, jpg or webp"), "{err}");
+
+    let svg = dir.path().join("art.svg");
+    std::fs::write(&svg, b"<svg xmlns='http://www.w3.org/2000/svg'/>").unwrap();
+    assert!(ws.import_back_image("a", &svg, false).is_err());
+
+    let huge = dir.path().join("huge.png");
+    let mut bytes = raster_bytes("png");
+    bytes.resize(crate::workspace::MAX_BACK_IMAGE_BYTES as usize + 1, 0);
+    std::fs::write(&huge, &bytes).unwrap();
+    assert!(ws.import_back_image("a", &huge, false).is_err());
+    assert!(ws.import_back_image("a", &huge, true).is_ok());
+}
+
+#[test]
+fn back_image_references_are_validated_on_save() {
+    let dir = tempfile::tempdir().unwrap();
+    let ws = Workspace::new(dir.path()).unwrap();
+    let bad = |asset: &str, width: f64, x: f64, y: f64| GlyphOutline {
+        back_image: Some(BackImage {
+            asset: asset.to_string(),
+            width,
+            x,
+            y,
+        }),
+        ..GlyphOutline::default()
+    };
+    for (asset, width) in [
+        ("../escape.png", 100.0),
+        ("sub/dir.png", 100.0),
+        (".", 100.0),
+        ("", 100.0),
+        ("scan.png", 0.0),
+        ("scan.png", f64::NAN),
+    ] {
+        let err = ws.save_glyph("g", &bad(asset, width, 1.0, 1.0));
+        assert!(err.is_err(), "accepted {asset:?} at width {width}");
+    }
+    let non_finite = ws.save_glyph("g", &bad("scan.png", 100.0, f64::NAN, 1.0));
+    assert!(non_finite.is_err());
+    assert!(ws
+        .save_glyph("g", &bad("scan 2.png", 100.0, 1.0, 1.0))
+        .is_ok());
+}
+
+#[test]
+fn deleting_a_glyph_sweeps_its_outline_and_orphan_assets() {
+    let dir = tempfile::tempdir().unwrap();
+    let mut ws = Workspace::new(dir.path()).unwrap();
+    ws.writing.glyphs = vec![
+        back_meta("a", 0xE000),
+        back_meta("b", 0xE001),
+        back_meta("c", 0xE002),
+    ];
+
+    let scan = dir.path().join("scan.png");
+    std::fs::write(&scan, raster_bytes("png")).unwrap();
+    let photo = dir.path().join("photo.png");
+    std::fs::write(&photo, raster_bytes("webp")).unwrap();
+    ws.import_back_image("a", &scan, false).unwrap();
+    ws.import_back_image("b", &photo, false).unwrap();
+    // Same bytes as a's scan, so the asset store shares one file.
+    ws.import_back_image("c", &scan, false).unwrap();
+    let asset_a = ws
+        .load_glyph("a")
+        .unwrap()
+        .unwrap()
+        .back_image
+        .unwrap()
+        .asset;
+    let asset_c = ws
+        .load_glyph("c")
+        .unwrap()
+        .unwrap()
+        .back_image
+        .unwrap()
+        .asset;
+    assert_eq!(asset_a, asset_c);
+
+    // Delete b through the app's own path: the writing `config_set`.
+    let mut value = serde_json::to_value(&ws.writing).unwrap();
+    value["glyphs"] = serde_json::json!([serde_json::to_value(back_meta("a", 0xE000)).unwrap()]);
+    value["glyphs"]
+        .as_array_mut()
+        .unwrap()
+        .push(serde_json::to_value(back_meta("c", 0xE002)).unwrap());
+    ws.set_config_json("writing", value).unwrap();
+    assert!(!ws.glyph_file("b").is_file(), "b's outline file is swept");
+    assert!(
+        !ws.writing_assets_dir().join("photo.png").is_file(),
+        "b's asset is unreferenced and swept"
+    );
+    assert!(
+        ws.writing_assets_dir().join(&asset_a).is_file(),
+        "c still references the shared scan"
+    );
+
+    // Deleting only one sharer keeps the file; deleting both sweeps it.
+    let mut value = serde_json::to_value(&ws.writing).unwrap();
+    value["glyphs"] = serde_json::json!([serde_json::to_value(back_meta("a", 0xE000)).unwrap()]);
+    ws.set_config_json("writing", value).unwrap();
+    assert!(
+        ws.writing_assets_dir().join(&asset_a).is_file(),
+        "a still references the shared scan"
+    );
+    let mut value = serde_json::to_value(&ws.writing).unwrap();
+    value["glyphs"] = serde_json::json!([]);
+    ws.set_config_json("writing", value).unwrap();
+    assert!(
+        !ws.writing_assets_dir().join(&asset_a).is_file(),
+        "the last reference is gone"
+    );
+    assert!(!ws.glyph_file("a").is_file());
+}
+
+#[test]
+fn the_font_key_and_exported_font_ignore_the_back_image() {
+    let dir = tempfile::tempdir().unwrap();
+    let mut ws = Workspace::new(dir.path()).unwrap();
+    ws.writing.glyphs = vec![back_meta("a", 0xE000)];
+    ws.save_glyph("a", &GlyphOutline::default()).unwrap();
+
+    let key_before = ws.writing_font_key().unwrap();
+    let (font_before, _) = ws.compile_writing_font().unwrap();
+
+    let src = dir.path().join("scan.png");
+    std::fs::write(&src, raster_bytes("png")).unwrap();
+    ws.import_back_image("a", &src, false).unwrap();
+
+    assert_eq!(
+        ws.writing_font_key().unwrap(),
+        key_before,
+        "the preview cache is not invalidated by editor-only material"
+    );
+    let (font_after, _) = ws.compile_writing_font().unwrap();
+    assert_eq!(
+        font_before, font_after,
+        "an export never contains the back image"
+    );
+}
+
+#[test]
+fn the_workspace_zip_includes_the_back_image_asset() {
+    use crate::archive::zip_workspace;
+
+    let dir = tempfile::tempdir().unwrap();
+    let mut ws = Workspace::new(dir.path()).unwrap();
+    ws.writing.glyphs = vec![back_meta("a", 0xE000)];
+    let src = dir.path().join("scan.png");
+    std::fs::write(&src, raster_bytes("png")).unwrap();
+    ws.import_back_image("a", &src, false).unwrap();
+
+    let dest = dir.path().join("share.zip");
+    zip_workspace(dir.path(), &dest).unwrap();
+    let file = std::fs::File::open(&dest).unwrap();
+    let mut archive = zip::ZipArchive::new(file).unwrap();
+    let names: Vec<String> = (0..archive.len())
+        .map(|i| archive.by_index(i).unwrap().name().to_string())
+        .collect();
+    assert!(
+        names.iter().any(|n| n == "writing/assets/scan.png"),
+        "{names:?}"
+    );
+    assert!(
+        names.iter().any(|n| n.ends_with("writing/glyphs/a")),
+        "{names:?}"
     );
 }
