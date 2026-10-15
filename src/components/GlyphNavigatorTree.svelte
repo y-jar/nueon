@@ -51,7 +51,7 @@
         >{phoneme.symbol}</span
       >
       {#if coveredIds.has(phoneme.id ?? phoneme.symbol)}
-        <span class="muted">\u2713</span>
+        <span class="muted">&#10003;</span>
       {:else}
         <button title={$t("writing.addGlyph")} onclick={() => onAddFor(phoneme)}>
           <Plus size={11} />

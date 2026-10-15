@@ -5947,7 +5947,7 @@ async function main() {
     await openActivity("Writing System");
     await waitJs(`!!document.querySelector('.writing')`, { label: "writing view" });
     await click(".writing-bar button");
-    await waitJs(`document.querySelectorAll('.glyph-tile').length === 1`, {
+    await waitJs(`document.querySelectorAll('.glyph-tile[data-kind="glyph"]').length === 1`, {
       label: "one glyph tile",
     });
     const config = JSON.parse(
@@ -5959,7 +5959,7 @@ async function main() {
   });
 
   await probe("99-glyph-opens-in-the-vector-editor", async () => {
-    await click(".glyph-tile");
+    await click('.glyph-tile[data-kind="glyph"]');
     await waitJs(`!!document.querySelector('.vector-editor .canvas-svg')`, {
       label: "vector editor",
     });
@@ -6105,8 +6105,8 @@ async function main() {
 
   await probe("105-glyph-opens-on-select-and-fits-the-view", async () => {
     await js(`document.querySelector('.vector-editor .back')?.click(); return true;`);
-    await waitJs(`!!document.querySelector('.glyph-tile')`, { label: "grid" });
-    await click(".glyph-tile");
+    await waitJs(`!!document.querySelector('.glyph-tile[data-kind="glyph"]')`, { label: "grid" });
+    await click('.glyph-tile[data-kind="glyph"]');
     await waitJs(`!!document.querySelector('.canvas-svg')`, { label: "editor" });
     assertEqual(await activeTool(), "select", "default tool");
     const v = await view();
@@ -6278,11 +6278,11 @@ async function main() {
       await openActivity("Writing System");
       await waitJs(`!!document.querySelector('.writing')`, { label: "writing view" });
     }
-    if (!(await js(`return !!document.querySelector('.glyph-tile');`))) {
+    if (!(await js(`return !!document.querySelector('.glyph-tile[data-kind="glyph"]');`))) {
       await click(".writing-bar button");
     }
-    await waitJs(`!!document.querySelector('.glyph-tile')`, { label: "glyph grid" });
-    await click(".glyph-tile");
+    await waitJs(`!!document.querySelector('.glyph-tile[data-kind="glyph"]')`, { label: "glyph grid" });
+    await click('.glyph-tile[data-kind="glyph"]');
     await waitJs(`!!document.querySelector('.canvas-svg')`, { label: "editor" });
   };
 
@@ -6852,6 +6852,173 @@ async function main() {
     const crosses = await js(`return document.querySelectorAll('.node-cross').length;`);
     if (crosses < 1) throw new Error("smooth on-curve nodes should carry a cross");
     await screenshot("p137-handle-colours");
+  });
+
+  // -- probes 138-: the glyph grid -------------------------------------------
+  const invokeAsync = async (cmd, args) => {
+    const result = await wd("POST", `/session/${sessionId}/execute/async`, {
+      script: `const done = arguments[arguments.length - 1];
+        window.__TAURI_INTERNALS__.invoke(${JSON.stringify(cmd)}, ${JSON.stringify(args)})
+          .then((v) => done({ ok: true, v })).catch((e) => done({ ok: false, e: String(e) }));`,
+      args: [],
+    });
+    if (!result?.ok) throw new Error(`${cmd} failed: ${result?.e}`);
+    return result.v;
+  };
+  const writeGrid = async (glyphs, phonemes, outlines) => {
+    const cfg = await invokeAsync("config_get", { section: "writing" });
+    await invokeAsync("config_set", { section: "writing", value: { ...cfg, glyphs } });
+    const ph = await invokeAsync("config_get", { section: "phonology" });
+    await invokeAsync("config_set", { section: "phonology", value: { ...ph, phonemes } });
+    for (const [id, outline] of Object.entries(outlines)) {
+      await invokeAsync("writing_glyph_set", { id, outline });
+    }
+  };
+  const sq = (x, y, w, h) => ({
+    kind: "contour", closed: true, fill_rule: "nonzero",
+    nodes: [[x, y], [x + w, y], [x + w, y + h], [x, y + h]].map(([a, b]) => ({ x: a, y: b, kind: "corner" })),
+  });
+  const reopenGrid = async () => {
+    await js(`document.querySelector('.vector-editor .back')?.click(); return true;`);
+    await openActivity("Dictionary");
+    await openActivity("Writing System");
+    await waitJs(`!!document.querySelector('.writing')`, { label: "writing view" });
+  };
+  const gcell = (id) => `document.querySelector('[data-cell="${id}"]')`;
+
+  await probe("138-grid-draws-boxed-cells-with-previews-and-x-slots-for-missing-sounds", async () => {
+    const mk = (id, name, sounds, group, order) => ({ id, name, codepoint: 0xe000 + order, phonemes: sounds, order, group });
+    await writeGrid(
+      [mk("g-k", "ka", ["p-k"], "consonants", 0), mk("g-a", "aa", ["p-a"], "vowels", 1), mk("g-blank", "blank", [], "", 2)],
+      [
+        { id: "p-k", symbol: "k", kind: "consonant" },
+        { id: "p-a", symbol: "a", kind: "vowel" },
+        { id: "p-t", symbol: "t", kind: "consonant" },
+        { id: "p-i", symbol: "i", kind: "vowel" },
+      ],
+      { "g-k": { elements: [sq(50, 0, 300, 700)], advance: 400 }, "g-a": { elements: [sq(20, 0, 500, 400)], advance: 560 }, "g-blank": { elements: [] } },
+    );
+    await reopenGrid();
+    await waitJs(`!!document.querySelector('[data-cell="g-k"]')`, { label: "first cell" });
+    await waitJs(`document.querySelectorAll('.glyph-tile[data-kind="empty"]').length === 2`, { label: "two empty slots (t and i)" });
+    await waitJs(`document.querySelectorAll('.cell-ink').length === 2`, { label: "two drawn previews" });
+    const info = await js(`const t = document.querySelector('[data-cell="g-k"]');
+      return { label: t.querySelector('.glyph-label').textContent.trim(),
+        hasArt: !!t.querySelector('svg.glyph-art'), ink: !!t.querySelector('.cell-ink'),
+        advance: !!t.querySelector('.cell-advance'),
+        slots: [...document.querySelectorAll('.glyph-tile[data-kind="empty"]')].map((e) => e.querySelector('.glyph-label').textContent.trim()).sort(),
+        xs: document.querySelectorAll('.glyph-tile[data-kind="empty"] .empty-x line').length };`);
+    if (!info.hasArt || !info.ink || !info.advance) throw new Error(`cell is missing art/ink/advance: ${JSON.stringify(info)}`);
+    if (!/k/.test(info.label)) throw new Error(`label should name the sound: ${info.label}`);
+    assertEqual(JSON.stringify(info.slots), JSON.stringify(["i", "t"]), "empty slots are the uncovered sounds");
+    assertEqual(info.xs, 4, "each empty slot draws an X (two lines each)");
+    const spans = await js(`const tile = document.querySelector('.glyph-tile[data-kind="empty"]');
+      const art = tile.querySelector('svg.glyph-art').getBoundingClientRect();
+      return [...tile.querySelectorAll('.empty-x line')].map((l) => { const r = l.getBoundingClientRect();
+        return { w: r.width / art.width, h: r.height / art.height }; });`);
+    for (const sp of spans) {
+      if (sp.w < 0.95 || sp.h < 0.95) throw new Error(`an X diagonal does not span its cell: ${JSON.stringify(spans)}`);
+    }
+    const literal = await js(`return [...document.querySelectorAll('.writing *')].filter((e) => e.children.length === 0 && /\\\\u[0-9a-fA-F]{4}/.test(e.textContent)).map((e) => e.textContent.trim());`);
+    if (literal.length) throw new Error(`literal unicode escapes are shown as text: ${JSON.stringify(literal)}`);
+    const blank = await js(`return !document.querySelector('[data-cell="g-blank"] .cell-ink');`);
+    assertEqual(blank, true, "a glyph with no outline draws no ink");
+    await screenshot("p138-grid");
+  });
+
+  await probe("139-progress-line-and-filters-follow-what-is-drawn", async () => {
+    const progress = () => js(`return document.querySelector('[data-testid="grid-progress"]').textContent.trim();`);
+    assertEqual(await progress(), "2 of 5 glyphs drawn", "ka and aa drawn of 3 glyphs + 2 empty sounds");
+    const shown = () => js(`return Number(document.querySelector('[data-testid="grid-shown"]').textContent);`);
+    assertEqual(await shown(), 5, "all cells shown");
+    const setSelect = (label, value) =>
+      js(`const s = document.querySelector('[aria-label="${label}"]'); s.value = ${JSON.stringify(value)};
+        s.dispatchEvent(new Event('change', { bubbles: true })); return true;`);
+    await setSelect("Filter by drawn or empty", "drawn");
+    await waitJs(`Number(document.querySelector('[data-testid="grid-shown"]').textContent) === 2`, { label: "only drawn" });
+    assertEqual(await progress(), "2 of 5 glyphs drawn", "progress ignores filters");
+    await setSelect("Filter by drawn or empty", "empty");
+    await waitJs(`Number(document.querySelector('[data-testid="grid-shown"]').textContent) === 3`, { label: "blank + two slots" });
+    await setSelect("Filter by drawn or empty", "all");
+    await setSelect("Filter by sound type", "vowel");
+    await waitJs(`Number(document.querySelector('[data-testid="grid-shown"]').textContent) === 2`, { label: "aa and the i slot" });
+    await setSelect("Filter by sound type", "all");
+    await js(`const i = document.querySelector('.grid-search'); i.value = 'ka'; i.dispatchEvent(new Event('input', { bubbles: true })); return true;`);
+    await waitJs(`Number(document.querySelector('[data-testid="grid-shown"]').textContent) === 1`, { label: "text filter" });
+    await js(`const i = document.querySelector('.grid-search'); i.value = ''; i.dispatchEvent(new Event('input', { bubbles: true })); return true;`);
+    await waitJs(`Number(document.querySelector('[data-testid="grid-shown"]').textContent) === 5`, { label: "filters cleared" });
+  });
+
+  await probe("140-cell-size-buttons-and-slider-resize-the-cells", async () => {
+    const width = () => js(`return Math.round(document.querySelector('[data-cell="g-k"]').getBoundingClientRect().width);`);
+    const m = await width();
+    await js(`document.querySelector('[data-size="L"]').click(); return true;`);
+    await waitJs(`Math.round(document.querySelector('[data-cell="g-k"]').getBoundingClientRect().width) > ${m}`, { label: "L is larger" });
+    const l = await width();
+    await js(`document.querySelector('[data-size="S"]').click(); return true;`);
+    await waitJs(`Math.round(document.querySelector('[data-cell="g-k"]').getBoundingClientRect().width) < ${m}`, { label: "S is smaller" });
+    const sm = await width();
+    if (!(sm < m && m < l)) throw new Error(`sizes not ordered: S ${sm} M ${m} L ${l}`);
+    await js(`document.querySelector('[data-size="M"]').click(); return true;`);
+  });
+
+  await probe("141-clicking-an-empty-slot-creates-and-opens-its-glyph", async () => {
+    await js(`document.querySelector('.glyph-tile[data-kind="empty"]').click(); return true;`);
+    await waitJs(`!!document.querySelector('.vector-editor .canvas-svg')`, { label: "editor opened for the new glyph" });
+    const cfg = await invokeAsync("config_get", { section: "writing" });
+    assertEqual(cfg.glyphs.length, 4, "a glyph was added");
+    const made = cfg.glyphs[cfg.glyphs.length - 1];
+    if (!made.phonemes.length) throw new Error("the new glyph is not mapped to the sound");
+  });
+
+  await probe("142-grid-cell-shows-edits-after-the-glyph-is-drawn-in-the-editor", async () => {
+    const id = (await invokeAsync("config_get", { section: "writing" })).glyphs.at(-1).id;
+    await tool("p");
+    for (const [x, y] of [[0.3, 0.6], [0.6, 0.6], [0.6, 0.4]]) await click1(x, y);
+    await key("Enter");
+    await js(`document.querySelector('.vector-editor .back').click(); return true;`);
+    await waitJs(`!!document.querySelector('[data-cell="${id}"] .cell-ink')`, { label: "the new glyph's cell now shows ink" });
+    await waitJs(`document.querySelector('[data-testid="grid-progress"]').textContent.trim() === '3 of 5 glyphs drawn'`, { label: "progress went up" });
+  });
+
+  await probe("143-large-glyph-sets-render-only-a-window-and-scroll-smoothly", async () => {
+    const N = 600;
+    const glyphs = [];
+    const outlines = {};
+    for (let n = 0; n < N; n++) {
+      const id = `g${String(n).padStart(4, "0")}`;
+      glyphs.push({ id, name: `glyph ${n}`, codepoint: 0xe000 + n, phonemes: [], order: n, group: "" });
+      outlines[id] = { elements: [sq(40 + (n % 5) * 20, 0, 300, 300 + (n % 7) * 60)], advance: 420 };
+    }
+    await writeGrid(glyphs, [], outlines);
+    await reopenGrid();
+    await waitJs(`!!document.querySelector('[data-cell="g0000"]')`, { label: "first cell" });
+    const stats = await js(`const g = document.querySelector('[data-testid="glyph-grid"]');
+      return { rendered: Number(g.dataset.rendered), rows: Number(g.dataset.rows), cols: Number(g.dataset.cols),
+        dom: document.querySelectorAll('.glyph-tile').length };`);
+    if (stats.dom >= 200) throw new Error(`rendered ${stats.dom} of ${N} cells: the grid is not virtualised`);
+    if (stats.rows * stats.cols < N) throw new Error(`layout too small for ${N}: ${JSON.stringify(stats)}`);
+    await waitJs(`document.querySelector('[data-testid="grid-progress"]').textContent.trim() === '${N} of ${N} glyphs drawn'`, {
+      timeout: 40000, label: "every outline loaded for the progress line",
+    });
+    const before = await js(`return !!document.querySelector('[data-cell="g0000"]');`);
+    assertEqual(before, true, "first cell is in the DOM at the top");
+    await js(`document.querySelector('.glyph-scroller').scrollTop = 99999; return true;`);
+    await waitJs(`!!document.querySelector('[data-cell="g0${N - 1}"]') || !!document.querySelector('[data-cell="g${N - 1}"]')`, { label: "last cell after scrolling to the end" });
+    const gone = await js(`return !document.querySelector('[data-cell="g0000"]');`);
+    assertEqual(gone, true, "cells scrolled out of view are removed from the DOM");
+    await waitJs(`!!document.querySelector('.glyph-tile .cell-ink')`, { label: "ink at the end" });
+    const cost = await js(`
+      return await new Promise((resolve) => {
+        const el = document.querySelector('.glyph-scroller');
+        const gaps = []; let last = performance.now(); let n = 0;
+        const step = () => { const now = performance.now(); gaps.push(now - last); last = now;
+          el.scrollTop = (n % 2 ? 0 : 99999) * 1; n += 1; if (n < 40) requestAnimationFrame(step); else
+          resolve({ worst: Math.round(Math.max(...gaps)), median: Math.round([...gaps].sort((a, b) => a - b)[20]) }); };
+        requestAnimationFrame(step); });`);
+    console.log("GRID-SCROLL", JSON.stringify(cost));
+    if (cost.worst > 250) throw new Error(`scrolling a ${N}-glyph grid has a ${cost.worst} ms frame`);
+    await screenshot("p143-large-grid");
   });
 }
 

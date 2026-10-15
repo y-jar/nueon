@@ -589,6 +589,19 @@
     "sidebarSearch": "Filter glyphs\u2026",
     "sidebarEmpty": "No glyphs yet.",
     "sidebarCoverage": "{mapped}/{total} sounds",
+    "progress": "{drawn} of {total} glyphs drawn",
+    "noMatches": "Nothing matches these filters.",
+    "filterSound": "Filter by sound type",
+    "filterFill": "Filter by drawn or empty",
+    "cellSize": "Cell size",
+    "sound": {
+      "all": "All sounds",
+      "consonant": "Consonants",
+      "vowel": "Vowels",
+      "other": "Other",
+      "unmapped": "No sound"
+    },
+    "fill": { "all": "Drawn and empty", "drawn": "Drawn only", "empty": "Empty only" },
     "forms": {
       "title": "Joining forms",
       "hint": "Glyphs with forms join their neighbours: the glyph is swapped for another at the start, middle or end of a run. Pick other glyphs you drew for each position.",

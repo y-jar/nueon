@@ -30,11 +30,12 @@ and regenerate.
 - `FontReportDialog.svelte` — Font export report: problems found per glyph, with a gated export button.
 - `GitPanel.svelte` — Source Control: status, diff, history and check-in.
 - `GlyphCanvas.svelte` — Canvas with typographic guides, the drawing surface and node overlay.
-- `GlyphGrid.svelte` — Wrapping grid of glyph tiles for the selected group.
+- `GlyphGrid.svelte` — The glyph grid: boxed cells in a virtualised scroller, with empty slots for sounds that have no glyph.
+- `GlyphGridControls.svelte` — Grid controls: cell size, sound and fill filters, text search, and the progress line.
 - `GlyphGridTray.svelte` — Bottom tray of glyph thumbnails, with multi-select batch actions.
 - `GlyphMetricsPanel.svelte` — Glyph metrics: active phonemes, side bearings and advance width.
 - `GlyphNavigatorTree.svelte` — Glyph groups and sound coverage for the writing system.
-- `GlyphTile.svelte` — One glyph tile in the writing-system grid.
+- `GlyphTile.svelte` — One boxed grid cell: label above, the glyph's outline and advance box inside; or a faint X for an empty slot.
 - `Grid.svelte` — The virtualized dictionary grid.
 - `GridCell.svelte` — One dictionary grid cell renderer.
 - `GroupBody.svelte` — The active view (editor/grid/etc) for a tab group.
@@ -126,6 +127,7 @@ and regenerate.
 - `layout.svelte.ts` — Tiling layout: tab drag between panes/windows, split/merge and persistence.
 - `morphology.svelte.ts` — Morphology store: classes, morphemes, paradigms and compose.
 - `notes.svelte.ts` — Note, folder and asset operations, and change/conflict handling.
+- `outlineCache.ts` — A small lazy cache of glyph outlines for the grid, with bounded concurrency and invalidation.
 - `raw.d.ts` — Module declarations for assets imported without types.
 - `shell.svelte.ts` — Shell chrome: the activity ribbon, panels and modal toggles.
 - `spellcheck.ts` — English misspelling guard for `definition` fields (PSD §B).
@@ -145,6 +147,7 @@ and regenerate.
 - `writingComponents.ts` — Pure component resolution for the glyph canvas: transform, flatten, expand.
 - `writingEditor.svelte.ts` — Vector-editor state: the open glyph, tools, selection, history and gestures.
 - `writingForms.ts` — Pure helpers for a glyph's positional forms (initial, medial, final).
+- `writingGrid.ts` — Pure logic for the glyph grid: cells, filters, progress, cell geometry and the virtual window.
 - `writingInfo.ts` — Pure helpers for the editor's visual language: guide labels, the info bar, contour direction.
 - `writingMenus.ts` — Pure menu definitions for the vector editor's menu bar.
 - `writingNodeType.ts` — Setting a node's type (corner, smooth, symmetric), growing handles when it has none.

@@ -630,6 +630,38 @@ handle never reaches past the next node (an open end gets its one handle).
 Symmetric nodes are drawn as diamonds, smooth as circles, corners as squares
 (`data-kind` on each node for tests).
 
+### Glyph grid
+
+The writing tab's grid (`GlyphGrid.svelte`, `GlyphTile.svelte`, pure logic in
+`src/lib/writingGrid.ts`) replaces the text tiles with boxed cells.
+
+- **A cell** has a label strip above (the mapped sound symbol and the glyph name)
+  and the glyph's real outline drawn inside as SVG, with its advance box and a
+  baseline. Every cell uses one square scale (the em, widened for a very wide
+  advance), so glyphs compare by size and a thin glyph with long spacing shows
+  as a narrow ink inside a wide box. Components are drawn with their transforms.
+  A glyph with no contours is a plain cell; a selected cell is highlighted.
+- **Empty slots.** Every sound in the inventory that no glyph covers gets a faint
+  dashed cell with an X; clicking it creates a glyph mapped to that sound and
+  opens it in the editor.
+- **Controls.** Cell size S/M/L plus a slider (48 to 240 px), a sound-type filter
+  (all, consonants, vowels, other, no sound), a drawn/empty filter, a text search
+  (name, sound or group), and the navigator group. The progress line "N of M
+  glyphs drawn" counts every glyph plus every uncovered sound and ignores the
+  filters, so it always describes the whole set.
+- **Virtualised.** Only the rows in view plus two overscan rows are in the DOM
+  (`visibleRows`); cells are absolutely positioned by row and column, and the
+  scroller measures its width with a deferred, equal-size-guarded observer. A 600
+  glyph set renders about 40 cells and scrolls with a worst frame of 10 ms.
+- **Outlines** come from `src/lib/outlineCache.ts`: lazy, six loads at a time,
+  de-duplicated, failures retried, and an invalidation discards loads that began
+  before it. Every outline is requested once so "drawn" can be told from "empty";
+  cells in view are requested first. The cache refreshes on the `writing` scope,
+  so a glyph edited in the editor redraws in the grid.
+- **Config reload.** The view reloads `config/writing` and phonology when either
+  revision bumps (the editor, another panel or a git checkout), and never
+  overwrites a local edit that is still waiting to save (`shouldApplyReload`).
+
 ### Visual language
 
 Pure helpers in `src/lib/writingInfo.ts`; colours are CSS variables on

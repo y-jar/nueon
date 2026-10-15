@@ -202,7 +202,10 @@ layer (`src-tauri/`), and the Svelte 5 frontend (`src/`). See `docs/ARCHITECTURE
   but keeps the curve's shape, Ctrl+Delete removes it plainly. Arrow keys nudge
   1 unit (Shift 10), Tab/Shift+Tab step through nodes, V is the default
   Select tool (whole shapes: click, Shift-click, box, drag, Ctrl+D, Delete),
-  a clearer visual language (square/circle/diamond nodes with crosses, X-marked
+  a glyph grid of boxed cells (real outline and advance box per cell, label
+  above, faint X slots for sounds with no glyph, S/M/L and slider sizes, filters,
+  a "N of M glyphs drawn" progress line, virtualised for 500+ glyphs), a clearer
+  visual language (square/circle/diamond nodes with crosses, X-marked
   handles in teal for the incoming and magenta for the outgoing side, labelled
   guide rails, advance box, start arrows, open-end caps) and an info bar (cursor,
   drag distance and angle, zoom, tool, layer), Bezier editing in the Direct tool (handles only for selected nodes and
@@ -278,7 +281,9 @@ layer (`src-tauri/`), and the Svelte 5 frontend (`src/`). See `docs/ARCHITECTURE
   in `writing.test.ts`, `writingTransform.test.ts` (matrix order, scale/rotate/skew about a pivot,
   Shift/Alt, handle hit rules, component folding, dialog order, copy) and
   `writingNodeType.test.ts` (handle growth, symmetric/smooth lengths, open ends),
-  both mutation-checked, `writingInfo.test.ts` (guide labels, coordinate/angle/zoom formatting, drag
+  both mutation-checked, `writingGrid.test.ts` (cell view box, filters, empty slots, progress, columns,
+  virtual window, reload guard) and `outlineCache.test.ts` (dedupe, concurrency,
+  invalidation, retry), both mutation-checked, `writingInfo.test.ts` (guide labels, coordinate/angle/zoom formatting, drag
   readout, contour direction, start direction, open ends; mutation-checked),
   `writingBezier.test.ts` (segment drag keeps the point under the pointer and
   the end nodes fixed, smooth/symmetric stay constrained, visible-handle rules,

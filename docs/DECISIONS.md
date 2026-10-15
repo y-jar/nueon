@@ -118,6 +118,19 @@ commit per stage. See `docs/PROBING.md`.
   position, so panning and zooming never hide them.
 - **Rulers and ruler-dragged guides are deferred** (the viewport model was already
   large); see `deferred.md`.
+- **Grid cells share one scale.** Fitting each glyph to its own box would make a
+  full stop look as large as a capital and hide spacing. Every cell shows the em
+  (and the whole advance if wider), centred on the advance box.
+- **Progress counts uncovered sounds as to-do.** "42 of 61 glyphs drawn" means
+  glyphs with ink out of glyphs plus sounds that still have none, so it reaches
+  100% only when every sound has an actual drawing.
+- **The writing view reloads its config on revision bumps.** It used to read
+  `config/writing` once at mount, so a change from outside (or a second panel)
+  never appeared until the tab was reopened. A reload is skipped while a local
+  edit is waiting to save, so it can never clobber typing.
+- **Probes seed the app through its own IPC**, not by editing files under the
+  workspace: the running app holds the config in memory and would ignore, then
+  overwrite, a file written behind its back.
 - **Open contours count as filled when hit-testing**, matching how the canvas
   draws them and how the font fills them.
 - **The editor effect loop (found after stage 1a).** The canvas resize effect

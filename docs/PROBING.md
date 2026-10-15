@@ -321,6 +321,16 @@ capture, so it is the harness, not the app. For capture-based surfaces, dispatch
 `PointerEvent`s directly in `js()` (`pointerdown` then `pointerup`, with
 `pointerId` and `button: 0`) as the writing probes' `canvasClick` does.
 
+### Seed state through IPC, not files
+
+The app keeps its config in memory. A probe that writes `config/writing` or a
+glyph file directly is ignored and then overwritten. Call the app's own commands
+from the page instead (`config_set`, `writing_glyph_set`), as the grid probes do
+with `invokeAsync` (WebDriver `execute/async` around
+`window.__TAURI_INTERNALS__.invoke`). Probes that build a glyph set leave it
+behind, so later probes should not assume a clean workspace; reset what they
+need, as `freshGlyph()` does.
+
 ### Canvas probes: dispatch keys on `.glyph-canvas`, not WebDriver keys
 
 Tool shortcuts are handled by the canvas `keydown` handler. Click `.glyph-canvas`

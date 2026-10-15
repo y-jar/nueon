@@ -1,6 +1,6 @@
 <!-- Writing System: glyph navigator, grid, and vector editor. -->
 <script lang="ts">
-  import { onMount } from "svelte";
+  import { onDestroy, onMount, untrack } from "svelte";
   import { t } from "svelte-i18n";
   import { Plus } from "@lucide/svelte";
   import * as api from "../lib/api";
@@ -11,7 +11,7 @@
     nextCodepoint,
     UNGROUPED,
   } from "../lib/writing";
-  import { confirmDialog, openGlyphContextMenu } from "../lib/state.svelte";
+  import { confirmDialog, openGlyphContextMenu, ui } from "../lib/state.svelte";
   import { editor, openGlyph, closeGlyph } from "../lib/writingEditor.svelte";
   import type { GuideField } from "../lib/writingMenus";
   import { deleteGlyphs, dependents, moveToGroup } from "../lib/writingBatch";
@@ -19,6 +19,17 @@
   import { writeTextFile } from "../lib/files";
   import GlyphNavigatorTree from "./GlyphNavigatorTree.svelte";
   import GlyphGrid from "./GlyphGrid.svelte";
+  import GlyphGridControls from "./GlyphGridControls.svelte";
+  import { createOutlineCache } from "../lib/outlineCache";
+  import {
+    CELL_SIZES,
+    buildCells,
+    clampCell,
+    progressOf,
+    shouldApplyReload,
+    type GridFilter,
+  } from "../lib/writingGrid";
+  import { guideHeight } from "../lib/writing";
   import OrthographyRules from "./OrthographyRules.svelte";
   import VectorEditor from "./VectorEditor.svelte";
 
@@ -47,12 +58,68 @@
   const coveredIds = $derived(new Set(config.glyphs.flatMap((g) => g.phonemes)));
   const editing = $derived(editor.openGlyphId !== null);
 
+  const cache = createOutlineCache((id) => api.writingGlyphGet(id), 6);
+  let cacheVersion = $state(0);
+  const offCache = cache.onChange(() => (cacheVersion = cache.version()));
+  onDestroy(offCache);
+
+  let cellSize = $state<number>(CELL_SIZES.M);
+  let filter = $state<GridFilter>({ group: null, sound: "all", fill: "all", text: "" });
+  const gridFilter = $derived<GridFilter>({ ...filter, group: selectedGroup });
+
+  const outlinesNow = $derived.by(() => {
+    cacheVersion;
+    const out: Record<string, api.GlyphOutline | null | undefined> = {};
+    for (const g of config.glyphs) out[g.id] = cache.get(g.id);
+    return out;
+  });
+  const cells = $derived(buildCells(config.glyphs, phonemes, outlinesNow, gridFilter));
+  const progress = $derived(progressOf(config.glyphs, phonemes, outlinesNow));
+
+  function lookup(id: string): api.GlyphOutline | null {
+    cache.request([id]);
+    return cache.get(id) ?? null;
+  }
+
+  let wantedIds = new Set<string>();
+  function onVisible(ids: string[]) {
+    const fresh = ids.filter((id) => !wantedIds.has(id));
+    wantedIds = new Set(ids);
+    if (fresh.length > 0) cache.request(ids);
+  }
+
+  // Every outline is needed once to tell drawn from empty for the progress line.
+  $effect(() => {
+    const ids = config.glyphs.map((g) => g.id);
+    untrack(() => cache.request(ids));
+  });
+
+  // Anything that changes the writing or phonology config (the editor, another
+  // panel, a git checkout) bumps a revision: reload the config and refresh previews.
+  let seenRevision = `${ui.writingRevision}:${ui.phonologyRevision}`;
+  $effect(() => {
+    const now = `${ui.writingRevision}:${ui.phonologyRevision}`;
+    untrack(() => {
+      if (now === seenRevision) return;
+      seenRevision = now;
+      cache.invalidate();
+      void load().then(() => cache.request(config.glyphs.map((g) => g.id)));
+    });
+  });
+
+  function createForPhoneme(phoneme: api.Phoneme) {
+    addGlyphFor(phoneme);
+    const made = config.glyphs[config.glyphs.length - 1];
+    if (made) openGlyph(made.id, made);
+  }
+
   onMount(load);
 
   async function load() {
     try {
-      config = await api.writingGet();
+      const loaded = await api.writingGet();
       const ph = await api.phonologyGet();
+      if (shouldApplyReload(config, loaded, pendingSave)) config = loaded;
       phonemes = ph.phonemes ?? [];
       error = "";
     } catch (e) {
@@ -60,12 +127,17 @@
     }
   }
 
+  let pendingSave = false;
+
   async function save() {
+    pendingSave = true;
     try {
       await api.writingSet(config);
       error = "";
     } catch (e) {
       error = String(e);
+    } finally {
+      pendingSave = false;
     }
   }
 
@@ -74,6 +146,7 @@
   function changeRules(rules: api.OrthographyRule[]) {
     config.rules = rules;
     clearTimeout(saveTimer);
+    pendingSave = true;
     saveTimer = setTimeout(() => void save(), 400);
   }
 
@@ -286,13 +359,30 @@
         onSelectGroup={(g) => (selectedGroup = g)}
         onAddFor={addGlyphFor}
       />
-      <GlyphGrid
-        glyphs={selectedGroup ? (groups.get(selectedGroup) ?? []) : config.glyphs}
-        {phonemes}
-        selectedId={editor.openGlyphId}
-        onSelect={selectGlyph}
-        {onMenu}
-      />
+      <div class="glyph-pane">
+        <GlyphGridControls
+          {filter}
+          {cellSize}
+          {progress}
+          shown={cells.length}
+          onFilter={(next) => (filter = next)}
+          onSize={(px) => (cellSize = clampCell(px))}
+        />
+        <GlyphGrid
+          {cells}
+          outlineOf={(id) => cache.get(id)}
+          {lookup}
+          {cellSize}
+          selectedId={editor.openGlyphId}
+          ascender={guideHeight(config, "ascender")}
+          descender={guideHeight(config, "descender")}
+          version={cacheVersion}
+          {onVisible}
+          onSelect={selectGlyph}
+          onCreate={createForPhoneme}
+          {onMenu}
+        />
+      </div>
     </div>
     <OrthographyRules rules={config.rules} glyphs={config.glyphs} onChange={changeRules} />
   {/if}

@@ -87,41 +87,94 @@
   cursor: pointer;
 }
 
-.glyph-grid {
-  display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(96px, 1fr));
-  gap: 6px;
-  align-content: start;
+.glyph-pane {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  min-width: 0;
+  min-height: 0;
+}
+
+.grid-controls {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+  font-size: 12px;
+}
+
+.grid-controls .grid-progress-bar { width: 120px; height: 8px; }
+.grid-controls .grid-search { width: 160px; }
+.grid-controls .size-group { display: flex; align-items: center; gap: 2px; }
+.grid-controls .size-group button.active { background: var(--accent); color: var(--bg); }
+.grid-controls .size-group input[type="range"] { width: 90px; }
+
+.glyph-scroller {
+  position: relative;
+  flex: 1;
+  min-height: 0;
   overflow-y: auto;
+  overflow-x: hidden;
+}
+
+.glyph-grid-canvas {
+  position: relative;
+  width: 100%;
+}
+
+.glyph-cell-pos {
+  position: absolute;
+  top: 0;
+  left: 0;
+  will-change: transform;
 }
 
 .glyph-tile {
   display: flex;
   flex-direction: column;
-  align-items: center;
-  gap: 2px;
-  padding: 8px 4px;
+  align-items: stretch;
+  padding: 0;
   border: 1px solid var(--border);
-  border-radius: 6px;
+  border-radius: 4px;
   background: var(--panel);
   color: var(--text);
   cursor: pointer;
-  min-height: 60px;
+  overflow: hidden;
 }
 
-.glyph-tile.selected {
-  border-color: var(--accent);
+.glyph-tile:hover { border-color: var(--muted); }
+.glyph-tile.selected { border-color: var(--accent); box-shadow: 0 0 0 1px var(--accent); }
+.glyph-tile.selected .glyph-label { background: var(--accent); color: var(--bg); }
+.glyph-tile:focus-visible { outline: 2px solid var(--accent); outline-offset: 1px; }
+
+.glyph-tile .glyph-label {
+  display: flex;
+  align-items: baseline;
+  justify-content: center;
+  gap: 4px;
+  height: 18px;
+  padding: 0 4px;
+  font-size: 12px;
+  border-bottom: 1px solid var(--border);
+  background: var(--faint);
+  white-space: nowrap;
+  overflow: hidden;
 }
 
-.glyph-tile .glyph-name {
-  font-size: 13px;
-}
+.glyph-tile .glyph-name { font-weight: 500; overflow: hidden; text-overflow: ellipsis; }
+.glyph-tile .glyph-symbols { color: var(--muted); font-size: 10px; }
+.glyph-tile.selected .glyph-symbols { color: inherit; }
+.glyph-tile .glyph-art { display: block; background: var(--bg); }
 
-.glyph-tile .glyph-symbols {
-  font-size: 11px;
-  color: var(--muted);
-  font-family: ui-monospace, monospace;
-}
+.glyph-tile .cell-ink { fill: var(--text); stroke: none; fill-rule: nonzero; }
+.glyph-tile.undrawn .cell-ink { fill: var(--muted); }
+.glyph-tile .cell-advance { fill: var(--faint); fill-opacity: 0.55; stroke: var(--advance, #7fae7a); stroke-opacity: 0.45; stroke-width: 6; }
+.glyph-tile .cell-baseline { stroke: var(--border); stroke-width: 4; }
+
+.glyph-tile.empty-slot { border-style: dashed; opacity: 0.8; }
+.glyph-tile.empty-slot .glyph-label { background: transparent; color: var(--muted); }
+.glyph-tile .empty-x line { stroke: var(--border); stroke-width: 1; vector-effect: non-scaling-stroke; }
+.glyph-tile.empty-slot:hover { opacity: 1; border-color: var(--accent); }
 
 /* -- vector editor -------------------------------------------------------- */
 
