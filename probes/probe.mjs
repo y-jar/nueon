@@ -5946,7 +5946,7 @@ async function main() {
   await probe("98-writing-tab-opens-and-adds-a-glyph", async () => {
     await openActivity("Writing System");
     await waitJs(`!!document.querySelector('.writing')`, { label: "writing view" });
-    await click(".writing-bar button");
+    await click('.writing-bar [data-action="add-glyph"]');
     await waitJs(`document.querySelectorAll('.glyph-tile[data-kind="glyph"]').length === 1`, {
       label: "one glyph tile",
     });
@@ -6279,7 +6279,7 @@ async function main() {
       await waitJs(`!!document.querySelector('.writing')`, { label: "writing view" });
     }
     if (!(await js(`return !!document.querySelector('.glyph-tile[data-kind="glyph"]');`))) {
-      await click(".writing-bar button");
+      await click('.writing-bar [data-action="add-glyph"]');
     }
     await waitJs(`!!document.querySelector('.glyph-tile[data-kind="glyph"]')`, { label: "glyph grid" });
     await click('.glyph-tile[data-kind="glyph"]');
@@ -7295,6 +7295,9 @@ async function main() {
       svg.dispatchEvent(new PointerEvent('pointermove', at(${p.x + dx})));
       svg.dispatchEvent(new PointerEvent('pointerup', at(${p.x + dx}))); return true;`);
   };
+  const setSizeTo = (v) =>
+    js(`const r = document.querySelector('[data-testid="preview-size"]'); r.value = ${v};
+      r.dispatchEvent(new Event('input', { bubbles: true })); return true;`);
   const setMode = (on) =>
     js(`const b = document.querySelector('[data-testid="spacing-toggle"]');
       if ((b.getAttribute('aria-pressed') === 'true') !== ${on}) b.click(); return true;`);
@@ -7391,6 +7394,251 @@ async function main() {
     await waitJs(`document.querySelectorAll('[data-edge]').length === 0 && !document.querySelector('[data-testid="spacing-popover"]')`, { label: "edges and popover gone" });
     const w = await js(`const t = document.querySelector('[data-cell="s-a"] .cell-advance'); return t ? Math.round(t.getBoundingClientRect().width) : 0;`);
     if (w < 20) throw new Error("the advance box is missing from the cell");
+  });
+
+  // -- probes 160-: the type preview ---------------------------------------------
+  const seedPreview = async () => {
+    const mk = (id, name, cp, order, ph) => ({ id, name, codepoint: cp, phonemes: ph, order, group: "" });
+    await writeGrid(
+      [mk("p-ka", "ka", 0xe000, 0, ["p-k"]), mk("p-tu", "tu", 0xe001, 1, ["p-t"]), mk("p-sp", "sp", 0x20, 2, [])],
+      [
+        { id: "p-k", symbol: "k", kind: "consonant" },
+        { id: "p-a", symbol: "a", kind: "vowel" },
+        { id: "p-t", symbol: "t", kind: "consonant" },
+        { id: "p-u", symbol: "u", kind: "vowel" },
+      ],
+      {
+        "p-ka": { elements: [sq(50, 0, 300, 700)], advance: 400 },
+        "p-tu": { elements: [sq(30, 0, 200, 500)], advance: 250 },
+        "p-sp": { elements: [], advance: 300 },
+      },
+    );
+    const cfg = await invokeAsync("config_get", { section: "writing" });
+    await invokeAsync("config_set", {
+      section: "writing",
+      value: {
+        ...cfg,
+        rules: [
+          { from: "ka", to: ["p-ka"], name: "ka" },
+          { from: "tu", to: ["p-tu"], name: "tu" },
+        ],
+      },
+    });
+    await reopenGrid();
+    await waitJs(`!!document.querySelector('[data-page="preview"]')`, { label: "preview tab" });
+  };
+  const openPreview = async () => {
+    await js(`document.querySelector('[data-page="preview"]').click(); return true;`);
+    await waitJs(`!!document.querySelector('[data-testid="type-preview"]')`, { label: "preview open" });
+  };
+  const typeInPreview = (text) =>
+    js(`const t = document.querySelector('[data-testid="preview-input"]'); t.value = ${JSON.stringify(text)};
+      t.dispatchEvent(new Event('input', { bubbles: true })); return true;`);
+  const lineInfo = () =>
+    js(`return [...document.querySelectorAll('[data-testid="preview-line"]')].map((l) => ({
+      glyphs: Number(l.dataset.glyphs), w: Math.round(l.getBoundingClientRect().width), h: Math.round(l.getBoundingClientRect().height),
+      ink: l.querySelectorAll('.p-ink').length }));`);
+
+  await probe("160-preview-sets-text-with-the-orthography-rules-applied-by-the-real-font", async () => {
+    await seedPreview();
+    await openPreview();
+    await typeInPreview("katu");
+    await waitJs(`document.querySelectorAll('[data-testid="preview-line"]').length === 1`, { label: "one line" });
+    await waitJs(`document.querySelector('[data-testid="preview-line"]').dataset.glyphs === '2'`, { label: "k+a and t+u became two glyphs" });
+    const [line] = await lineInfo();
+    assertEqual(line.ink, 2, "both glyphs are drawn");
+    const key = await js(`return document.querySelector('[data-testid="preview-scroll"]').dataset.key;`);
+    if (!/^[0-9a-f]{16}$/.test(key)) throw new Error(`the preview should report the font key: ${key}`);
+    await screenshot("p160-preview");
+  });
+
+  await probe("161-the-preview-equals-the-exported-fonts-shaping-for-a-set-of-strings", async () => {
+    const strings = ["katu", "tuka", "kaka tutu", "k", "ak", "ka tu ka", "\ue000\ue001"];
+    for (const text of strings) {
+      await typeInPreview(text);
+      await idle(500);
+      const shown = await js(`return [...document.querySelectorAll('[data-testid="preview-line"]')].map((l) => Number(l.dataset.glyphs));`);
+      const direct = await invokeAsync("writing_preview_shape", { lines: [text], rtl: false });
+      assertEqual(JSON.stringify(shown), JSON.stringify(direct.runs.map((r) => r.glyphs.length)), `glyph count for ${JSON.stringify(text)}`);
+    }
+    // and the shaping command itself must agree with the font the export writes
+    const a = await invokeAsync("writing_preview_shape", { lines: ["katu"], rtl: false });
+    const b = await invokeAsync("writing_preview_shape", { lines: ["katu"], rtl: false });
+    assertEqual(a.key, b.key, "the key is stable");
+    assertEqual(a.runs[0].advance, 650, "ka (400) + tu (250)");
+    assertEqual(a.runs[0].glyphs.map((g) => g.id).join(","), "1,2", "ka then tu");
+    const check = await invokeAsync("writing_validate_font", {});
+    if (check.some((i) => i.severity === "error")) throw new Error(`export would be blocked: ${JSON.stringify(check)}`);
+  });
+
+  await probe("162-size-slider-scales-the-drawing-from-12-to-300-px", async () => {
+    const setSize = (v) =>
+      js(`const r = document.querySelector('[data-testid="preview-size"]'); r.value = ${v};
+        r.dispatchEvent(new Event('input', { bubbles: true })); return true;`);
+    assertEqual(await js(`const r = document.querySelector('[data-testid="preview-size"]'); return [r.min, r.max];`).then((a) => a.join("-")), "12-300", "slider range");
+    await typeInPreview("ka");
+    await setSize(60);
+    await waitJs(`document.querySelector('[data-testid="preview-size-px"]').textContent.trim() === '60px'`, { label: "60px" });
+    await idle(200);
+    const w60 = (await lineInfo())[0].w;
+    await setSize(120);
+    await idle(300);
+    const w120 = (await lineInfo())[0].w;
+    if (Math.abs(w120 / w60 - 2) > 0.05) throw new Error(`doubling the size should double the width: ${w60} -> ${w120}`);
+    assertEqual(w60, 24, "ka is 400 units: 400/1000 * 60");
+    await setSize(12);
+    await idle(300);
+    assertEqual((await lineInfo())[0].w, 5, "400/1000 * 12 rounds to 5");
+    await setSize(300);
+    await idle(300);
+    assertEqual((await lineInfo())[0].w, 120, "400/1000 * 300");
+    await setSize(60);
+  });
+
+  await probe("163-lines-wrap-to-the-width-and-the-view-scrolls", async () => {
+    await typeInPreview("ka ".repeat(60));
+    await setSizeTo(240);
+    await idle(700);
+    const rows = await lineInfo();
+    if (rows.length < 4) throw new Error(`a long line should wrap into several rows, saw ${rows.length}`);
+    const scrollW = await js(`return document.querySelector('[data-testid="preview-scroll"]').clientWidth;`);
+    for (const r of rows) if (r.w > scrollW) throw new Error(`a row (${r.w}) is wider than the view (${scrollW})`);
+    const sc = await js(`const e = document.querySelector('[data-testid="preview-scroll"]'); return { sh: e.scrollHeight, ch: e.clientHeight };`);
+    if (sc.sh <= sc.ch) throw new Error("tall text should scroll inside the preview");
+    await js(`document.querySelector('[data-testid="preview-scroll"]').scrollTop = 99999; return true;`);
+    const top = await js(`return document.querySelector('[data-testid="preview-scroll"]').scrollTop;`);
+    if (top <= 0) throw new Error("the preview did not scroll");
+    await typeInPreview("ka");
+    await setSizeTo(60);
+  });
+
+  await probe("164-all-glyphs-and-pairs-sources-and-advance-boxes", async () => {
+    await js(`document.querySelector('[data-source="all"]').click(); return true;`);
+    await waitJs(`document.querySelectorAll('[data-testid="preview-line"] .p-ink').length >= 2`, { label: "all glyphs drawn" });
+    await js(`document.querySelector('[data-source="pairs"]').click(); return true;`);
+    await waitJs(`document.querySelectorAll('[data-testid="preview-line"]').length === 3`, { label: "a row per glyph" });
+    await js(`const b = document.querySelector('[data-testid="preview-boxes"]'); b.click(); return true;`);
+    await waitJs(`document.querySelectorAll('[data-box]').length > 0`, { label: "advance boxes drawn" });
+    await screenshot("p164-pairs");
+  });
+
+  await probe("165-lexicon-words-source-lists-words-and-sets-the-picked-ones", async () => {
+    await js(`document.querySelector('[data-source="words"]').click(); return true;`);
+    await waitJs(`!!document.querySelector('[data-testid="word-list"]')`, { label: "word list" });
+    const words = await js(`return [...document.querySelectorAll('[data-testid="word-list"] button')].map((b) => b.dataset.word);`);
+    if (words.length === 0) throw new Error("the lexicon has words, so some should be listed");
+    await js(`document.querySelector('[data-testid="word-list"] button').click(); return true;`);
+    await waitJs(`document.querySelectorAll('[data-testid="preview-line"]').length === 1`, { label: "the picked word is set" });
+  });
+
+  await probe("166-editing-a-glyph-updates-the-preview", async () => {
+    await js(`document.querySelector('[data-source="custom"]').click(); return true;`);
+    await typeInPreview("ka");
+    await waitJs(`document.querySelectorAll('[data-testid="preview-line"] .p-ink').length === 1`, { label: "ka drawn" });
+    const key0 = await js(`return document.querySelector('[data-testid="preview-scroll"]').dataset.key;`);
+    const out = await invokeAsync("writing_glyph_get", { id: "p-ka" });
+    await invokeAsync("writing_glyph_set", { id: "p-ka", outline: { ...out, advance: 520 } });
+    await waitJs(`document.querySelector('[data-testid="preview-scroll"]').dataset.key !== '${key0}'`, { label: "a new font key after the edit" });
+    await idle(300);
+    assertEqual((await lineInfo())[0].w, Math.round(0.52 * 60), "the line is as wide as the new advance");
+  });
+
+  await probe("167-the-preview-is-cheap-when-idle-and-does-not-recompile-while-typing", async () => {
+    await typeInPreview("katu");
+    await idle(600);
+    const key0 = await js(`return document.querySelector('[data-testid="preview-scroll"]').dataset.key;`);
+    for (const t of ["ka", "kat", "katu", "katuka", "tuka"]) { await typeInPreview(t); await idle(160); }
+    assertEqual(await js(`return document.querySelector('[data-testid="preview-scroll"]').dataset.key;`), key0, "typing leaves the font key alone");
+    const res = await js(`
+      return await new Promise((resolve) => {
+        const gaps = []; const lates = []; let last = performance.now(); let lt = performance.now(); let run = true;
+        const frame = () => { const n = performance.now(); gaps.push(n - last); last = n; if (run) requestAnimationFrame(frame); };
+        requestAnimationFrame(frame);
+        const timer = setInterval(() => { const n = performance.now(); lates.push(n - lt - 10); lt = n; }, 10);
+        setTimeout(() => { run = false; clearInterval(timer); resolve({ frames: gaps.filter((x) => x > 50).length, late: lates.filter((x) => x > 50).length, worst: Math.round(Math.max(0, ...gaps)) }); }, 3000);
+      });`);
+    console.log("PREVIEW-IDLE", JSON.stringify(res));
+    if (res.frames > 0 || res.late > 0) throw new Error(`the idle preview blocks the main thread: ${JSON.stringify(res)}`);
+  });
+
+  // -- probes 168-: preview overlays and bearing-adjust drag ----------------------
+  const rowBox = (n) =>
+    js(`const l = document.querySelectorAll('[data-testid="preview-line"]')[${n}]; const r = l.getBoundingClientRect();
+      return { left: r.left, top: r.top, w: r.width, h: r.height };`);
+  const dragRow = async (n, x0, x1) => {
+    const b = await rowBox(n);
+    await js(`const l = document.querySelectorAll('[data-testid="preview-line"]')[${n}];
+      const at = (x) => ({ bubbles: true, cancelable: true, pointerId: 1, button: 0, clientX: ${b.left} + x, clientY: ${b.top + b.h / 2} });
+      l.dispatchEvent(new PointerEvent('pointermove', at(${x0})));
+      l.dispatchEvent(new PointerEvent('pointerdown', at(${x0})));
+      l.dispatchEvent(new PointerEvent('pointermove', at(${(x0 + x1) / 2})));
+      l.dispatchEvent(new PointerEvent('pointermove', at(${x1})));
+      l.dispatchEvent(new PointerEvent('pointerup', at(${x1}))); return true;`);
+  };
+
+  await probe("168-metric-lines-and-advance-boxes-toggle-in-the-preview", async () => {
+    const ka = await invokeAsync("writing_glyph_get", { id: "p-ka" });
+    await invokeAsync("writing_glyph_set", { id: "p-ka", outline: { ...ka, advance: 400 } });
+    await idle(600);
+    await setSizeTo(60);
+    await js(`document.querySelector('[data-source="custom"]').click(); return true;`);
+    await typeInPreview("katu");
+    await waitJs(`document.querySelectorAll('[data-testid="preview-line"] .p-rail').length === 4`, { label: "four metric rails" });
+    const boxes0 = await js(`return document.querySelectorAll('[data-box]').length;`);
+    if (boxes0 > 0) {
+      await js(`document.querySelector('[data-testid="preview-boxes"]').click(); return true;`);
+    }
+    await waitJs(`document.querySelectorAll('[data-box]').length === 0`, { label: "boxes off" });
+    await js(`document.querySelector('[data-testid="preview-boxes"]').click(); return true;`);
+    await waitJs(`document.querySelectorAll('[data-box]').length === 2`, { label: "one advance box per glyph" });
+    const w = await js(`return [...document.querySelectorAll('[data-box]')].map((b) => [Number(b.getAttribute('x')), Number(b.getAttribute('width'))]);`);
+    assertEqual(JSON.stringify(w), JSON.stringify([[0, 24], [24, 15]]), "ka (400 units) then tu (250) at 60 px, side by side");
+  });
+
+  await probe("169-dragging-the-gap-between-two-letters-changes-their-bearings-and-undoes", async () => {
+    await js(`document.querySelector('[data-testid="preview-adjust"]').click(); return true;`);
+    await waitJs(`!!document.querySelector('[data-testid="preview-gap-mode"]')`, { label: "adjust mode on" });
+    await typeInPreview("katu");
+    await waitJs(`document.querySelector('[data-testid="preview-line"]').dataset.glyphs === '2'`, { label: "two glyphs" });
+    const before = {
+      ka: await invokeAsync("writing_glyph_get", { id: "p-ka" }),
+      tu: await invokeAsync("writing_glyph_get", { id: "p-tu" }),
+    };
+    // the ka|tu boundary is at 400/1000*60 = 24 px; drag it right by 10 px = 166 units, shared between both.
+    await dragRow(0, 24, 34);
+    await idle(900);
+    const after = {
+      ka: await invokeAsync("writing_glyph_get", { id: "p-ka" }),
+      tu: await invokeAsync("writing_glyph_get", { id: "p-tu" }),
+    };
+    const left = (o) => Math.min(...o.elements.flatMap((e) => e.nodes.map((n) => n.x)));
+    const right = (o) => Math.max(...o.elements.flatMap((e) => e.nodes.map((n) => n.x)));
+    const rsb = (o) => o.advance - right(o);
+    const dRsb = rsb(after.ka) - rsb(before.ka);
+    const dLsb = left(after.tu) - left(before.tu);
+    if (Math.abs(dRsb - 83) > 4 || Math.abs(dLsb - 83) > 4) throw new Error(`each side should take about half of 166 units: rsb ${dRsb}, lsb ${dLsb}`);
+    assertEqual(left(after.ka), left(before.ka), "ka's own left bearing is untouched");
+    const adv = after.ka.advance + after.tu.advance;
+    const shaped = await invokeAsync("writing_preview_shape", { lines: ["katu"], rtl: false });
+    if (Math.abs(shaped.runs[0].advance - adv) > 1) throw new Error(`the font shapes katu as ${shaped.runs[0].advance}, the outlines add up to ${adv}`);
+    await waitJs(`Math.round(document.querySelector('[data-testid="preview-line"]').getBoundingClientRect().width) > 39`, { label: "the preview widened live" });
+    await screenshot("p169-gap");
+  });
+
+  await probe("170-the-gap-drag-is-one-undo-step-in-the-glyph-grid-log", async () => {
+    await js(`document.querySelector('[data-page="glyphs"]').click(); return true;`);
+    await waitJs(`!!document.querySelector('[data-testid="spacing-toggle"]')`, { label: "grid back" });
+    await setMode(true);
+    await waitJs(`!document.querySelector('[data-testid="spacing-undo"]').disabled`, { label: "undo available" });
+    const advBefore = (await invokeAsync("writing_glyph_get", { id: "p-ka" })).advance;
+    await js(`document.querySelector('[data-testid="spacing-undo"]').click(); return true;`);
+    await idle(900);
+    const a = await invokeAsync("writing_glyph_get", { id: "p-ka" });
+    const t = await invokeAsync("writing_glyph_get", { id: "p-tu" });
+    if (!(a.advance < advBefore)) throw new Error(`undo did not restore ka: ${advBefore} -> ${a.advance}`);
+    assertEqual(a.advance, 400, "ka's advance is back");
+    assertEqual(t.advance, 250, "tu's advance is back: both glyphs undone in one step");
+    await setMode(false);
   });
 }
 

@@ -21,6 +21,7 @@
   import GlyphGrid from "./GlyphGrid.svelte";
   import GlyphGridControls from "./GlyphGridControls.svelte";
   import SpacingPopover from "./SpacingPopover.svelte";
+  import TypePreview from "./TypePreview.svelte";
   import { createSpacingLog, type Outlines } from "../lib/spacingHistory";
   import {
     applyBearings,
@@ -91,6 +92,10 @@
   const progress = $derived(progressOf(config.glyphs, phonemes, outlinesNow));
 
   // -- spacing mode: drag cell edges, edit numbers, copy and batch ----------------
+  let page = $state<"glyphs" | "preview">("glyphs");
+  const lexiconWords = $derived(
+    [...new Set(Object.values(ui.wordIndex).flatMap((hits) => hits.map((h) => h.wordname)))].sort(),
+  );
   let spacingMode = $state(false);
   let popoverId = $state<string | null>(null);
   let spacingTick = $state(0);
@@ -475,7 +480,15 @@
     </span>
     <span class="grow"></span>
     {#if !editing}
-      <button onclick={addGlyph}><Plus size={14} /> {$t("writing.addGlyph")}</button>
+      <div class="page-tabs" role="tablist" aria-label={$t("writing.title")}>
+        <button role="tab" aria-selected={page === "glyphs"} class:active={page === "glyphs"} data-page="glyphs" onclick={() => (page = "glyphs")}>
+          {$t("writing.glyphs")}
+        </button>
+        <button role="tab" aria-selected={page === "preview"} class:active={page === "preview"} data-page="preview" onclick={() => (page = "preview")}>
+          {$t("writing.preview.tab")}
+        </button>
+      </div>
+      <button data-action="add-glyph" onclick={addGlyph}><Plus size={14} /> {$t("writing.addGlyph")}</button>
     {/if}
   </header>
 
@@ -497,6 +510,18 @@
       onBatchGroup={batchGroup}
       onBatchAdvance={batchAdvance}
       onBatchExport={batchExport}
+    />
+  {:else if page === "preview"}
+    <TypePreview
+      {config}
+      {phonemes}
+      glyphs={config.glyphs}
+      outlineOf={(id) => cache.get(id)}
+      {lookup}
+      version={cacheVersion}
+      words={lexiconWords}
+      onSpacing={(label, before, after) => void applyChange(label, before, after)}
+      onLive={(id, o) => cache.set(id, o)}
     />
   {:else}
     {#if config.glyphs.length === 0}

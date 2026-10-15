@@ -64,7 +64,10 @@ to a TrueType font, verify it by reading it back, write it to a chosen path;
 returns `{ glyphs, mapped, bytes, source_glyphs, lookups }`; it refuses to
 run while the check reports an error) and `writing_validate_font` (check every glyph without
 writing anything; returns `FontIssue[]` of `{ glyph, name, severity, code,
-message }`, severity `error`, `warning` or `info`). `read_text_file` / `write_text_file` move SVG
+message }`, severity `error`, `warning` or `info`). `writing_preview_shape` (shape lines of text against the compiled font for the
+type preview: takes `lines` and `rtl`, returns `{ key, glyph_ids, runs }` where each
+run lists `{ id, cluster, advance, x_offset, y_offset }` per glyph in visual order;
+the compiled font is cached by `key`). `read_text_file` / `write_text_file` move SVG
 text to and from paths chosen in a file dialog. The writing config itself
 travels through the generic `config_get`/`config_set` with section `writing`.
 

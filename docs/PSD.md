@@ -202,6 +202,9 @@ layer (`src-tauri/`), and the Svelte 5 frontend (`src/`). See `docs/ARCHITECTURE
   but keeps the curve's shape, Ctrl+Delete removes it plainly. Arrow keys nudge
   1 unit (Shift 10), Tab/Shift+Tab step through nodes, V is the default
   Select tool (whole shapes: click, Shift-click, box, drag, Ctrl+D, Delete),
+  a type preview (text set in the script, shaped by the same font the export
+  writes, 12 to 300 px, typed text / lexicon words / all glyphs / pairs, metric
+  lines and advance boxes, and a gap drag that edits the neighbouring bearings),
   spacing (derived bearings, draggable bearing lines in the editor, a grid
   Spacing mode with a test-pair popover, copy-from and batch bearings, undo),
   Shift snapping (alignment with other nodes, 45/135 degree lines, clean node spots
@@ -284,7 +287,10 @@ layer (`src-tauri/`), and the Svelte 5 frontend (`src/`). See `docs/ARCHITECTURE
   in `writing.test.ts`, `writingTransform.test.ts` (matrix order, scale/rotate/skew about a pivot,
   Shift/Alt, handle hit rules, component folding, dialog order, copy) and
   `writingNodeType.test.ts` (handle growth, symmetric/smooth lengths, open ends),
-  both mutation-checked, `writingSpacing.test.ts` (bearings from ink, left/right/advance edits, line hit
+  both mutation-checked, `typePreview.test.ts` (size range, placement and wrapping, sample text, gap hit
+  and drag; mutation-checked), Rust tests for `shape.rs` (cross-checked with
+  `hb-shape`), the preview font equalling the exported font, the font key and the
+  preview cache, and `writingSpacing.test.ts` (bearings from ink, left/right/advance edits, line hit
   and drag, cell geometry, pair layout) and `spacingHistory.test.ts`, both
   mutation-checked, a Rust test that reads the compiled font's `hmtx` back, and
   `writingSuggest.test.ts` (clean spots, alignment and angle targets, claim

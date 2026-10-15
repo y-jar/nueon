@@ -972,6 +972,26 @@ export interface FontIssue {
   message: string;
 }
 export const writingValidateFont = (): Promise<FontIssue[]> => invoke("writing_validate_font");
+
+/** One glyph of a shaped line, from the same font the export writes. */
+export interface PreviewGlyph {
+  id: number;
+  cluster: number;
+  advance: number;
+  x_offset: number;
+  y_offset: number;
+}
+
+export interface PreviewShaping {
+  /** Hash of everything the font depends on; equal keys mean the same font. */
+  key: string;
+  /** The user glyph id behind each font glyph id ("" for .notdef and hidden letters). */
+  glyph_ids: string[];
+  runs: { glyphs: PreviewGlyph[]; advance: number; upem: number }[];
+}
+
+export const writingPreviewShape = (lines: string[], rtl: boolean): Promise<PreviewShaping> =>
+  invoke("writing_preview_shape", { lines, rtl });
 export const writingExportFont = (path: string): Promise<FontExport> =>
   invoke("writing_export_font", { path });
 export const writingImportSvg = (id: string, svg: string): Promise<number> =>

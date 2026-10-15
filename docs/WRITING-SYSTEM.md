@@ -630,6 +630,51 @@ handle never reaches past the next node (an open end gets its one handle).
 Symmetric nodes are drawn as diamonds, smooth as circles, corners as squares
 (`data-kind` on each node for tests).
 
+### Type preview
+
+The writing tab has a **Glyphs / Preview** switch. The preview sets text in the
+writing system itself (`TypePreview.svelte`, pure layout in
+`src/lib/typePreview.ts`).
+
+- **One engine, so it cannot disagree with the export.** The preview does not
+  reimplement the orthography rules, positional forms or ligatures. The
+  `writing_preview_shape` command compiles the same font the export writes
+  (`compile_preview_font`) and shapes each line against it with `harfrust`
+  (`crates/nueon-core/src/font/shape.rs`); the frontend draws each returned glyph
+  from its outline as SVG. A Rust test asserts the preview font is
+  **byte-for-byte the exported font**, and the shaping was cross-checked against
+  C HarfBuzz (`hb-shape`) on eight strings in both directions. FreeType rendering
+  of the compiled font and the SVG drawing give the same ink to the pixel.
+- **Cached by a font key.** `writing_font_key` hashes every glyph's metadata,
+  outline and advance, the rules, the metrics and the inventory. Equal keys mean
+  the same font, so the compiled font is reused while typing; one slot is kept
+  (`PreviewCache`). An edit anywhere changes the key and recompiles.
+- **More forgiving than the export.** An export refuses a rule that names a
+  missing glyph; the preview skips that rule and still renders, so a half-built
+  system can be previewed. The export is unchanged.
+- **Size** 12 to 300 px per em (slider, `data-testid="preview-size"`), scrollable,
+  multi-line, optional line wrapping by whole glyphs. Right-to-left writing
+  direction is shaped right to left.
+- **Text sources:** typed text, picked lexicon words (filterable list), every
+  glyph, and every glyph beside every glyph (pairs). Characters in the private-use
+  area show glyphs directly; the rules' letters (`ka`) go through the orthography
+  rules.
+- **Overlays:** metric lines (baseline, x-height, ascender, descender) and advance
+  boxes, each switchable.
+- **Adjust spacing.** With it on, hovering the boundary between two letters shows a
+  gap marker and dragging it changes the bearings live: *Both neighbours* (the
+  default) splits the change between the left letter's right bearing and the
+  right letter's left bearing, or either one alone can be chosen. The drag is one
+  step in the grid's spacing undo log (both glyphs undone together), and the next
+  shaped preview and the export use the new numbers. Hidden letters the rules
+  need and `.notdef` have no spacing to edit, so no gap is offered next to them.
+- **Reusing it.** `TypePreview` takes only data and a lookup, and
+  `writing_preview_shape` takes plain lines, so the translator and glossing views
+  can set their output in the script by calling the command with their text and
+  drawing the runs with the same `glyphPlacements` helper. The remaining work is
+  deciding where the word-to-script text comes from (the rules already turn Latin
+  letters into glyphs) and a read-only variant without the controls: small.
+
 ### Spacing
 
 Bearings are **derived, never stored**: only the advance is saved with a glyph.

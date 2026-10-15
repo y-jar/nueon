@@ -2444,3 +2444,242 @@ fn orthography_rules_become_gsub_and_bad_rules_are_reported() {
         "{err}"
     );
 }
+
+fn preview_workspace() -> (tempfile::TempDir, Workspace) {
+    use crate::config::{
+        Contour, FillRule, GlyphMeta, GlyphOutline, Node, NodeKind, OrthographyRule,
+        OutlineElement, Phoneme, PhonemeKind,
+    };
+    let dir = tempfile::tempdir().unwrap();
+    let mut ws = Workspace::new(dir.path()).unwrap();
+    let corner = |x: f64, y: f64| Node {
+        x,
+        y,
+        handle_in: None,
+        handle_out: None,
+        kind: NodeKind::Corner,
+    };
+    for (id, size, advance) in [("ka", 300.0, 400.0), ("tu", 200.0, 250.0)] {
+        ws.save_glyph(
+            id,
+            &GlyphOutline {
+                elements: vec![OutlineElement::Contour(Contour {
+                    nodes: vec![
+                        corner(0.0, 0.0),
+                        corner(0.0, size),
+                        corner(size, size),
+                        corner(size, 0.0),
+                    ],
+                    closed: true,
+                    fill_rule: FillRule::Nonzero,
+                })],
+                advance: Some(advance),
+                lsb: None,
+                rsb: None,
+            },
+        )
+        .unwrap();
+    }
+    ws.writing.glyphs = ["ka", "tu"]
+        .iter()
+        .enumerate()
+        .map(|(i, id)| GlyphMeta {
+            id: id.to_string(),
+            name: id.to_string(),
+            codepoint: 0xE000 + i as u32,
+            phonemes: vec![],
+            order: i as u32,
+            group: String::new(),
+            forms: Default::default(),
+        })
+        .collect();
+    ws.phonology.phonemes = ["k", "a", "t", "u"]
+        .iter()
+        .map(|s| Phoneme {
+            id: s.to_string(),
+            symbol: s.to_string(),
+            kind: if *s == "a" || *s == "u" {
+                PhonemeKind::Vowel
+            } else {
+                PhonemeKind::Consonant
+            },
+        })
+        .collect();
+    ws.writing.rules = vec![
+        OrthographyRule {
+            name: None,
+            from: "ka".into(),
+            to: vec!["ka".into()],
+            left: None,
+            right: None,
+        },
+        OrthographyRule {
+            name: None,
+            from: "tu".into(),
+            to: vec!["tu".into()],
+            left: None,
+            right: None,
+        },
+    ];
+    (dir, ws)
+}
+
+#[test]
+fn the_preview_font_is_byte_for_byte_the_exported_font_and_shapes_the_same() {
+    use crate::font::Direction;
+    let (_dir, ws) = preview_workspace();
+    let (exported, _) = ws.compile_writing_font().unwrap();
+    let (preview, ids) = ws.compile_preview_font().unwrap();
+    assert_eq!(preview, exported, "the preview and the export are one font");
+    assert_eq!(ids, vec!["", "ka", "tu"]);
+
+    let lines = vec!["katu".to_string(), "tuka".to_string(), "k a".to_string()];
+    let runs = Workspace::shape_preview(&preview, &lines, Direction::Ltr).unwrap();
+    let from_export = Workspace::shape_preview(&exported, &lines, Direction::Ltr).unwrap();
+    assert_eq!(runs, from_export);
+    assert_eq!(
+        runs[0].glyphs.iter().map(|g| g.id).collect::<Vec<_>>(),
+        vec![1, 2]
+    );
+    assert_eq!(runs[0].advance, 650);
+    assert_eq!(
+        runs[1].glyphs.iter().map(|g| g.id).collect::<Vec<_>>(),
+        vec![2, 1]
+    );
+}
+
+#[test]
+fn the_preview_still_builds_when_the_export_is_blocked_by_a_bad_rule() {
+    use crate::config::OrthographyRule;
+    let (_dir, mut ws) = preview_workspace();
+    ws.writing.rules.push(OrthographyRule {
+        name: Some("ghost".into()),
+        from: "zz".into(),
+        to: vec!["missing".into()],
+        left: None,
+        right: None,
+    });
+    assert!(ws.compile_writing_font().is_err(), "the export refuses");
+    let (bytes, _) = ws.compile_preview_font().unwrap();
+    let runs = Workspace::shape_preview(&bytes, &["katu".to_string()], crate::font::Direction::Ltr)
+        .unwrap();
+    assert_eq!(
+        runs[0].glyphs.len(),
+        2,
+        "the good rules still work in the preview"
+    );
+}
+
+#[test]
+fn the_font_key_changes_when_the_font_would_and_not_otherwise() {
+    use crate::config::{Contour, FillRule, GlyphOutline, Node, NodeKind, OutlineElement};
+    let (_dir, mut ws) = preview_workspace();
+    let k0 = ws.writing_font_key().unwrap();
+    assert_eq!(k0, ws.writing_font_key().unwrap(), "stable across calls");
+    assert_eq!(k0.len(), 16);
+
+    let mut outline = ws.load_glyph("ka").unwrap().unwrap();
+    outline.advance = Some(420.0);
+    ws.save_glyph("ka", &outline).unwrap();
+    let k1 = ws.writing_font_key().unwrap();
+    assert_ne!(k0, k1, "a changed advance changes the font");
+
+    let corner = |x: f64, y: f64| Node {
+        x,
+        y,
+        handle_in: None,
+        handle_out: None,
+        kind: NodeKind::Corner,
+    };
+    ws.save_glyph(
+        "tu",
+        &GlyphOutline {
+            elements: vec![OutlineElement::Contour(Contour {
+                nodes: vec![
+                    corner(0.0, 0.0),
+                    corner(0.0, 210.0),
+                    corner(210.0, 210.0),
+                    corner(210.0, 0.0),
+                ],
+                closed: true,
+                fill_rule: FillRule::Nonzero,
+            })],
+            advance: Some(250.0),
+            lsb: None,
+            rsb: None,
+        },
+    )
+    .unwrap();
+    let k2 = ws.writing_font_key().unwrap();
+    assert_ne!(k1, k2, "a changed outline changes the font");
+
+    ws.writing.rules.pop();
+    assert_ne!(
+        k2,
+        ws.writing_font_key().unwrap(),
+        "a changed rule changes the font"
+    );
+
+    let before = ws.writing_font_key().unwrap();
+    ws.writing.glyphs[0].group = "other".into();
+    assert_ne!(
+        before,
+        ws.writing_font_key().unwrap(),
+        "metadata is part of the key too"
+    );
+}
+
+#[test]
+fn an_empty_writing_system_has_no_preview_font() {
+    let dir = tempfile::tempdir().unwrap();
+    let ws = Workspace::new(dir.path()).unwrap();
+    assert!(ws.compile_preview_font().is_err());
+}
+
+#[test]
+fn a_changed_inventory_changes_the_key_and_the_shaping_when_a_rule_reads_it() {
+    use crate::config::{OrthographyRule, Phoneme, PhonemeKind};
+    use crate::font::Direction;
+    let (_dir, mut ws) = preview_workspace();
+    ws.writing.rules = vec![OrthographyRule {
+        name: None,
+        from: "a".into(),
+        to: vec!["tu".into()],
+        left: Some("C".into()),
+        right: None,
+    }];
+    let (before, _) = ws.compile_preview_font().unwrap();
+    let key_before = ws.writing_font_key().unwrap();
+    let shaped = |bytes: &[u8]| {
+        Workspace::shape_preview(bytes, &["ka".to_string()], Direction::Ltr).unwrap()[0]
+            .glyphs
+            .iter()
+            .map(|g| g.id)
+            .collect::<Vec<_>>()
+    };
+    let with_k_as_consonant = shaped(&before);
+
+    ws.phonology.phonemes = vec![
+        Phoneme {
+            id: "k".into(),
+            symbol: "k".into(),
+            kind: PhonemeKind::Vowel,
+        },
+        Phoneme {
+            id: "a".into(),
+            symbol: "a".into(),
+            kind: PhonemeKind::Vowel,
+        },
+    ];
+    let (after, _) = ws.compile_preview_font().unwrap();
+    assert_ne!(
+        key_before,
+        ws.writing_font_key().unwrap(),
+        "the key follows the inventory"
+    );
+    assert_ne!(
+        shaped(&after),
+        with_k_as_consonant,
+        "k stopped being a consonant, so `a` after k is no longer rewritten"
+    );
+}

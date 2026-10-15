@@ -24,9 +24,9 @@ Bundled third-party components
   compile and verify the exported TrueType font; linked into the Rust core
   (see Cargo.lock).
 - harfrust (https://github.com/harfbuzz/harfrust) - MIT license, Copyright (c)
-  The HarfRust authors, a port of HarfBuzz. A development dependency only: the
-  tests shape the exported font with it to prove the orthography rules work.
-  It is not linked into the application.
+  The HarfRust authors, a port of HarfBuzz. Shapes text against the compiled
+  writing-system font for the type preview, so the preview and the exported
+  font cannot disagree; linked into the Rust core (see Cargo.lock).
 
 Project assets
 

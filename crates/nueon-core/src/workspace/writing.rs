@@ -3,6 +3,8 @@
 use std::collections::HashSet;
 use std::path::PathBuf;
 
+use sha2::{Digest, Sha256};
+
 use super::storage::{self, StorageError};
 use super::Workspace;
 use crate::config::{
@@ -10,8 +12,8 @@ use crate::config::{
     validate_components, validate_outline, Contour, GlyphOutline, OutlineElement,
 };
 use crate::font::{
-    blocks_export, compile_font, plan_layout, read_back, validate_glyphs, FontError, FontGlyph,
-    FontIssue, FontReport, FontSettings,
+    blocks_export, compile_font, plan_layout, read_back, shape_text, validate_glyphs, Direction,
+    FontError, FontGlyph, FontIssue, FontReport, FontSettings, ShapedRun,
 };
 use crate::model::{pathfinder_apply, BooleanOp};
 
@@ -222,6 +224,81 @@ impl Workspace {
         let (_, rule_issues) = plan_layout(&glyphs, &self.writing.rules, &self.phonology.phonemes);
         issues.extend(rule_issues);
         Ok(issues)
+    }
+
+    fn font_settings(&self) -> FontSettings {
+        let config = &self.writing;
+        FontSettings {
+            family: self.language.name.clone(),
+            upem: config.upem,
+            ascender: if config.ascender != 0.0 {
+                config.ascender
+            } else {
+                800.0
+            },
+            descender: if config.descender != 0.0 {
+                config.descender
+            } else {
+                -200.0
+            },
+            x_height: config.x_height,
+            cap_height: config.cap_height,
+            rules: config.rules.clone(),
+            phonemes: self.phonology.phonemes.clone(),
+        }
+    }
+
+    /// A short hash of everything the compiled font depends on: every glyph's
+    /// metadata, outline and advance, the writing config and the inventory. Two
+    /// equal keys mean the same font, so a preview can reuse its compiled bytes.
+    pub fn writing_font_key(&self) -> Result<String, StorageError> {
+        let glyphs = self.font_glyphs()?;
+        let parts: Vec<serde_json::Value> = glyphs
+            .iter()
+            .map(|g| serde_json::json!([g.meta, g.contours, g.advance]))
+            .collect();
+        let settings = self.font_settings();
+        let input = serde_json::json!([
+            parts,
+            self.writing.rules,
+            self.writing.upem,
+            settings.ascender,
+            settings.descender,
+            settings.x_height,
+            settings.cap_height,
+            self.phonology.phonemes,
+        ]);
+        let digest = Sha256::digest(input.to_string().as_bytes());
+        Ok(digest.iter().take(8).map(|b| format!("{b:02x}")).collect())
+    }
+
+    /// Compile the font for the type preview. Unlike an export it is not blocked
+    /// by validation warnings or a rule that names a missing glyph (such rules
+    /// are skipped), so a half-finished system still previews. Returns the font
+    /// bytes and the user glyph id behind each font glyph id (`""` for `.notdef`
+    /// and the hidden letters the rules need).
+    pub fn compile_preview_font(&self) -> Result<(Vec<u8>, Vec<String>), StorageError> {
+        let glyphs = self.font_glyphs()?;
+        let (bytes, _) = compile_font(&self.font_settings(), &glyphs)
+            .map_err(|err| StorageError::Config("font".to_string(), err.to_string()))?;
+        let mut ids = vec![String::new()];
+        ids.extend(glyphs.iter().map(|g| g.meta.id.clone()));
+        Ok((bytes, ids))
+    }
+
+    /// Shape each line of `lines` against `font` (see [`Workspace::compile_preview_font`]).
+    pub fn shape_preview(
+        font: &[u8],
+        lines: &[String],
+        direction: Direction,
+    ) -> Result<Vec<ShapedRun>, StorageError> {
+        lines
+            .iter()
+            .map(|line| {
+                shape_text(font, line, direction)
+                    .map_err(|err| StorageError::Config("font".to_string(), err.to_string()))
+            })
+            .collect()
     }
 
     /// Compile every glyph into a TrueType font, verify it by reading it back,

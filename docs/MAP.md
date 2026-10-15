@@ -69,6 +69,7 @@ and regenerate.
 - `TransformDialog.svelte` — Transform dialog: numeric move, scale, rotate and skew, with an optional copy.
 - `Translation.svelte` — Translation activity: builder + runner.
 - `TrashModal.svelte` — Trash bin modal (restore/delete).
+- `TypePreview.svelte` — Type preview: text set in the writing system's own font, shaped with the same engine and rules as the export.
 - `VectorEditor.svelte` — Vector editor: menu, toolbar, toolbox, canvas, metrics and tray.
 - `VectorToolbar.svelte` — Vector toolbar: undo/redo, zoom, snap, compose and SVG import/export.
 - `WritingPanel.svelte` — Writing System activity: searchable glyph list with sound coverage.
@@ -139,6 +140,7 @@ and regenerate.
 - `tabs.svelte.ts` — Opening, activating and closing tabs, and their table operations.
 - `tabs.ts` — Pure tab helpers: pruning, identity and singleton checks.
 - `tiling.ts` — Split layout: indices, serialization and tree helpers.
+- `typePreview.ts` — Pure layout for the type preview: sample text, scale, placement and wrapping of shaped runs.
 - `wikilink.ts` — Pure [[...]] link parsing, ranking and resolution.
 - `window.ts` — Current window label and main-window flag.
 - `words.ts` — Word creation and value editing helpers.

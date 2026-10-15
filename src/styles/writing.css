@@ -1137,3 +1137,41 @@
 .glyph-pane { position: relative; }
 
 .glyph-tile.batched { box-shadow: 0 0 0 2px var(--advance, #7fae7a); }
+
+.type-preview { display: flex; flex-direction: column; gap: 8px; min-height: 0; flex: 1; }
+.preview-controls { display: flex; flex-wrap: wrap; align-items: center; gap: 10px; font-size: 12px; }
+.preview-controls .preview-size { display: flex; align-items: center; gap: 6px; }
+.preview-controls .preview-size input { width: 180px; }
+.preview-controls .preview-source { display: flex; gap: 2px; }
+.preview-controls .preview-source button.active { background: var(--accent); color: var(--bg); }
+.preview-controls .check { display: flex; align-items: center; gap: 4px; }
+.preview-input { width: 100%; resize: vertical; font-size: 14px; }
+.preview-words { display: flex; flex-direction: column; gap: 4px; }
+.preview-words .word-list { display: flex; flex-wrap: wrap; gap: 4px; max-height: 96px; overflow: auto; }
+.preview-words .word-list button { font-size: 12px; padding: 1px 6px; }
+.preview-words .word-list button.active { background: var(--accent); color: var(--bg); }
+.preview-scroll {
+  flex: 1;
+  min-height: 0;
+  overflow: auto;
+  padding: 12px;
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  background: var(--bg);
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+.preview-line { display: block; flex: none; }
+.preview-line .p-ink { fill: var(--text); }
+.preview-line .p-rail { stroke: var(--border); stroke-width: 1; }
+.preview-line .p-rail.dashed { stroke-dasharray: 4 4; opacity: 0.6; }
+.preview-line .p-box { fill: none; stroke: var(--advance, #7fae7a); stroke-opacity: 0.55; stroke-width: 1; }
+.preview-line .p-notdef { fill: none; stroke: var(--muted); stroke-width: 1; }
+
+.writing-bar .page-tabs { display: flex; gap: 2px; }
+.writing-bar .page-tabs button.active { background: var(--accent); color: var(--bg); }
+
+.preview-line.adjusting { cursor: default; touch-action: none; }
+.preview-line.adjusting.gap-hover { cursor: col-resize; }
+.preview-line .p-gap { stroke: var(--accent); stroke-width: 2; }

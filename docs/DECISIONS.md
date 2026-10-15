@@ -118,6 +118,20 @@ commit per stage. See `docs/PROBING.md`.
   position, so panning and zooming never hide them.
 - **Rulers and ruler-dragged guides are deferred** (the viewport model was already
   large); see `deferred.md`.
+- **The preview shapes in Rust, against the font the export writes.** A second
+  planner in TypeScript would drift from the font the first time a rule or a
+  positional form changed. harfrust (MIT, a HarfBuzz port) is now a runtime
+  dependency rather than dev-only; NOTICE says so, and `Cargo.lock` already held
+  it, so the nix vendor hash did not change. The cost is one compile when the font
+  changes, avoided while typing by a one-slot cache keyed on a hash of everything
+  the font depends on. Rejected: a browser `@font-face` (no per-glyph positions,
+  so no advance boxes or gap dragging) and a hand-written shaper.
+- **The preview is more forgiving than the export.** A rule naming a missing glyph
+  blocks an export but is skipped in the preview, so a half-built system still
+  previews.
+- **Preview spacing edits reuse the grid's undo log.** Dragging a gap changes two
+  glyphs; the grid log already records one step across many glyphs, so the same
+  undo reverses it.
 - **Bearings follow FontForge.** The left bearing moves the ink and the advance
   together; the right bearing and the advance change only the advance. Only the
   advance is stored: the left bearing is the ink's left edge and the right bearing
