@@ -5,7 +5,7 @@ use std::sync::Mutex;
 use tauri::{AppHandle, State};
 
 use nueon_core::config::GlyphOutline;
-use nueon_core::font::FontIssue;
+use nueon_core::font::{Direction, FontIssue, ShapedRun};
 use nueon_core::model::BooleanOp;
 
 use crate::state::AppState;
@@ -136,6 +136,48 @@ pub struct FontExport {
     pub bytes: usize,
     pub source_glyphs: usize,
     pub lookups: usize,
+}
+
+/// Text shaped against the compiled font, for the type preview.
+#[derive(serde::Serialize)]
+pub struct PreviewShaping {
+    /// Hash of everything the font depends on; equal keys mean the same font.
+    pub key: String,
+    /// The user glyph id behind each font glyph id (`""` for `.notdef` and hidden letters).
+    pub glyph_ids: Vec<String>,
+    /// One shaped run per input line.
+    pub runs: Vec<ShapedRun>,
+}
+
+/// Shape lines of text with the font the export would produce. The compiled font
+/// is cached by its key, so typing does not recompile.
+#[tauri::command]
+pub fn writing_preview_shape(
+    state: State<'_, Shared>,
+    lines: Vec<String>,
+    rtl: bool,
+) -> Result<PreviewShaping, String> {
+    let mut guard = state.lock().map_err(|_| "state poisoned".to_string())?;
+    let state = &mut *guard;
+    let workspace = state
+        .workspace
+        .as_ref()
+        .ok_or_else(|| "no workspace is open".to_string())?;
+    let key = workspace
+        .writing_font_key()
+        .map_err(|err| err.to_string())?;
+    let font = state
+        .preview_font
+        .get_or_build(&key, || workspace.compile_preview_font())
+        .map_err(|err| err.to_string())?;
+    let direction = if rtl { Direction::Rtl } else { Direction::Ltr };
+    let runs = nueon_core::Workspace::shape_preview(&font.bytes, &lines, direction)
+        .map_err(|err| err.to_string())?;
+    Ok(PreviewShaping {
+        key: font.key.clone(),
+        glyph_ids: (*font.glyph_ids).clone(),
+        runs,
+    })
 }
 
 /// Check the writing system for problems a font export would hit, without

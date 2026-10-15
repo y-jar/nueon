@@ -3,6 +3,7 @@
 use std::collections::HashSet;
 use std::path::{Path, PathBuf};
 
+use nueon_core::font::PreviewCache;
 use nueon_core::global::GlobalConfig;
 use nueon_core::{StorageError, Workspace};
 
@@ -16,6 +17,8 @@ pub struct AppState {
     /// Secondary windows being closed by the app itself (quit or workspace
     /// switch); their saved layout is kept instead of pruned.
     pub silent_close: HashSet<String>,
+    /// The last compiled type-preview font, reused until the font would change.
+    pub preview_font: PreviewCache,
 }
 
 impl AppState {
@@ -55,6 +58,7 @@ impl AppState {
             global,
             workspace,
             silent_close: HashSet::new(),
+            preview_font: PreviewCache::default(),
         }
     }
 
