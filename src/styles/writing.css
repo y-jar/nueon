@@ -621,6 +621,13 @@
   font-size: 11px;
   color: var(--muted);
   pointer-events: none;
+  user-select: none;
+  -webkit-user-select: none;
+}
+
+.glyph-canvas {
+  user-select: none;
+  -webkit-user-select: none;
 }
 
 .menu-wrap {
@@ -832,6 +839,8 @@
   color: var(--bg);
   font-size: 11px;
   pointer-events: none;
+  user-select: none;
+  -webkit-user-select: none;
 }
 
 .snap-label.weld {
@@ -1027,3 +1036,30 @@
 .canvas-svg .glyph-node.node-hover { stroke: var(--accent); stroke-width: 2; }
 .canvas-svg .segment-hover { fill: none; stroke: var(--accent); stroke-width: 3; opacity: 0.6; vector-effect: non-scaling-stroke; pointer-events: none; }
 .canvas-svg .handle.handle-hover { fill: var(--accent); }
+
+.canvas-svg .align-line {
+  stroke: var(--advance, #7fae7a);
+  stroke-width: 1;
+  stroke-dasharray: 5 4;
+  vector-effect: non-scaling-stroke;
+  pointer-events: none;
+}
+
+.canvas-svg .align-from {
+  fill: var(--advance, #7fae7a);
+  pointer-events: none;
+}
+
+.canvas-svg .clean-spot {
+  fill: var(--bg);
+  stroke: var(--start-arrow, #7aa2d6);
+  stroke-width: 2;
+  vector-effect: non-scaling-stroke;
+  pointer-events: none;
+}
+
+.canvas-svg .clean-spot.clean-spot-active {
+  fill: var(--start-arrow, #7aa2d6);
+}
+
+.snap-label.spot-label { background: var(--start-arrow, #7aa2d6); }

@@ -2,7 +2,15 @@
 import type { GlyphOutline } from "./api.ts";
 import { isContour, type NodeRef, type Point } from "./writingCommands.ts";
 
-export type SnapKind = "node" | "guide" | "origin" | "advance" | "midpoint" | "grid";
+export type SnapKind =
+  | "node"
+  | "guide"
+  | "origin"
+  | "advance"
+  | "midpoint"
+  | "grid"
+  | "align"
+  | "angle";
 
 export interface SnapTarget {
   kind: SnapKind;
@@ -11,6 +19,8 @@ export interface SnapTarget {
   y?: number;
   label: string;
   node?: NodeRef;
+  /** The node an alignment or angle line runs through, so the canvas can draw the guide. */
+  from?: Point;
 }
 
 export interface SnapResult {

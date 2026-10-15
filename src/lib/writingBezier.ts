@@ -53,6 +53,9 @@ function controls(a: GlyphNode, b: GlyphNode): [Pt, Pt, Pt, Pt] {
 
 /** The point at parameter `t` on the segment from `a` to `b`. */
 export function curvePoint(a: GlyphNode, b: GlyphNode, t: number): Pt {
+  if (!a.handle_out && !b.handle_in) {
+    return { x: a.x + (b.x - a.x) * t, y: a.y + (b.y - a.y) * t };
+  }
   const [p0, p1, p2, p3] = controls(a, b);
   const u = 1 - t;
   const b0 = u * u * u;

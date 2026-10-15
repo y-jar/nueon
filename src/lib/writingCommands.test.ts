@@ -468,3 +468,47 @@ test("every command that takes an element index leaves the outline alone when th
   assert.equal(setNodeKind(outline, { element: 3, node: 0 }, "smooth"), outline);
   assert.equal(moveNodes(outline, [{ element: 3, node: 0 }], 1, 1), outline);
 });
+
+test("nearestSegment finds a long straight edge anywhere along it, not only near sampled points", () => {
+  const edge: GlyphOutline = {
+    elements: [
+      {
+        kind: "contour",
+        closed: false,
+        fill_rule: "nonzero",
+        nodes: [
+          { x: 0, y: 0, kind: "corner" },
+          { x: 1000, y: 0, kind: "corner" },
+        ],
+      },
+    ],
+  };
+  for (const x of [20, 61, 333, 507, 990]) {
+    const hit = nearestSegment(edge, { x, y: 3 }, 8);
+    assert.ok(hit, `a click ${3} units off the edge at x=${x} should hit it`);
+    assert.ok(Math.abs(hit.distance - 3) < 0.01, `distance ${hit.distance}`);
+    assert.ok(Math.abs(hit.point.x - x) < 0.5 && Math.abs(hit.point.y) < 0.01);
+  }
+  assert.equal(nearestSegment(edge, { x: 500, y: 9 }, 8), null, "beyond the radius is a miss");
+  assert.equal(nearestSegment(edge, { x: 1030, y: 0 }, 8), null, "past the end is a miss");
+});
+
+test("nearestSegment on a curve returns the true closest point, not the closest sample", () => {
+  const arc: GlyphOutline = {
+    elements: [
+      {
+        kind: "contour",
+        closed: false,
+        fill_rule: "nonzero",
+        nodes: [
+          { x: 0, y: 0, kind: "smooth", handle_out: [0, 400] },
+          { x: 1000, y: 0, kind: "smooth", handle_in: [0, 400] },
+        ],
+      },
+    ],
+  };
+  const hit = nearestSegment(arc, { x: 500, y: 300 + 2 }, 6);
+  assert.ok(hit);
+  assert.ok(Math.abs(hit.t - 0.5) < 0.01, `t ${hit.t}`);
+  assert.ok(hit.distance < 3.01, `distance ${hit.distance}`);
+});

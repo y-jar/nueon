@@ -202,7 +202,8 @@ layer (`src-tauri/`), and the Svelte 5 frontend (`src/`). See `docs/ARCHITECTURE
   but keeps the curve's shape, Ctrl+Delete removes it plainly. Arrow keys nudge
   1 unit (Shift 10), Tab/Shift+Tab step through nodes, V is the default
   Select tool (whole shapes: click, Shift-click, box, drag, Ctrl+D, Delete),
-  a glyph grid of boxed cells (real outline and advance box per cell, label
+  Shift snapping (alignment with other nodes, 45/135 degree lines, clean node spots
+  in Node Mod, centre-of-line drag), a glyph grid of boxed cells (real outline and advance box per cell, label
   above, faint X slots for sounds with no glyph, S/M/L and slider sizes, filters,
   a "N of M glyphs drawn" progress line, virtualised for 500+ glyphs), a clearer
   visual language (square/circle/diamond nodes with crosses, X-marked
@@ -281,7 +282,9 @@ layer (`src-tauri/`), and the Svelte 5 frontend (`src/`). See `docs/ARCHITECTURE
   in `writing.test.ts`, `writingTransform.test.ts` (matrix order, scale/rotate/skew about a pivot,
   Shift/Alt, handle hit rules, component folding, dialog order, copy) and
   `writingNodeType.test.ts` (handle growth, symmetric/smooth lengths, open ends),
-  both mutation-checked, `writingGrid.test.ts` (cell view box, filters, empty slots, progress, columns,
+  both mutation-checked, `writingSuggest.test.ts` (clean spots, alignment and angle targets, claim
+  precedence, insertion choice, centre drag; mutation-checked) and
+  `writingGrid.test.ts` (cell view box, filters, empty slots, progress, columns,
   virtual window, reload guard) and `outlineCache.test.ts` (dedupe, concurrency,
   invalidation, retry), both mutation-checked, `writingInfo.test.ts` (guide labels, coordinate/angle/zoom formatting, drag
   readout, contour direction, start direction, open ends; mutation-checked),

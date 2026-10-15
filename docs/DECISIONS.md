@@ -118,6 +118,18 @@ commit per stage. See `docs/PROBING.md`.
   position, so panning and zooming never hide them.
 - **Rulers and ruler-dragged guides are deferred** (the viewport model was already
   large); see `deferred.md`.
+- **Shift means "aim for snapping", not "no snapping".** It used to switch
+  snapping off. Users reach for Shift when they want help, so it now adds
+  alignment with other nodes and 45/135 degree lines, and guide-line feedback.
+  Rejected: a separate key; one more modifier to remember.
+- **A node lock beats every alignment**, and guide rails, the left edge and the
+  advance keep their axis, so Shift can only add precision, never move a point off
+  something it already snapped to. Found by mutation testing; three of the ten
+  claims in `snapExtended` were untested until then.
+- **Line hit-testing is exact, not sampled.** `nearestSegment` took the closest
+  of 24 samples, which on a long line left gaps wider than the click radius: a
+  click right on a 1200 unit line missed 43% of the time (measured), so Node Mod
+  felt random. It now refines to the true closest point (0% missed).
 - **Grid cells share one scale.** Fitting each glyph to its own box would make a
   full stop look as large as a capital and hide spacing. Every cell shows the em
   (and the whole advance if wider), centred on the advance box.

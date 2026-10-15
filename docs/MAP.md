@@ -155,6 +155,7 @@ and regenerate.
 - `writingSelect.ts` — Element-level selection for the Select tool: hit testing, marquee, move, duplicate.
 - `writingSidebar.ts` — Pure filtering and grouping for the Writing System sidebar glyph list.
 - `writingSnap.ts` — Pure snapping: nodes, guide rails, bearing lines, edge midpoints and the grid.
+- `writingSuggest.ts` — Clean node spots on a segment, and alignment/angle snapping to other nodes.
 - `writingTransform.ts` — Pure transform maths for the Select tool's transform box and the Transform dialog.
 - `writingViewport.ts` — Pure viewport math for the glyph canvas: zoom about a point, pan, fit.
 

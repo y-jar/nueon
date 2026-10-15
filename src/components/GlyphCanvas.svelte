@@ -468,6 +468,18 @@
         />
       {/each}
     {/each}
+    {#if editor.spots.length > 0}
+      {#each editor.spots as spot (spot.t)}
+        <circle
+          class="clean-spot"
+          class:clean-spot-active={editor.spotAt?.t === spot.t}
+          data-spot={spot.label}
+          cx={spot.point.x}
+          cy={flipY(spot.point.y)}
+          r={(editor.spotAt?.t === spot.t ? 7 : 4.5) * handleScale}
+        />
+      {/each}
+    {/if}
     {#if hoverSegmentD}<path class="segment-hover" d={hoverSegmentD} />{/if}
     {#each handleDots as hd (hd.key)}
       {@const hovered = editor.hover?.key === `h:${hd.key}`}
@@ -567,6 +579,23 @@
           <line class="snap-line" x1={minX} y1={flipY(t.y ?? 0)} x2={maxX} y2={flipY(t.y ?? 0)} />
         {:else if t.kind === "origin" || t.kind === "advance"}
           <line class="snap-line" x1={t.x} y1={-storageMaxY} x2={t.x} y2={-storageMinY} />
+        {:else if t.kind === "align" && t.from}
+          {#if t.x !== undefined}
+            <line class="align-line" x1={t.x} y1={-storageMaxY} x2={t.x} y2={-storageMinY} />
+          {:else if t.y !== undefined}
+            <line class="align-line" x1={minX} y1={flipY(t.y)} x2={maxX} y2={flipY(t.y)} />
+          {/if}
+          <circle class="align-from" cx={t.from.x} cy={flipY(t.from.y)} r={4 * handleScale} />
+        {:else if t.kind === "angle" && t.from}
+          {@const ux = /135/.test(t.label) ? -1 : 1}
+          <line
+            class="align-line"
+            x1={t.from.x - ux * 4000}
+            y1={flipY(t.from.y - 4000)}
+            x2={t.from.x + ux * 4000}
+            y2={flipY(t.from.y + 4000)}
+          />
+          <circle class="align-from" cx={t.from.x} cy={flipY(t.from.y)} r={4 * handleScale} />
         {/if}
       {/each}
       {#if hit.locked}
@@ -582,7 +611,9 @@
       {/if}
     {/if}
   </svg>
-  {#if editor.snapHit}
+  {#if editor.spotAt}
+    <div class="snap-label spot-label" data-testid="spot-label">add node at {editor.spotAt.label}</div>
+  {:else if editor.snapHit}
     <div class="snap-label" class:weld={!!editor.snapHit.weld}>
       {editor.snapHit.weld
         ? "release to weld"

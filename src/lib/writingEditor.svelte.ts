@@ -75,8 +75,16 @@ import {
 } from "./writingTransform";
 import { kindOfSelection, setKinds } from "./writingNodeType";
 import {
+  chooseInsertion,
+  cleanNodeSpots,
+  segmentCentreDelta,
+  snapExtended,
+  type Spot,
+} from "./writingSuggest";
+import {
   addExtrema,
   constrainHandle,
+  curvePoint,
   dragSegment,
   hitTarget,
   pullHandles,
@@ -112,7 +120,6 @@ import {
   constrainAngle,
   constrainAxis,
   isOpenEndpoint,
-  snapPoint as snapTo,
   type SnapResult,
 } from "./writingSnap";
 
@@ -141,6 +148,12 @@ export const editor = $state({
   grid: 10,
   showGuides: true,
   showAllHandles: false,
+  /** Clean spots offered on the hovered line in Node Mod while Shift is held. */
+  spots: [] as Spot[],
+  /** Which element the shown spots belong to. */
+  spotsElement: -1,
+  /** The spot the next Node Mod click would use. */
+  spotAt: null as Spot | null,
   /** The pointer in glyph space for the info bar; null when it has left the canvas. */
   cursor: null as Point | null,
   /** Where the current gesture began, for distance and angle in the info bar. */
@@ -691,16 +704,19 @@ export function setGuideHeights(guides: { y: number; label: string }[]): void {
   });
 }
 
+/**
+ * Snap a point. Shift is the "aim for snapping" key: it adds alignment with
+ * other nodes (horizontal, vertical, 45 and 135 degrees) to the usual targets.
+ * `extended` is Shift; there is no key that turns snapping off.
+ */
 function snapAt(
   raw: Point,
   exclude: NodeRef[],
   dragging: NodeRef | null,
-  disabled: boolean,
+  extended: boolean,
 ): SnapResult {
-  if (disabled || !editor.outline) {
-    return { point: raw, hits: [], locked: false, weld: null };
-  }
-  return snapTo(
+  if (!editor.outline) return { point: raw, hits: [], locked: false, weld: null };
+  return snapExtended(
     {
       outline: editor.outline,
       guides: editor.guideHeights,
@@ -712,10 +728,13 @@ function snapAt(
       dragging,
     },
     raw,
+    extended,
   );
 }
 
 const NODE_RADIUS = 8;
+/** How far from a line, in screen pixels, a Node Mod click still counts as on it. */
+const NODE_MOD_LINE_PX = 10;
 
 function selectNode(ref: NodeRef, additive: boolean): void {
   const exists = editor.selection.some((s) => s.element === ref.element && s.node === ref.node);
@@ -984,9 +1003,12 @@ export function pointerDown(raw: Point, mods: Modifiers): void {
         }
         return;
       }
-      const seg = nearestSegment(outline, raw, radius);
+      const seg = nearestSegment(outline, raw, NODE_MOD_LINE_PX / editor.zoom);
       if (seg) {
-        commit(splitSegment(outline, seg.element, seg.segment, seg.t), "node added");
+        const ins = chooseInsertion(outline, seg, raw, editor.zoom, mods.shift);
+        commit(splitSegment(outline, ins.element, ins.segment, ins.t), ins.spot ? `node added (${ins.spot.label})` : "node added");
+        editor.spots = [];
+        editor.spotAt = null;
       } else {
         say(TOOL_HINT.node);
       }
@@ -1105,6 +1127,12 @@ export function pointerMove(raw: Point, mods: Modifiers): void {
   } else if (editor.hoverHandle !== null) {
     editor.hoverHandle = null;
   }
+  if (!drag && effectiveTool() === "node") {
+    updateSpots(raw, mods.shift);
+  } else if (editor.spots.length > 0 || editor.spotAt) {
+    editor.spots = [];
+    editor.spotAt = null;
+  }
   if (!drag && effectiveTool() === "direct") {
     const t = hitTarget(editor.outline, editor.selection, raw, editor.zoom, editor.showAllHandles);
     const next = hoverOf(t);
@@ -1151,8 +1179,27 @@ export function pointerMove(raw: Point, mods: Modifiers): void {
     drag.last = raw;
     drag.moved = true;
   } else if (drag.kind === "segment") {
-    const delta = { x: raw.x - drag.start.x, y: raw.y - drag.start.y };
-    editor.outline = dragSegment(drag.base, drag.element, drag.segment, drag.t, delta);
+    let delta = { x: raw.x - drag.start.x, y: raw.y - drag.start.y };
+    let t = drag.t;
+    if (mods.shift) {
+      const ctx = {
+        outline: drag.base,
+        guides: editor.guideHeights,
+        advance: drag.base.advance ?? null,
+        grid: editor.grid,
+        gridOn: editor.snap,
+        zoom: editor.zoom,
+        exclude: segmentEnds(drag.base, drag.element, drag.segment),
+      };
+      delta = segmentCentreDelta(ctx, drag.element, drag.segment, delta);
+      t = 0.5;
+      const centre = centreOf(drag.base, drag.element, drag.segment);
+      const snapped = centre ? snapExtended(ctx, { x: centre.x + delta.x, y: centre.y + delta.y }, true) : null;
+      editor.snapHit = snapped && snapped.hits.length > 0 ? snapped : null;
+    } else if (editor.snapHit) {
+      editor.snapHit = null;
+    }
+    editor.outline = dragSegment(drag.base, drag.element, drag.segment, t, delta);
     drag.moved = true;
   } else if (drag.kind === "pull") {
     const next = pullHandles(editor.outline, drag.ref, raw);
@@ -1191,6 +1238,49 @@ export function pointerMove(raw: Point, mods: Modifiers): void {
   } else if (drag.kind === "marquee") {
     editor.marquee = { a: drag.from, b: raw };
   }
+}
+
+/** While Shift is held over a line in Node Mod, show the clean spots on it and the one a click would use. */
+function updateSpots(raw: Point, shift: boolean): void {
+  if (!editor.outline || !shift) {
+    if (editor.spots.length > 0) editor.spots = [];
+    if (editor.spotAt) editor.spotAt = null;
+    return;
+  }
+  const seg = nearestSegment(editor.outline, raw, NODE_MOD_LINE_PX / editor.zoom);
+  if (!seg) {
+    if (editor.spots.length > 0) editor.spots = [];
+    if (editor.spotAt) editor.spotAt = null;
+    return;
+  }
+  const same =
+    editor.spots.length > 0 &&
+    editor.spots[0].segment === seg.segment &&
+    editor.spotsElement === seg.element;
+  if (!same) {
+    editor.spots = cleanNodeSpots(editor.outline, seg.element, seg.segment);
+    editor.spotsElement = seg.element;
+  }
+  const ins = chooseInsertion(editor.outline, seg, raw, editor.zoom, true);
+  const key = (x: Spot | null) => (x ? `${x.segment}:${x.t}` : "");
+  if (key(ins.spot) !== key(editor.spotAt)) editor.spotAt = ins.spot;
+}
+
+function segmentEnds(outline: api.GlyphOutline, element: number, segment: number): NodeRef[] {
+  const el = outline.elements[element];
+  if (!el || !isContour(el)) return [];
+  return [
+    { element, node: segment },
+    { element, node: (segment + 1) % el.nodes.length },
+  ];
+}
+
+function centreOf(outline: api.GlyphOutline, element: number, segment: number): Point | null {
+  const el = outline.elements[element];
+  if (!el || !isContour(el)) return null;
+  const a = el.nodes[segment];
+  const b = el.nodes[(segment + 1) % el.nodes.length];
+  return a && b ? curvePoint(a, b, 0.5) : null;
 }
 
 function hoverOf(t: Target | null): { kind: string; key: string } | null {

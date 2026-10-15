@@ -630,6 +630,36 @@ handle never reaches past the next node (an open end gets its one handle).
 Symmetric nodes are drawn as diamonds, smooth as circles, corners as squares
 (`data-kind` on each node for tests).
 
+### Snapping and Shift
+
+Pure logic in `src/lib/writingSnap.ts` (nodes, rails, edge lines, grid) and
+`src/lib/writingSuggest.ts` (everything Shift adds). **Shift is the "aim for
+snapping" key**; there is no key that turns snapping off.
+
+- **Without Shift:** a node within 10 screen px wins, else each axis snaps to the
+  nearest guide rail, the left edge or the advance line, else the grid if it is
+  on.
+- **With Shift,** moves also snap to other nodes' **horizontal and vertical
+  alignment**, and to the **45 and 135 degree lines** through them (a dashed green
+  guide and a dot on the node it comes from are drawn). Precedence: a node lock
+  wins and draws no guides; a guide rail, the left edge and the advance line keep
+  their own axis; alignment beats the grid on the axis it claims; a diagonal pins
+  both axes, and where one axis already aligned the point goes to the crossing.
+- **Node Mod, Shift hover:** clean spots appear on the line under the pointer, as
+  blue rings, the one a click would use filled and named ("add node at middle").
+  A straight edge offers its middle, thirds and quarters; a curve its middle and
+  its extrema; every segment also offers the points level (same x or y) with
+  another node. A click inside 24 screen px of a spot uses it; otherwise, and
+  always without Shift, the node goes exactly where you clicked.
+- **Node Mod hit area.** A click within 10 screen px of a line counts as on it.
+  The test is an exact closest-point search; the old version sampled 24 points
+  per segment, so on a 1200 unit line a click on the line missed 43% of the time.
+- **Direct tool, Shift-drag a line:** drags the **centre** of the line (the point
+  at t = 0.5, not the point you grabbed), and that centre snaps like a node, with
+  the alignment guides. Without Shift the grabbed point follows the pointer.
+- **Handles:** Shift constrains a handle to 0, 45 or 90 degrees (so it does not
+  also use the alignment snapping).
+
 ### Glyph grid
 
 The writing tab's grid (`GlyphGrid.svelte`, `GlyphTile.svelte`, pure logic in
@@ -745,6 +775,9 @@ Pure logic is in `src/lib/writingBezier.ts`.
 | Alt-drag a node | Pull out symmetric handles | Direct tool |
 | Double-click a node | Toggle corner / smooth | Direct tool |
 | Shift/Ctrl-drag a handle | Constrain to 45 / 15 degrees | Alt breaks the node's constraint |
+| Shift while moving a node, shape or point | Align with other nodes, snap to 45/135 degree lines | See Snapping and Shift |
+| Shift-hover a line in Node Mod | Show clean node spots | Click uses the nearest |
+| Shift-drag a line (Direct) | Drag its centre, with snapping | |
 | Arrows, Shift+Arrows | Nudge 1 or 10 units | Shapes (Select) or nodes (Direct) |
 | Tab, Shift+Tab | Step through nodes | |
 | Ctrl+A | Select all | Shapes in Select, nodes otherwise |

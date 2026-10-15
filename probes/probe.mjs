@@ -7020,6 +7020,138 @@ async function main() {
     if (cost.worst > 250) throw new Error(`scrolling a ${N}-glyph grid has a ${cost.worst} ms frame`);
     await screenshot("p143-large-grid");
   });
+
+  // -- probes 144-: polish round (double-click selection, node mod, shift snapping)
+  const selectedText = () => js(`return String(window.getSelection()?.toString() ?? '');`);
+
+  await probe("144-double-clicking-the-canvas-does-not-select-its-hint-text", async () => {
+    await freshGlyph();
+    await tool("v");
+    await js(`window.getSelection()?.removeAllRanges(); return true;`);
+    const at = await js(`const b = document.querySelector('.canvas-svg').getBoundingClientRect();
+      const h = document.querySelector('.canvas-hint').getBoundingClientRect();
+      return { x: Math.round(h.left + 12), y: Math.round(h.top + h.height / 2), b: [b.left, b.top, b.width, b.height] };`);
+    // Real double-click on the hint, where the browser would otherwise select a word.
+    await wd("POST", `/session/${sessionId}/actions`, {
+      actions: [{ type: "pointer", id: "mouse", parameters: { pointerType: "mouse" }, actions: [
+        { type: "pointerMove", duration: 0, origin: "viewport", x: at.x, y: at.y },
+        { type: "pointerDown", button: 0 }, { type: "pointerUp", button: 0 },
+        { type: "pointerDown", button: 0 }, { type: "pointerUp", button: 0 }] }],
+    });
+    await idle(200);
+    const sel = await selectedText();
+    assertEqual(sel, "", "nothing is selected after a double-click on the canvas hint");
+    const cs = await js(`const h = document.querySelector('.canvas-hint'); const c = document.querySelector('.glyph-canvas');
+      return [getComputedStyle(h).userSelect || getComputedStyle(h).webkitUserSelect, getComputedStyle(c).userSelect || getComputedStyle(c).webkitUserSelect];`);
+    assertEqual(cs[0], "none", "hint is user-select none");
+    assertEqual(cs[1], "none", "canvas is user-select none");
+  });
+
+  const longLine = async () => {
+    await freshGlyph();
+    await tool("p");
+    await click1(0.2, 0.5);
+    await click1(0.8, 0.5);
+    await key("Enter");
+    await tool("n");
+  };
+  const pointsOn = () => js(`return document.querySelectorAll('.glyph-node').length;`);
+
+  await probe("145-node-mod-adds-a-node-anywhere-along-a-long-line", async () => {
+    await longLine();
+    assertEqual(await pointsOn(), 2, "two nodes to start");
+    const fracs = [0.27, 0.41, 0.58, 0.73];
+    for (const f of fracs) {
+      const before = await pointsOn();
+      await click1(f, 0.5 + 0.004);
+      await waitJs(`document.querySelectorAll('.glyph-node').length === ${before + 1}`, { label: `a node added near ${f}` });
+    }
+    assertEqual(await pointsOn(), 6, "four nodes were added, one per click, none missed");
+  });
+
+  await probe("146-shift-hover-in-node-mod-shows-clean-spots-and-a-click-uses-one", async () => {
+    await longLine();
+    await fire("pointermove", 0.52, 0.5 + 0.003, { shiftKey: true });
+    await waitJs(`document.querySelectorAll('.clean-spot').length >= 3`, { label: "clean spots appear while Shift is held" });
+    const labels = await js(`return [...document.querySelectorAll('.clean-spot')].map((c) => c.dataset.spot);`);
+    for (const want of ["middle", "1/3", "2/3"]) if (!labels.includes(want)) throw new Error(`missing spot ${want} in ${labels}`);
+    await waitJs(`document.querySelectorAll('.clean-spot-active').length === 1`, { label: "the nearest spot is highlighted" });
+    await waitJs(`!!document.querySelector('[data-testid="spot-label"]')`, { label: "a label says what a click will do" });
+    await fire("pointermove", 0.52, 0.5 + 0.003, {});
+    await waitJs(`document.querySelectorAll('.clean-spot').length === 0`, { label: "spots vanish without Shift" });
+    await fire("pointermove", 0.53, 0.5 + 0.003, { shiftKey: true });
+    await waitJs(`document.querySelectorAll('.clean-spot-active').length === 1`, { label: "spots back" });
+    const before = await pointsOn();
+    const mid = await js(`const a = [...document.querySelectorAll('.glyph-node')].map((n) => n.getBoundingClientRect());
+      return a.length === 2 ? { x: (a[0].left + a[1].left) / 2 + a[0].width / 2 } : null;`);
+    await fire("pointerdown", 0.53, 0.5 + 0.003, { shiftKey: true });
+    await fire("pointerup", 0.53, 0.5 + 0.003, { shiftKey: true });
+    await waitJs(`document.querySelectorAll('.glyph-node').length === ${before + 1}`, { label: "node added" });
+    const nodes = await js(`const b = document.querySelector('.canvas-svg').getBoundingClientRect();
+      return [...document.querySelectorAll('.glyph-node')].map((n) => { const r = n.getBoundingClientRect(); return (r.left + r.width / 2 - b.left) / b.width; }).sort((p, q) => p - q);`);
+    const a0 = nodes[0], a1 = nodes[nodes.length - 1];
+    const frac = (nodes[1] - a0) / (a1 - a0);
+    const ok = [1 / 2, 1 / 3, 2 / 3, 1 / 4, 3 / 4].some((c) => Math.abs(c - frac) < 0.004);
+    if (!ok) throw new Error(`the node was not placed on a clean fraction: ${frac}`);
+    void mid;
+    await screenshot("p146-clean-spots");
+  });
+
+  await probe("147-shift-moving-a-node-aligns-it-with-another-node", async () => {
+    await freshGlyph();
+    await tool("p");
+    for (const [x, y] of [[0.3, 0.65], [0.7, 0.65], [0.7, 0.35]]) await click1(x, y);
+    await key("Enter");
+    await tool("a");
+    await click1(0.9, 0.9);
+    const p = await js(`const b = document.querySelector('.canvas-svg').getBoundingClientRect();
+      const r = [...document.querySelectorAll('.glyph-node')].map((n) => n.getBoundingClientRect());
+      return r.map((q) => ({ fx: (q.left + q.width / 2 - b.left) / b.width, fy: (q.top + q.height / 2 - b.top) / b.height }));`);
+    const target = p[1];
+    await fire("pointerdown", p[2].fx, p[2].fy);
+    await fire("pointermove", p[2].fx - 0.03, p[2].fy - 0.02, { shiftKey: true });
+    await fire("pointermove", target.fx - 0.002, p[2].fy - 0.06, { shiftKey: true });
+    await waitJs(`document.querySelectorAll('.align-line').length >= 1`, { label: "an alignment guide is drawn" });
+    await fire("pointerup", target.fx - 0.002, p[2].fy - 0.06, { shiftKey: true });
+    const after = await js(`const b = document.querySelector('.canvas-svg').getBoundingClientRect();
+      const r = [...document.querySelectorAll('.glyph-node')].map((n) => n.getBoundingClientRect());
+      return r.map((q) => (q.left + q.width / 2 - b.left) / b.width);`);
+    if (Math.abs(after[2] - after[1]) > 0.0015) throw new Error(`the node did not align horizontally: ${after[2]} vs ${after[1]}`);
+    await screenshot("p147-aligned");
+  });
+
+  await probe("148-shift-dragging-a-line-moves-its-centre-and-snaps", async () => {
+    await freshGlyph();
+    await tool("p");
+    for (const [x, y] of [[0.3, 0.7], [0.7, 0.7], [0.7, 0.4], [0.3, 0.4]]) await click1(x, y);
+    await fire("pointerdown", 0.3, 0.7); await fire("pointerup", 0.3, 0.7);
+    await key("Enter");
+    await tool("a");
+    await click1(0.9, 0.9);
+    const info = await js(`const b = document.querySelector('.canvas-svg').getBoundingClientRect();
+      const r = [...document.querySelectorAll('.glyph-node')].map((n) => n.getBoundingClientRect());
+      return r.map((q) => ({ fx: (q.left + q.width / 2 - b.left) / b.width, fy: (q.top + q.height / 2 - b.top) / b.height }));`);
+    const a = info[0], b = info[1];
+    const grab = { fx: a.fx + (b.fx - a.fx) * 0.8, fy: a.fy };
+    await fire("pointerdown", grab.fx, grab.fy);
+    await fire("pointermove", grab.fx, grab.fy - 0.03, { shiftKey: true });
+    await fire("pointermove", grab.fx, grab.fy - 0.06, { shiftKey: true });
+    const centreMoved = await js(`const d = document.querySelector('.outline').getAttribute('d'); return d;`);
+    await fire("pointerup", grab.fx, grab.fy - 0.06, { shiftKey: true });
+    const d = centreMoved;
+    const m = d.match(/C ([\-\d.]+) ([\-\d.]+) ([\-\d.]+) ([\-\d.]+) ([\-\d.]+) ([\-\d.]+)/);
+    if (!m) throw new Error(`the line did not become a curve: ${d}`);
+    await key("z", { ctrlKey: true });
+    // Without Shift the grabbed point (80% along) follows; with Shift the centre (50%) does. The two
+    // curves must differ, which they only do if Shift changed the anchor.
+    await fire("pointerdown", grab.fx, grab.fy);
+    await fire("pointermove", grab.fx, grab.fy - 0.03);
+    await fire("pointermove", grab.fx, grab.fy - 0.06);
+    const plain = await js(`return document.querySelector('.outline').getAttribute('d');`);
+    await fire("pointerup", grab.fx, grab.fy - 0.06);
+    if (plain === d) throw new Error("Shift made no difference to which point of the line is dragged");
+    await key("z", { ctrlKey: true });
+  });
 }
 
 try {

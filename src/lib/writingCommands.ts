@@ -302,6 +302,34 @@ export interface SegmentHit {
   point: Point;
 }
 
+/** The parameter and distance of the closest point on one segment: coarse scan, then a ternary refine. */
+function closestOnSegment(a: GlyphNode, b: GlyphNode, p: Point): { t: number; distance: number; point: Point } {
+  const steps = 32;
+  let bestT = 0;
+  let bestD = Infinity;
+  for (let k = 0; k <= steps; k++) {
+    const q = segmentAt(a, b, k / steps);
+    const d = Math.hypot(q.x - p.x, q.y - p.y);
+    if (d < bestD) {
+      bestD = d;
+      bestT = k / steps;
+    }
+  }
+  let lo = Math.max(0, bestT - 1 / steps);
+  let hi = Math.min(1, bestT + 1 / steps);
+  for (let i = 0; i < 28; i++) {
+    const m1 = lo + (hi - lo) / 3;
+    const m2 = hi - (hi - lo) / 3;
+    const q1 = segmentAt(a, b, m1);
+    const q2 = segmentAt(a, b, m2);
+    if (Math.hypot(q1.x - p.x, q1.y - p.y) < Math.hypot(q2.x - p.x, q2.y - p.y)) hi = m2;
+    else lo = m1;
+  }
+  const t = (lo + hi) / 2;
+  const point = segmentAt(a, b, t);
+  return { t, distance: Math.hypot(point.x - p.x, point.y - p.y), point };
+}
+
 export function nearestSegment(
   outline: GlyphOutline,
   point: Point,
@@ -314,21 +342,15 @@ export function nearestSegment(
     for (let si = 0; si < count; si++) {
       const a = element.nodes[si];
       const b = element.nodes[(si + 1) % element.nodes.length];
-      const steps = 24;
-      for (let k = 0; k <= steps; k++) {
-        const t = k / steps;
-        const p = segmentAt(a, b, t);
-        const distance = Math.hypot(p.x - point.x, p.y - point.y);
-        if (distance <= radius && (!best || distance < best.distance)) {
-          best = { element: ei, segment: si, t, distance, point: p };
-        }
+      const r = closestOnSegment(a, b, point);
+      if (r.distance <= radius && (!best || r.distance < best.distance)) {
+        best = { element: ei, segment: si, t: r.t, distance: r.distance, point: r.point };
       }
     }
   });
   return best;
 }
 
-/** Insert a node on a segment at parameter `t`, preserving the curve shape. */
 export function splitSegment(
   outline: GlyphOutline,
   element: number,
