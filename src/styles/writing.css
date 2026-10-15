@@ -898,3 +898,7 @@
 .node-type-buttons button { display: inline-flex; gap: 4px; align-items: center; font-size: 11px; padding: 2px 6px; }
 .node-type-buttons button.active { background: var(--accent); color: var(--bg); }
 .node-type-buttons svg { fill: none; stroke: currentColor; stroke-width: 1.5; }
+
+.canvas-svg .glyph-node.node-hover { stroke: var(--accent); stroke-width: 2; }
+.canvas-svg .segment-hover { fill: none; stroke: var(--accent); stroke-width: 3; opacity: 0.6; vector-effect: non-scaling-stroke; pointer-events: none; }
+.canvas-svg .handle.handle-hover { fill: var(--accent); }

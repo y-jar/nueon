@@ -12,7 +12,6 @@ import {
   cycleNodeKind,
   distributeElements,
   emptyOutline,
-  hitHandle,
   hitNode,
   isContour,
   knifeCut,
@@ -76,6 +75,16 @@ import {
 } from "./writingTransform";
 import { kindOfSelection, setKinds } from "./writingNodeType";
 import {
+  addExtrema,
+  constrainHandle,
+  dragSegment,
+  hitTarget,
+  pullHandles,
+  setHandleBroken,
+  toggleNode,
+  type Target,
+} from "./writingBezier";
+import {
   clampZoom,
   fitView,
   panBy,
@@ -132,6 +141,8 @@ export const editor = $state({
   grid: 10,
   showGuides: true,
   showAllHandles: false,
+  /** What the pointer is over in the Direct tool, for hover highlight; written only when it changes. */
+  hover: null as { kind: string; key: string } | null,
   composeOpen: false,
   loading: false,
   status: "",
@@ -180,7 +191,9 @@ interface TransformDrag {
 let drag:
   | { kind: "move"; origin: Point; last: Point; moved: boolean; anchor: NodeRef; axis: boolean; start: Point }
   | { kind: "marquee"; from: Point; additive: boolean }
-  | { kind: "handle"; ref: NodeRef; which: "in" | "out" }
+  | { kind: "handle"; ref: NodeRef; which: "in" | "out"; broken: boolean }
+  | { kind: "segment"; element: number; segment: number; t: number; start: Point; base: api.GlyphOutline; moved: boolean }
+  | { kind: "pull"; ref: NodeRef; moved: boolean }
   | { kind: "pen"; ref: NodeRef }
   | { kind: "shape"; from: Point }
   | { kind: "pan"; x: number; y: number }
@@ -883,18 +896,23 @@ export function pointerDown(raw: Point, mods: Modifiers): void {
       return;
     }
     case "direct": {
-      const handle = hitHandle(outline, raw, radius);
-      if (handle) {
+      const target = hitTarget(outline, editor.selection, raw, editor.zoom, editor.showAllHandles);
+      editor.selectedComponent = null;
+      if (target?.kind === "handle") {
         history = pushHistory(history, outline);
         syncHistoryFlags();
-        drag = { kind: "handle", ref: handle.ref, which: handle.which };
+        drag = { kind: "handle", ref: target.ref, which: target.which, broken: mods.alt };
         return;
       }
-      const hit = hitNode(outline, raw, radius);
-      if (hit) {
+      if (target?.kind === "node") {
+        const hit = target.ref;
         selectNode(hit, mods.shift);
         history = pushHistory(history, outline);
         syncHistoryFlags();
+        if (mods.alt && !mods.shift) {
+          drag = { kind: "pull", ref: hit, moved: false };
+          return;
+        }
         const startNode = nodeAt(hit);
         drag = {
           kind: "move",
@@ -905,32 +923,42 @@ export function pointerDown(raw: Point, mods: Modifiers): void {
           axis: mods.ctrl,
           start: startNode ? { x: startNode.x, y: startNode.y } : raw,
         };
-      } else {
-        const seg = nearestSegment(outline, raw, radius);
-        if (seg && mods.shift) {
-          const element = outline.elements[seg.element];
+        return;
+      }
+      if (target?.kind === "segment") {
+        if (mods.shift) {
+          const element = outline.elements[target.element];
           if (isContour(element)) {
-            const a = seg.segment;
-            const b = (seg.segment + 1) % element.nodes.length;
             editor.selection = [
-              { element: seg.element, node: a },
-              { element: seg.element, node: b },
+              { element: target.element, node: target.segment },
+              { element: target.element, node: (target.segment + 1) % element.nodes.length },
             ];
           }
           return;
         }
-        const component = hitComponent(raw);
-        if (component !== null) {
-          editor.selection = [];
-          editor.selectedComponent = component;
-          say("component selected");
-          return;
-        }
-        editor.selectedComponent = null;
-        if (!mods.shift) editor.selection = [];
-        drag = { kind: "marquee", from: raw, additive: mods.shift };
-        editor.marquee = { a: raw, b: raw };
+        history = pushHistory(history, outline);
+        syncHistoryFlags();
+        drag = {
+          kind: "segment",
+          element: target.element,
+          segment: target.segment,
+          t: target.t,
+          start: raw,
+          base: outline,
+          moved: false,
+        };
+        return;
       }
+      const component = hitComponent(raw);
+      if (component !== null) {
+        editor.selection = [];
+        editor.selectedComponent = component;
+        say("component selected");
+        return;
+      }
+      if (!mods.shift) editor.selection = [];
+      drag = { kind: "marquee", from: raw, additive: mods.shift };
+      editor.marquee = { a: raw, b: raw };
       return;
     }
     case "node": {
@@ -1058,6 +1086,14 @@ export function pointerMove(raw: Point, mods: Modifiers): void {
   } else if (editor.hoverHandle !== null) {
     editor.hoverHandle = null;
   }
+  if (!drag && effectiveTool() === "direct") {
+    const t = hitTarget(editor.outline, editor.selection, raw, editor.zoom, editor.showAllHandles);
+    const next = hoverOf(t);
+    const cur = editor.hover;
+    if ((cur?.key ?? null) !== (next?.key ?? null)) editor.hover = next;
+  } else if (editor.hover !== null) {
+    editor.hover = null;
+  }
   if (!drag) {
     // Hover feedback: show what a click would snap to, without changing anything.
     if (editor.activeTool === "pen" || editor.activeTool === "shapes") {
@@ -1095,22 +1131,31 @@ export function pointerMove(raw: Point, mods: Modifiers): void {
     editor.outline = moveNodes(editor.outline, refs, dx, dy);
     drag.last = raw;
     drag.moved = true;
+  } else if (drag.kind === "segment") {
+    const delta = { x: raw.x - drag.start.x, y: raw.y - drag.start.y };
+    editor.outline = dragSegment(drag.base, drag.element, drag.segment, drag.t, delta);
+    drag.moved = true;
+  } else if (drag.kind === "pull") {
+    const next = pullHandles(editor.outline, drag.ref, raw);
+    if (next !== editor.outline) {
+      editor.outline = next;
+      drag.moved = true;
+    }
   } else if (drag.kind === "handle") {
     const element = editor.outline.elements[drag.ref.element];
     if (!element || !isContour(element)) return;
     const node = element.nodes[drag.ref.node];
-    let offset: [number, number] = [raw.x - node.x, raw.y - node.y];
-    if (mods.ctrl) {
-      const c = constrainAngle({ x: 0, y: 0 }, { x: offset[0], y: offset[1] }, 15);
-      offset = [c.x, c.y];
+    if (!node) return;
+    const pointer = mods.shift ? raw : snapAt(raw, [drag.ref], null, false).point;
+    let offset: [number, number] = constrainHandle([pointer.x - node.x, pointer.y - node.y], {
+      shift: mods.shift,
+      ctrl: mods.ctrl,
+    });
+    if (drag.broken || mods.alt) {
+      editor.outline = setHandleBroken(editor.outline, drag.ref, drag.which, offset);
+    } else {
+      editor.outline = setHandle(editor.outline, drag.ref, drag.which, offset);
     }
-    if (mods.alt) {
-      const current = drag.which === "in" ? node.handle_in : node.handle_out;
-      const keep = current ? Math.hypot(current[0], current[1]) : 0;
-      const length = Math.hypot(offset[0], offset[1]);
-      if (keep > 0 && length > 0) offset = [(offset[0] / length) * keep, (offset[1] / length) * keep];
-    }
-    editor.outline = setHandle(editor.outline, drag.ref, drag.which, offset);
   } else if (drag.kind === "shape") {
     let point = snapAt(raw, [], null, mods.shift).point;
     if (mods.ctrl) {
@@ -1127,6 +1172,13 @@ export function pointerMove(raw: Point, mods: Modifiers): void {
   } else if (drag.kind === "marquee") {
     editor.marquee = { a: drag.from, b: raw };
   }
+}
+
+function hoverOf(t: Target | null): { kind: string; key: string } | null {
+  if (!t) return null;
+  if (t.kind === "node") return { kind: "node", key: `n:${t.ref.element}:${t.ref.node}` };
+  if (t.kind === "handle") return { kind: "handle", key: `h:${t.ref.element}:${t.ref.node}:${t.which}` };
+  return { kind: "segment", key: `s:${t.element}:${t.segment}` };
 }
 
 function nodeAt(ref: NodeRef) {
@@ -1211,6 +1263,10 @@ export function pointerUp(raw: Point, mods: Modifiers): void {
     void saveOutline();
   } else if (finished.kind === "handle") {
     void saveOutline();
+  } else if (finished.kind === "segment") {
+    if (finished.moved) void saveOutline();
+  } else if (finished.kind === "pull") {
+    if (finished.moved) void saveOutline();
   } else if (finished.kind === "shape") {
     editor.preview = null;
     let point = snapAt(raw, [], null, mods.shift).point;
@@ -1459,4 +1515,34 @@ export function setSelectedKind(kind: api.NodeKind): void {
 export function selectedKind(): api.NodeKind | null {
   if (!editor.outline) return null;
   return kindOfSelection(editor.outline, editor.selection);
+}
+
+
+/** Double-click a node in the Direct tool: corner <-> smooth. */
+export function toggleNodeAt(raw: Point): void {
+  if (!editor.outline) return;
+  const t = hitTarget(editor.outline, editor.selection, raw, editor.zoom, editor.showAllHandles);
+  if (t?.kind !== "node") return;
+  commit(toggleNode(editor.outline, t.ref), "node type toggled");
+  editor.selection = [t.ref];
+}
+
+/** Add a node at each horizontal and vertical extremum of the selected curves. */
+export function addExtremaToSelection(): void {
+  if (!editor.outline) return;
+  const elements =
+    editor.selection.length > 0
+      ? [...new Set(editor.selection.map((r) => r.element))]
+      : editor.elements.length > 0
+        ? editor.elements
+        : editor.outline.elements.map((_, i) => i);
+  const before = editor.outline.elements.reduce((n, el) => n + (el.kind === "contour" ? el.nodes.length : 0), 0);
+  const next = addExtrema(editor.outline, elements);
+  const after = next.elements.reduce((n, el) => n + (el.kind === "contour" ? el.nodes.length : 0), 0);
+  if (after === before) {
+    say("no extrema to add");
+    return;
+  }
+  commit(next, `added ${after - before} extrema node(s)`);
+  editor.selection = [];
 }

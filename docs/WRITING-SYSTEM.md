@@ -630,6 +630,38 @@ handle never reaches past the next node (an open end gets its one handle).
 Symmetric nodes are drawn as diamonds, smooth as circles, corners as squares
 (`data-kind` on each node for tests).
 
+### Bezier editing (Direct tool)
+
+Pure logic is in `src/lib/writingBezier.ts`.
+
+- **Handles are shown only where they matter.** A selected node shows both of its
+  handles, and each neighbour shows only the handle that faces it (wrapping round
+  a closed contour). `Shift+H` shows every handle. A handle of an unselected node
+  can never be grabbed.
+- **Targets.** Node reach 10 screen px, handle 12 px, segment 8 px; drawn node
+  half-size 5 px, handle dot radius 4 px. The hovered node or handle grows and
+  turns the accent colour, and a hovered segment is highlighted.
+- **Hit priority.** Nearest node first, then handle, then segment. If a node and
+  a handle are both in reach, the node wins, unless that node is already selected
+  and the pointer is more than 4 px from its centre (so a short handle cannot
+  steal a click on its node, yet a long-selected node's handle is still reachable).
+- **Drag a curve segment** to reshape it. With the pointed-at parameter `t`
+  fixed (clamped to 0.1..0.9), both control points move by the least amount that
+  carries that point with the pointer: `d * Bi / (B1^2 + B2^2)`, `B1 =
+  3(1-t)^2 t`, `B2 = 3(1-t) t^2`. The end nodes do not move, smooth and symmetric
+  neighbours keep their constraint, and a straight segment first becomes a curve
+  with handles at a third and two thirds. One drag is one undo step.
+- **Alt-drag from a node** pulls out two equal, opposite handles (the node becomes
+  symmetric). **Double-click a node** toggles corner and smooth (smooth grows
+  handles, corner retracts them).
+- **Handle drags.** Shift constrains the handle's angle to 0, 45 or 90 degrees,
+  Ctrl to 15. Smooth and symmetric nodes keep their constraint; holding Alt breaks
+  it for that drag (only that handle moves and the node becomes a corner).
+- **Add extrema** (Tools menu, Ctrl+Shift+X) inserts a node at every horizontal and
+  vertical extremum of the curves in the selection (the selected nodes' contours,
+  else the selected shapes, else every shape), by exact subdivision, so the shape
+  is unchanged and each new node has a horizontal or vertical tangent.
+
 ### Tools and shortcuts
 
 | Key | Tool / action | Notes |
@@ -649,7 +681,11 @@ Symmetric nodes are drawn as diamonds, smooth as circles, corners as squares
 | Ctrl+wheel | Zoom about the cursor | sqrt(2) per notch |
 | 0 | Fit glyph | Also Ctrl+F |
 | 1 | 100% | |
-| Shift+H | Show all handles | Option stored now, handle drawing changes in a later stage |
+| Shift+H | Show all handles | Otherwise only selected nodes (and facing neighbours) show handles |
+| Ctrl+Shift+X | Add extrema | Direct tool; selection, else shapes, else all |
+| Alt-drag a node | Pull out symmetric handles | Direct tool |
+| Double-click a node | Toggle corner / smooth | Direct tool |
+| Shift/Ctrl-drag a handle | Constrain to 45 / 15 degrees | Alt breaks the node's constraint |
 | Arrows, Shift+Arrows | Nudge 1 or 10 units | Shapes (Select) or nodes (Direct) |
 | Tab, Shift+Tab | Step through nodes | |
 | Ctrl+A | Select all | Shapes in Select, nodes otherwise |

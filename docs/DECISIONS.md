@@ -100,6 +100,16 @@ commit per stage. See `docs/PROBING.md`.
   drafted element but `editor.draft` still pointed at it. The draft is now dropped
   on undo, redo, commit and reload, validated on each pen click, and `isContour`
   accepts a missing element. A random 160-step edit probe (118) guards the family.
+- **Handles follow selection.** Drawing every handle always made short handles
+  steal node clicks and filled the canvas. Only selected nodes (and the facing
+  handle of each neighbour) show handles, and only visible handles can be grabbed;
+  Shift+H restores the old show-everything view.
+- **Segment drag uses the minimum-norm move**, not a fixed-handle-length drag, so
+  the curve point follows the pointer exactly and the handles change as little as
+  possible. t is clamped to 0.1..0.9 so a drag near an end cannot throw a handle
+  far away. Mutation tests showed that two plausible mistakes (swapping B1 and B2,
+  forgetting to rescale the split parameter for a second extremum) are only caught
+  by checking the shape, not by counting nodes.
 - **Open contours count as filled when hit-testing**, matching how the canvas
   draws them and how the font fills them.
 - **The editor effect loop (found after stage 1a).** The canvas resize effect

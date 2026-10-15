@@ -202,7 +202,10 @@ layer (`src-tauri/`), and the Svelte 5 frontend (`src/`). See `docs/ARCHITECTURE
   but keeps the curve's shape, Ctrl+Delete removes it plainly. Arrow keys nudge
   1 unit (Shift 10), Tab/Shift+Tab step through nodes, V is the default
   Select tool (whole shapes: click, Shift-click, box, drag, Ctrl+D, Delete),
-  a transform box on selected shapes (corner scale, outside-corner rotate,
+  Bezier editing in the Direct tool (handles only for selected nodes and
+  their facing neighbours, node-over-handle hit priority, drag a segment to
+  reshape it, Alt-pull symmetric handles, double-click toggles corner/smooth,
+  Shift/Ctrl handle constraints, add extrema), a transform box on selected shapes (corner scale, outside-corner rotate,
   edge skew, draggable pivot; one undo step per drag), Edit > Transform... with
   numeric move/scale/rotate/skew and copy, Corner/Smooth/Symmetric node types
   (buttons, menu, drawn shape), H Hand and Z Zoom tools (viewport model with zoom about the cursor,
@@ -272,7 +275,10 @@ layer (`src-tauri/`), and the Svelte 5 frontend (`src/`). See `docs/ARCHITECTURE
   in `writing.test.ts`, `writingTransform.test.ts` (matrix order, scale/rotate/skew about a pivot,
   Shift/Alt, handle hit rules, component folding, dialog order, copy) and
   `writingNodeType.test.ts` (handle growth, symmetric/smooth lengths, open ends),
-  both mutation-checked, `writingForms.test.ts`, positional-forms tests (runs,
+  both mutation-checked, `writingBezier.test.ts` (segment drag keeps the point under the pointer and
+  the end nodes fixed, smooth/symmetric stay constrained, visible-handle rules,
+  hit priority and radii, extrema keep the shape and land on extremes;
+  mutation-checked), `writingForms.test.ts`, positional-forms tests (runs,
   breaks, missing forms, rules combined) cross-checked against `hb-shape` on
   ten shaped strings, `validate.rs` tests (winding, reversal keeps holes and handles, bow-tie
   detection, names, duplicates, range), `fontReport.test.ts`, a compile test

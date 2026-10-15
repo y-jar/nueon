@@ -22,12 +22,14 @@
     setGuideMetrics,
     setCanvasSize,
     currentViewBox,
+    addExtremaToSelection,
     currentPivot,
     currentTransformBox,
     duplicateSelection,
     openTransformDialog,
     lookupGlyph,
     previewOutline,
+    toggleNodeAt,
     effectiveTool,
     fitGlyph,
     holdTool,
@@ -49,6 +51,7 @@
   import { isContour } from "../lib/writingCommands";
   import { elementPathBounds } from "../lib/writingSelect";
   import { measuredSize } from "../lib/writingViewport";
+  import { segmentPathData, visibleHandles } from "../lib/writingBezier";
 
   interface Props {
     config: WritingConfig;
@@ -99,6 +102,38 @@
       : [],
   );
   const handleScale = $derived(1 / editor.zoom);
+  const shownHandles = $derived(
+    editor.outline && effectiveTool() !== "select"
+      ? visibleHandles(editor.outline, editor.selection, editor.showAllHandles)
+      : [],
+  );
+  const handleDots = $derived(
+    shownHandles.flatMap((h) => {
+      const el = editor.outline!.elements[h.ref.element];
+      if (!el || el.kind !== "contour") return [];
+      const n = el.nodes[h.ref.node];
+      const off = h.which === "in" ? n.handle_in : n.handle_out;
+      if (!n || !off) return [];
+      return [{
+        key: `${h.ref.element}:${h.ref.node}:${h.which}`,
+        which: h.which,
+        nx: n.x,
+        ny: n.y,
+        hx: n.x + off[0],
+        hy: n.y + off[1],
+      }];
+    }),
+  );
+  const hoverSegmentD = $derived.by(() => {
+    const h = editor.hover;
+    if (!h || h.kind !== "segment" || !editor.outline) return "";
+    const [, e, sg] = h.key.split(":");
+    const el = editor.outline.elements[Number(e)];
+    if (!el || el.kind !== "contour") return "";
+    const a = el.nodes[Number(sg)];
+    const b = el.nodes[(Number(sg) + 1) % el.nodes.length];
+    return a && b ? segmentPathData(a, b, true) : "";
+  });
   const tbox = $derived(editor.liveMatrix ? null : currentTransformBox());
   const pivot = $derived(editor.liveMatrix ? null : currentPivot());
   const showTransformBox = $derived(
@@ -191,6 +226,11 @@
     return () => observer.disconnect();
   });
 
+  function onDouble(event: MouseEvent) {
+    if (effectiveTool() === "direct") toggleNodeAt(locate(event).glyph);
+    else finishPath();
+  }
+
   function onKeyUp(event: KeyboardEvent) {
     if (event.key === " ") {
       spaceDown = false;
@@ -226,6 +266,9 @@
     } else if (mod && event.key.toLowerCase() === "f") {
       event.preventDefault();
       fitGlyph();
+    } else if (mod && event.shiftKey && event.key.toLowerCase() === "x") {
+      event.preventDefault();
+      addExtremaToSelection();
     } else if (mod && event.shiftKey && event.key.toLowerCase() === "m") {
       event.preventDefault();
       openTransformDialog();
@@ -280,7 +323,7 @@
     onpointerdown={onDown}
     onpointermove={onMove}
     onpointerup={onUp}
-    ondblclick={finishPath}
+    ondblclick={onDouble}
   >
     {#if editor.showGuides}
       {#each guides as guide (guide.key)}
@@ -318,57 +361,50 @@
 
     {#each contours as { element, index } (index)}
       {#each element.nodes as node, ni (ni)}
-        {#if node.handle_in}
-          <line
-            class="handle-line"
-            x1={node.x}
-            y1={flipY(node.y)}
-            x2={node.x + node.handle_in[0]}
-            y2={flipY(node.y + node.handle_in[1])}
-          />
-          <circle
-            class="handle"
-            cx={node.x + node.handle_in[0]}
-            cy={flipY(node.y + node.handle_in[1])}
-            r={4 * handleScale}
-          />
-        {/if}
-        {#if node.handle_out}
-          <line
-            class="handle-line"
-            x1={node.x}
-            y1={flipY(node.y)}
-            x2={node.x + node.handle_out[0]}
-            y2={flipY(node.y + node.handle_out[1])}
-          />
-          <circle
-            class="handle"
-            cx={node.x + node.handle_out[0]}
-            cy={flipY(node.y + node.handle_out[1])}
-            r={4 * handleScale}
-          />
-        {/if}
+        {@const hovered = editor.hover?.key === `n:${index}:${ni}`}
+        {@const r = (hovered ? 7 : 5) * handleScale}
         {#if node.kind === "symmetric"}
           <polygon
             class="glyph-node node-symmetric"
             class:node-selected={isSelected(index, ni)}
+            class:node-hover={hovered}
             data-kind="symmetric"
-            points="{node.x},{flipY(node.y) - 5.5 * handleScale} {node.x + 5.5 * handleScale},{flipY(node.y)} {node.x},{flipY(node.y) + 5.5 * handleScale} {node.x - 5.5 * handleScale},{flipY(node.y)}"
+            points="{node.x},{flipY(node.y) - 1.2 * r} {node.x + 1.2 * r},{flipY(node.y)} {node.x},{flipY(node.y) + 1.2 * r} {node.x - 1.2 * r},{flipY(node.y)}"
           />
         {:else}
           <rect
             class="glyph-node"
             class:node-selected={isSelected(index, ni)}
             class:node-smooth={node.kind !== "corner"}
+            class:node-hover={hovered}
             data-kind={node.kind}
-            x={node.x - 4 * handleScale}
-            y={flipY(node.y) - 4 * handleScale}
-            width={8 * handleScale}
-            height={8 * handleScale}
-            rx={node.kind === "corner" ? 0 : 4 * handleScale}
+            x={node.x - r}
+            y={flipY(node.y) - r}
+            width={2 * r}
+            height={2 * r}
+            rx={node.kind === "corner" ? 0 : r}
           />
         {/if}
       {/each}
+    {/each}
+    {#if hoverSegmentD}<path class="segment-hover" d={hoverSegmentD} />{/if}
+    {#each handleDots as hd (hd.key)}
+      {@const hovered = editor.hover?.key === `h:${hd.key}`}
+      <line
+        class="handle-line handle-{hd.which}"
+        x1={hd.nx}
+        y1={flipY(hd.ny)}
+        x2={hd.hx}
+        y2={flipY(hd.hy)}
+      />
+      <circle
+        class="handle handle-{hd.which}"
+        class:handle-hover={hovered}
+        data-handle-dot={hd.key}
+        cx={hd.hx}
+        cy={flipY(hd.hy)}
+        r={(hovered ? 6 : 4) * handleScale}
+      />
     {/each}
     {#each selectedBoxes as sb (sb.index)}
       <rect

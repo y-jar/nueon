@@ -41,6 +41,7 @@
     zoomStep,
     duplicateSelection,
     openTransformDialog,
+    addExtremaToSelection,
     setSelectedKind,
     shearSelection,
     toggleCompose,
@@ -181,6 +182,7 @@
       case "toggle-handles": return void (editor.showAllHandles = !editor.showAllHandles);
       case "duplicate": return duplicateSelection();
       case "transform": return openTransformDialog();
+      case "add-extrema": return addExtremaToSelection();
       case "node-corner": return setSelectedKind("corner");
       case "node-smooth": return setSelectedKind("smooth");
       case "node-symmetric": return setSelectedKind("symmetric");

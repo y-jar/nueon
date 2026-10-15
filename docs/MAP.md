@@ -140,6 +140,7 @@ and regenerate.
 - `words.ts` — Word creation and value editing helpers.
 - `writing.ts` — Pure writing-system helpers: glyph grouping, ordering and geometry.
 - `writingBatch.ts` — Pure batch operations over the glyph index (multi-select actions).
+- `writingBezier.ts` — Bezier editing helpers for the Direct tool: segment drag, handle visibility, hit priority, extrema.
 - `writingCommands.ts` — Pure edit operations on glyph outlines: nodes, shapes, transforms, brush.
 - `writingComponents.ts` — Pure component resolution for the glyph canvas: transform, flatten, expand.
 - `writingEditor.svelte.ts` — Vector-editor state: the open glyph, tools, selection, history and gestures.

@@ -6616,6 +6616,151 @@ async function main() {
     await key("z", { ctrlKey: true });
     await screenshot("p126-node-types");
   });
+
+  // -- probes 127-: bezier editing in the Direct tool ------------------------
+  const handleCount = () => js(`return document.querySelectorAll('.handle-line').length;`);
+  const nodePos = (n) =>
+    js(`const svg = document.querySelector('.canvas-svg'); const b = svg.getBoundingClientRect();
+      const el = document.querySelectorAll('.glyph-node')[${n}]; if (!el) return null;
+      const r = el.getBoundingClientRect();
+      return { fx: (r.left + r.width / 2 - b.left) / b.width, fy: (r.top + r.height / 2 - b.top) / b.height };`);
+  const freshGlyph = async () => {
+    await openFirstGlyph();
+    await tool("v");
+    await key("a", { ctrlKey: true });
+    await key("Delete");
+  };
+  const drawSquare = async () => {
+    await tool("p");
+    for (const [x, y] of [[0.3, 0.6], [0.6, 0.6], [0.6, 0.4], [0.3, 0.4]]) await click1(x, y);
+    await key("Enter");
+    await tool("a");
+  };
+  const asCorners = async () => {
+    await tool("a");
+    await key("a", { ctrlKey: true });
+    await js(`document.querySelector('[data-testid="node-type"] [data-kind="corner"]').click(); return true;`);
+    await js(`[...document.querySelectorAll('.glyph-node')].length; return true;`);
+  };
+
+  await probe("127-handles-show-only-for-selected-nodes-and-their-neighbours", async () => {
+    await freshGlyph();
+    await drawSquare();
+    await key("a", { ctrlKey: true });
+    await js(`document.querySelector('[data-testid="node-type"] [data-kind="smooth"]').click(); return true;`);
+    await click1(0.9, 0.9);
+    await waitJs(`document.querySelectorAll('.glyph-node.node-selected').length === 0`, { label: "deselected" });
+    assertEqual(await handleCount(), 0, "no handles with nothing selected");
+    const p = await nodePos(1);
+    await click1(p.fx, p.fy);
+    await waitJs(`document.querySelectorAll('.glyph-node.node-selected').length === 1`, { label: "one selected" });
+    const n = await handleCount();
+    if (n !== 4) throw new Error(`a selected node shows 2 of its own handles + 1 facing handle on each neighbour = 4, saw ${n}`);
+    // An open path's two end nodes each have one handle fewer than the others.
+    await key("H", { shiftKey: true });
+    await waitJs(`document.querySelectorAll('.handle-line').length === 6`, { label: "show all handles" });
+    await key("H", { shiftKey: true });
+    await waitJs(`document.querySelectorAll('.handle-line').length === 4`, { label: "show all off again" });
+    await screenshot("p127-selected-handles");
+  });
+
+  await probe("128-dragging-a-curve-segment-reshapes-it-and-undoes-in-one-step", async () => {
+    await freshGlyph();
+    await drawSquare();
+    await asCorners();
+    await click1(0.9, 0.9);
+    const d0 = await js(`return document.querySelector('.outline').getAttribute('d');`);
+    const a = await nodePos(0);
+    const b = await nodePos(1);
+    const mid = { fx: (a.fx + b.fx) / 2, fy: (a.fy + b.fy) / 2 };
+    const nodesBefore = await js(`return document.querySelectorAll('.glyph-node').length;`);
+    await dragOnCanvas([mid.fx, mid.fy], [mid.fx, mid.fy - 0.08]);
+    const d1 = await js(`return document.querySelector('.outline').getAttribute('d');`);
+    if (d0 === d1) throw new Error("dragging the segment did not change the outline");
+    if (!/C /.test(d1)) throw new Error(`the segment did not become a curve: ${d1}`);
+    assertEqual(await js(`return document.querySelectorAll('.glyph-node').length;`), nodesBefore, "no node was added or removed");
+    const pa = await nodePos(0);
+    const pb = await nodePos(1);
+    if (Math.abs(pa.fx - a.fx) > 0.002 || Math.abs(pb.fx - b.fx) > 0.002) throw new Error("an end node moved");
+    await key("z", { ctrlKey: true });
+    const d2 = await js(`return document.querySelector('.outline').getAttribute('d');`);
+    assertEqual(d2, d0, "one undo restores the whole drag");
+  });
+
+  await probe("129-alt-drag-from-a-node-pulls-out-symmetric-handles", async () => {
+    await click1(0.9, 0.9);
+    const p = await nodePos(1);
+    await dragOnCanvas([p.fx, p.fy], [p.fx + 0.08, p.fy], { altKey: true });
+    await waitJs(`document.querySelector('.glyph-node.node-selected')?.dataset.kind === 'symmetric'`, { label: "node is symmetric" });
+    const n = await handleCount();
+    if (n < 2) throw new Error(`expected two handles after the pull, saw ${n}`);
+    await key("z", { ctrlKey: true });
+  });
+
+  await probe("130-double-click-toggles-corner-and-smooth", async () => {
+    await click1(0.9, 0.9);
+    const p = await nodePos(2);
+    await js(`const svg = document.querySelector('.canvas-svg'); const b = svg.getBoundingClientRect();
+      const at = { bubbles: true, cancelable: true, pointerId: 1, button: 0,
+        clientX: b.left + b.width * ${p.fx}, clientY: b.top + b.height * ${p.fy} };
+      svg.dispatchEvent(new PointerEvent('pointerdown', at)); svg.dispatchEvent(new PointerEvent('pointerup', at));
+      svg.dispatchEvent(new MouseEvent('dblclick', at)); return true;`);
+    await waitJs(`document.querySelector('.glyph-node.node-selected')?.dataset.kind === 'smooth'`, { label: "became smooth" });
+    const withHandles = await handleCount();
+    if (withHandles < 2) throw new Error("a smooth node should have handles");
+    await js(`const svg = document.querySelector('.canvas-svg'); const b = svg.getBoundingClientRect();
+      const at = { bubbles: true, cancelable: true, pointerId: 1, button: 0,
+        clientX: b.left + b.width * ${p.fx}, clientY: b.top + b.height * ${p.fy} };
+      svg.dispatchEvent(new PointerEvent('pointerdown', at)); svg.dispatchEvent(new PointerEvent('pointerup', at));
+      svg.dispatchEvent(new MouseEvent('dblclick', at)); return true;`);
+    await waitJs(`document.querySelector('.glyph-node.node-selected')?.dataset.kind === 'corner'`, { label: "back to corner" });
+  });
+
+  await probe("131-add-extrema-inserts-nodes-on-a-bulging-curve", async () => {
+    await freshGlyph();
+    await tool("p");
+    await fire("pointerdown", 0.3, 0.6); await fire("pointermove", 0.3, 0.45); await fire("pointerup", 0.3, 0.45);
+    await fire("pointerdown", 0.6, 0.6); await fire("pointermove", 0.6, 0.75); await fire("pointerup", 0.6, 0.75);
+    await key("Enter");
+    await tool("a");
+    const before = await js(`return document.querySelectorAll('.glyph-node').length;`);
+    await key("x", { ctrlKey: true, shiftKey: true });
+    await waitJs(`document.querySelectorAll('.glyph-node').length > ${before}`, { label: "extrema added" });
+    await key("z", { ctrlKey: true });
+    await waitJs(`document.querySelectorAll('.glyph-node').length === ${before}`, { label: "undo removed them" });
+    await screenshot("p131-extrema");
+  });
+
+  await probe("132-handle-drag-keeps-a-smooth-node-collinear-and-alt-breaks-it", async () => {
+    await freshGlyph();
+    await drawSquare();
+    await key("a", { ctrlKey: true });
+    await js(`document.querySelector('[data-testid="node-type"] [data-kind="smooth"]').click(); return true;`);
+    await click1(0.9, 0.9);
+    const p = await nodePos(1);
+    await click1(p.fx, p.fy);
+    const dot = () =>
+      js(`const b = document.querySelector('.canvas-svg').getBoundingClientRect();
+        return [...document.querySelectorAll('.handle')].map((c) => { const r = c.getBoundingClientRect();
+          return { key: c.dataset.handleDot, fx: (r.left + r.width / 2 - b.left) / b.width, fy: (r.top + r.height / 2 - b.top) / b.height }; });`);
+    const dots = await dot();
+    const out = dots.find((d) => d.key.endsWith("1:out"));
+    if (!out) throw new Error(`no out handle for node 1: ${JSON.stringify(dots)}`);
+    await dragOnCanvas([out.fx, out.fy], [out.fx + 0.03, out.fy - 0.06]);
+    const after = await dot();
+    const o = after.find((d) => d.key.endsWith("1:out"));
+    const i = after.find((d) => d.key.endsWith("1:in"));
+    const np = await nodePos(1);
+    const cross = (o.fx - np.fx) * (i.fy - np.fy) - (o.fy - np.fy) * (i.fx - np.fx);
+    if (Math.abs(cross) > 0.0005) throw new Error(`smooth handles are not collinear, cross ${cross}`);
+    await dragOnCanvas([o.fx, o.fy], [o.fx - 0.05, o.fy + 0.02], { altKey: true });
+    const broken = await dot();
+    const o2 = broken.find((d) => d.key.endsWith("1:out"));
+    const i2 = broken.find((d) => d.key.endsWith("1:in"));
+    const cross2 = (o2.fx - np.fx) * (i2.fy - np.fy) - (o2.fy - np.fy) * (i2.fx - np.fx);
+    if (Math.abs(cross2) < 0.0005) throw new Error("Alt did not break the constraint");
+    assertEqual(await js(`return document.querySelector('.glyph-node.node-selected')?.dataset.kind;`), "corner", "alt-break makes it a corner");
+  });
 }
 
 try {

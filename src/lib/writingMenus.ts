@@ -105,6 +105,7 @@ export function menuItems(menu: MenuId, state: MenuState): MenuItem[] {
         { id: "node-smooth", label: "Node: smooth", disabled: !state.hasSelection },
         { id: "node-symmetric", label: "Node: symmetric", disabled: !state.hasSelection },
         { id: "node-kind", label: "Cycle node type", disabled: !state.hasSelection },
+        { id: "add-extrema", label: "Add extrema", shortcut: "Ctrl+Shift+X", disabled: !state.hasGlyph },
         { id: "component-expand", label: "Expand component", shortcut: "Ctrl+Shift+E", disabled: !state.hasComponent },
         { id: "node-join", label: "Join endpoints", shortcut: "Shift+J", disabled: !state.hasSelection },
         { id: "node-break", label: "Break node", shortcut: "Shift+B", disabled: !state.hasSelection },
