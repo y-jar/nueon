@@ -6,6 +6,7 @@
   import GlyphTile from "./GlyphTile.svelte";
   import { LABEL_HEIGHT, gridLayout, visibleRows, type Cell } from "../lib/writingGrid";
   import type { GlyphLookup } from "../lib/writingComponents";
+  import type { BearingLine } from "../lib/writingSpacing";
 
   interface Props {
     cells: Cell[];
@@ -17,9 +18,14 @@
     descender: number;
     version: number;
     onVisible: (ids: string[]) => void;
-    onSelect: (glyph: GlyphMeta) => void;
+    onSelect: (glyph: GlyphMeta, additive?: boolean) => void;
+    batch?: string[];
     onCreate: (phoneme: Phoneme) => void;
     onMenu: (event: MouseEvent, glyph: GlyphMeta) => void;
+    spacing?: boolean;
+    onEdgeStart?: (glyph: GlyphMeta, line: BearingLine, px: number) => void;
+    onEdgeMove?: (px: number) => void;
+    onEdgeEnd?: () => void;
   }
 
   let {
@@ -33,8 +39,13 @@
     version,
     onVisible,
     onSelect,
+    batch = [],
     onCreate,
     onMenu,
+    spacing = false,
+    onEdgeStart,
+    onEdgeMove,
+    onEdgeEnd,
   }: Props = $props();
 
   const GAP = 8;
@@ -126,8 +137,13 @@
             selected={cell.kind === "glyph" && cell.glyph.id === selectedId}
             {ascender}
             {descender}
-            onSelect={() => (cell.kind === "glyph" ? onSelect(cell.glyph) : onCreate(cell.phoneme))}
+            batched={cell.kind === "glyph" && batch.includes(cell.glyph.id)}
+            onSelect={(additive) => (cell.kind === "glyph" ? onSelect(cell.glyph, additive) : onCreate(cell.phoneme))}
             onMenu={(e) => cell.kind === "glyph" && onMenu(e, cell.glyph)}
+            {spacing}
+            onEdgeStart={(line, px) => cell.kind === "glyph" && onEdgeStart?.(cell.glyph, line, px)}
+            {onEdgeMove}
+            {onEdgeEnd}
           />
         </div>
       {/each}

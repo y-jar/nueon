@@ -28,6 +28,7 @@
     duplicateSelection,
     openTransformDialog,
     lookupGlyph,
+    currentSpacing,
     previewOutline,
     setCursor,
     toggleNodeAt,
@@ -146,7 +147,9 @@
         })
       : [],
   );
-  const advanceX = $derived(editor.outline?.advance ?? null);
+  const spacingNow = $derived((editor.outline, currentSpacing()));
+  const advanceX = $derived(spacingNow?.advance ?? null);
+  const inkLeft = $derived(spacingNow && spacingNow.lsb !== null ? spacingNow.lsb : null);
   const tbox = $derived(editor.liveMatrix ? null : currentTransformBox());
   const pivot = $derived(editor.liveMatrix ? null : currentPivot());
   const showTransformBox = $derived(
@@ -329,6 +332,7 @@
     bind:this={svg}
     class="canvas-svg tool-{effectiveTool()}"
     data-hover={editor.hoverHandle ?? ""}
+    data-bearing-hover={editor.hoverBearing ?? ""}
     class:panning={editor.tempTool === "hand"}
     aria-hidden="true"
     {viewBox}
@@ -361,7 +365,39 @@
           font-size={11 * handleScale}
         >{label.text}</text>
       {/each}
+      {#if inkLeft !== null}
+        <line
+          class="bearing-line"
+          class:bearing-active={editor.hoverBearing === "lsb"}
+          data-bearing="lsb"
+          x1={inkLeft}
+          y1={-storageMaxY}
+          x2={inkLeft}
+          y2={-storageMinY}
+        />
+        <text class="guide-label" x={inkLeft + 4 * handleScale} y={-storageMaxY + 28 * handleScale} font-size={11 * handleScale}>
+          lsb {Math.round(spacingNow?.lsb ?? 0)}
+        </text>
+      {/if}
       {#if advanceX && advanceX > 0}
+        <line
+          class="bearing-line"
+          class:bearing-active={editor.hoverBearing === "advance"}
+          data-bearing="advance"
+          x1={advanceX}
+          y1={-storageMaxY}
+          x2={advanceX}
+          y2={-storageMinY}
+        />
+        {#if spacingNow && spacingNow.rsb !== null}
+          <text
+            class="guide-label"
+            x={advanceX - 4 * handleScale}
+            y={-storageMaxY + 28 * handleScale}
+            font-size={11 * handleScale}
+            text-anchor="end"
+          >rsb {Math.round(spacingNow.rsb)}</text>
+        {/if}
         <rect
           class="advance-box"
           x={0}

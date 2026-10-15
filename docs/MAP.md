@@ -58,6 +58,7 @@ and regenerate.
 - `SetupWizard.svelte` — First-workspace setup wizard.
 - `Sidebar.svelte` — Notes explorer sidebar.
 - `SidebarHost.svelte` — Host showing the active activity's sidebar.
+- `SpacingPopover.svelte` — Spacing popover: LSB, RSB and advance for one glyph, a live test pair, and copy-from.
 - `SplitView.svelte` — Split-pane container over the tab groups.
 - `SuggestInput.svelte` — Input with a suggestion dropdown.
 - `SuggestionList.svelte` — The suggestion dropdown list.
@@ -130,6 +131,7 @@ and regenerate.
 - `outlineCache.ts` — A small lazy cache of glyph outlines for the grid, with bounded concurrency and invalidation.
 - `raw.d.ts` — Module declarations for assets imported without types.
 - `shell.svelte.ts` — Shell chrome: the activity ribbon, panels and modal toggles.
+- `spacingHistory.ts` — An undo log for spacing edits made from the glyph grid, where one change can touch many glyphs.
 - `spellcheck.ts` — English misspelling guard for `definition` fields (PSD §B).
 - `state.svelte.ts` — Public state API re-exported for components.
 - `store.svelte.ts` — The reactive ui store and shared domain types.
@@ -155,6 +157,7 @@ and regenerate.
 - `writingSelect.ts` — Element-level selection for the Select tool: hit testing, marquee, move, duplicate.
 - `writingSidebar.ts` — Pure filtering and grouping for the Writing System sidebar glyph list.
 - `writingSnap.ts` — Pure snapping: nodes, guide rails, bearing lines, edge midpoints and the grid.
+- `writingSpacing.ts` — Spacing maths: bearings are derived from the ink and the advance; only the advance is stored.
 - `writingSuggest.ts` — Clean node spots on a segment, and alignment/angle snapping to other nodes.
 - `writingTransform.ts` — Pure transform maths for the Select tool's transform box and the Transform dialog.
 - `writingViewport.ts` — Pure viewport math for the glyph canvas: zoom about a point, pan, fit.

@@ -118,6 +118,22 @@ commit per stage. See `docs/PROBING.md`.
   position, so panning and zooming never hide them.
 - **Rulers and ruler-dragged guides are deferred** (the viewport model was already
   large); see `deferred.md`.
+- **Bearings follow FontForge.** The left bearing moves the ink and the advance
+  together; the right bearing and the advance change only the advance. Only the
+  advance is stored: the left bearing is the ink's left edge and the right bearing
+  is derived, so there is one source of truth and the font cannot disagree with
+  the editor. The unused `lsb`/`rsb` fields on the outline file are left in the
+  format for compatibility but are no longer written or read.
+- **The bearing boxes did nothing before this stage.** They stored a value the
+  compiler ignored, so typing in them changed neither the glyph nor the font. A
+  control that does nothing is worse than none; they now edit the real values, and
+  a probe compares what the box shows with the numbers in the stored outline.
+- **Grid spacing edits have their own undo log.** The editor's history is per open
+  glyph, but a grid edit can touch many glyphs (a batch). A small log of
+  before/after outlines per change gives one undo step per change.
+- **A node on a bearing line keeps priority** over the line, so an edge node moves
+  as a node. Found when a probe drew a block whose left nodes lie exactly on the
+  left-bearing line.
 - **Shift means "aim for snapping", not "no snapping".** It used to switch
   snapping off. Users reach for Shift when they want help, so it now adds
   alignment with other nodes and 45/135 degree lines, and guide-line feedback.

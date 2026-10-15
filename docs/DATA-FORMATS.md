@@ -64,6 +64,10 @@ Reserved tags with fixed meaning: `wordname`, `definition` (a `tag_list`),
 
 ### `writing/glyphs/<id>` detail
 
+Spacing: only `advance` is meaningful. Bearings are derived from the ink (left
+bearing is the leftmost node, right bearing is `advance` minus the rightmost); the
+`lsb` and `rsb` fields are accepted but ignored and are no longer written.
+
 One file per glyph outline, named by the glyph's stable id (extensionless, like
 tables and config). Holds a `GlyphOutline`: `elements` (a list of contours or
 component instances), plus optional `advance`, `lsb`, `rsb`. Component

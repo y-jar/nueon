@@ -589,6 +589,18 @@
     "sidebarSearch": "Filter glyphs\u2026",
     "sidebarEmpty": "No glyphs yet.",
     "sidebarCoverage": "{mapped}/{total} sounds",
+    "spacing": {
+      "mode": "Spacing",
+      "hint": "Drag a cell's dashed edges to set its left bearing and advance",
+      "undo": "Undo spacing",
+      "redo": "Redo spacing",
+      "close": "Close",
+      "noInk": "This glyph has no outline yet, so it has no bearings.",
+      "copyFrom": "Copy spacing from",
+      "pick": "Pick a glyph",
+      "copy": "Copy",
+      "applyTo": "Give {count} selected the same bearings"
+    },
     "progress": "{drawn} of {total} glyphs drawn",
     "noMatches": "Nothing matches these filters.",
     "filterSound": "Filter by sound type",

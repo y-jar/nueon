@@ -2,7 +2,7 @@
 <script lang="ts">
   import { t } from "svelte-i18n";
   import type { GlyphMeta, Phoneme } from "../lib/api";
-  import { editor, selectedKind, setMetric, setSelectedKind } from "../lib/writingEditor.svelte";
+  import { currentSpacing, editor, selectedKind, setSpacingField, setSelectedKind } from "../lib/writingEditor.svelte";
   import type { NodeKind } from "../lib/api";
   import { FORM_KEYS, formChoices, setForm, type FormKey } from "../lib/writingForms";
 
@@ -30,6 +30,13 @@
   const symbols = $derived(
     (editor.glyphMeta?.phonemes ?? []).map((id) => byId.get(id) ?? id),
   );
+
+  const spacing = $derived((editor.outline, currentSpacing()));
+
+  /** Whole font units: fractional ink positions are not meaningful in an exported font. */
+  function shown(v: number | null): number | string {
+    return v === null ? "" : Math.round(v);
+  }
 
   function parseMetric(raw: string): number | null {
     if (raw.trim() === "") return null;
@@ -82,32 +89,18 @@
     {/if}
   </div>
 
-  <div class="metric-block">
-    <span class="metric-label">{$t("writing.metrics.lsb")}</span>
-    <input
-      type="number"
-      value={editor.outline?.lsb ?? ""}
-      oninput={(e) => setMetric("lsb", parseMetric(e.currentTarget.value))}
-    />
-  </div>
-
-  <div class="metric-block">
-    <span class="metric-label">{$t("writing.metrics.rsb")}</span>
-    <input
-      type="number"
-      value={editor.outline?.rsb ?? ""}
-      oninput={(e) => setMetric("rsb", parseMetric(e.currentTarget.value))}
-    />
-  </div>
-
-  <div class="metric-block">
-    <span class="metric-label">{$t("writing.metrics.advance")}</span>
-    <input
-      type="number"
-      value={editor.outline?.advance ?? ""}
-      oninput={(e) => setMetric("advance", parseMetric(e.currentTarget.value))}
-    />
-  </div>
+  {#each [["lsb", "lsb"], ["rsb", "rsb"], ["advance", "advance"]] as [field, label] (field)}
+    <div class="metric-block">
+      <span class="metric-label">{$t(`writing.metrics.${label}`)}</span>
+      <input
+        type="number"
+        data-spacing={field}
+        disabled={field !== "advance" && spacing?.[field as "lsb" | "rsb"] === null}
+        value={spacing ? shown(spacing[field as keyof typeof spacing]) : ""}
+        onchange={(e) => setSpacingField(field as "lsb" | "rsb" | "advance", parseMetric(e.currentTarget.value))}
+      />
+    </div>
+  {/each}
 
   <div class="metric-block forms" data-testid="glyph-forms">
     <span class="metric-label">{$t("writing.forms.title")}</span>

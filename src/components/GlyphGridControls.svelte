@@ -10,9 +10,28 @@
     shown: number;
     onFilter: (next: GridFilter) => void;
     onSize: (px: number) => void;
+    spacing: boolean;
+    onSpacing: (on: boolean) => void;
+    canUndo: boolean;
+    canRedo: boolean;
+    onUndo: () => void;
+    onRedo: () => void;
   }
 
-  let { filter, cellSize, progress, shown, onFilter, onSize }: Props = $props();
+  let {
+    filter,
+    cellSize,
+    progress,
+    shown,
+    onFilter,
+    onSize,
+    spacing,
+    onSpacing,
+    canUndo,
+    canRedo,
+    onUndo,
+    onRedo,
+  }: Props = $props();
 
   const SOUNDS = ["all", "consonant", "vowel", "other", "unmapped"] as const;
   const FILLS = ["all", "drawn", "empty"] as const;
@@ -24,6 +43,20 @@
   </span>
   <progress class="grid-progress-bar" max={Math.max(1, progress.total)} value={progress.drawn}></progress>
   <span class="grow"></span>
+  <button
+    class="spacing-toggle"
+    class:active={spacing}
+    aria-pressed={spacing}
+    data-testid="spacing-toggle"
+    title={$t("writing.spacing.hint")}
+    onclick={() => onSpacing(!spacing)}
+  >
+    {$t("writing.spacing.mode")}
+  </button>
+  {#if spacing}
+    <button disabled={!canUndo} data-testid="spacing-undo" onclick={onUndo}>{$t("writing.spacing.undo")}</button>
+    <button disabled={!canRedo} data-testid="spacing-redo" onclick={onRedo}>{$t("writing.spacing.redo")}</button>
+  {/if}
   <input
     class="grid-search"
     type="search"

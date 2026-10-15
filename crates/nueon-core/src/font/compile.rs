@@ -327,6 +327,8 @@ pub struct FontCheck {
     pub units_per_em: u16,
     pub mapped: Vec<(u32, u32)>,
     pub advances: Vec<u16>,
+    /// Left side bearing of each glyph, as stored in `hmtx`.
+    pub side_bearings: Vec<i16>,
     /// Number of GSUB lookups, zero when the font has no GSUB table.
     pub lookups: usize,
 }
@@ -378,6 +380,7 @@ pub fn read_back(bytes: &[u8]) -> Result<FontCheck, FontError> {
         units_per_em: head.units_per_em(),
         mapped,
         advances: hmtx.h_metrics().iter().map(|m| m.advance()).collect(),
+        side_bearings: hmtx.h_metrics().iter().map(|m| m.side_bearing()).collect(),
         lookups,
     })
 }
@@ -540,6 +543,47 @@ mod tests {
         let (bytes, _) = compile_font(&settings(), &[glyph("a", 0xE000, drawn, None)]).unwrap();
         let area = compiled_area(&bytes, 1);
         assert!((area + 160_000.0).abs() < 1.0, "{area}");
+    }
+
+    #[test]
+    fn the_font_takes_the_left_bearing_from_the_ink_and_the_advance_from_the_outline() {
+        let shifted = |dx: f64| {
+            vec![Contour {
+                nodes: vec![
+                    corner(dx, 0.0),
+                    corner(dx, 300.0),
+                    corner(dx + 300.0, 300.0),
+                    corner(dx + 300.0, 0.0),
+                ],
+                closed: true,
+                fill_rule: FillRule::Nonzero,
+            }]
+        };
+        let glyphs = vec![
+            glyph("a", 0xE000, shifted(50.0), Some(450.0)),
+            glyph("b", 0xE001, shifted(80.0), Some(480.0)),
+            glyph("c", 0xE002, shifted(50.0), Some(370.0)),
+        ];
+        let (bytes, _) = compile_font(&settings(), &glyphs).unwrap();
+        let check = read_back(&bytes).unwrap();
+        assert_eq!(
+            check.side_bearings[1..],
+            [50, 80, 50],
+            "left bearing is the ink's left edge"
+        );
+        assert_eq!(check.advances[1..], [450, 480, 370]);
+        let rsb = |i: usize, ink_right: i32| i32::from(check.advances[i]) - ink_right;
+        assert_eq!(rsb(1, 350), 100);
+        assert_eq!(
+            rsb(2, 380),
+            100,
+            "shifting the ink and the advance together keeps the right bearing"
+        );
+        assert_eq!(
+            rsb(3, 350),
+            20,
+            "a smaller advance alone shrinks the right bearing"
+        );
     }
 
     #[test]

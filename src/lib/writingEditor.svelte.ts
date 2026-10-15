@@ -75,6 +75,16 @@ import {
 } from "./writingTransform";
 import { kindOfSelection, setKinds } from "./writingNodeType";
 import {
+  bearingsOf,
+  dragBearing,
+  hitBearingLine,
+  setAdvance,
+  setLeftBearing,
+  setRightBearing,
+  type BearingLine,
+  type Spacing,
+} from "./writingSpacing";
+import {
   chooseInsertion,
   cleanNodeSpots,
   segmentCentreDelta,
@@ -180,6 +190,8 @@ export const editor = $state({
   library: {} as Record<string, api.GlyphOutline>,
   /** The font validation report; null when the dialog is closed. */
   report: null as { issues: api.FontIssue[]; exporting: boolean } | null,
+  /** The bearing line under the pointer or being dragged, for the cursor and highlight. */
+  hoverBearing: null as BearingLine | null,
   /** The transform handle under the pointer, for the cursor; written only when it changes. */
   hoverHandle: null as string | null,
   /** The transform box's pivot, or null for the box centre. Reset when the selection changes. */
@@ -214,6 +226,7 @@ let drag:
   | { kind: "pen"; ref: NodeRef }
   | { kind: "shape"; from: Point }
   | { kind: "pan"; x: number; y: number }
+  | { kind: "bearing"; line: BearingLine; base: api.GlyphOutline; moved: boolean }
   | { kind: "zoombox"; from: Point; screen: Point }
   | { kind: "elements-move"; origin: Point; last: Point; moved: boolean }
   | TransformDrag
@@ -521,13 +534,41 @@ export function redo(): void {
   void refreshLibrary();
 }
 
-/** Update one glyph metric and persist the outline immediately. */
-export function setMetric(
-  field: "advance" | "lsb" | "rsb",
-  value: number | null,
-): void {
-  if (!editor.outline) return;
-  commit({ ...editor.outline, [field]: value });
+/** The open glyph's bearings and advance, derived from its ink (components included). */
+export function currentSpacing(): Spacing | null {
+  if (!editor.outline) return null;
+  return bearingsOf(editor.outline, lookupGlyph);
+}
+
+/**
+ * Set one spacing value as a single undoable step. The left bearing moves the
+ * ink and the advance together; the right bearing and the advance change only
+ * the advance. A value that equals the current one writes nothing.
+ */
+export function setSpacingField(field: "lsb" | "rsb" | "advance", value: number | null): void {
+  if (!editor.outline || value === null || !Number.isFinite(value)) return;
+  const now = currentSpacing();
+  if (!now) return;
+  if (field === "advance") {
+    if (value === now.advance) return;
+    commit(setAdvance(editor.outline, value), "advance changed");
+    return;
+  }
+  if (now[field] === null) {
+    say("draw something first: a glyph with no ink has no bearings");
+    return;
+  }
+  if (now[field] === value) return;
+  const next =
+    field === "lsb"
+      ? setLeftBearing(editor.outline, value, lookupGlyph)
+      : setRightBearing(editor.outline, value, lookupGlyph);
+  commit(next, field === "lsb" ? "left bearing changed" : "right bearing changed");
+}
+
+/** Kept for callers that set the advance directly. */
+export function setMetric(field: "advance" | "lsb" | "rsb", value: number | null): void {
+  setSpacingField(field, value);
 }
 
 /** Append a component reference to the active outline and persist. */
@@ -817,6 +858,21 @@ export function pointerDown(raw: Point, mods: Modifiers): void {
   editor.snapHit = null;
   editor.gestureFrom = { x: Math.round(raw.x), y: Math.round(raw.y) };
 
+  if (
+    mods.button !== 1 &&
+    (effectiveTool() === "select" || effectiveTool() === "direct") &&
+    !mods.alt
+  ) {
+    const line = hitBearingLine(outline, raw, editor.zoom, lookupGlyph);
+    if (line && !touchesContent(outline, raw, radius, line)) {
+      history = pushHistory(history, outline);
+      syncHistoryFlags();
+      drag = { kind: "bearing", line, base: outline, moved: false };
+      editor.hoverBearing = line;
+      return;
+    }
+  }
+
   if (mods.button === 1 || effectiveTool() === "hand") {
     if (mods.screen) drag = { kind: "pan", x: mods.screen.x, y: mods.screen.y };
     return;
@@ -1068,6 +1124,16 @@ function liveTransform(d: TransformDrag, raw: Point, mods: Modifiers): Matrix {
   return IDENTITY;
 }
 
+/**
+ * A bearing line is grabbed only when nothing more specific is under the
+ * pointer: a node or handle that sits on the same x keeps priority, so moving
+ * an edge node never drags the whole glyph.
+ */
+function touchesContent(outline: api.GlyphOutline, raw: Point, radius: number, _line: BearingLine): boolean {
+  if (hitNode(outline, raw, radius)) return true;
+  return hitTarget(outline, editor.selection, raw, editor.zoom, editor.showAllHandles)?.kind === "handle";
+}
+
 /** Pointer move in glyph space; only local state changes, never IPC. */
 /** Record the pointer for the info bar; whole units, and only when the shown value changes. */
 export function setCursor(raw: Point | null): void {
@@ -1091,6 +1157,18 @@ export function pointerMove(raw: Point, mods: Modifiers): void {
       drag = { kind: "pan", x: mods.screen.x, y: mods.screen.y };
     }
     return;
+  }
+  if (drag && drag.kind === "bearing") {
+    editor.outline = dragBearing(drag.base, drag.line, raw.x, editor.snap, editor.grid, lookupGlyph);
+    drag.moved = true;
+    return;
+  }
+  if (!drag && (effectiveTool() === "select" || effectiveTool() === "direct")) {
+    const line = hitBearingLine(editor.outline, raw, editor.zoom, lookupGlyph);
+    const shown = line && !touchesContent(editor.outline, raw, NODE_RADIUS / editor.zoom, line) ? line : null;
+    if (editor.hoverBearing !== shown) editor.hoverBearing = shown;
+  } else if (!drag && editor.hoverBearing !== null) {
+    editor.hoverBearing = null;
   }
   if (drag && drag.kind === "pivot") {
     const p = snapAt(raw, [], null, mods.shift).point;
@@ -1305,6 +1383,11 @@ export function pointerUp(raw: Point, mods: Modifiers): void {
   if (!finished || !editor.outline) return;
 
   if (finished.kind === "pan") return;
+  if (finished.kind === "bearing") {
+    editor.hoverBearing = null;
+    if (finished.moved) void saveOutline();
+    return;
+  }
   if (finished.kind === "pivot") return;
   if (finished.kind === "transform") {
     const m = editor.liveMatrix;

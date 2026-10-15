@@ -7152,6 +7152,246 @@ async function main() {
     if (plain === d) throw new Error("Shift made no difference to which point of the line is dragged");
     await key("z", { ctrlKey: true });
   });
+
+  // -- probes 149-: spacing by dragging ----------------------------------------
+  const spacingVals = () =>
+    js(`const v = (f) => { const i = document.querySelector('[data-spacing="' + f + '"]'); return i ? i.value : null; };
+      return { lsb: v('lsb'), rsb: v('rsb'), advance: v('advance') };`);
+  const setSpacingInput = (field, value) =>
+    js(`const i = document.querySelector('[data-spacing="${field}"]'); i.value = ${JSON.stringify(String(value))};
+      i.dispatchEvent(new Event('change', { bubbles: true })); return true;`);
+  const drawBlock = async () => {
+    await freshGlyph();
+    await tool("p");
+    for (const [x, y] of [[0.35, 0.65], [0.6, 0.65], [0.6, 0.4], [0.35, 0.4]]) await click1(x, y);
+    await fire("pointerdown", 0.35, 0.65); await fire("pointerup", 0.35, 0.65);
+    await key("Enter");
+    await tool("v");
+  };
+  const lineX = (which) =>
+    js(`const svg = document.querySelector('.canvas-svg'); const b = svg.getBoundingClientRect();
+      const l = document.querySelector('[data-bearing="${which}"]'); if (!l) return null;
+      const r = l.getBoundingClientRect(); return (r.left + r.width / 2 - b.left) / b.width;`);
+
+  await probe("149-bearing-fields-show-the-real-values-and-the-lsb-box-moves-the-ink", async () => {
+    await drawBlock();
+    const v0 = await spacingVals();
+    if (v0.lsb === "" || v0.rsb === "" || v0.advance === "") throw new Error(`fields are empty: ${JSON.stringify(v0)}`);
+    const lsb0 = Number(v0.lsb), rsb0 = Number(v0.rsb), adv0 = Number(v0.advance);
+    const left0 = await lineX("lsb");
+    await setSpacingInput("lsb", lsb0 + 100);
+    await waitJs(`Number(document.querySelector('[data-spacing="lsb"]').value) === ${lsb0 + 100}`, { label: "lsb updated" });
+    const v1 = await spacingVals();
+    assertEqual(Number(v1.rsb), rsb0, "right bearing unchanged by a left-bearing edit");
+    assertEqual(Number(v1.advance), adv0 + 100, "the advance moved with the ink");
+    const left1 = await lineX("lsb");
+    if (!(left1 > left0)) throw new Error("the left bearing line did not move right");
+    await key("z", { ctrlKey: true });
+    await waitJs(`Number(document.querySelector('[data-spacing="lsb"]').value) === ${lsb0}`, { label: "one undo restores it" });
+    await screenshot("p149-bearings");
+  });
+
+  await probe("150-rsb-and-advance-boxes-change-only-the-advance", async () => {
+    const v0 = await spacingVals();
+    const lsb0 = Number(v0.lsb), rsb0 = Number(v0.rsb), adv0 = Number(v0.advance);
+    await setSpacingInput("rsb", rsb0 + 40);
+    await waitJs(`Number(document.querySelector('[data-spacing="advance"]').value) === ${adv0 + 40}`, { label: "advance grew" });
+    assertEqual(Number((await spacingVals()).lsb), lsb0, "ink did not move");
+    await setSpacingInput("advance", adv0 + 40 + 60);
+    await waitJs(`Number(document.querySelector('[data-spacing="rsb"]').value) === ${rsb0 + 100}`, { label: "rsb absorbed it" });
+    await key("z", { ctrlKey: true });
+    await key("z", { ctrlKey: true });
+  });
+
+  await probe("151-dragging-the-bearing-lines-on-the-canvas-sets-spacing", async () => {
+    const v0 = await spacingVals();
+    const adv0 = Number(v0.advance), lsb0 = Number(v0.lsb), rsb0 = Number(v0.rsb);
+    const ax = await lineX("advance");
+    await fire("pointermove", ax, 0.2);
+    await waitJs(`document.querySelector('.canvas-svg').dataset.bearingHover === 'advance'`, { label: "hover shows the advance line is grabbable" });
+    await fire("pointerdown", ax, 0.2);
+    await fire("pointermove", ax + 0.04, 0.2);
+    await fire("pointermove", ax + 0.08, 0.2);
+    await fire("pointerup", ax + 0.08, 0.2);
+    const v1 = await spacingVals();
+    if (!(Number(v1.advance) > adv0 + 20)) throw new Error(`dragging the advance line right did not widen the advance: ${JSON.stringify({ v0, v1 })}`);
+    assertEqual(Number(v1.lsb), lsb0, "ink unmoved by an advance drag");
+    await key("z", { ctrlKey: true });
+    assertEqual(Number((await spacingVals()).advance), adv0, "one undo undoes the whole drag");
+
+    const lx = await lineX("lsb");
+    await fire("pointerdown", lx, 0.2);
+    await fire("pointermove", lx + 0.05, 0.2);
+    await fire("pointermove", lx + 0.1, 0.2);
+    await fire("pointerup", lx + 0.1, 0.2);
+    const v2 = await spacingVals();
+    if (!(Number(v2.lsb) > lsb0 + 20)) throw new Error(`left-bearing drag did not move the ink: ${JSON.stringify(v2)}`);
+    assertEqual(Number(v2.rsb), rsb0, "right bearing unchanged by a left-bearing drag");
+    await key("z", { ctrlKey: true });
+    assertEqual(Number((await spacingVals()).lsb), lsb0, "undone");
+  });
+
+  await probe("152-a-node-on-the-bearing-line-is-moved-not-the-whole-glyph", async () => {
+    await tool("a");
+    const lx = await lineX("lsb");
+    const n = await js(`const b = document.querySelector('.canvas-svg').getBoundingClientRect();
+      const r = [...document.querySelectorAll('.glyph-node')].map((q) => q.getBoundingClientRect());
+      return r.map((q) => ({ fx: (q.left + q.width / 2 - b.left) / b.width, fy: (q.top + q.height / 2 - b.top) / b.height }))
+        .sort((p, q) => p.fx - q.fx)[0];`);
+    const lsb0 = Number((await spacingVals()).lsb);
+    await fire("pointerdown", n.fx, n.fy);
+    await fire("pointermove", n.fx, n.fy - 0.05);
+    await fire("pointermove", n.fx, n.fy - 0.1);
+    await fire("pointerup", n.fx, n.fy - 0.1);
+    assertEqual(Number((await spacingVals()).lsb), lsb0, "the node moved up, and the whole glyph did not shift");
+    void lx;
+    await key("z", { ctrlKey: true });
+  });
+
+  await probe("153-the-compiled-font-uses-the-same-bearings-the-editor-shows", async () => {
+    await js(`document.querySelector('.vector-editor .back')?.click(); return true;`);
+    await openFirstGlyph();
+    await tool("v");
+    const v = await spacingVals();
+    const check = await invokeAsync("writing_validate_font", {});
+    if (check.some((i) => i.severity === "error")) throw new Error(`font check has errors: ${JSON.stringify(check)}`);
+    const glyph = (await invokeAsync("config_get", { section: "writing" })).glyphs[0];
+    const outline = await invokeAsync("writing_glyph_get", { id: glyph.id });
+    const xs = outline.elements.flatMap((e) => (e.kind === "contour" ? e.nodes.map((n) => n.x) : []));
+    assertEqual(Math.round(Math.min(...xs)), Number(v.lsb), "the field equals the real left edge of the stored ink");
+    assertEqual(Math.round(outline.advance ?? 0) || Math.round(Math.max(...xs) + 50), Number(v.advance), "the field equals the stored advance");
+  });
+
+  // -- probes 154-: grid spacing mode --------------------------------------------
+  const seedSpacing = async () => {
+    const mk = (id, name, order) => ({ id, name, codepoint: 0xe000 + order, phonemes: [], order, group: "" });
+    await writeGrid(
+      [mk("s-a", "aa", 0), mk("s-b", "bb", 1), mk("s-c", "cc", 2)],
+      [],
+      {
+        "s-a": { elements: [sq(100, 0, 300, 700)], advance: 500 },
+        "s-b": { elements: [sq(40, 0, 200, 500)], advance: 300 },
+        "s-c": { elements: [sq(60, 0, 250, 600)], advance: 400 },
+      },
+    );
+    await reopenGrid();
+    await waitJs(`!!document.querySelector('[data-cell="s-a"] .cell-ink')`, { label: "seeded cells drawn" });
+  };
+  const storedAdvance = async (id) => (await invokeAsync("writing_glyph_get", { id })).advance;
+  const storedLeft = async (id) => {
+    const o = await invokeAsync("writing_glyph_get", { id });
+    return Math.min(...o.elements.flatMap((e) => e.nodes.map((n) => n.x)));
+  };
+  const edgeXY = (id, edge) =>
+    js(`const t = document.querySelector('[data-cell="${id}"]'); const art = t.querySelector('svg.glyph-art').getBoundingClientRect();
+      const l = t.querySelector('[data-edge="${edge}"]'); if (!l) return null; const r = l.getBoundingClientRect();
+      return { x: r.left + r.width / 2, y: art.top + art.height * 0.5, left: art.left };`);
+  const dragInCell = async (id, edge, dx) => {
+    const p = await edgeXY(id, edge);
+    await js(`const svg = document.querySelector('[data-cell="${id}"] svg.glyph-art');
+      const at = (x) => ({ bubbles: true, cancelable: true, pointerId: 1, button: 0, clientX: x, clientY: ${p.y} });
+      svg.dispatchEvent(new PointerEvent('pointerdown', at(${p.x})));
+      svg.dispatchEvent(new PointerEvent('pointermove', at(${p.x + dx / 2})));
+      svg.dispatchEvent(new PointerEvent('pointermove', at(${p.x + dx})));
+      svg.dispatchEvent(new PointerEvent('pointerup', at(${p.x + dx}))); return true;`);
+  };
+  const setMode = (on) =>
+    js(`const b = document.querySelector('[data-testid="spacing-toggle"]');
+      if ((b.getAttribute('aria-pressed') === 'true') !== ${on}) b.click(); return true;`);
+
+  await probe("154-spacing-mode-shows-draggable-edges-and-bearings-on-each-cell", async () => {
+    await seedSpacing();
+    assertEqual(await js(`return document.querySelectorAll('[data-edge]').length;`), 0, "no edges outside spacing mode");
+    await setMode(true);
+    await waitJs(`document.querySelectorAll('[data-edge="advance"]').length === 3`, { label: "an advance edge on each cell" });
+    assertEqual(await js(`return document.querySelectorAll('[data-edge="lsb"]').length;`), 3, "a left edge on each cell");
+    const txt = await js(`return document.querySelector('[data-cell="s-a"] [data-testid="cell-bearings"]').textContent.trim();`);
+    assertEqual(txt, "100|100", "cell aa has left 100 and right 100");
+    await screenshot("p154-spacing-mode");
+  });
+
+  await probe("155-dragging-a-cell-edge-changes-the-stored-spacing-and-undoes-as-one-step", async () => {
+    const adv0 = await storedAdvance("s-a");
+    await dragInCell("s-a", "advance", 14);
+    await waitJs(`document.querySelector('[data-cell="s-a"] [data-testid="cell-bearings"]').textContent.trim() !== '100|100'`, { label: "readout updates live" });
+    await idle(600);
+    const adv1 = await storedAdvance("s-a");
+    if (!(adv1 > adv0)) throw new Error(`advance did not grow: ${adv0} -> ${adv1}`);
+    assertEqual(await storedLeft("s-a"), 100, "ink unmoved by an advance edge drag");
+    const left0 = await storedLeft("s-b");
+    await dragInCell("s-b", "lsb", 10);
+    await idle(600);
+    const left1 = await storedLeft("s-b");
+    if (!(left1 > left0)) throw new Error(`left bearing drag did not move the ink: ${left0} -> ${left1}`);
+    await js(`document.querySelector('[data-testid="spacing-undo"]').click(); return true;`);
+    await idle(600);
+    assertEqual(await storedLeft("s-b"), left0, "undo restored the left-bearing drag");
+    assertEqual(await storedAdvance("s-a"), adv1, "undo only undid the last step");
+    await js(`document.querySelector('[data-testid="spacing-undo"]').click(); return true;`);
+    await idle(600);
+    assertEqual(await storedAdvance("s-a"), adv0, "second undo restored the first drag");
+    await js(`document.querySelector('[data-testid="spacing-redo"]').click(); return true;`);
+    await idle(600);
+    assertEqual(await storedAdvance("s-a"), adv1, "redo reapplies it");
+    await js(`document.querySelector('[data-testid="spacing-undo"]').click(); return true;`);
+    await idle(400);
+  });
+
+  await probe("156-clicking-a-cell-opens-the-popover-with-fields-and-test-pairs", async () => {
+    await js(`document.querySelector('[data-cell="s-a"]').click(); return true;`);
+    await waitJs(`!!document.querySelector('[data-testid="spacing-popover"]')`, { label: "popover" });
+    const f = await js(`const v = (n) => document.querySelector('[data-spacing-field="' + n + '"]').value;
+      return { lsb: v('lsb'), rsb: v('rsb'), advance: v('advance') };`);
+    assertEqual(f.lsb, "100", "popover left bearing");
+    assertEqual(f.rsb, "100", "popover right bearing");
+    assertEqual(f.advance, "500", "popover advance");
+    const pairs = await js(`return [...document.querySelectorAll('[data-pair]')].map((p) => p.dataset.pair);`);
+    if (!pairs.includes("s-a|s-a")) throw new Error(`the glyph beside itself is missing: ${JSON.stringify(pairs)}`);
+    const n = await js(`return document.querySelectorAll('[data-testid="pair-list"] .pair').length;`);
+    if (n < 3) throw new Error(`expected the glyph beside itself and its neighbours, saw ${n} pairs`);
+    const gap = await js(`return document.querySelector('[data-testid="pair-list"] .pair figcaption').textContent.trim();`);
+    assertEqual(gap, "200", "the aa pair's gap is a's right bearing 100 plus a's left bearing 100");
+    await js(`const i = document.querySelector('[data-spacing-field="rsb"]'); i.value = '40'; i.dispatchEvent(new Event('change', { bubbles: true })); return true;`);
+    await waitJs(`document.querySelector('[data-testid="pair-list"] .pair figcaption').textContent.trim() === '140'`, { label: "the test pair updates live" });
+    await idle(500);
+    assertEqual(await storedAdvance("s-a"), 440, "the numeric field wrote through");
+    await screenshot("p156-popover");
+  });
+
+  await probe("157-copy-spacing-from-another-glyph", async () => {
+    await js(`const s = document.querySelector('[data-testid="copy-from"]'); s.value = 's-c'; s.dispatchEvent(new Event('change', { bubbles: true })); return true;`);
+    await js(`document.querySelector('[data-testid="copy-spacing"]').click(); return true;`);
+    await idle(700);
+    const left = await storedLeft("s-a");
+    assertEqual(left, 60, "aa now has cc's left bearing");
+    const o = await invokeAsync("writing_glyph_get", { id: "s-a" });
+    const right = Math.max(...o.elements.flatMap((e) => e.nodes.map((n) => n.x)));
+    assertEqual(o.advance - right, 400 - (60 + 250), "and cc's right bearing (90)");
+  });
+
+  await probe("158-apply-the-same-bearings-to-the-ctrl-selected-glyphs", async () => {
+    await js(`const el = document.querySelector('[data-cell="s-b"]');
+      el.dispatchEvent(new MouseEvent('click', { bubbles: true, ctrlKey: true })); return true;`);
+    await waitJs(`document.querySelector('[data-cell="s-b"]').classList.contains('batched')`, { label: "bb is in the batch" });
+    await js(`document.querySelector('[data-cell="s-a"]').click(); return true;`);
+    await waitJs(`!!document.querySelector('[data-testid="apply-to-selected"]') && !document.querySelector('[data-testid="apply-to-selected"]').disabled`, { label: "apply is available" });
+    await js(`document.querySelector('[data-testid="apply-to-selected"]').click(); return true;`);
+    await idle(800);
+    assertEqual(await storedLeft("s-b"), 60, "bb got aa's left bearing");
+    const o = await invokeAsync("writing_glyph_get", { id: "s-b" });
+    const right = Math.max(...o.elements.flatMap((e) => e.nodes.map((n) => n.x)));
+    assertEqual(o.advance - right, 90, "and aa's right bearing");
+    await js(`document.querySelector('[data-testid="spacing-undo"]').click(); return true;`);
+    await idle(700);
+    assertEqual(await storedLeft("s-b"), 40, "one undo restores every glyph the batch touched");
+  });
+
+  await probe("159-leaving-spacing-mode-hides-the-edges-and-the-previews-keep-the-new-spacing", async () => {
+    await setMode(false);
+    await waitJs(`document.querySelectorAll('[data-edge]').length === 0 && !document.querySelector('[data-testid="spacing-popover"]')`, { label: "edges and popover gone" });
+    const w = await js(`const t = document.querySelector('[data-cell="s-a"] .cell-advance'); return t ? Math.round(t.getBoundingClientRect().width) : 0;`);
+    if (w < 20) throw new Error("the advance box is missing from the cell");
+  });
 }
 
 try {

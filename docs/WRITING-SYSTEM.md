@@ -630,6 +630,46 @@ handle never reaches past the next node (an open end gets its one handle).
 Symmetric nodes are drawn as diamonds, smooth as circles, corners as squares
 (`data-kind` on each node for tests).
 
+### Spacing
+
+Bearings are **derived, never stored**: only the advance is saved with a glyph.
+The left bearing is the ink's left edge (x = 0 is the origin), the right bearing
+is the advance minus the ink's right edge, and the compiler writes exactly those
+numbers into `hmtx` (a Rust test reads them back out of the compiled font). The
+old `lsb` and `rsb` boxes in the properties panel stored a value the compiler
+ignored, so they did nothing; they now show and edit the real values
+(`src/lib/writingSpacing.ts`, pure and unit-tested).
+
+Following FontForge:
+
+| Edit | Ink | Advance |
+| --- | --- | --- |
+| Left bearing (box or dragging the left line) | moves | moves by the same amount, so the right bearing is unchanged |
+| Right bearing (box) | stays | changes |
+| Advance (box or dragging the advance line) | stays | changes; the right bearing absorbs it |
+
+Bearings may be negative (letters that overlap). A glyph with no ink has only an
+advance, and its bearing boxes are disabled. The advance never drops below 1.
+Components are included: moving the left bearing moves components with the
+contours.
+
+- **In the editor,** a dashed line at the ink's left edge (labelled `lsb N`) and
+  one at the advance edge (`rsb N`) run the full height. Hover shows a resize
+  cursor and highlights the line; dragging moves it, rounded to whole units (or
+  the grid when snap is on), as one undo step. A node or handle sitting on the
+  line keeps priority, so moving an edge node never drags the whole glyph.
+- **In the grid, Spacing mode** (toolbar button) shows the same two edges in every
+  cell and a `left|right` readout beside each label. Dragging an edge changes the
+  glyph live and is saved on release. Clicking a cell opens a popover with the
+  three numbers, **test pairs** (the glyph beside itself and beside its two
+  neighbours on each side, drawn with their advance boxes and the white gap
+  between the ink printed under each), **Copy spacing from** another glyph, and
+  **Give N selected the same bearings** for the glyphs Ctrl- or Shift-clicked into
+  a batch. Undo and redo in the toolbar step through these edits; a batch is one
+  step across every glyph it touched (`src/lib/spacingHistory.ts`).
+- The grid cells and test pairs redraw from the cache as soon as a spacing edit
+  lands, and the next font export uses the new numbers.
+
 ### Snapping and Shift
 
 Pure logic in `src/lib/writingSnap.ts` (nodes, rails, edge lines, grid) and
