@@ -463,18 +463,90 @@
   stroke-dasharray: 5 3;
 }
 
+.canvas-svg {
+  --handle-in: #5fb3a8;
+  --handle-out: #d06aa8;
+  --guide-label: #9e9484;
+  --start-arrow: #7aa2d6;
+  --open-end: #d9a441;
+  --advance: #7fae7a;
+}
+
 .canvas-svg .handle-line {
-  stroke: var(--muted);
   stroke-width: 1;
   vector-effect: non-scaling-stroke;
   pointer-events: none;
 }
 
+.canvas-svg .handle-line.handle-in { stroke: var(--handle-in); }
+.canvas-svg .handle-line.handle-out { stroke: var(--handle-out); }
+
 .canvas-svg .handle {
   fill: var(--bg);
-  stroke: var(--accent);
   stroke-width: 1;
   vector-effect: non-scaling-stroke;
+}
+
+.canvas-svg .handle.handle-in { stroke: var(--handle-in); }
+.canvas-svg .handle.handle-out { stroke: var(--handle-out); }
+
+.canvas-svg .handle-x {
+  stroke-width: 1.5;
+  vector-effect: non-scaling-stroke;
+  pointer-events: none;
+}
+
+.canvas-svg .handle-x.handle-in { stroke: var(--handle-in); }
+.canvas-svg .handle-x.handle-out { stroke: var(--handle-out); }
+
+.canvas-svg .node-cross {
+  stroke: var(--text);
+  stroke-width: 1;
+  vector-effect: non-scaling-stroke;
+  pointer-events: none;
+}
+
+.canvas-svg .node-cross.node-cross-selected { stroke: var(--bg); }
+
+.canvas-svg .guide-label {
+  fill: var(--guide-label);
+  font-family: ui-monospace, monospace;
+  pointer-events: none;
+  user-select: none;
+}
+
+.canvas-svg .advance-box {
+  fill: none;
+  stroke: var(--advance);
+  stroke-width: 1;
+  stroke-opacity: 0.55;
+  vector-effect: non-scaling-stroke;
+  pointer-events: none;
+}
+
+.canvas-svg .start-arrow line,
+.canvas-svg .start-arrow polygon {
+  stroke: var(--start-arrow);
+  fill: var(--start-arrow);
+  stroke-width: 1.5;
+  vector-effect: non-scaling-stroke;
+  pointer-events: none;
+}
+
+.canvas-svg .open-end {
+  fill: none;
+  stroke: var(--open-end);
+  stroke-width: 1.5;
+  stroke-dasharray: 3 2;
+  vector-effect: non-scaling-stroke;
+  pointer-events: none;
+}
+
+.editor-statusbar .info-cell {
+  padding: 0 8px;
+  border-left: 1px solid var(--border);
+  font-size: 11px;
+  white-space: nowrap;
 }
 
 .canvas-svg .glyph-node {

@@ -630,6 +630,33 @@ handle never reaches past the next node (an open end gets its one handle).
 Symmetric nodes are drawn as diamonds, smooth as circles, corners as squares
 (`data-kind` on each node for tests).
 
+### Visual language
+
+Pure helpers in `src/lib/writingInfo.ts`; colours are CSS variables on
+`.canvas-svg` in `src/styles/writing.css`.
+
+- **On-curve nodes:** a square for a corner, a circle with a small cross for
+  smooth, a diamond with a cross for symmetric; the accent fill when selected.
+- **Off-curve handles:** a circle with an X mark. The incoming handle and its
+  line are teal (`--handle-in`), the outgoing ones magenta (`--handle-out`), so
+  the two sides can be told apart. Contrast against the background is 6.4:1 and
+  4.7:1 (computed, WCAG AA for graphics is 3:1).
+- **Guides:** the baseline, x-height, cap height, ascender and descender are each
+  labelled with their name and height at the left edge of the visible area (so
+  the label stays on screen when panned). The glyph's origin (`0`) and, when an
+  advance is set, the advance edge (`advance N`) and a faint advance box are
+  drawn. Bearings are not stored (see the spacing stage).
+- **Contour direction:** each contour has a blue start arrow at its first node,
+  pointing the way it leaves it. Direction (`cw`/`ccw`) is on the arrow's
+  `data-direction`; fonts want outer contours clockwise and the compiler
+  reverses counter-clockwise glyphs on export. An open contour shows a dashed
+  amber cap at each end.
+- **Info bar:** cursor position in font units, distance and counter-clockwise
+  angle from where the current drag began (only while dragging), zoom percent,
+  the active tool (including a held Space as Hand) and the active layer. Position
+  is rounded to whole units and written only when the shown number changes.
+- **Rulers:** not built; recorded in `deferred.md`.
+
 ### Bezier editing (Direct tool)
 
 Pure logic is in `src/lib/writingBezier.ts`.

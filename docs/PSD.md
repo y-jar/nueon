@@ -202,7 +202,10 @@ layer (`src-tauri/`), and the Svelte 5 frontend (`src/`). See `docs/ARCHITECTURE
   but keeps the curve's shape, Ctrl+Delete removes it plainly. Arrow keys nudge
   1 unit (Shift 10), Tab/Shift+Tab step through nodes, V is the default
   Select tool (whole shapes: click, Shift-click, box, drag, Ctrl+D, Delete),
-  Bezier editing in the Direct tool (handles only for selected nodes and
+  a clearer visual language (square/circle/diamond nodes with crosses, X-marked
+  handles in teal for the incoming and magenta for the outgoing side, labelled
+  guide rails, advance box, start arrows, open-end caps) and an info bar (cursor,
+  drag distance and angle, zoom, tool, layer), Bezier editing in the Direct tool (handles only for selected nodes and
   their facing neighbours, node-over-handle hit priority, drag a segment to
   reshape it, Alt-pull symmetric handles, double-click toggles corner/smooth,
   Shift/Ctrl handle constraints, add extrema), a transform box on selected shapes (corner scale, outside-corner rotate,
@@ -275,7 +278,9 @@ layer (`src-tauri/`), and the Svelte 5 frontend (`src/`). See `docs/ARCHITECTURE
   in `writing.test.ts`, `writingTransform.test.ts` (matrix order, scale/rotate/skew about a pivot,
   Shift/Alt, handle hit rules, component folding, dialog order, copy) and
   `writingNodeType.test.ts` (handle growth, symmetric/smooth lengths, open ends),
-  both mutation-checked, `writingBezier.test.ts` (segment drag keeps the point under the pointer and
+  both mutation-checked, `writingInfo.test.ts` (guide labels, coordinate/angle/zoom formatting, drag
+  readout, contour direction, start direction, open ends; mutation-checked),
+  `writingBezier.test.ts` (segment drag keeps the point under the pointer and
   the end nodes fixed, smooth/symmetric stay constrained, visible-handle rules,
   hit priority and radii, extrema keep the shape and land on extremes;
   mutation-checked), `writingForms.test.ts`, positional-forms tests (runs,

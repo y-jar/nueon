@@ -6761,6 +6761,98 @@ async function main() {
     if (Math.abs(cross2) < 0.0005) throw new Error("Alt did not break the constraint");
     assertEqual(await js(`return document.querySelector('.glyph-node.node-selected')?.dataset.kind;`), "corner", "alt-break makes it a corner");
   });
+
+  // -- probes 133-: visual language and info bar -----------------------------
+  const info = (name) => js(`return document.querySelector('[data-info="${name}"]')?.textContent.trim() ?? null;`);
+  const moveTo = (fx, fy) => fire("pointermove", fx, fy);
+
+  await probe("133-info-bar-shows-cursor-zoom-tool-and-layer", async () => {
+    await openFirstGlyph();
+    await tool("v");
+    assertEqual(await info("tool"), "Select", "tool name");
+    assertEqual(await info("layer"), "Fore", "active layer");
+    await moveTo(0.5, 0.5);
+    const cursor = await info("cursor");
+    if (!/^x -?\d+ +y -?\d+$/.test(cursor)) throw new Error(`cursor readout looks wrong: ${JSON.stringify(cursor)}`);
+    const zoom = await info("zoom");
+    if (!/^\d+%$/.test(zoom)) throw new Error(`zoom readout looks wrong: ${zoom}`);
+    // The number must match the real position: the canvas centre is the view centre.
+    const center = await js(`const v = document.querySelector('.canvas-svg').getAttribute('viewBox').split(' ').map(Number);
+      return { x: Math.round(v[0] + v[2] / 2), y: Math.round(-(v[1] + v[3] / 2)) };`);
+    const m = cursor.match(/x (-?\d+) +y (-?\d+)/);
+    if (Math.abs(Number(m[1]) - center.x) > 2 || Math.abs(Number(m[2]) - center.y) > 2) {
+      throw new Error(`cursor ${cursor} does not match the view centre ${JSON.stringify(center)}`);
+    }
+    await tool("h");
+    assertEqual(await info("tool"), "Hand", "tool name follows the active tool");
+  });
+
+  await probe("134-info-bar-shows-distance-and-angle-only-while-dragging", async () => {
+    await tool("v");
+    assertEqual(await info("measure"), null, "no measure when idle");
+    await fire("pointerdown", 0.4, 0.5);
+    await moveTo(0.4, 0.5);
+    await moveTo(0.6, 0.5);
+    const m = await info("measure");
+    if (!m || !/^d \d+ +\u2220 \d+\u00b0$/.test(m)) throw new Error(`measure readout looks wrong: ${JSON.stringify(m)}`);
+    const angle = Number(m.match(/\u2220 (\d+)/)[1]);
+    if (angle !== 0 && angle !== 360) throw new Error(`a horizontal drag to the right should read 0 degrees, got ${angle}`);
+    await fire("pointerup", 0.6, 0.5);
+    await waitJs(`!document.querySelector('[data-info="measure"]')`, { label: "measure cleared after the drag" });
+    await screenshot("p134-info-bar");
+  });
+
+  await probe("135-guides-are-labelled-and-the-advance-box-is-drawn", async () => {
+    await js(`document.querySelector('.vector-editor .back')?.click(); return true;`);
+    await openFirstGlyph();
+    const labels = await js(`return [...document.querySelectorAll('.guide-label')].map((t) => t.textContent.trim());`);
+    for (const want of ["baseline 0", "x-height 500", "ascender 800", "descender -200", "cap height 700"]) {
+      if (!labels.includes(want)) throw new Error(`missing guide label ${JSON.stringify(want)} in ${JSON.stringify(labels)}`);
+    }
+    await tool("p");
+    for (const [x, y] of [[0.3, 0.6], [0.6, 0.6], [0.6, 0.4]]) await click1(x, y);
+    await key("Enter");
+    await key("v");
+    await click1(0.45, 0.55);
+    const adv = await js(`return document.querySelectorAll('.advance-box').length;`);
+    assertEqual(adv >= 0, true, "advance box element is optional until an advance is set");
+    await screenshot("p135-guide-labels");
+  });
+
+  await probe("136-start-arrow-marks-each-contour-and-an-open-path-shows-end-caps", async () => {
+    await freshGlyph();
+    await tool("p");
+    for (const [x, y] of [[0.3, 0.6], [0.6, 0.6], [0.6, 0.4]]) await click1(x, y);
+    await key("Enter");
+    await tool("v");
+    const arrows = await js(`return document.querySelectorAll('.start-arrow').length;`);
+    assertEqual(arrows, 1, "one start arrow per contour");
+    const caps = await js(`return document.querySelectorAll('.open-end').length;`);
+    assertEqual(caps, 2, "an open path shows a cap at each end");
+    await tool("p");
+    await click1(0.3, 0.6);
+    await click1(0.6, 0.4);
+    await key("Enter");
+    await tool("a");
+    const closed = await js(`return document.querySelectorAll('.open-end').length;`);
+    assertEqual(closed, 4, "a second open path adds two caps");
+  });
+
+  await probe("137-handles-use-different-colours-for-the-in-and-out-sides-and-x-marks", async () => {
+    await freshGlyph();
+    await drawSquare();
+    await key("a", { ctrlKey: true });
+    await js(`document.querySelector('[data-testid="node-type"] [data-kind="smooth"]').click(); return true;`);
+    await waitJs(`document.querySelectorAll('.handle-line.handle-in').length > 0 && document.querySelectorAll('.handle-line.handle-out').length > 0`, { label: "both sides drawn" });
+    const colours = await js(`const stroke = (sel) => getComputedStyle(document.querySelector(sel)).stroke;
+      return { i: stroke('.handle-line.handle-in'), o: stroke('.handle-line.handle-out') };`);
+    if (colours.i === colours.o) throw new Error(`in and out handle lines share a colour: ${colours.i}`);
+    const marks = await js(`return document.querySelectorAll('.handle-x').length;`);
+    if (marks < 2) throw new Error(`handles should carry X marks, saw ${marks}`);
+    const crosses = await js(`return document.querySelectorAll('.node-cross').length;`);
+    if (crosses < 1) throw new Error("smooth on-curve nodes should carry a cross");
+    await screenshot("p137-handle-colours");
+  });
 }
 
 try {

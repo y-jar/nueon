@@ -22,7 +22,7 @@ and regenerate.
 - `DerivationGraph.svelte` — Ancestor/descendant etymology graph.
 - `Editor.svelte` — Note editor: toolbar, codemirror, link follow.
 - `EditorMenuBar.svelte` — Editor menu bar: File/Edit/View/Tools/Metrics/Glyphs/Export dropdowns.
-- `EditorStatusBar.svelte` — Editor status bar: live status, node count and canvas buttons.
+- `EditorStatusBar.svelte` — Editor info bar: cursor, drag distance and angle, zoom, tool, layer, counts and status.
 - `EditorToolbar.svelte` — Formatting toolbar for the note editor.
 - `EmptyState.svelte` — Empty pane: new note/table shortcuts.
 - `ExplorerTree.svelte` — The notes tree with inline rename and drag.
@@ -145,6 +145,7 @@ and regenerate.
 - `writingComponents.ts` — Pure component resolution for the glyph canvas: transform, flatten, expand.
 - `writingEditor.svelte.ts` — Vector-editor state: the open glyph, tools, selection, history and gestures.
 - `writingForms.ts` — Pure helpers for a glyph's positional forms (initial, medial, final).
+- `writingInfo.ts` — Pure helpers for the editor's visual language: guide labels, the info bar, contour direction.
 - `writingMenus.ts` — Pure menu definitions for the vector editor's menu bar.
 - `writingNodeType.ts` — Setting a node's type (corner, smooth, symmetric), growing handles when it has none.
 - `writingRules.ts` — Pure helpers for editing orthography rules in the writing tab.

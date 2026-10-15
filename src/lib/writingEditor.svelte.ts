@@ -141,6 +141,10 @@ export const editor = $state({
   grid: 10,
   showGuides: true,
   showAllHandles: false,
+  /** The pointer in glyph space for the info bar; null when it has left the canvas. */
+  cursor: null as Point | null,
+  /** Where the current gesture began, for distance and angle in the info bar. */
+  gestureFrom: null as Point | null,
   /** What the pointer is over in the Direct tool, for hover highlight; written only when it changes. */
   hover: null as { kind: string; key: string } | null,
   composeOpen: false,
@@ -792,6 +796,7 @@ export function pointerDown(raw: Point, mods: Modifiers): void {
   const outline = editor.outline;
   const radius = NODE_RADIUS / editor.zoom;
   editor.snapHit = null;
+  editor.gestureFrom = { x: Math.round(raw.x), y: Math.round(raw.y) };
 
   if (mods.button === 1 || effectiveTool() === "hand") {
     if (mods.screen) drag = { kind: "pan", x: mods.screen.x, y: mods.screen.y };
@@ -1042,7 +1047,21 @@ function liveTransform(d: TransformDrag, raw: Point, mods: Modifiers): Matrix {
 }
 
 /** Pointer move in glyph space; only local state changes, never IPC. */
+/** Record the pointer for the info bar; whole units, and only when the shown value changes. */
+export function setCursor(raw: Point | null): void {
+  if (raw === null) {
+    if (editor.cursor !== null) editor.cursor = null;
+    return;
+  }
+  const x = Math.round(raw.x);
+  const y = Math.round(raw.y);
+  const c = editor.cursor;
+  if (c && c.x === x && c.y === y) return;
+  editor.cursor = { x, y };
+}
+
 export function pointerMove(raw: Point, mods: Modifiers): void {
+  setCursor(raw);
   if (!editor.outline) return;
   if (drag && drag.kind === "pan") {
     if (mods.screen) {
@@ -1190,6 +1209,7 @@ function nodeAt(ref: NodeRef) {
 export function pointerUp(raw: Point, mods: Modifiers): void {
   const finished = drag;
   drag = null;
+  editor.gestureFrom = null;
   const hit = editor.snapHit;
   editor.snapHit = null;
   if (!finished || !editor.outline) return;
@@ -1391,6 +1411,7 @@ export function finishPath(): void {
 
 export function cancelGesture(): void {
   drag = null;
+  editor.gestureFrom = null;
   editor.liveMatrix = null;
   editor.snapHit = null;
   editor.preview = null;

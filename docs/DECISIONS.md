@@ -110,6 +110,14 @@ commit per stage. See `docs/PROBING.md`.
   far away. Mutation tests showed that two plausible mistakes (swapping B1 and B2,
   forgetting to rescale the split parameter for a second extremum) are only caught
   by checking the shape, not by counting nodes.
+- **Teal in, magenta out for handles.** Colours are picked and checked by
+  computed contrast on the dark background, not by eye, because the screenshot
+  tool cannot judge them; they also differ from each other, so the two sides can
+  be told apart without relying on position.
+- **Guide labels live at the left edge of the view**, not at a fixed glyph
+  position, so panning and zooming never hide them.
+- **Rulers and ruler-dragged guides are deferred** (the viewport model was already
+  large); see `deferred.md`.
 - **Open contours count as filled when hit-testing**, matching how the canvas
   draws them and how the font fills them.
 - **The editor effect loop (found after stage 1a).** The canvas resize effect

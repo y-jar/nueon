@@ -29,6 +29,7 @@
     openTransformDialog,
     lookupGlyph,
     previewOutline,
+    setCursor,
     toggleNodeAt,
     effectiveTool,
     fitGlyph,
@@ -52,6 +53,7 @@
   import { elementPathBounds } from "../lib/writingSelect";
   import { measuredSize } from "../lib/writingViewport";
   import { segmentPathData, visibleHandles } from "../lib/writingBezier";
+  import { contourDirection, contourStart, guideLabelPlacement, handleMarkLines, openEnds } from "../lib/writingInfo";
 
   interface Props {
     config: WritingConfig;
@@ -134,6 +136,17 @@
     const b = el.nodes[(Number(sg) + 1) % el.nodes.length];
     return a && b ? segmentPathData(a, b, true) : "";
   });
+  const contourMarks = $derived(
+    shown
+      ? shown.elements.flatMap((el, index) => {
+          if (el.kind !== "contour") return [];
+          const start = contourStart(el);
+          const dir = contourDirection(el);
+          return [{ index, start, dir, ends: openEnds(el).map((i) => ({ i, n: el.nodes[i] })) }];
+        })
+      : [],
+  );
+  const advanceX = $derived(editor.outline?.advance ?? null);
   const tbox = $derived(editor.liveMatrix ? null : currentTransformBox());
   const pivot = $derived(editor.liveMatrix ? null : currentPivot());
   const showTransformBox = $derived(
@@ -322,6 +335,7 @@
     preserveAspectRatio="xMidYMid meet"
     onpointerdown={onDown}
     onpointermove={onMove}
+    onpointerleave={() => setCursor(null)}
     onpointerup={onUp}
     ondblclick={onDouble}
   >
@@ -338,6 +352,37 @@
       {/each}
     {/if}
     {#if editor.showGuides}
+      {#each guides as guide (guide.key)}
+        {@const label = guideLabelPlacement(guide.key, guide.y, minX)}
+        <text
+          class="guide-label"
+          x={label.x + 4 * handleScale}
+          y={flipY(guide.y) - 3 * handleScale}
+          font-size={11 * handleScale}
+        >{label.text}</text>
+      {/each}
+      {#if advanceX && advanceX > 0}
+        <rect
+          class="advance-box"
+          x={0}
+          y={-storageMaxY}
+          width={advanceX}
+          height={storageMaxY - storageMinY}
+        />
+        <text
+          class="guide-label"
+          x={advanceX - 4 * handleScale}
+          y={-storageMaxY + 14 * handleScale}
+          font-size={11 * handleScale}
+          text-anchor="end"
+        >advance {Math.round(advanceX)}</text>
+      {/if}
+      <text
+        class="guide-label"
+        x={4 * handleScale}
+        y={-storageMaxY + 14 * handleScale}
+        font-size={11 * handleScale}
+      >0</text>
       <line class="guide edge" x1={0} y1={-storageMaxY} x2={0} y2={-storageMinY} />
       {#if editor.outline?.advance}
         <line
@@ -385,6 +430,42 @@
             rx={node.kind === "corner" ? 0 : r}
           />
         {/if}
+        {#if node.kind !== "corner"}
+          {#each handleMarkLines("plus", { x: node.x, y: flipY(node.y) }, 3 * handleScale) as ln, li (li)}
+            <line
+              class="node-cross"
+              class:node-cross-selected={isSelected(index, ni)}
+              x1={ln.x1}
+              y1={ln.y1}
+              x2={ln.x2}
+              y2={ln.y2}
+            />
+          {/each}
+        {/if}
+      {/each}
+    {/each}
+    {#each contourMarks as mark (mark.index)}
+      {#if mark.start}
+        {@const ax = mark.start.x}
+        {@const ay = flipY(mark.start.y)}
+        {@const ux = mark.start.dx}
+        {@const uy = -mark.start.dy}
+        {@const len = 16 * handleScale}
+        <g class="start-arrow" data-start={mark.index} data-direction={mark.dir ?? "open"}>
+          <line x1={ax} y1={ay} x2={ax + ux * len} y2={ay + uy * len} />
+          <polygon
+            points="{ax + ux * len},{ay + uy * len} {ax + ux * len - ux * 6 * handleScale - uy * 3.5 * handleScale},{ay + uy * len - uy * 6 * handleScale + ux * 3.5 * handleScale} {ax + ux * len - ux * 6 * handleScale + uy * 3.5 * handleScale},{ay + uy * len - uy * 6 * handleScale - ux * 3.5 * handleScale}"
+          />
+        </g>
+      {/if}
+      {#each mark.ends as end (end.i)}
+        <circle
+          class="open-end"
+          data-open-end={`${mark.index}:${end.i}`}
+          cx={end.n.x}
+          cy={flipY(end.n.y)}
+          r={9 * handleScale}
+        />
       {/each}
     {/each}
     {#if hoverSegmentD}<path class="segment-hover" d={hoverSegmentD} />{/if}
@@ -405,6 +486,9 @@
         cy={flipY(hd.hy)}
         r={(hovered ? 6 : 4) * handleScale}
       />
+      {#each handleMarkLines("x", { x: hd.hx, y: flipY(hd.hy) }, (hovered ? 4 : 3) * handleScale) as ln, li (li)}
+        <line class="handle-x handle-{hd.which}" x1={ln.x1} y1={ln.y1} x2={ln.x2} y2={ln.y2} />
+      {/each}
     {/each}
     {#each selectedBoxes as sb (sb.index)}
       <rect

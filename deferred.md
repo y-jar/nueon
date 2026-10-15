@@ -131,3 +131,14 @@ new-note button.
 - ~~Cross-table parent links: Compose only links roots in the chosen save table;
   roots from another table are listed as "different table, not linked". The
   backend already stores parents by UUID, so cross-table links are possible.~~
+
+## Writing system editor
+
+- Rulers along the top and left, and dragging a guide out of a ruler. Skipped in
+  the polish pass because the viewport model and info bar already cover reading
+  positions; revisit if the info bar proves not enough.
+- Spiro curves, perspective and 3D rotate (FontForge tools): niche for a
+  conlang writing system, and spiro needs its own curve solver.
+- Mouse-button-to-tool mapping: the toolbox and shortcuts cover the same ground.
+- Hints, CID fonts and multiple master: they do not apply to a small PUA TrueType
+  export.
