@@ -50,6 +50,14 @@ docs: module headers + generated source map
   store function), wrap the call in `untrack`, and make the setter compare
   before it assigns, so an equal value is never written. A new object or array
   counts as a change even when its contents are equal.
+- **An async continuation must not write state after its owner unmounts.** Any
+  `await` inside an effect, its callees, or an event handler whose writes are
+  picked up by reactive rendering must be guarded: an `alive` flag set false in
+  the effect's cleanup, and a generation counter that a newer load invalidates
+  (see `DerivationGraph`'s `reload`). Without the guard, the write schedules an
+  update on a destroyed subtree and reads a just-destroyed branch's props, which
+  is how `88` used to throw.
+  is how `88` used to throw.
 
 ## Docs
 

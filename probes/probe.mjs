@@ -933,10 +933,24 @@ async function collectProbeErrors(statusBefore, allow) {
   return found.filter((text) => !allow.some((re) => re.test(text)));
 }
 
+/** With PROBE_STACKS, print the stacks of the errors the probe just produced. */
+async function drainStacks(name) {
+  if (!process.env.PROBE_STACKS) return;
+  try {
+    const stacks = (await js(`return (window.__stacks || []).splice(0);`)) ?? [];
+    for (const e of stacks) console.log(`PAGE-STACK ${name}: ${JSON.stringify(e)}`);
+  } catch {
+    // the page may be gone; nothing to print
+  }
+}
+
 async function probe(name, fn, options = {}) {
-  // `PROBE_ONLY` runs a subset (substring match) for focused debugging.
+  // `PROBE_ONLY` runs a subset for focused debugging: a plain substring, or
+  // `/regex/` to select exact sets (e.g. `'/(87|88-tab)/'`).
   const only = process.env.PROBE_ONLY;
-  if (only && !name.includes(only)) return;
+  const onlyRe = only && only.startsWith("/") && only.endsWith("/") ? new RegExp(only.slice(1, -1)) : null;
+  if (only && !onlyRe && !name.includes(only)) return;
+  if (onlyRe && !onlyRe.test(name)) return;
   // `PROBE_DELAY_MS` slows each step so a human can follow it on screen.
   const delay = Number(process.env.PROBE_DELAY_MS || 0);
   if (delay > 0) await new Promise((resolve) => setTimeout(resolve, delay));
@@ -959,13 +973,16 @@ async function probe(name, fn, options = {}) {
     if (errors.length) {
       const text = errors.join(" | ").slice(0, 400);
       const loop = /effect_update_depth_exceeded/.test(text) ? " [infinite effect loop]" : "";
+      await drainStacks(name);
       results.push([name, "FAIL", `errors during probe${loop}: ${text}`]);
       console.log(`FAIL ${name}: errors during probe${loop}: ${text}`);
       return;
     }
+    await drainStacks(name);
     results.push([name, "PASS", ""]);
     console.log(`PASS ${name}`);
   } catch (error) {
+    await drainStacks(name);
     results.push([name, "FAIL", String(error?.message ?? error)]);
     console.log(`FAIL ${name}: ${String(error?.message ?? error).slice(0, 300)}`);
   }
@@ -1097,6 +1114,19 @@ async function main() {
   await waitJs(`!!document.querySelector('.tree-row[data-path="alpha.md"]')`, {
     label: "seeded notes in tree",
   });
+  if (process.env.PROBE_STACKS) {
+    // Keep the full stack of every page error for debugging (the default
+    // harness check keeps only the message).
+    await js(`window.__stacks = [];
+      window.addEventListener('unhandledrejection', (e) => {
+        const r = e.reason;
+        window.__stacks.push({ msg: String(r && r.message || r), stack: r && r.stack ? String(r.stack).slice(0, 1600) : null });
+      });
+      window.addEventListener('error', (e) => {
+        window.__stacks.push({ msg: e.message, stack: e.error && e.error.stack ? String(e.error.stack).slice(0, 1600) : null });
+      }, true);
+      return true;`);
+  }
 
   // -- probe 16: the brand is the new logo, not the old "L" ----------------
   // (The app has a single dark theme, so there is no light theme to check.)
@@ -7582,17 +7612,18 @@ async function main() {
     await idle(600);
     await setSizeTo(60);
     await js(`document.querySelector('[data-source="custom"]').click(); return true;`);
+    await idle(100);
     await typeInPreview("katu");
-    await waitJs(`document.querySelectorAll('[data-testid="preview-line"] .p-rail').length === 4`, { label: "four metric rails" });
-    const boxes0 = await js(`return document.querySelectorAll('[data-box]').length;`);
-    if (boxes0 > 0) {
-      await js(`document.querySelector('[data-testid="preview-boxes"]').click(); return true;`);
-    }
+    await waitJs(`document.querySelectorAll('[data-testid="preview-line"] .p-rail').length === 4 && document.querySelectorAll('[data-box]')[0]?.getAttribute('width') === '24'`, { label: "four metric rails and ka's box first (the previous probe left 'tuka', which also shapes to two glyphs)" });
+    const boxes = await js(`return [...document.querySelectorAll('[data-box]')].map((b) => [Number(b.getAttribute('x')), Number(b.getAttribute('width'))]);`);
+    assertEqual(JSON.stringify(boxes), JSON.stringify([[0, 24], [24, 15]]), "ka (400 units) then tu (250) at 60 px, side by side");
+    const boxes0 = boxes.length;
+    // Off and on must restore the same set.
+    await js(`document.querySelector('[data-testid="preview-boxes"]').click(); return true;`);
     await waitJs(`document.querySelectorAll('[data-box]').length === 0`, { label: "boxes off" });
     await js(`document.querySelector('[data-testid="preview-boxes"]').click(); return true;`);
-    await waitJs(`document.querySelectorAll('[data-box]').length === 2`, { label: "one advance box per glyph" });
     const w = await js(`return [...document.querySelectorAll('[data-box]')].map((b) => [Number(b.getAttribute('x')), Number(b.getAttribute('width'))]);`);
-    assertEqual(JSON.stringify(w), JSON.stringify([[0, 24], [24, 15]]), "ka (400 units) then tu (250) at 60 px, side by side");
+    assertEqual(JSON.stringify(w), JSON.stringify(boxes), "boxes identical after being toggled off and on");
   });
 
   await probe("169-dragging-the-gap-between-two-letters-changes-their-bearings-and-undoes", async () => {

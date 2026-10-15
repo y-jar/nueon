@@ -84,6 +84,20 @@ summary, writes screenshots to `probes/out/`, and **exits non-zero on any
 failure**. No app instrumentation is required - probes reach into the running
 webview through WebDriver's `execute/sync`.
 
+Environment toggles:
+
+- `PROBE_ONLY=<substring>` - run the probes whose name contains the string; a
+  `/regex/` form (`PROBE_ONLY=/(87|88-tab)/`) picks exact sets. A probe that
+  only reproduces with the state a specific earlier probe left behind runs
+  WITH it this way (`/84|88-tab/`).
+- `PROBE_STACKS=1` - after each probe, print `PAGE-STACK <probe> <json>` with
+  the full stack of the errors it produced (message plus stack), beyond the
+  message-only error line the default check reports.
+
+Probes are yours alone while a run lasts: run them **serially**. Two or more
+concurrent `probe.mjs` processes break each other's WebDriver session
+(`invalid session id` mid-run) and lose all results.
+
 ### The helper API (`probes/probe.mjs`)
 
 Everything runs inside the webview unless noted:
@@ -302,14 +316,29 @@ late 10 ms timers over 3 s with nobody touching the page. Measured on the
 probe machine: broken build, 11-12 frame gaps over 50 ms with a worst of
 1.4-1.8 s; fixed build, none, worst frame gap 6 ms.
 
-To find which effect loops, build the frontend in Svelte dev mode
-(`svelte({ compilerOptions: { dev: true } })` in `vite.config.ts`, temporarily),
-put `$inspect.trace("name")` and a run counter in each `$effect`, and read the
-counts from the page. Revert before committing.
+To find which effect loops or crash a probe, build the frontend in Svelte dev
+mode: `npx vite build --mode development` (NOT `svelte({ compilerOptions: {
+dev: true } })` in `vite.config.ts` - the plugin forces `dev` off from vite's
+`isProduction` during `vite build`, so that edit silently does nothing), then
+point the nix build at the tree and run the suite with `PROBE_STACKS=1`. The
+harness then prints a `PAGE-STACK <probe>` line with the full un-minified stack
+of every error, including the function names, so a crash maps back to source.
+Revert the build before committing.
 
-Known old failure: `88-tab-active-revealed` triggers `null is not an object
-(evaluating 'c(s).id')`. It fails identically on builds from before the writing
-polish pass and is not related to it.
+`PROBE_ONLY` selects a subset: a plain substring (`PROBE_ONLY=88-tab`) or a
+`/regex/` (`PROBE_ONLY=/(87|88-tab)/`), for when a probe only reproduces with
+state a specific earlier probe left. `PROBE_STACKS=1` keeps the full stack of
+every page error (see below).
+
+Known failure, now fixed: `88-tab-active-revealed` threw `null is not an object
+(evaluating 'u(s).id')` when tab churn re-rendered the Inspector onto a word
+another probe had deleted: the load in `DerivationGraph` kept writing state
+after the component unmounted (the write schedules a props read on a destroyed
+branch). Fixed by guarding its post-await writes with `alive` + a generation
+counter (see `standards.md`). Lesson for flaky errors that only reproduce in the
+full run: reproduce with `PROBE_ONLY=/regex/` pairs and read the real stack with
+`PROBE_STACKS=1` on a dev-mode build instead of guessing from the minified
+function names.
 
 ### Pointer capture swallows WebDriver pointer actions
 
@@ -343,6 +372,15 @@ writing probes). A glyph now opens on Select, so a probe that draws must press
 `22-translator-loads-grammar-rule` ("clause canvas" timeout) fails about one run
 in three or four, on builds before and after the writing-system polish pass.
 Rerun before investigating; if it fails twice in a row, look at it.
+
+### A probe must not assert on a state an earlier probe left drawn
+
+Probes run in sequence and share state (see "Seed state through IPC"). A probe
+that types text and asserts a glyph count can pass on the PREVIOUS probe's
+rendering if the count happens to be the same (168 vs 167's final `tuka`: also
+two glyphs). Make the wait distinguish the new state specifically (e.g. the
+first box's width) rather than a count that both states produce, and re-select
+the source with a small `idle()` between the switch and the typing.
 
 ### An image viewer can show a stale screenshot
 
@@ -382,6 +420,9 @@ before concluding the fix failed.
 3. **Forgetting to `git add` new files** and concluding "the fix doesn't work".
 4. **Editing `App.svelte` for a probe and never restoring it.** Restore with
    `git checkout HEAD -- src/App.svelte` and re-`git add`.
+4b. **Running probe suites in parallel** (see §5) - each breaks the others' WebDriver session.
+5. **Re-deriving the probe harness.** It already exists (`probes/probe.mjs`);
+   extend it.
 5. **Re-deriving the probe harness.** It already exists (`probes/probe.mjs`);
    extend it.
 6. **Hard-coding fixture counts.** Compute them from the file.

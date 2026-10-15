@@ -42,23 +42,36 @@
     return nodes.filter((node) => node.parents.includes(nodeId));
   }
 
+  let load = 0;
+  let alive = true;
+
   async function reload() {
+    const mine = ++load;
     try {
-      nodes = await api.derivationGraph(id);
+      const next = await api.derivationGraph(id);
+      if (!alive || mine !== load) return;
+      nodes = next;
     } catch (e) {
+      if (!alive || mine !== load) return;
       error = String(e);
       return;
     }
-    candidates = await api.parentCandidates(id).catch(() => []);
+    const nextCandidates = await api.parentCandidates(id).catch(() => []);
+    if (!alive || mine !== load) return;
+    candidates = nextCandidates;
   }
 
   $effect(() => {
     const target = id;
     if (!target) return;
+    alive = true;
     error = "";
     exportStatus = "";
     reload();
     exportPath = `derivations/${ui.nameById[target] ?? "word"}`;
+    return () => {
+      alive = false;
+    };
   });
 
   async function addParent() {
