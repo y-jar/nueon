@@ -149,9 +149,12 @@ new-note button.
   variable width via the nib.
 - Measure **persistent rulers** and snapping the measurement onto nodes and
   edges (the shipped measure is a free drag readout).
-- Rulers along the top and left, and dragging a guide out of a ruler. Skipped in
-  the polish pass because the viewport model and info bar already cover reading
-  positions; revisit if the info bar proves not enough.
+- ~~Rulers along the top and left, and dragging a guide out of a ruler.~~
+  (stage 7, UX pass)
+- Persist guides per glyph (they are session-only today: no file, no undo, they
+  reset with the glyph).
+- Diagonal guides, and snapping the measure tool's endpoints onto nodes and
+  guides.
 - Spiro curves, perspective and 3D rotate (FontForge tools): niche for a
   conlang writing system, and spiro needs its own curve solver.
 - Mouse-button-to-tool mapping: the toolbox and shortcuts cover the same ground.

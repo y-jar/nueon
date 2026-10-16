@@ -44,6 +44,8 @@ export interface SnapContext {
   outline: GlyphOutline;
   /** Y heights of the horizontal guide rails (storage coordinates). */
   guides: { y: number; label: string }[];
+  /** X positions of the vertical guides dragged out of the left ruler. */
+  verticals?: { x: number; label: string }[];
   advance: number | null;
   grid: number;
   gridOn: boolean;
@@ -94,6 +96,11 @@ export function snapTargets(ctx: SnapContext, point: Point, radius: number): Sna
   for (const guide of ctx.guides) {
     if (Math.abs(guide.y - point.y) <= radius) {
       targets.push({ kind: "guide", y: guide.y, label: guide.label });
+    }
+  }
+  for (const vertical of ctx.verticals ?? []) {
+    if (Math.abs(vertical.x - point.x) <= radius) {
+      targets.push({ kind: "guide", x: vertical.x, label: vertical.label });
     }
   }
   if (Math.abs(point.x) <= radius) targets.push({ kind: "origin", x: 0, label: "left edge" });

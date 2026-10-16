@@ -367,6 +367,19 @@ to focus it, then dispatch `KeyboardEvent`s on it (the `tool()` helper in the
 writing probes). A glyph now opens on Select, so a probe that draws must press
 `p` first.
 
+### A synthetic PointerEvent must use pointerId 1
+
+The app's pointerdown handlers call `setPointerCapture(event.pointerId)`. An
+id with no active pointer (2, 3, …) makes that call throw and the gesture never
+starts — every probe that dispatches synthetic PointerEvents uses `pointerId: 1`.
+
+### Probe 118 is flaky
+
+`118-random-edit-sequences-never-throw` failed once in four full runs with a
+page error `each_key_duplicate` (step 105 of its fixed random sequence), and
+could not be reproduced in three further runs, with or without `PROBE_STACKS`.
+Rerun before investigating; if it fails twice in a row, capture the stack.
+
 ### Probe 22 is flaky
 
 `22-translator-loads-grammar-rule` ("clause canvas" timeout) fails about one run

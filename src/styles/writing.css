@@ -415,6 +415,65 @@
   stroke-width: 1;
 }
 
+.glyph-canvas .ruler {
+  position: absolute;
+  background: var(--panel);
+  z-index: 3;
+  cursor: crosshair;
+  user-select: none;
+}
+
+.glyph-canvas .ruler-top {
+  top: 0;
+  left: 0;
+  right: 0;
+  height: 18px;
+  border-bottom: 1px solid var(--border);
+}
+
+.glyph-canvas .ruler-left {
+  top: 0;
+  left: 0;
+  bottom: 0;
+  width: 18px;
+  border-right: 1px solid var(--border);
+}
+
+.glyph-canvas .ruler-corner {
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 18px;
+  height: 18px;
+  background: var(--panel);
+  border-bottom: 1px solid var(--border);
+  border-right: 1px solid var(--border);
+  z-index: 4;
+}
+
+.glyph-canvas .ruler .tick {
+  stroke: var(--muted);
+  stroke-width: 1;
+}
+
+.glyph-canvas .ruler text {
+  fill: var(--muted);
+  font-family: ui-monospace, monospace;
+  font-size: 8.5px;
+}
+
+.canvas-svg .user-guide {
+  stroke: var(--accent);
+  stroke-width: 1;
+  stroke-dasharray: 5 4;
+  vector-effect: non-scaling-stroke;
+  pointer-events: none;
+}
+
+.canvas-svg .user-guide.pending {
+  stroke-dasharray: 2 3;
+}
+
 .canvas-svg .measure-line {
   stroke: var(--accent);
   stroke-width: 1;

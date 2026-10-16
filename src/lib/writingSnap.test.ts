@@ -42,6 +42,13 @@ test("a point snaps to a guide rail on y only", () => {
   assert.equal(r.hits[0].kind, "guide");
 });
 
+test("a vertical guide dragged from the ruler snaps x", () => {
+  const r = snapPoint(ctx({ verticals: [{ x: 250, label: "guide 250" }] }), { x: 245, y: 300 });
+  assert.equal(r.point.x, 250);
+  assert.equal(r.point.y, 300);
+  assert.deepEqual(r.hits, [{ kind: "guide", x: 250, label: "guide 250" }]);
+});
+
 test("the left edge and the advance line snap x", () => {
   assert.equal(snapPoint(ctx(), { x: 3, y: 300 }).point.x, 0);
   assert.equal(snapPoint(ctx(), { x: 597, y: 300 }).point.x, 600);

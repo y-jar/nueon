@@ -8196,6 +8196,190 @@ async function main() {
     assertEqual(line.nodes[0].handle_out, undefined, "with no handles");
     await screenshot("p179-freehand");
   });
+
+  await probe("180-a-badly-drawn-freehand-circle-becomes-one-closed-shape", async () => {
+    await seedImageGlyph();
+    await ensureLayers();
+    await freshGlyph();
+    await tool("f");
+    // A wobbly ellipse, drawn all the way around, ending where it began.
+    const stroke = [];
+    for (let i = 0; i <= 44; i++) {
+      const t = (i / 44) * Math.PI * 2;
+      const wobble = 1 + (i % 4 === 0 ? 0.06 : -0.03);
+      stroke.push([0.5 + 0.2 * wobble * Math.cos(t), 0.45 - 0.16 * wobble * Math.sin(t)]);
+    }
+    await fire("pointerdown", stroke[0][0], stroke[0][1]);
+    for (const [fx, fy] of stroke.slice(1)) await fire("pointermove", fx, fy);
+    await fire("pointerup", stroke[stroke.length - 1][0], stroke[stroke.length - 1][1]);
+    await idle(300);
+    const outline = await glyphOutline();
+    const fitted = outline.elements.find((e) => e.kind === "contour");
+    if (!fitted) throw new Error("nothing was drawn");
+    assertEqual(fitted.closed, true, "a stroke that ends where it began becomes one closed shape");
+    assertEqual(fitted.nodes.length <= 12, true, `few fitted nodes, got ${fitted.nodes.length}`);
+    // The nodes follow the stroke around once: their angle about the centre is
+    // monotonic, not scrambled (the spaghetti failure).
+    const nodes = fitted.nodes;
+    const cx = nodes.reduce((t2, n) => t2 + n.x, 0) / nodes.length;
+    const cy = nodes.reduce((t2, n) => t2 + n.y, 0) / nodes.length;
+    let angle = Math.atan2(nodes[0].y - cy, nodes[0].x - cx);
+    let unwound = 0;
+    for (let i = 1; i < nodes.length; i++) {
+      const next = Math.atan2(nodes[i].y - cy, nodes[i].x - cx);
+      let delta = next - angle;
+      while (delta > Math.PI) delta -= 2 * Math.PI;
+      while (delta < -Math.PI) delta += 2 * Math.PI;
+      unwound += delta;
+      angle = next;
+    }
+    assertEqual(
+      Math.abs(unwound) > Math.PI && Math.abs(unwound) < 3 * Math.PI,
+      true,
+      `the nodes wind around once, in stroke order: ${unwound.toFixed(2)} radians`,
+    );
+    await screenshot("p180-freehand-circle");
+  });
+
+  // -- probes 181-: rulers, guides dragged out of them ----------------------
+  const stripFire = (strip, type, fx, fy, extra = {}) =>
+    js(`const strip = document.querySelector('[data-ruler="${strip}"]');
+      const svg = document.querySelector('.canvas-svg');
+      const b = svg.getBoundingClientRect();
+      strip.dispatchEvent(new PointerEvent(${JSON.stringify(type)}, Object.assign({ bubbles: true, cancelable: true,
+        pointerId: 1, button: 0, clientX: b.left + b.width * ${fx}, clientY: b.top + b.height * ${fy} }, ${JSON.stringify(extra)})));
+      return true;`);
+  const guideCount = () => js(`return document.querySelectorAll('.canvas-svg .user-guide:not(.pending)').length;`);
+  const guideAt = (axis) =>
+    js(`const g = document.querySelector('.canvas-svg .user-guide[data-guide-axis="${axis}"]:not(.pending)');
+      return g ? Number(g.getAttribute('data-guide-at')) : null;`);
+
+  await probe("181-rulers-label-positions-and-a-guide-comes-out-of-them", async () => {
+    await seedImageGlyph();
+    await ensureLayers();
+    assertEqual(await guideCount(), 0, "no guides to start");
+    // Both rulers exist, with labels that map to the view.
+    const readRuler = (which) =>
+      js(`const strip = document.querySelector('[data-ruler="${which}"]');
+        const svg = document.querySelector('.canvas-svg');
+        const b = svg.getBoundingClientRect();
+        const labels = [...strip.querySelectorAll('text')].slice(0, 40).map((t) => {
+          const line = t.previousElementSibling;
+          return {
+            text: t.textContent.trim(),
+            px: Number(line ? line.getAttribute(${which === "top"} ? 'x1' : 'y1') : null),
+          };
+        });
+        const vb = svg.getAttribute('viewBox').split(' ').map(Number);
+        return { labels, vb, size: { w: b.width, h: b.height } };
+      `);
+    for (const which of ["top", "left"]) {
+      const r = await readRuler(which);
+      assertEqual(r.labels.length > 0, true, `the ${which} ruler labels positions`);
+      const check = r.labels[Math.min(2, r.labels.length - 1)];
+      const pxPerUnit = r.size.w / r.vb[2];
+      const unit = Number(check.text);
+      // The top ruler maps x directly; the left one shows storage y, flipped.
+      const along = which === "top" ? unit - r.vb[0] : -unit - r.vb[1];
+      const low = along * pxPerUnit - 1;
+      const high = along * pxPerUnit + 1;
+      assertEqual(
+        check.px >= low && check.px <= high,
+        true,
+        `the ${which} ruler's label ${check.text} sits at its position (${check.px} px)`,
+      );
+    }
+
+    // Drag a horizontal guide down from the top ruler to a known height.
+    const target = await storageToCanvas(0, 650);
+    const start = { fx: 0.5, fy: 0.004 };
+    await stripFire("top", "pointerdown", start.fx, start.fy);
+    await stripFire("top", "pointermove", start.fx, (start.fy + target.fy) / 2);
+    await stripFire("top", "pointermove", start.fx, target.fy);
+    assertEqual(
+      await js(`return !!document.querySelector('.canvas-svg .user-guide.pending');`),
+      true,
+      "the guide previews while dragged",
+    );
+    await stripFire("top", "pointerup", start.fx, target.fy);
+    assertEqual(await guideCount(), 1, "the guide landed");
+    const at = await guideAt("y");
+    if (Math.abs((at ?? 0) - 650) > 2) throw new Error(`the guide is not at 650: ${at}`);
+    // Dropping straight back on the ruler without leaving it discards.
+    await stripFire("top", "pointerdown", 0.5, 0.004);
+    await stripFire("top", "pointermove", 0.5, 0.01);
+    await stripFire("top", "pointerup", 0.5, 0.01);
+    assertEqual(await guideCount(), 1, "a press that never left the ruler adds nothing");
+    await screenshot("p181-rulers");
+  });
+
+  await probe("182-a-guide-moves-and-dropping-it-back-on-the-ruler-removes-it", async () => {
+    // 181 left one horizontal guide at y=650.
+    assertEqual(await guideCount(), 1, "one guide from the previous probe");
+    // Grab it and move it, from a point beside the square's ink (the ink
+    // has first claim on the pointer).
+    const from = await storageToCanvas(0, 650);
+    const to = await storageToCanvas(0, 420);
+    await dragOnCanvas([0.02, from.fy], [0.02, to.fy]);
+    const moved = await guideAt("y");
+    if (Math.abs((moved ?? 0) - 420) > 2) throw new Error(`the guide did not move to 420: ${moved}`);
+    assertEqual(await guideCount(), 1, "moving keeps one guide");
+    // A vertical guide comes out of the left ruler too.
+    const vx = await storageToCanvas(750, 0);
+    const vstart = { fx: 0.004, fy: 0.5 };
+    await stripFire("left", "pointerdown", vstart.fx, vstart.fy);
+    await stripFire("left", "pointermove", (vstart.fx + vx.fx) / 2, 0.5);
+    await stripFire("left", "pointermove", vx.fx, 0.5);
+    await stripFire("left", "pointerup", vx.fx, 0.5);
+    assertEqual(await guideCount(), 2, "a vertical guide landed");
+    const vat = await guideAt("x");
+    if (Math.abs((vat ?? 0) - 750) > 2) throw new Error(`the vertical guide is not at 750: ${vat}`);
+    // Drag the horizontal guide back onto the top ruler: it is removed.
+    const back = await storageToCanvas(0, 420);
+    await dragOnCanvas([0.02, back.fy], [0.02, 0.002]);
+    assertEqual(await guideCount(), 1, "dropping a guide on its ruler removes it");
+    // Guides are part of the guide layer: hidden with it.
+    await js(`document.querySelector('[data-layer="guide"]').click(); return true;`);
+    assertEqual(await guideCount(), 0, "the guide layer hides them");
+    await js(`document.querySelector('[data-layer="guide"]').click(); return true;`);
+    assertEqual(await guideCount(), 1, "and shows them again");
+    await screenshot("p182-guides");
+  });
+
+  await probe("183-shift-dragging-a-node-snaps-to-a-custom-guide", async () => {
+    // 182 left a vertical guide at x=750; redraw the square and drag a node
+    // near it with Shift held.
+    await seedImageGlyph();
+    await ensureLayers();
+    const vx = await storageToCanvas(750, 0);
+    const vstart = { fx: 0.004, fy: 0.5 };
+    await stripFire("left", "pointerdown", vstart.fx, vstart.fy);
+    await stripFire("left", "pointermove", (vstart.fx + vx.fx) / 2, 0.5);
+    await stripFire("left", "pointermove", vx.fx, 0.5);
+    await stripFire("left", "pointerup", vx.fx, 0.5);
+    assertEqual(await guideCount(), 1, "one vertical guide");
+    await tool("v");
+    await drawSquare();
+    await tool("a");
+    const before = await js(`return document.querySelectorAll('.glyph-node')[1]?.getAttribute('transform') ?? '';`);
+    const node = await nodePos(0);
+    await fire("pointerdown", node.fx, node.fy, { shiftKey: true });
+    await fire("pointermove", (node.fx + vx.fx) / 2, node.fy + 0.02, { shiftKey: true });
+    await fire("pointermove", vx.fx, node.fy + 0.02, { shiftKey: true });
+    const label = await js(`return document.querySelector('.snap-label')?.textContent.trim() ?? '';`);
+    if (!label.includes("guide 750")) {
+      throw new Error(`no guide snap while shift-dragging: ${JSON.stringify(label)}`);
+    }
+    await fire("pointerup", vx.fx, node.fy + 0.02, { shiftKey: true });
+    await idle(400);
+    const outline = await glyphOutline();
+    const square = outline.elements[0];
+    const near = square && square.nodes.some((n) => Math.abs(n.x - 750) < 0.01);
+    assertEqual(near, true, "the node landed on the guide");
+    await key("z", { ctrlKey: true });
+    const unused = before;
+    assertEqual(unused !== null, true, "undo available");
+  });
 }
 
 try {

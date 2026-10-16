@@ -8,6 +8,9 @@
     expandSelectedComponent,
     cancelGesture,
     clearBackImage,
+    rulerGuideMove,
+    rulerGuideUp,
+    startRulerGuide,
     currentBackRect,
     deleteNodes,
     editor,
@@ -54,6 +57,7 @@
   } from "../lib/writing";
   import { isContour } from "../lib/writingCommands";
   import { backRectCorners } from "../lib/writingLayers";
+  import { rulerTicks, RULER_PX } from "../lib/writingRulers";
   import { elementPathBounds } from "../lib/writingSelect";
   import { measuredSize } from "../lib/writingViewport";
   import { segmentPathData, visibleHandles } from "../lib/writingBezier";
@@ -74,6 +78,18 @@
   });
 
   const box = $derived(currentViewBox());
+  const xTicks = $derived(
+    rulerTicks(box.x, box.x + box.width, editor.zoom).map((t) => ({
+      ...t,
+      px: (t.at - box.x) * editor.zoom,
+    })),
+  );
+  const yTicks = $derived(
+    rulerTicks(-(box.y + box.height), -box.y, editor.zoom).map((t) => ({
+      ...t,
+      px: (flipY(t.at) - box.y) * editor.zoom,
+    })),
+  );
   const viewBox = $derived(`${box.x} ${box.y} ${box.width} ${box.height}`);
   const minX = $derived(box.x);
   const maxX = $derived(box.x + box.width);
@@ -175,6 +191,26 @@
   }
 
   /** The pointer in canvas pixels and in glyph (y-up) coordinates, from the live view. */
+  const onRulerDown = (axis: "x" | "y", event: PointerEvent) => {
+    if (event.button !== 0) return;
+    (event.currentTarget as HTMLElement).setPointerCapture(event.pointerId);
+    const at = locate(event);
+    startRulerGuide(axis, at.glyph, at.screen);
+  };
+
+  const onRulerMove = (event: PointerEvent) => {
+    const at = locate(event);
+    rulerGuideMove(at.glyph);
+  };
+
+  const onRulerUp = (event: PointerEvent) => {
+    if ((event.currentTarget as HTMLElement).hasPointerCapture(event.pointerId)) {
+      (event.currentTarget as HTMLElement).releasePointerCapture(event.pointerId);
+    }
+    const at = locate(event);
+    rulerGuideUp(at.glyph, at.screen);
+  };
+
   function locate(event: { clientX: number; clientY: number }) {
     const rect = svg?.getBoundingClientRect();
     const sx = event.clientX - (rect?.left ?? 0);
@@ -630,6 +666,33 @@
       </g>
     {/if}
     {/if}
+    {#if editor.layers.guide && (editor.guides.length > 0 || editor.guideDrag)}
+      {#each editor.guides as g, i (i)}
+        {@const along = g.axis === "y"}
+        <line
+          class="user-guide"
+          data-guide-axis={g.axis}
+          data-guide-at={g.at}
+          x1={along ? box.x : g.at}
+          x2={along ? box.x + box.width : g.at}
+          y1={along ? flipY(g.at) : box.y}
+          y2={along ? flipY(g.at) : box.y + box.height}
+        />
+      {/each}
+      {#if editor.guideDrag}
+        {@const pending = editor.guideDrag}
+        {@const along = pending.axis === "y"}
+        <line
+          class="user-guide pending"
+          data-guide-axis={pending.axis}
+          data-guide-at={pending.at}
+          x1={along ? box.x : pending.at}
+          x2={along ? box.x + box.width : pending.at}
+          y1={along ? flipY(pending.at) : box.y}
+          y2={along ? flipY(pending.at) : box.y + box.height}
+        />
+      {/if}
+    {/if}
     {#if editor.measureLine}
       {@const m = editor.measureLine}
       <line
@@ -709,5 +772,48 @@
         : editor.snapHit.hits.map((t) => t.label).join(" + ") || "grid"}
     </div>
   {/if}
+  <!-- svelte-ignore a11y_no_static_element_interactions -->
+  <div class="ruler ruler-top" data-ruler="top" title="Drag down to place a horizontal guide"
+    onpointerdown={(e) => onRulerDown("y", e)}
+    onpointermove={onRulerMove}
+    onpointerup={onRulerUp}
+  >
+    <svg width="100%" height={RULER_PX}>
+      {#each xTicks as t (t.at)}
+        <line
+          class="tick"
+          class:major={t.label !== null}
+          x1={t.px}
+          x2={t.px}
+          y1={t.label !== null ? RULER_PX * 0.4 : RULER_PX * 0.65}
+          y2={RULER_PX}
+        />
+        {#if t.label !== null}<text x={t.px + 3} y={RULER_PX * 0.45}>{t.label}</text>{/if}
+      {/each}
+    </svg>
+  </div>
+  <!-- svelte-ignore a11y_no_static_element_interactions -->
+  <div class="ruler ruler-left" data-ruler="left" title="Drag right to place a vertical guide"
+    onpointerdown={(e) => onRulerDown("x", e)}
+    onpointermove={onRulerMove}
+    onpointerup={onRulerUp}
+  >
+    <svg width={RULER_PX} height="100%">
+      {#each yTicks as t (t.at)}
+        <line
+          class="tick"
+          class:major={t.label !== null}
+          y1={t.px}
+          y2={t.px}
+          x1={t.label !== null ? RULER_PX * 0.4 : RULER_PX * 0.65}
+          x2={RULER_PX}
+        />
+        {#if t.label !== null}
+          <text x={RULER_PX * 0.45} y={t.px + 3} transform={`rotate(-90 ${RULER_PX * 0.45} ${t.px + 3})`}>{t.label}</text>
+        {/if}
+      {/each}
+    </svg>
+  </div>
+  <div class="ruler-corner" aria-hidden="true"></div>
   <div class="canvas-hint">{toolHint(editor.activeTool)}</div>
 </div>

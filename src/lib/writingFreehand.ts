@@ -1,6 +1,8 @@
 //! Fitting a freehand stroke into a few Bezier nodes: a standard
-//! simplify-then-fit pass over the drawn points, pure so it can be
-//! tested and mutation-checked without the DOM.
+//! worst-point refinement over the drawn points, pure so it can be tested
+//! and mutation-checked without the DOM. A stroke that ends where it began
+//! is fitted as a closed contour (a hand-drawn circle), with the stroke's own
+//! order — never geometry — placing every added node.
 
 import { newContour, type ContourElement } from "./writingCommands.ts";
 
@@ -51,11 +53,23 @@ interface FitNode {
   handle_out?: [number, number];
 }
 
-/** Catmull-Rom tangents turned into Bezier handles, a third of each chord. */
-function buildNodes(kept: Pt[]): FitNode[] {
-  return kept.map((p, i) => {
-    const prev = kept[Math.max(0, i - 1)];
-    const next = kept[Math.min(kept.length - 1, i + 1)];
+/**
+ * The kept points (as indices into the stroke, in stroke order) become smooth
+ * nodes whose handles follow Catmull-Rom tangents, a third of each chord. A
+ * cyclic fit has no ends: neighbours wrap, and every node carries both
+ * handles; an open fit leaves its two end nodes clean.
+ */
+function buildNodes(drawn: Pt[], kept: number[], cyclic: boolean): FitNode[] {
+  return kept.map((ki, i) => {
+    const p = drawn[ki];
+    const prevI = cyclic
+      ? kept[(i - 1 + kept.length) % kept.length]
+      : kept[Math.max(0, i - 1)];
+    const nextI = cyclic
+      ? kept[(i + 1) % kept.length]
+      : kept[Math.min(kept.length - 1, i + 1)];
+    const prev = drawn[prevI];
+    const next = drawn[nextI];
     let tx = next.x - prev.x;
     let ty = next.y - prev.y;
     const tlen = Math.hypot(tx, ty);
@@ -72,8 +86,9 @@ function buildNodes(kept: Pt[]): FitNode[] {
       x: p.x,
       y: p.y,
       kind: "smooth" as const,
-      handle_in: i > 0 ? ([-tx * back, -ty * back] as [number, number]) : undefined,
-      handle_out: i < kept.length - 1 ? ([tx * forth, ty * forth] as [number, number]) : undefined,
+      handle_in: cyclic || i > 0 ? ([-tx * back, -ty * back] as [number, number]) : undefined,
+      handle_out:
+        cyclic || i < kept.length - 1 ? ([tx * forth, ty * forth] as [number, number]) : undefined,
     };
   });
 }
@@ -96,11 +111,17 @@ function sampleCurve(a: FitNode, b: FitNode, steps: number): Pt[] {
   return out;
 }
 
-/** Each drawn point's distance to the fitted path: the fit's error budget. */
-function pointDistances(nodes: FitNode[], points: Pt[]): number[] {
+/**
+ * Each drawn point's distance to the fitted path: the fit's error budget. A
+ * cyclic path's segments wrap around from the last node back to the first.
+ */
+function pointDistances(drawn: Pt[], nodes: FitNode[], cyclic: boolean): number[] {
   let samples: Pt[] = [];
-  for (let i = 0; i + 1 < nodes.length; i++) samples = samples.concat(sampleCurve(nodes[i], nodes[i + 1], 32));
-  return points.map((p) => {
+  const segments = nodes.length - (cyclic ? 0 : 1);
+  for (let i = 0; i < segments; i++) {
+    samples = samples.concat(sampleCurve(nodes[i], nodes[(i + 1) % nodes.length], 32));
+  }
+  return drawn.map((p) => {
     let best = Infinity;
     for (const q of samples) best = Math.min(best, Math.hypot(p.x - q.x, p.y - q.y));
     return best;
@@ -108,12 +129,14 @@ function pointDistances(nodes: FitNode[], points: Pt[]): number[] {
 }
 
 /**
- * Fit a freehand stroke into an open contour of a few Bezier nodes: the
- * stroke is thinned, a straight one collapses to its two ends, and otherwise
- * the two ends become smooth nodes whose handles follow Catmull-Rom tangents
- * and the drawn point the path misses most adds a node there, until every
- * drawn point is within [`FIT_ERROR`] or the path reaches [`MAX_NODES`]
- * nodes. A stroke too short to have a direction fits nothing.
+ * Fit a freehand stroke into a contour of a few Bezier nodes. The stroke is
+ * thinned; a near-straight one collapses to its two ends; one that ends where
+ * it began (and has enough room to have gone anywhere) is fitted as a closed
+ * contour. Otherwise the two ends become smooth nodes with Catmull-Rom
+ * handles, and the drawn point the path misses most adds a node there —
+ * placed by the stroke's own order — until every drawn point is within
+ * [`FIT_ERROR`] or the path reaches [`MAX_NODES`] nodes. A stroke too short to
+ * have a direction fits nothing.
  */
 export function fitFreehand(points: Pt[]): ContourElement | null {
   const drawn = thin(points);
@@ -129,38 +152,41 @@ export function fitFreehand(points: Pt[]): ContourElement | null {
     return newContour([endA, endB], false);
   }
 
-  let kept: Pt[] = [endA, endB];
-  let nodes = buildNodes(kept);
-  let distances = pointDistances(nodes, drawn);
+  const xs = drawn.map((p) => p.x);
+  const ys = drawn.map((p) => p.y);
+  const extent = Math.max(Math.max(...xs) - Math.min(...xs), Math.max(...ys) - Math.min(...ys));
+  const cyclic =
+    drawn.length >= 8 &&
+    extent > 4 * FIT_ERROR &&
+    Math.hypot(endB.x - endA.x, endB.y - endA.y) <= Math.max(2 * FIT_ERROR, 0.04 * extent);
+  if (cyclic) return fitCyclic(drawn);
+  return fitOpen(drawn);
+}
+
+function fitOpen(drawn: Pt[]): ContourElement {
+  return fit(drawn, [0, drawn.length - 1], false);
+}
+
+function fitCyclic(drawn: Pt[]): ContourElement {
+  const quarter = Math.floor(drawn.length / 4);
+  return fit(drawn, [0, quarter, 2 * quarter, 3 * quarter], true);
+}
+
+function fit(drawn: Pt[], initial: number[], cyclic: boolean): ContourElement {
+  let kept = initial.slice().sort((a, b) => a - b);
+  let nodes = buildNodes(drawn, kept, cyclic);
+  let distances = pointDistances(drawn, nodes, cyclic);
   while (nodes.length < MAX_NODES && Math.max(...distances) > FIT_ERROR) {
     let worst = 0;
     for (let i = 1; i < distances.length; i++) if (distances[i] > distances[worst]) worst = i;
-    kept = insertSorted(kept, drawn[worst]);
-    nodes = buildNodes(kept);
-    distances = pointDistances(nodes, drawn);
+    kept = [...kept, worst].sort((a, b) => a - b);
+    nodes = buildNodes(drawn, kept, cyclic);
+    distances = pointDistances(drawn, nodes, cyclic);
   }
-
   return {
     kind: "contour",
     nodes,
-    closed: false,
+    closed: cyclic,
     fill_rule: "nonzero",
   };
 }
-
-/** Insert a point between its nearest kept neighbours, in stroke order. */
-function insertSorted(kept: Pt[], p: Pt): Pt[] {
-  let at = kept.length - 1;
-  for (let i = 0; i + 1 < kept.length; i++) {
-    const a = kept[i];
-    const b = kept[i + 1];
-    const chord = Math.hypot(b.x - a.x, b.y - a.y);
-    const along = chord === 0 ? 0 : ((p.x - a.x) * (b.x - a.x) + (p.y - a.y) * (b.y - a.y)) / (chord * chord);
-    if (along >= 0 && along <= 1) {
-      at = i + 1;
-      break;
-    }
-  }
-  return [...kept.slice(0, at), p, ...kept.slice(at)];
-}
-

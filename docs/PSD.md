@@ -210,9 +210,13 @@ layer (`src-tauri/`), and the Svelte 5 frontend (`src/`). See `docs/ARCHITECTURE
   a knife (K: cut a contour exactly where clicked, shape-preserving by de
   Casteljau subdivision, one undo step), a measure tool (R: a dashed line and
   the info bar's distance/angle while dragging, no edits, works with the fore
-  layer hidden) and freehand drawing (F: the raw stroke previews, on release a
-  fitted open path within 2 units, at most 12 nodes, Catmull-Rom handles,
-  worst-point refinement, a straight stroke becomes its two ends),
+  layer hidden), freehand drawing (F: the raw stroke previews, on release a
+  fitted path within 2 units, at most 12 nodes, Catmull-Rom handles,
+  worst-point refinement placed by stroke order, a straight stroke becomes its
+  two ends, one that ends where it began closes into a shape), rulers along
+  the canvas edges with an adaptive 1/2/5 tick ladder, and guides dragged out
+  of them (dashed lines on the guide layer, moved by dragging, removed by
+  dropping back on the ruler, session-only, joined to the snap claims),
   layers (guide/back/fore visibility toggles in the toolbox and View menu; a
   tracing image per glyph imported into `writing/assets/`, placed in font units,
   selected, moved and corner-scaled with the aspect kept, one undo step per
@@ -305,7 +309,11 @@ layer (`src-tauri/`), and the Svelte 5 frontend (`src/`). See `docs/ARCHITECTURE
   hidden-fore edit block, the image rectangle, corner hits, corner scaling
   with the anchor and aspect and the min clamp; every mutation caught),
   `writingFreehand.test.ts` (straight collapse, quarter/half circle budgets, cap,
-  order and clean ends, short strokes; every mutation caught or justified),
+  order and clean ends, short strokes, the badly drawn circle closing and
+  winding once instead of spaghetti, closure boundaries; every mutation caught
+  or justified), `writingRulers.test.ts` (the 1/2/5 ladder at many zooms,
+  minors, ranges, boundaries; every mutation caught) and the vertical-guide
+  snap test,
   `knifeCutAt` tests in `writingCommands.test.ts` (exact shape preservation by
   de Casteljau correspondence, open/closed/node/boundary/wild-t cases),
   `typePreview.test.ts` (size range, placement and wrapping, sample text, gap hit

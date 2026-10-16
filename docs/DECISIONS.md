@@ -167,6 +167,26 @@ commit per stage. See `docs/PROBING.md`.
   it stays available with the fore layer hidden (Hand and Zoom are its company),
   and it borrows the info bar's existing distance-and-angle readout instead of a
   new one.
+- **A freehand stroke that ends where it began closes, and nodes are placed by
+  the stroke's order.** A hand-drawn circle is the common freehand shape, so
+  the fit detects closure (enough points, real extent, ends within an
+  allowance of 4% of it) and fits it cyclically: tangents wrap, the path
+  closes, and the two stroke-ends are one node. The first version placed added
+  nodes by projecting them onto the chords already drawn — on a wobbly circle
+  the chords zigzag and the projection scrambled the node order into a
+  12-node spaghetti pile (measured 87 units off). The stroke's point order was
+  available all along; the fit now inserts by index and a winding test holds
+  it honest.
+- **Guides are session aids, not data.** Rulers and the guides dragged out of
+  them change no file and carry no undo history; a guide is a view-layer line
+  like a metric rail (it hides with the guide layer), deletable by dropping it
+  back on its ruler. Persisting guides per glyph would need a format change;
+  deferred until the session-only version proves worth keeping.
+- **Guides join the snap claims; the ink keeps first claim on the pointer.**
+  A dragged guide grabs at 6 px, but only after contours, nodes and handles
+  have declined the click — the drawing is what you edit; the guide is what
+  you align with. Custom guides feed the same snap claim list as the metric
+  rails (`guide 750` labels), with the existing nearest-wins priority.
 - **The Freehand fit is worst-point refinement, not a curve-fitting library.**
   Catmull-Rom handles on the ends, then add the drawn point the path misses most
   until within 2 units or 12 nodes. An RDP pre-pass was dropped after mutation

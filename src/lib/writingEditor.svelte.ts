@@ -134,6 +134,7 @@ import {
   type SnapResult,
 } from "./writingSnap";
 import { fitFreehand, freehandPreview } from "./writingFreehand";
+import { GUIDE_HIT_PX, RULER_PX } from "./writingRulers";
 import {
   backImageRect,
   backRectCorners,
@@ -191,6 +192,10 @@ export const editor = $state({
   gestureFrom: null as Point | null,
   /** The Measure tool's line, from `from` to the pointer; null when not measuring. */
   measureLine: null as { from: Point; to: Point } | null,
+  /** Guides dragged out of the rulers this session, in font units. */
+  guides: [] as { axis: "x" | "y"; at: number }[],
+  /** The guide being dragged out of a ruler or repositioned, drawn live. */
+  guideDrag: null as { axis: "x" | "y"; at: number } | null,
   /** What the pointer is over in the Direct tool, for hover highlight; written only when it changes. */
   hover: null as { kind: string; key: string } | null,
   composeOpen: false,
@@ -260,6 +265,8 @@ let drag:
   | { kind: "brush"; points: Point[] }
   | { kind: "freehand"; points: Point[] }
   | { kind: "measure"; from: Point }
+  | { kind: "guide-new"; axis: "x" | "y" }
+  | { kind: "guide-move"; index: number; axis: "x" | "y" }
   | null = null;
 
 function syncHistoryFlags(): void {
@@ -302,6 +309,8 @@ export function openGlyph(id: string, meta: api.GlyphMeta): void {
   editor.preview = null;
   editor.imageSelected = false;
   editor.backImage = null;
+  editor.guides = [];
+  editor.guideDrag = null;
   drag = null;
   resetHistory();
   void loadOutline(id).then(fitGlyph);
@@ -321,6 +330,8 @@ export function closeGlyph(): void {
   editor.preview = null;
   editor.imageSelected = false;
   editor.backImage = null;
+  editor.guides = [];
+  editor.guideDrag = null;
   drag = null;
   resetHistory();
 }
@@ -856,7 +867,15 @@ function snapAt(
   return snapExtended(
     {
       outline: editor.outline,
-      guides: editor.guideHeights,
+      guides: [
+        ...editor.guideHeights,
+        ...editor.guides
+          .filter((g) => g.axis === "y")
+          .map((g) => ({ y: g.at, label: `guide ${Math.round(g.at)}` })),
+      ],
+      verticals: editor.guides
+        .filter((g) => g.axis === "x")
+        .map((g) => ({ x: g.at, label: `guide ${Math.round(g.at)}` })),
       advance: editor.outline.advance ?? null,
       grid: editor.grid,
       gridOn: editor.snap,
@@ -987,6 +1006,20 @@ export function pointerDown(raw: Point, mods: Modifiers): void {
     return;
   }
 
+  // A guide line grabbed from under the pointer beats the (much larger)
+  // image, but only once nothing on the fore layer has the click.
+  const startGuideGesture = (): boolean => {
+    if (!editor.layers.guide) return false;
+    const radius = GUIDE_HIT_PX / editor.zoom;
+    const index = editor.guides.findIndex((g) =>
+      Math.abs((g.axis === "x" ? raw.x : raw.y) - g.at) <= radius,
+    );
+    if (index === -1) return false;
+    drag = { kind: "guide-move", index, axis: editor.guides[index].axis };
+    editor.guideDrag = { ...editor.guides[index] };
+    return true;
+  };
+
   // The pointer tools reach the back image once nothing on the fore layer
   // (or a corner handle of the selected image) takes the click first.
   const startImageGesture = (theOutline: api.GlyphOutline): boolean => {
@@ -1056,6 +1089,7 @@ export function pointerDown(raw: Point, mods: Modifiers): void {
           return;
         }
       }
+      if (startGuideGesture()) return;
       if (startImageGesture(outline)) return;
       if (blocked) {
         say("show the Fore layer to edit");
@@ -1181,6 +1215,7 @@ export function pointerDown(raw: Point, mods: Modifiers): void {
         say("component selected");
         return;
       }
+      if (startGuideGesture()) return;
       if (startImageGesture(outline)) return;
       if (!mods.shift) editor.selection = [];
       editor.imageSelected = false;
@@ -1528,6 +1563,13 @@ export function pointerMove(raw: Point, mods: Modifiers): void {
     }
   } else if (drag.kind === "measure") {
     editor.measureLine = { from: drag.from, to: raw };
+  } else if (drag.kind === "guide-new" || drag.kind === "guide-move") {
+    const at = drag.axis === "x" ? raw.x : raw.y;
+    editor.guideDrag = { axis: drag.axis, at };
+    if (drag.kind === "guide-move") {
+      const guide = editor.guides[drag.index];
+      if (guide) editor.guides[drag.index] = { axis: drag.axis, at };
+    }
   } else if (drag.kind === "marquee") {
     editor.marquee = { a: drag.from, b: raw };
   }
@@ -1606,6 +1648,28 @@ export function pointerUp(raw: Point, mods: Modifiers): void {
   if (finished.kind === "image-move" || finished.kind === "image-scale") {
     if (!finished.moved) editor.outline = finished.base;
     else void saveOutline();
+    return;
+  }
+  if (finished.kind === "guide-move") {
+    const droppedOnRuler =
+      mods.screen !== undefined &&
+      (finished.axis === "y" ? mods.screen.y <= RULER_PX + 4 : mods.screen.x <= RULER_PX + 4);
+    if (droppedOnRuler) {
+      editor.guides = editor.guides.filter((_, i) => i !== finished.index);
+      say("guide removed");
+    }
+    editor.guideDrag = null;
+    return;
+  }
+  if (finished.kind === "guide-new") {
+    const draggedOut =
+      mods.screen !== undefined &&
+      (finished.axis === "y" ? mods.screen.y > RULER_PX + 4 : mods.screen.x > RULER_PX + 4);
+    if (draggedOut && editor.guideDrag) {
+      editor.guides = [...editor.guides, editor.guideDrag];
+      say(`guide ${Math.round(editor.guideDrag.at)}`);
+    }
+    editor.guideDrag = null;
     return;
   }
   if (finished.kind === "pivot") return;
@@ -1815,6 +1879,7 @@ export function cancelGesture(): void {
   editor.snapHit = null;
   editor.preview = null;
   editor.imageSelected = false;
+  editor.guideDrag = null;
   finishPath();
 }
 
@@ -1868,6 +1933,43 @@ export function clearBackImage(): void {
   if (!outline?.back_image) return;
   editor.imageSelected = false;
   commit({ ...outline, back_image: null }, "tracing image removed");
+}
+
+/** A pointer press on a ruler strip: begin dragging a guide out of it. A
+ * press on the top ruler makes a horizontal guide; the left ruler, vertical. */
+export function startRulerGuide(axis: "x" | "y", raw: Point, screen: Point): void {
+  editor.gestureFrom = raw;
+  drag = { kind: "guide-new", axis };
+  editor.guideDrag = { axis, at: axis === "x" ? raw.x : raw.y };
+  editor.snapHit = null;
+  void screen;
+}
+
+/** The drag out of a ruler has moved. */
+export function rulerGuideMove(raw: Point): void {
+  if (!drag || drag.kind !== "guide-new") return;
+  const at = drag.axis === "x" ? raw.x : raw.y;
+  editor.guideDrag = { axis: drag.axis, at };
+}
+
+/** The drag out of a ruler ended: keep the guide if it landed on the canvas,
+ * discard it if it never left (or came back to) the strip. */
+export function rulerGuideUp(raw: Point, screen: Point): void {
+  const finished = drag;
+  drag = null;
+  editor.gestureFrom = null;
+  if (!finished || finished.kind !== "guide-new" || !editor.guideDrag) {
+    editor.guideDrag = null;
+    return;
+  }
+  const draggedOut =
+    finished.axis === "y" ? screen.y > RULER_PX + 4 : screen.x > RULER_PX + 4;
+  if (draggedOut) {
+    editor.guides = [...editor.guides, editor.guideDrag];
+    say(`guide ${Math.round(editor.guideDrag.at)}`);
+  }
+  editor.guideDrag = null;
+  void raw;
 }
 
 export async function exportGlyphSvg(): Promise<string | null> {

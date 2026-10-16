@@ -879,7 +879,7 @@ gesture is one history step, like a node drag.
 | E | Eraser | |
 | K | Knife | Click an edge to cut the contour open at that exact point; clicking a node opens it there |
 | R | Measure | Drag between two points: dashed line on the canvas, distance and angle in the info bar; no edits, works with the fore layer hidden |
-| F | Freehand | Draw a stroke; on release it becomes an open path of a few fitted Bezier nodes (within 2 units, at most 12 nodes; a straight stroke is just its two ends) |
+| F | Freehand | Draw a stroke; on release it becomes a path of a few fitted Bezier nodes (within 2 units, at most 12 nodes; a straight stroke is just its two ends; one that ends where it began closes into a shape) |
 | Space (held) | Temporary Hand | Returns to the chosen tool on release |
 | Middle-drag | Pan | In any tool |
 | Ctrl+wheel | Zoom about the cursor | sqrt(2) per notch |
@@ -918,10 +918,30 @@ Eraser keeps its own boundary cut and node delete.
 
 The Freehand fit (`src/lib/writingFreehand.ts`, mutation-checked) is
 deliberately simple: the stroke is thinned, a near-straight one collapses to its
-two ends, and otherwise the two ends become smooth nodes with Catmull-Rom
-handles and the drawn point the path misses most adds a node there, until every
-drawn point is within 2 units or the path reaches 12 nodes. What you see while
-drawing is the raw stroke, not the fit.
+two ends, and one that ends where it began (at least eight points, room to have
+gone anywhere, ends within the closure allowance) is fitted as a **closed**
+contour — a hand-drawn circle closes. Otherwise the two ends become smooth
+nodes with Catmull-Rom handles, and the drawn point the path misses most adds
+a node there, until every drawn point is within 2 units or the path reaches 12
+nodes. Every added node is placed by the stroke's own order, never by
+geometry: placing nodes by where they project onto already-drawn chords
+scrambles a wobbly circle into spaghetti, which is exactly what the winding
+test guards against. What you see while drawing is the raw stroke, not the fit.
+
+### Rulers and guides
+
+Rulers run along the top and left of the canvas (`src/lib/writingRulers.ts`):
+majors on a 1/2/5 ladder chosen as the finest step whose spacing clears 48 px,
+minors a fifth of it, labelled in font units with no trailing zeros, so a
+label always sits at its position at any zoom.
+
+Dragging out of a ruler places a **guide** — a dashed line on the guide layer
+at that position (the top ruler makes horizontal guides, the left vertical).
+A guide grabs from anywhere along it (6 px reach) once nothing on the fore
+layer has the pointer; dragging it moves it, and dropping it back on its ruler
+removes it. Guides are aids, not edits: they carry no undo history, are not
+saved, and reset with the glyph. Shift-dragging a node or shape snaps to a
+guide like a metric rail (the label reads `guide 750`).
 
 
 ## IPC commands
