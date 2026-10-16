@@ -157,6 +157,7 @@ and regenerate.
 - `writingLayers.ts` — Back-layer and layer-visibility maths for the vector editor, pure so it can
 - `writingMenus.ts` — Pure menu definitions for the vector editor's menu bar.
 - `writingNodeType.ts` — Setting a node's type (corner, smooth, symmetric), growing handles when it has none.
+- `writingRulers.ts` — Ruler maths: the adaptive tick ladder for the canvas rulers, pure so it
 - `writingRules.ts` — Pure helpers for editing orthography rules in the writing tab.
 - `writingSelect.ts` — Element-level selection for the Select tool: hit testing, marquee, move, duplicate.
 - `writingSidebar.ts` — Pure filtering and grouping for the Writing System sidebar glyph list.
