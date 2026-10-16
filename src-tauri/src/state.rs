@@ -22,6 +22,9 @@ pub struct AppState {
     pub granted_paths: Vec<PathBuf>,
     /// A tracing image chosen in a dialog, kept for one confirm retry.
     pub pending_back_image: Option<(String, PathBuf)>,
+    /// The import file chosen in the wizard's Rust-run dialog, kept for the
+    /// detect/preview/apply steps. The host path never crosses to JavaScript.
+    pub pending_import: Option<PathBuf>,
     /// Secondary windows being closed by the app itself (quit or workspace
     /// switch); their saved layout is kept instead of pruned.
     pub silent_close: HashSet<String>,
@@ -87,6 +90,7 @@ impl AppState {
             asset_root: None,
             granted_paths: Vec::new(),
             pending_back_image: None,
+            pending_import: None,
         }
     }
 

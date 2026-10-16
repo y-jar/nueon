@@ -1,7 +1,6 @@
 <!-- Import step: pick file and format. -->
 <script lang="ts">
   import { t } from "svelte-i18n";
-  import { open } from "@tauri-apps/plugin-dialog";
   import { FileUp, RefreshCw, FileSpreadsheet } from "@lucide/svelte";
   import * as api from "../../../lib/api";
 
@@ -23,6 +22,21 @@
 
   let error = $state("");
 
+  async function rescan() {
+    if (!path) return;
+    onBusy(true);
+    try {
+      const picked = await api.importDetectAgain(options);
+      path = picked.path;
+      onDetected(picked.path, picked.detection);
+      error = "";
+    } catch (e) {
+      error = String(e);
+    } finally {
+      onBusy(false);
+    }
+  }
+
   const DELIMITERS = [
     { value: "\t", label: "Tab" },
     { value: ",", label: "Comma" },
@@ -37,26 +51,15 @@
 
   async function pick() {
     error = "";
-    const selected = await open({
-      multiple: false,
-      filters: [
-        { name: $t("import.fileFilter"), extensions: ["csv", "tsv", "txt", "tab"] },
-      ],
-    });
-    if (typeof selected !== "string") return;
-    path = selected;
-    if (!options.target_table) options.target_table = defaultTableName(selected);
-    await rescan();
-  }
-
-  async function rescan() {
-    if (!path) return;
     onBusy(true);
     try {
-      const detection = await api.importDetect(path, options);
-      onDetected(path, detection);
+      const picked = await api.importPickDialog(options);
+      path = picked.path;
+      if (!options.target_table) options.target_table = defaultTableName(picked.path);
+      onDetected(picked.path, picked.detection);
       error = "";
     } catch (e) {
+      if (String(e).includes("cancelled")) return;
       error = String(e);
     } finally {
       onBusy(false);

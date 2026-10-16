@@ -2,8 +2,7 @@
 <script lang="ts">
   import { onMount } from "svelte";
   import { t } from "svelte-i18n";
-  import { open } from "@tauri-apps/plugin-dialog";
-  import * as api from "../lib/api";
+    import * as api from "../lib/api";
   import { exportProfileDialog } from "../lib/exports";
   import {
     ui,
@@ -161,7 +160,6 @@
     }
   }
 
-  const PROFILE_FILTER = [{ name: "Nueon profile", extensions: ["json"] }];
 
   async function exportProfile() {
     try {
@@ -174,14 +172,13 @@
   }
 
   async function importProfile() {
-    const path = await open({ multiple: false, filters: PROFILE_FILTER });
-    if (!path || Array.isArray(path)) return;
     try {
-      await api.profileImport(path);
+      await api.profileImportDialog();
       await load();
       status = $t("settings.saved");
       error = "";
     } catch (e) {
+      if (String(e).includes("cancelled")) return;
       error = String(e);
     }
   }

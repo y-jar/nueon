@@ -59,14 +59,30 @@ callback API, so no thread blocks), and the I/O functions that take a path are
 plain and unit-tested (`src-tauri/src/security.rs`: the 8 MB read cap, the
 50 MB write cap, extension checks). Removed outright: `read_text_file`,
 `write_text_file`, `writing_export_font`, `writing_back_image_import`,
-`export_document` — all took a path from JavaScript. `import_asset` and
-`copy_into_notes` remain for OS drag-dropped files only: the drag-drop handler
-records the dropped paths as one-use grants, and both commands consume a
-grant or refuse. The dialog commands: `writing_import_svg_dialog`,
-`writing_export_svg_dialog`, `writing_export_text_dialog` (app-generated SVG
-text), `writing_export_font_dialog` (+ `writing_font_bytes`, the same
-compiled bytes in memory, for tests and probes), `asset_import_dialog` and
-`export_document_dialog` (PDF/ODT).
+`export_document`, `export_presets`, `import_presets`, `profile_export`,
+`profile_import`, `export_workspace_zip`, `workspace_import_zip`,
+`import_detect`, `import_preview`, `export_table`, `export_anki` — all took a
+path from JavaScript. `import_asset` and `copy_into_notes` remain for OS
+drag-dropped files only: the drag-drop handler records the dropped paths as
+one-use grants, and both commands consume a grant or refuse. The dialog
+commands: `writing_import_svg_dialog`, `writing_export_svg_dialog`,
+`writing_export_text_dialog` (app-generated SVG text),
+`writing_export_font_dialog` (+ `writing_font_bytes`, the same compiled bytes
+in memory, for tests and probes), `asset_import_dialog`,
+`export_document_dialog` (PDF/ODT), `export_presets_dialog` /
+`import_presets_dialog`, `profile_export_dialog` / `profile_import_dialog`,
+`export_workspace_zip_dialog` (zips to a temp file beside the destination,
+then moves it into place) / `workspace_import_zip_dialog` (both the zip and the
+parent directory are picked in Rust), `import_pick_dialog` (picks the import
+file, reads and detects it, stashes the path for the wizard's
+`import_detect_again` / `import_preview_stashed` / `import_apply`, which
+replaces the plan's `source` with the stashed path; `import_cancel` forgets
+it), `export_table_dialog`, `export_anki_dialog`,
+`workspace_open_dialog` (picks the folder) and `workspace_create_dialog`
+(picks the parent). `workspace_open` stays for opening a workspace from the
+registry list the backend produced, and refuses a path that is not registered;
+`workspace_remove`, `workspace_rename` and `workspace_delete_from_disk`
+refuse unregistered paths the same way.
 
 ## Writing system
 

@@ -55,6 +55,16 @@ pub async fn pick_save_file(
     rx.await.map_err(|err| err.to_string())
 }
 
+/// A directory dialog, resolved when the user closes it.
+pub async fn pick_directory(app: &AppHandle) -> Result<Option<PathBuf>, String> {
+    let (tx, rx) = oneshot::channel();
+    app.dialog().file().pick_folder(move |file| {
+        let picked = file.and_then(|f| f.into_path().ok());
+        let _ = tx.send(picked);
+    });
+    rx.await.map_err(|err| err.to_string())
+}
+
 /// Read a text file, refusing anything above [`MAX_READ_BYTES`].
 pub fn read_text_capped(path: &Path) -> Result<String, String> {
     let meta = std::fs::metadata(path).map_err(|err| format!("{path:?}: {err}"))?;

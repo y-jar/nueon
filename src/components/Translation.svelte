@@ -2,8 +2,7 @@
 <script lang="ts">
   import { onMount } from "svelte";
   import { t } from "svelte-i18n";
-  import { open, save } from "@tauri-apps/plugin-dialog";
-  import * as api from "../lib/api";
+    import * as api from "../lib/api";
   import { ui, activeDoc } from "../lib/state.svelte";
   import TranslationToolbar from "./translation/TranslationToolbar.svelte";
   import FeatureBar from "./translation/FeatureBar.svelte";
@@ -162,33 +161,25 @@
   });
 
   async function exportPresets() {
-    const path = await save({
-      defaultPath: "nueon-presets.json",
-      filters: [{ name: "JSON", extensions: ["json"] }],
-    });
-    if (!path) return;
     try {
-      await api.exportPresets(path, presets);
+      await api.exportPresetsDialog(presets);
       error = "";
     } catch (e) {
+      if (String(e).includes("cancelled")) return;
       error = String(e);
     }
   }
 
   async function importPresets() {
-    const selected = await open({
-      multiple: false,
-      filters: [{ name: "JSON", extensions: ["json"] }],
-    });
-    if (!selected || Array.isArray(selected)) return;
     try {
-      const imported = await api.importPresets(selected);
+      const imported = await api.importPresetsDialog();
       for (const preset of imported) {
         await api.savePreset(preset);
       }
       await loadPresets();
       error = "";
     } catch (e) {
+      if (String(e).includes("cancelled")) return;
       error = String(e);
     }
   }

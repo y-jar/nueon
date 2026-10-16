@@ -19,9 +19,11 @@ export {
 } from "./notes.svelte";
 export {
   createWorkspace,
+  createWorkspaceDialog,
   init,
   loadWordIndex,
   openWorkspace,
+  openWorkspaceDialog,
   refreshTables,
   refreshTree,
   refreshWorkspaces,

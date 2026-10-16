@@ -20,7 +20,7 @@
     if (!path) return;
     onBusy(true);
     try {
-      preview = await api.importPreview(path, options);
+      preview = await api.importPreviewStashed(options);
       error = "";
     } catch (e) {
       error = String(e);

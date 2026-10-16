@@ -2,8 +2,7 @@
 <script lang="ts">
   import { onDestroy } from "svelte";
   import { get } from "svelte/store";
-  import { save } from "@tauri-apps/plugin-dialog";
-  import { createVirtualizer } from "@tanstack/svelte-virtual";
+    import { createVirtualizer } from "@tanstack/svelte-virtual";
   import { autofocus } from "../lib/actions";
   import { t } from "svelte-i18n";
   import {
@@ -996,15 +995,11 @@
     const name = doc.currentTable;
     if (!name) return;
     try {
-      const destination = await save({
-        defaultPath: `${name}.${format}`,
-        filters: [{ name: format.toUpperCase(), extensions: [format] }],
-      });
-      if (!destination) return;
       ui.status = $t("status.exporting", { values: { name } });
-      ui.status = await api.exportTable(name, format, destination);
-      ui.status = $t("status.exported", { values: { name, path: destination } });
+      const path = await api.exportTableDialog(name, format);
+      ui.status = $t("status.exported", { values: { name, path } });
     } catch (e) {
+      if (String(e).includes("cancelled")) return;
       ui.status = $t("status.exportFailed", { values: { error: String(e) } });
     }
   }
@@ -1014,15 +1009,11 @@
     const name = doc.currentTable;
     if (!name) return;
     try {
-      const destination = await save({
-        defaultPath: `${name}.txt`,
-        filters: [{ name: "Anki text", extensions: ["txt"] }],
-      });
-      if (!destination) return;
       ui.status = $t("status.exporting", { values: { name } });
-      ui.status = await api.exportAnki(name, { deck: name }, destination);
-      ui.status = $t("status.exported", { values: { name, path: destination } });
+      const path = await api.exportAnkiDialog(name, { deck: name });
+      ui.status = $t("status.exported", { values: { name, path } });
     } catch (e) {
+      if (String(e).includes("cancelled")) return;
       ui.status = $t("status.exportFailed", { values: { error: String(e) } });
     }
   }

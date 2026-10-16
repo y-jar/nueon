@@ -11,6 +11,7 @@ use nueon_core::model::TranslationReport;
 use nueon_core::{Morphology, SyntaxGrid, TableRole, TableRoleConfig, TranslationOptions, WordHit};
 
 use super::changed;
+use crate::security::{pick_open_file, pick_save_file, read_text_capped, write_bytes_checked};
 use crate::state::AppState;
 
 type Shared = Mutex<AppState>;
@@ -249,18 +250,31 @@ pub fn set_translation_options(
     Ok(())
 }
 
-/// Write presets to a JSON file chosen by the user.
+/// Write presets to a JSON file whose path is chosen in a dialog run on the
+/// Rust side. A path string from JavaScript is never trusted with a write.
 #[tauri::command]
-pub fn export_presets(path: String, grids: Vec<SyntaxGrid>) -> Result<(), String> {
+pub async fn export_presets_dialog(
+    app: AppHandle,
+    grids: Vec<SyntaxGrid>,
+) -> Result<String, String> {
     let json = serde_json::to_vec_pretty(&grids).map_err(|err| err.to_string())?;
-    std::fs::write(&path, json).map_err(|err| err.to_string())
+    let Some(path) =
+        pick_save_file(&app, &[("JSON", &["json"])], Some("nueon-presets.json")).await?
+    else {
+        return Err("cancelled".to_string());
+    };
+    write_bytes_checked(&path, &json, "json").map(|p| p.display().to_string())
 }
 
-/// Read presets from a JSON file chosen by the user.
+/// Read presets from a JSON file whose path is chosen in a dialog run on the
+/// Rust side, under the read cap.
 #[tauri::command]
-pub fn import_presets(path: String) -> Result<Vec<SyntaxGrid>, String> {
-    let bytes = std::fs::read(&path).map_err(|err| err.to_string())?;
-    serde_json::from_slice(&bytes).map_err(|err| err.to_string())
+pub async fn import_presets_dialog(app: AppHandle) -> Result<Vec<SyntaxGrid>, String> {
+    let Some(path) = pick_open_file(&app, &[("JSON", &["json"])]).await? else {
+        return Err("cancelled".to_string());
+    };
+    let json = read_text_capped(&path)?;
+    serde_json::from_str(&json).map_err(|err| err.to_string())
 }
 
 /// Create a word from a missing translation token (writes to the dictionary and

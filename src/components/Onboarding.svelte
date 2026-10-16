@@ -2,8 +2,7 @@
 <script lang="ts">
   import { autofocus } from "../lib/actions";
   import { t } from "svelte-i18n";
-  import { open } from "@tauri-apps/plugin-dialog";
-  import { ui, openWorkspace, createWorkspace } from "../lib/state.svelte";
+    import { ui, openWorkspace, openWorkspaceDialog, createWorkspaceDialog } from "../lib/state.svelte";
   import logo from "../../assets/branding/nueon-logo-bright.svg";
 
   let name = $state("");
@@ -11,15 +10,14 @@
   let path = $state("");
   let error = $state("");
 
+  // Folder choices happen in Rust-run dialogs; JavaScript never sees a path
+  // it could pass back (see docs/DECISIONS.md).
   async function browse(field: "destination" | "path") {
-    const selected = await open({
-      directory: true,
-      multiple: false,
-      title: $t("onboarding.chooseFolder"),
-    });
-    if (typeof selected === "string") {
-      if (field === "destination") destination = selected;
-      else path = selected;
+    try {
+      if (field === "destination") await doCreateDialog();
+      else await doOpenDialog();
+    } catch (e) {
+      error = String(e);
     }
   }
 
@@ -34,26 +32,38 @@
 
   async function doCreate() {
     error = "";
-    if (!name.trim() || !destination.trim()) {
+    if (!name.trim()) {
       error = $t("onboarding.nameAndDestinationRequired");
       return;
     }
+    await doCreateDialog();
+  }
+
+  async function doCreateDialog() {
+    if (!name.trim()) {
+      error = $t("onboarding.nameAndDestinationRequired");
+      return;
+    }
+    error = "";
     try {
-      await createWorkspace(name.trim(), destination.trim());
+      await createWorkspaceDialog(name.trim());
     } catch (e) {
+      if (String(e).includes("cancelled")) return;
       error = String(e);
     }
   }
 
   async function doOpen() {
     error = "";
-    if (!path.trim()) {
-      error = $t("onboarding.pathRequired");
-      return;
-    }
+    await doOpenDialog();
+  }
+
+  async function doOpenDialog() {
+    error = "";
     try {
-      await openWorkspace(path.trim());
+      await openWorkspaceDialog();
     } catch (e) {
+      if (String(e).includes("cancelled")) return;
       error = String(e);
     }
   }

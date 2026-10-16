@@ -127,6 +127,37 @@ export async function init(): Promise<void> {
   });
 }
 
+export async function openWorkspaceDialog(): Promise<void> {
+  ui.layoutReady = false;
+  try {
+    await api.workspaceOpenDialog();
+  } catch (e) {
+    if (String(e).includes("cancelled")) {
+      ui.layoutReady = true;
+      return;
+    }
+    ui.status = "";
+    ui.layoutReady = true;
+    await refreshWorkspaces();
+    throw e;
+  }
+  await onWorkspaceOpened();
+}
+
+async function onWorkspaceOpened(): Promise<void> {
+  ui.showWorkspacePicker = false;
+  resetDocuments();
+  await refreshWorkspaces();
+  await refreshTree();
+  await loadWordIndex();
+  await loadFixesTables();
+  await refreshTables();
+  await restoreMainTiling();
+  await reloadOpenNotes();
+  ui.status = "";
+  ui.layoutReady = true;
+}
+
 export async function openWorkspace(path: string): Promise<void> {
   ui.status = tr("status.opening", { path });
   ui.layoutReady = false;
@@ -139,15 +170,25 @@ export async function openWorkspace(path: string): Promise<void> {
     await refreshWorkspaces();
     throw error;
   }
-  ui.showWorkspacePicker = false;
-  resetDocuments();
-  await refreshWorkspaces();
-  await refreshTree();
-  await loadWordIndex();
-  await loadFixesTables();
-  await refreshTables();
-  await restoreMainTiling();
-  ui.status = "";
+  await onWorkspaceOpened();
+}
+
+/** Create a workspace whose parent folder is chosen in a Rust-run dialog. */
+export async function createWorkspaceDialog(name: string): Promise<void> {
+  ui.status = tr("status.creating", { name });
+  ui.layoutReady = false;
+  try {
+    await api.workspaceCreateDialog(name);
+  } catch (e) {
+    if (String(e).includes("cancelled")) {
+      ui.layoutReady = true;
+      return;
+    }
+    ui.status = "";
+    ui.layoutReady = true;
+    throw e;
+  }
+  await onWorkspaceOpened();
 }
 
 export async function createWorkspace(

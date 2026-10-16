@@ -35,10 +35,18 @@ export const workspaceCurrent = (): Promise<string | null> =>
   invoke("workspace_current");
 export const workspaceOpen = (path: string): Promise<string> =>
   invoke("workspace_open", { path });
+
+/** Open a workspace by picking its folder in a Rust-run dialog. */
+export const workspaceOpenDialog = (): Promise<string> =>
+  invoke("workspace_open_dialog");
 export const workspaceCreate = (
   name: string,
   destination: string,
 ): Promise<string> => invoke("workspace_create", { name, destination });
+
+/** Create a workspace by picking its parent folder in a Rust-run dialog. */
+export const workspaceCreateDialog = (name: string): Promise<string> =>
+  invoke("workspace_create_dialog", { name });
 
 // -- notes ---------------------------------------------------------------
 export const listWorkspace = (): Promise<NoteNode[]> =>
@@ -425,12 +433,12 @@ export const keybindsGet = (): Promise<Record<string, string>> =>
 export const setKeybind = (id: string, key: string | null): Promise<void> =>
   invoke("set_keybind", { id, key });
 export const resetKeybinds = (): Promise<void> => invoke("reset_keybinds");
-export const exportWorkspaceZip = (path: string): Promise<void> =>
-  invoke("export_workspace_zip", { path });
-export const workspaceImportZip = (
-  zipPath: string,
-  dest: string,
-): Promise<string> => invoke("workspace_import_zip", { zipPath, dest });
+/** Zip the workspace; the path is chosen on the Rust side. */
+export const exportWorkspaceZipDialog = (): Promise<string> =>
+  invoke("export_workspace_zip_dialog");
+/** Restore a workspace from a zip; both paths are chosen on the Rust side. */
+export const workspaceImportZipDialog = (): Promise<string> =>
+  invoke("workspace_import_zip_dialog");
 export const recentRecord = (entry: string): Promise<void> =>
   invoke("recent_record", { entry });
 export const recentList = (): Promise<string[]> => invoke("recent_list");
@@ -592,16 +600,17 @@ export const translationOptions = (): Promise<TranslationOptions> =>
 export const setTranslationOptions = (
   options: TranslationOptions,
 ): Promise<void> => invoke("set_translation_options", { options });
-export const exportPresets = (
-  path: string,
+export const exportPresetsDialog = (
   grids: SyntaxGrid[],
-): Promise<void> => invoke("export_presets", { path, grids });
-export const profileExport = (path: string): Promise<void> =>
-  invoke("profile_export", { path });
-export const profileImport = (path: string): Promise<void> =>
-  invoke("profile_import", { path });
-export const importPresets = (path: string): Promise<SyntaxGrid[]> =>
-  invoke("import_presets", { path });
+): Promise<string> => invoke("export_presets_dialog", { grids });
+/** Export the profile; the path is chosen on the Rust side. */
+export const profileExportDialog = (): Promise<string> =>
+  invoke("profile_export_dialog");
+/** Import a profile; the path is chosen on the Rust side. */
+export const profileImportDialog = (): Promise<void> =>
+  invoke("profile_import_dialog");
+export const importPresetsDialog = (): Promise<SyntaxGrid[]> =>
+  invoke("import_presets_dialog");
 
 // -- config & layout -----------------------------------------------------
 export type TextDirection = "ltr" | "rtl";
@@ -1219,14 +1228,24 @@ export interface ImportReport {
   warnings: string[];
 }
 
-export const importDetect = (
-  path: string,
+/** The pick returns the file's base name (never the host path) and its shape. */
+export interface DetectResult {
+  path: string;
+  detection: Detection;
+}
+
+export const importPickDialog = (
   options: ImportOptions,
-): Promise<Detection> => invoke("import_detect", { path, options });
-export const importPreview = (
-  path: string,
+): Promise<DetectResult> => invoke("import_pick_dialog", { options });
+
+export const importDetectAgain = (
   options: ImportOptions,
-): Promise<Preview> => invoke("import_preview", { path, options });
+): Promise<DetectResult> => invoke("import_detect_again", { options });
+export const importPreviewStashed = (
+  options: ImportOptions,
+): Promise<Preview> => invoke("import_preview_stashed", { options });
+
+export const importCancel = (): Promise<void> => invoke("import_cancel");
 export const importApply = (plan: ImportPlan): Promise<ImportReport> =>
   invoke("import_apply", { plan });
 
@@ -1234,11 +1253,10 @@ export const importApply = (plan: ImportPlan): Promise<ImportReport> =>
 export type TableFormat = "csv" | "tsv" | "json";
 
 /** Export a table to `destination`; resolves to the written path. */
-export const exportTable = (
+export const exportTableDialog = (
   name: string,
   format: TableFormat,
-  destination: string,
-): Promise<string> => invoke("export_table", { name, format, destination });
+): Promise<string> => invoke("export_table_dialog", { name, format });
 
 // -- Anki export ---------------------------------------------------------
 export type AnkiSeparator =
@@ -1261,8 +1279,7 @@ export interface AnkiExportOptions {
 }
 
 /** Export a table as an Anki-importable text file. */
-export const exportAnki = (
+export const exportAnkiDialog = (
   name: string,
   options: AnkiExportOptions,
-  destination: string,
-): Promise<string> => invoke("export_anki", { name, options, destination });
+): Promise<string> => invoke("export_anki_dialog", { name, options });
