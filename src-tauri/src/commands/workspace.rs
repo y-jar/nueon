@@ -11,7 +11,7 @@ use nueon_core::{
 };
 
 use super::{changed, destroy_windows, secondary_labels};
-use crate::state::{default_name, AppState};
+use crate::state::{default_name, refresh_asset_scope, AppState};
 
 /// Record a recently opened note or table (`note:<path>` / `table:<name>`).
 #[tauri::command]
@@ -84,6 +84,7 @@ pub fn workspace_open(
     let mut state = state.lock().map_err(|_| "state poisoned".to_string())?;
     let stale = retire_secondary_windows(&app, &mut state);
     state.workspace = Some(workspace);
+    refresh_asset_scope(&app, &mut state);
     let path = PathBuf::from(path);
     state.global.add(path.clone(), default_name(&path));
     state.global.last = Some(path);
@@ -111,6 +112,7 @@ pub fn workspace_create(
     let mut state = state.lock().map_err(|_| "state poisoned".to_string())?;
     let stale = retire_secondary_windows(&app, &mut state);
     state.workspace = Some(workspace);
+    refresh_asset_scope(&app, &mut state);
     state.global.add(target.clone(), name);
     state.global.last = Some(target);
     let _ = state.global.save();
@@ -139,6 +141,7 @@ pub fn workspace_remove(
     {
         state.workspace = None;
     }
+    refresh_asset_scope(&app, &mut state);
     let _ = state.global.save();
     drop(state);
 
@@ -217,6 +220,7 @@ pub fn workspace_delete_from_disk(
     {
         state.workspace = None;
     }
+    refresh_asset_scope(&app, &mut state);
     let _ = state.global.save();
     drop(state);
 
@@ -449,6 +453,7 @@ pub fn workspace_import_zip(
     let mut state = state.lock().map_err(|_| "state poisoned".to_string())?;
     let stale = retire_secondary_windows(&app, &mut state);
     state.workspace = Some(workspace);
+    refresh_asset_scope(&app, &mut state);
     let path = PathBuf::from(&dest);
     state.global.add(path.clone(), default_name(&path));
     state.global.last = Some(path);

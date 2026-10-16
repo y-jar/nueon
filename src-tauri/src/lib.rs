@@ -12,7 +12,7 @@ use std::time::{Duration, Instant};
 
 use tauri::{Emitter, Manager};
 
-use state::AppState;
+use state::{refresh_asset_scope, AppState};
 
 /// Liveness probe for the frontend.
 #[tauri::command]
@@ -82,8 +82,11 @@ pub fn run() {
     tauri::Builder::default()
         .plugin(tauri_plugin_opener::init())
         .plugin(tauri_plugin_dialog::init())
-        .manage(Mutex::new(AppState::load()))
         .setup(|app| {
+            let mut boot = AppState::load();
+            refresh_asset_scope(app.handle(), &mut boot);
+            app.manage(Mutex::new(boot));
+
             let handle = app.handle().clone();
             std::thread::spawn(move || background_pump(handle));
 

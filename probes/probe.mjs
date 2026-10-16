@@ -8430,6 +8430,33 @@ async function main() {
     assertEqual(dom.link, true, "the link text stays");
     await screenshot("p184-hostile-html");
   });
+
+  // -- probe 185: the asset protocol reaches only the open workspace --------
+  const loadsViaAsset = (abs) =>
+    js(`return await new Promise((resolve) => {
+      const abs = ${JSON.stringify(abs)};
+      const url = window.__TAURI_INTERNALS__.convertFileSrc(abs, 'asset');
+      const img = new Image();
+      img.onload = () => resolve(true);
+      img.onerror = () => resolve(false);
+      img.src = url;
+      setTimeout(() => resolve(false), 3000);
+    });`);
+
+  await probe("185-the-asset-protocol-reaches-only-the-open-workspace", async () => {
+    await openActivity("Notes");
+    // A file inside the workspace loads; one outside it does not.
+    const inside = path.join(WORKSPACE, "notes", "assets", "pic.png");
+    const outside = path.join(ROOT, "probe-outside.png");
+    fs.copyFileSync(path.join(WORKSPACE, "notes", "assets", "pic.png"), outside);
+    assertEqual(await loadsViaAsset(inside), true, "a workspace asset still loads");
+    assertEqual(
+      await loadsViaAsset(outside),
+      false,
+      "a file outside the workspace is not reachable through the asset protocol",
+    );
+    await screenshot("p185-asset-scope");
+  });
 }
 
 try {

@@ -14,11 +14,31 @@ pub struct AppState {
     pub global: GlobalConfig,
     /// The currently open workspace, if any.
     pub workspace: Option<Workspace>,
+    /// The workspace root the asset protocol is currently scoped to, so a
+    /// switch can forbid exactly what the previous workspace allowed.
+    pub asset_root: Option<PathBuf>,
     /// Secondary windows being closed by the app itself (quit or workspace
     /// switch); their saved layout is kept instead of pruned.
     pub silent_close: HashSet<String>,
     /// The last compiled type-preview font, reused until the font would change.
     pub preview_font: PreviewCache,
+}
+
+/// Point the webview's asset protocol at exactly the open workspace. The
+/// config's scope starts empty, so nothing on the host is reachable until a
+/// workspace opens; switching forbids the old root and allows the new one
+/// (a forbid always beats an allow in Tauri's scope resolution).
+pub fn refresh_asset_scope(app: &tauri::AppHandle, state: &mut AppState) {
+    use tauri::Manager;
+    let scope = app.asset_protocol_scope();
+    if let Some(old) = state.asset_root.take() {
+        let _ = scope.forbid_directory(&old, true);
+    }
+    let root = state.workspace.as_ref().map(|w| w.root_path.clone());
+    if let Some(root) = &root {
+        let _ = scope.allow_directory(root, true);
+    }
+    state.asset_root = root;
 }
 
 impl AppState {
@@ -59,6 +79,7 @@ impl AppState {
             workspace,
             silent_close: HashSet::new(),
             preview_font: PreviewCache::default(),
+            asset_root: None,
         }
     }
 

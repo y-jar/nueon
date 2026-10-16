@@ -196,6 +196,14 @@ commit per stage. See `docs/PROBING.md`.
 - **A hidden Fore layer blocks editing, not viewing.** Editing invisible
   outlines would be blind luck, so every tool except the view tools waits; the
   back image stays reachable so a scan can be inspected alone.
+- **The asset protocol reaches only the open workspace.** The config scope
+  was `**` — every file on the host readable by the webview. It now starts
+  empty; the workspace root is allowed when it opens (boot included) and the
+  previous root is forbidden on a switch or close, so a stray URL from a note
+  or a workspace change cannot read outside the open workspace. The forbid
+  wins over the allow in Tauri's scope resolution. Verified by probes both
+  ways: workspace assets and tracing images load, an outside file does not;
+  the switch case (a second workspace mid-session) is manual-tier.
 - **A CSP is set, and the starting baseline needed nothing loosened.**
   `default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline';
   img-src 'self' data: blob: asset: http://asset.localhost; font-src 'self'
