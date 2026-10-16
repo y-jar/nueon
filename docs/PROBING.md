@@ -376,11 +376,11 @@ starts — every probe that dispatches synthetic PointerEvents uses `pointerId: 
 ### A loaded desktop flakes the timing probes
 
 The desktop this suite runs on is also the user's working machine: with OBS,
-Discord, Steam and a browser running (load average 4+), probes 31, 106, 111
-and 118 failed two full runs in a row — on a binary that had just passed
-183/183 — and passed again unchanged on the third. ResizeObserver-loop
-errors, zoom-point drift and random-click misses are load, not code. Rerun
-with the desktop idle before investigating any of them.
+Discord, Steam and a browser running (load average 4+), probes 31, 106, 111,
+118 and once 128 failed full runs — on a binary that had just passed 183/183
+unchanged — and each passed again on a later run. ResizeObserver-loop errors,
+zoom-point drift, click misses and random-sequence page errors are load, not
+code. Rerun with the desktop idle before investigating any of them.
 
 ### Probe 118 is flaky
 

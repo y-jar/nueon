@@ -42,6 +42,19 @@ const RACE_MARKER = "TYPED_IN_A ";
 const INLINE = "above\nplain **bold** and $x+y$ here\n";
 // A note to type brackets into (probe 12).
 const TYPE = "start\n";
+// A hostile HTML block beside benign markup (probe 184).
+const HOSTILE = [
+  "above",
+  "",
+  "<div>keep me</div>",
+  `<img src="data:image/gif;base64,R0lGODlhAQABAAAAACw=" onerror="window.__xss = 'ran'">`,
+  "<script>window.__xss = window.__xss || 'script';</script>",
+  `<a href="javascript:window.__xss = 'link'" id="evil-link">link</a>`,
+  `<iframe src="https://example.invalid" id="evil-frame"></iframe>`,
+  `<form action="javascript:window.__xss = 'form'"><input type="text"></form>`,
+  "<p>and this text survives</p>",
+  "",
+].join("\n");
 // A note for Ctrl+click multi-cursor (probe 13).
 const MULTI = "hello world\n";
 // A note for heading/strikethrough shortcuts (probe 14).
@@ -842,6 +855,9 @@ function seedWorkspace() {
   fs.writeFileSync(path.join(WORKSPACE, "notes", "raceB.md"), RACE_B);
   fs.writeFileSync(path.join(WORKSPACE, "notes", "inline.md"), INLINE);
   fs.writeFileSync(path.join(WORKSPACE, "notes", "type.md"), TYPE);
+  // A note whose HTML block tries everything: a handler that phones home, a
+  // script, an iframe, a form and a javascript: link, beside benign markup.
+  fs.writeFileSync(path.join(WORKSPACE, "notes", "hostile.md"), HOSTILE);
   fs.writeFileSync(path.join(WORKSPACE, "notes", "multi.md"), MULTI);
   fs.writeFileSync(path.join(WORKSPACE, "notes", "fmt.md"), FMT);
   fs.writeFileSync(path.join(WORKSPACE, "notes", "task.md"), TASK);
@@ -8379,6 +8395,40 @@ async function main() {
     await key("z", { ctrlKey: true });
     const unused = before;
     assertEqual(unused !== null, true, "undo available");
+  });
+
+  await probe("184-a-hostile-html-block-renders-its-text-and-runs-nothing", async () => {
+    await openActivity("Notes");
+    await openNote("hostile.md");
+    await waitJs(`!!document.querySelector('.cm-html-block')`, { label: "the html block rendered" });
+    await idle(600);
+    const ran = await js(`return window.__xss ?? null;`);
+    assertEqual(ran, null, `nothing ran: window.__xss is ${JSON.stringify(ran)}`);
+    const dom = await js(`return (() => {
+      const block = document.querySelector('.cm-html-block');
+      return {
+        kept: !!block && block.textContent.includes("keep me") && block.textContent.includes("and this text survives"),
+        script: !!block?.querySelector("script"),
+        iframe: !!block?.querySelector("iframe"),
+        form: !!block?.querySelector("form"),
+        input: !!block?.querySelector("input"),
+        img: !!block?.querySelector("img"),
+        handler: [...(block?.querySelectorAll("*") ?? [])].some((el) =>
+          [...el.attributes].some((a) => a.name.startsWith("on"))),
+        jsHref: block?.querySelector("a")?.getAttribute("href")?.startsWith("javascript:") ?? false,
+        link: !!block?.querySelector("a"),
+      };
+    })()`);
+    assertEqual(dom.kept, true, "the benign markup and text survive");
+    assertEqual(dom.script, false, "no script element");
+    assertEqual(dom.iframe, false, "no iframe");
+    assertEqual(dom.form, false, "no form");
+    assertEqual(dom.input, false, "no form input");
+    assertEqual(dom.img, true, "a bare img may stay; its handler may not");
+    assertEqual(dom.handler, false, "no on* attributes anywhere");
+    assertEqual(dom.jsHref, false, "no javascript: href");
+    assertEqual(dom.link, true, "the link text stays");
+    await screenshot("p184-hostile-html");
   });
 }
 

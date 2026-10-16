@@ -9,6 +9,9 @@ Bundled third-party components
   Academy and other contributors. The web fonts ship inside the KaTeX
   package, which carries a single MIT LICENSE and no separate font license
   file.
+- DOMPurify (https://github.com/cure53/DOMPurify) - Apache-2.0 OR MPL-2.0
+  dual licence; used under the Apache-2.0 licence. Sanitises HTML blocks in
+  the notes editor against an allowlist.
 - nspell (https://github.com/wooorm/nspell) - MIT License, Copyright (c) 2016
   Titus Wormer.
 - English dictionary (dictionary-en) - see the verbatim notice and license

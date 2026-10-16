@@ -41,7 +41,7 @@
         src = ./.;
         # Node 22 to match the dev shell and CI (the nixpkgs default drifts).
         nodejs = pkgs.nodejs_22;
-        npmDepsHash = "sha256-itrhxmVI6PyLODiSDVsYqUV6Wo6K9ZPQ3+AvpW2vBRg=";
+        npmDepsHash = "sha256-XqhwcnaQFsaNeNFi2RFGVzYtXatUbvXOqQMi2STr1ow=";
         npmBuildScript = "build";
         installPhase = ''
           runHook preInstall

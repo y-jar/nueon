@@ -196,6 +196,15 @@ commit per stage. See `docs/PROBING.md`.
 - **A hidden Fore layer blocks editing, not viewing.** Editing invisible
   outlines would be blind luck, so every tool except the view tools waits; the
   back image stays reachable so a scan can be inspected alone.
+- **HTML blocks render through an allowlist sanitiser, never raw.** A note's
+  HTML block is arbitrary user content that used to go straight into
+  `innerHTML` with the app's CSP unset, so any note could run script.
+  DOMPurify (Apache-2.0 OR MPL-2.0; used under Apache-2.0) now sanitises with
+  an explicit tag/attribute allowlist and a URI regexp that drops `javascript:`
+  URLs; handlers, scripts, frames and forms never reach the DOM, benign
+  markup survives, and a hostile note (`<img onerror=…>`, `<script>`,
+  `<iframe>`, `<form>`, `javascript:` link) is covered by a probe that fails
+  the moment anything runs.
 - **A boolean's result is every piece, with holes wound against their
   outline.** `flo_curves`' `path_combine` returns one subpath per piece, and
   the first version kept only the first: a union of disjoint shapes silently

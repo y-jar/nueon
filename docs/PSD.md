@@ -43,7 +43,10 @@ layer (`src-tauri/`), and the Svelte 5 frontend (`src/`). See `docs/ARCHITECTURE
 
 - **Behaviour.** Obsidian-style live preview: a single CodeMirror 6 view renders
   headings, bold/italic, links, code; GFM tables, task lists, footnotes; KaTeX
-  math and HTML blocks render but reveal raw text under the cursor. `[[...]]`
+  math and HTML blocks render but reveal raw text under the cursor (an HTML
+  block renders through a DOMPurify allowlist: handlers, scripts, frames,
+  forms and `javascript:` URLs are stripped, and a hostile note runs nothing —
+  probe-verified). `[[...]]`
   links highlight, follow on Ctrl/Cmd+click, and rewrite on rename.
 - **Data.** `notes/<path>.md`; the dictionary word index for highlighting.
 - **Invariants.** Autosave is debounced and never writes a stale buffer over a

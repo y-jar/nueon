@@ -1,4 +1,5 @@
 //! Live-preview decorations (images, math, blocks).
+import DOMPurify from "dompurify";
 import { type Range } from "@codemirror/state";
 import {
   Decoration,
@@ -270,10 +271,26 @@ class HtmlWidget extends WidgetType {
     const wrap = document.createElement("div");
     wrap.className = "cm-html-block";
     enterBlockOnClick(wrap, view, this.pos);
-    wrap.innerHTML = this.html;
+    // An HTML block is arbitrary user content: it is rendered through an
+    // allowlist sanitiser, never raw (see the security notes in PSD.md).
+    wrap.innerHTML = DOMPurify.sanitize(this.html, HTML_BLOCK_CONFIG);
     return wrap;
   }
 }
+
+/** What an HTML block may contain: benign markup only. Everything else —
+ * event handlers, scripts, frames, forms, `javascript:` URLs — is stripped
+ * on the way into the DOM. */
+const HTML_BLOCK_CONFIG = {
+  ALLOWED_TAGS: [
+    "a", "abbr", "b", "blockquote", "br", "code", "div", "em", "h1", "h2",
+    "h3", "h4", "h5", "h6", "hr", "i", "img", "li", "ol", "p", "pre", "q",
+    "small", "span", "strong", "sub", "sup", "table", "tbody", "td", "tfoot",
+    "th", "thead", "tr", "u", "ul",
+  ],
+  ALLOWED_ATTR: ["alt", "height", "href", "src", "title", "width"],
+  ALLOWED_URI_REGEXP: /^(?:(?:https?|mailto|data):|[^a-z]|[a-z+.\-]+(?:[^a-z+.\-:]|$))/i,
+};
 
 function activeLines(state: EditorView["state"]): Set<number> {
   const lines = new Set<number>();
