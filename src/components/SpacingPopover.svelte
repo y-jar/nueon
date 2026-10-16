@@ -125,11 +125,17 @@
         {/each}
       </select>
     </label>
-    <button data-testid="copy-spacing" disabled={!donor} onclick={() => onCopyFrom(donor)}>
+    <button
+      data-testid="copy-spacing"
+      title={$t("writing.spacing.copyHint")}
+      disabled={!donor}
+      onclick={() => onCopyFrom(donor)}
+    >
       {$t("writing.spacing.copy")}
     </button>
     <button
       data-testid="apply-to-selected"
+      title={$t("writing.spacing.applyHint")}
       disabled={selectedCount === 0 || lsbBlocked}
       onclick={() => onApplyToSelected(b.lsb, b.rsb)}
     >

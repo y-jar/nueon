@@ -120,7 +120,10 @@
     {/if}
   {/each}
   <div class="custom-row">
-    <button onclick={() => onChange(addRule(rules))}>
+    <button
+      title={$t("writing.rules.addHint")}
+      onclick={() => onChange(addRule(rules))}
+    >
       <Plus size={14} /> {$t("writing.rules.add")}
     </button>
   </div>

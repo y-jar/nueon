@@ -481,14 +481,32 @@
     <span class="grow"></span>
     {#if !editing}
       <div class="page-tabs" role="tablist" aria-label={$t("writing.title")}>
-        <button role="tab" aria-selected={page === "glyphs"} class:active={page === "glyphs"} data-page="glyphs" onclick={() => (page = "glyphs")}>
+        <button
+          role="tab"
+          aria-selected={page === "glyphs"}
+          class:active={page === "glyphs"}
+          data-page="glyphs"
+          title={$t("writing.glyphsHint")}
+          onclick={() => (page = "glyphs")}
+        >
           {$t("writing.glyphs")}
         </button>
-        <button role="tab" aria-selected={page === "preview"} class:active={page === "preview"} data-page="preview" onclick={() => (page = "preview")}>
+        <button
+          role="tab"
+          aria-selected={page === "preview"}
+          class:active={page === "preview"}
+          data-page="preview"
+          title={$t("writing.previewHint")}
+          onclick={() => (page = "preview")}
+        >
           {$t("writing.preview.tab")}
         </button>
       </div>
-      <button data-action="add-glyph" onclick={addGlyph}><Plus size={14} /> {$t("writing.addGlyph")}</button>
+      <button
+        data-action="add-glyph"
+        title={$t("writing.addGlyphHint")}
+        onclick={addGlyph}
+      ><Plus size={14} /> {$t("writing.addGlyph")}</button>
     {/if}
   </header>
 

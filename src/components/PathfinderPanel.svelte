@@ -18,7 +18,11 @@
 <div class="pathfinder-panel">
   <h2>{$t("writing.pathfinder")}</h2>
   {#each OPS as op (op.id)}
-    <button disabled={!ready} onclick={() => void runPathfinder(op.id)}>
+    <button
+      disabled={!ready}
+      title={$t(`writing.pathfinderHints.${op.id}`)}
+      onclick={() => void runPathfinder(op.id)}
+    >
       {$t(op.label)}
     </button>
   {/each}

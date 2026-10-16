@@ -54,6 +54,17 @@ was the column-menu bug; use a script-level `$derived` instead.
 - Focus-visible outlines on interactive chrome (`base.css`); the tab close button
   appears on `:focus-within`.
 
+## Hover descriptions
+
+Every interactive element and readout in the writing UI carries hover text: a
+`title` (or `aria-label`) that says what it does, not just its visible label —
+buttons get one even when their text names them; inputs, selects and textareas
+may instead sit inside a `<label>` with text or carry a placeholder. Info-bar
+readouts are described too (what "d ∠" or the zoom number means). Probe 176
+audits the whole writing view — grid, spacing mode, preview and editor — and
+fails listing anything undescribed, so a new widget must either say what it
+does on hover or the probe catches it.
+
 ## Status & errors
 
 - `ui.status` is the single status-bar line; `ui.toast` for transient messages

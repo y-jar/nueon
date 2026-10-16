@@ -79,7 +79,12 @@
 {/if}
 
 <div class="glyph-tray">
-  <button class="tray-tile" class:batch-selected={selectMode} onclick={() => (selectMode ? leave() : (selectMode = true))}>
+  <button
+    class="tray-tile"
+    class:batch-selected={selectMode}
+    title={$t("writing.selectModeHint")}
+    onclick={() => (selectMode ? leave() : (selectMode = true))}
+  >
     {$t("writing.selectMode")}
   </button>
   {#each glyphs as glyph (glyph.id)}

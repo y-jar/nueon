@@ -263,23 +263,34 @@
         max={MAX_SIZE}
         value={size}
         data-testid="preview-size"
+        title={$t("writing.preview.sizeHint")}
         oninput={(e) => (size = clampSize(Number(e.currentTarget.value)))}
       />
       <span class="mono" data-testid="preview-size-px">{size}px</span>
     </label>
     <div class="preview-source" role="group" aria-label={$t("writing.preview.source")}>
       {#each SOURCES as s (s)}
-        <button class:active={source === s} data-source={s} onclick={() => (source = s)}>
+        <button
+          class:active={source === s}
+          data-source={s}
+          title={$t(`writing.preview.sourceHint_${s}`)}
+          onclick={() => (source = s)}
+        >
           {$t(`writing.preview.sources.${s}`)}
         </button>
       {/each}
     </div>
-    <label class="check"><input type="checkbox" bind:checked={showMetrics} /> {$t("writing.preview.metrics")}</label>
-    <label class="check"><input type="checkbox" bind:checked={showBoxes} data-testid="preview-boxes" /> {$t("writing.preview.boxes")}</label>
-    <label class="check"><input type="checkbox" bind:checked={wrap} /> {$t("writing.preview.wrap")}</label>
-    <label class="check"><input type="checkbox" bind:checked={adjust} data-testid="preview-adjust" /> {$t("writing.preview.adjust")}</label>
+    <label class="check" title={$t("writing.preview.metricsHint")}><input type="checkbox" bind:checked={showMetrics} /> {$t("writing.preview.metrics")}</label>
+    <label class="check" title={$t("writing.preview.boxesHint")}><input type="checkbox" bind:checked={showBoxes} data-testid="preview-boxes" /> {$t("writing.preview.boxes")}</label>
+    <label class="check" title={$t("writing.preview.wrapHint")}><input type="checkbox" bind:checked={wrap} /> {$t("writing.preview.wrap")}</label>
+    <label class="check" title={$t("writing.preview.adjustHint")}><input type="checkbox" bind:checked={adjust} data-testid="preview-adjust" /> {$t("writing.preview.adjust")}</label>
     {#if adjust}
-      <select bind:value={gapMode} aria-label={$t("writing.preview.adjustMode")} data-testid="preview-gap-mode">
+      <select
+        bind:value={gapMode}
+        aria-label={$t("writing.preview.adjustMode")}
+        title={$t("writing.preview.adjustModeHint")}
+        data-testid="preview-gap-mode"
+      >
         <option value="split">{$t("writing.preview.modeSplit")}</option>
         <option value="left">{$t("writing.preview.modeLeft")}</option>
         <option value="right">{$t("writing.preview.modeRight")}</option>
@@ -292,6 +303,7 @@
       class="preview-input"
       data-testid="preview-input"
       rows="2"
+      title={$t("writing.preview.inputHint")}
       placeholder={$t("writing.preview.placeholder")}
       bind:value={custom}
     ></textarea>
@@ -300,12 +312,18 @@
       <input
         class="word-filter"
         type="search"
+        title={$t("writing.preview.filterWordsHint")}
         placeholder={$t("writing.preview.filterWords")}
         bind:value={wordFilter}
       />
       <div class="word-list" data-testid="word-list">
         {#each visibleWords as w (w)}
-          <button class:active={picked.includes(w)} data-word={w} onclick={() => togglePicked(w)}>{w}</button>
+          <button
+            class:active={picked.includes(w)}
+            data-word={w}
+            title={$t("writing.preview.wordHint", { values: { word: w } })}
+            onclick={() => togglePicked(w)}
+          >{w}</button>
         {:else}
           <span class="muted">{$t("writing.preview.noWords")}</span>
         {/each}

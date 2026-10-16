@@ -7708,6 +7708,10 @@ async function main() {
     const cfg = await invokeAsync("config_get", { section: "writing" });
     await invokeAsync("config_set", { section: "writing", value: { ...cfg, rules: [] } });
     await reopenGrid();
+    // The writing view keeps its page across activity switches; an earlier
+    // probe may have left it on the preview. Go to the glyphs page.
+    await js(`const t = document.querySelector('.writing [data-page="glyphs"]');
+      if (t && t.getAttribute('aria-selected') !== 'true') t.click(); return true;`);
     await waitJs(`!!document.querySelector('.glyph-tile[data-kind="glyph"]')`, { label: "seeded tiles" });
     await click('.glyph-tile[data-kind="glyph"]');
     await waitJs(`!!document.querySelector('.canvas-svg')`, { label: "editor" });
@@ -7994,6 +7998,63 @@ async function main() {
     );
     const check = await invokeAsync("writing_validate_font", {});
     assertEqual(check.some((i) => i.severity === "error"), false, "no export blocker appeared");
+  });
+
+  // -- probe 176: hover descriptions on every tool and widget ---------------
+  const audit = (what) =>
+    js(`return (() => {
+      const described = (el) => {
+        if ((el.getAttribute('title') || '').trim() || (el.getAttribute('aria-label') || '').trim()) return true;
+        if (el.tagName === 'INPUT' || el.tagName === 'TEXTAREA' || el.tagName === 'SELECT') {
+          if ((el.getAttribute('placeholder') || '').trim()) return true;
+          const label = el.closest('label');
+          if (label && label.textContent.trim()) return true;
+        }
+        return false;
+      };
+      const missing = [];
+      for (const el of document.querySelectorAll(
+        '.writing button, .writing select, .writing input, .writing textarea, .writing [role="button"], .writing [data-info], .writing .glyph-tile, .writing [data-edge]',
+      )) {
+        if (!(el instanceof HTMLElement) || !el.offsetParent) continue;
+        if (el.closest('[aria-hidden="true"]')) continue;
+        if (!described(el)) missing.push(el.outerHTML.slice(0, 100) + ' @ ' + (el.parentElement?.className || el.parentElement?.tagName || '?'));
+      }
+      return missing;
+    })()`).then((missing) => {
+      if (missing.length) {
+        fs.writeFileSync(
+          path.join(ROOT, "audit-missing.json"),
+          JSON.stringify({ what, missing }, null, 1),
+        );
+        throw new Error(`${what}: ${missing.length} undescribed (see audit-missing.json): ${JSON.stringify(missing.slice(0, 2))}`);
+      }
+    });
+
+  await probe("176-every-tool-and-widget-in-the-writing-ui-has-a-hover-description", async () => {
+    await seedImageGlyph();
+    await ensureLayers();
+    await js(`document.querySelector('.vector-editor .back')?.click(); return true;`);
+    await waitJs(`!!document.querySelector('[data-page="glyphs"]')`, { label: "grid page" });
+    await audit("the glyph grid");
+
+    await js(`document.querySelector('[data-page="preview"]').click(); return true;`);
+    await waitJs(`!!document.querySelector('[data-testid="type-preview"]')`, { label: "preview page" });
+    await audit("the type preview");
+
+    await js(`document.querySelector('[data-page="glyphs"]').click(); return true;`);
+    await waitJs(`!!document.querySelector('[data-testid="spacing-toggle"]')`, { label: "grid back" });
+    await setMode(true);
+    await waitJs(`document.querySelectorAll('[data-edge]').length > 0`, { label: "spacing edges" });
+    await js(`document.querySelector('[data-cell]').click(); return true;`);
+    await waitJs(`!!document.querySelector('[data-testid="spacing-popover"]')`, { label: "spacing popover" });
+    await audit("spacing mode");
+    await setMode(false);
+    await waitJs(`document.querySelectorAll('[data-edge]').length === 0`, { label: "edges gone" });
+
+    await click('.glyph-tile[data-kind="glyph"]');
+    await waitJs(`!!document.querySelector('.canvas-svg')`, { label: "editor" });
+    await audit("the vector editor");
   });
 }
 

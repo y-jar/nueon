@@ -54,8 +54,18 @@
     {$t("writing.spacing.mode")}
   </button>
   {#if spacing}
-    <button disabled={!canUndo} data-testid="spacing-undo" onclick={onUndo}>{$t("writing.spacing.undo")}</button>
-    <button disabled={!canRedo} data-testid="spacing-redo" onclick={onRedo}>{$t("writing.spacing.redo")}</button>
+    <button
+      disabled={!canUndo}
+      data-testid="spacing-undo"
+      title={$t("writing.spacing.undoHint")}
+      onclick={onUndo}
+    >{$t("writing.spacing.undo")}</button>
+    <button
+      disabled={!canRedo}
+      data-testid="spacing-redo"
+      title={$t("writing.spacing.redoHint")}
+      onclick={onRedo}
+    >{$t("writing.spacing.redo")}</button>
   {/if}
   <input
     class="grid-search"
@@ -80,7 +90,12 @@
   </select>
   <div class="size-group" role="group" aria-label={$t("writing.cellSize")}>
     {#each Object.entries(CELL_SIZES) as [name, px] (name)}
-      <button class:active={cellSize === px} data-size={name} onclick={() => onSize(px)}>{name}</button>
+      <button
+        class:active={cellSize === px}
+        data-size={name}
+        title={$t("writing.cellSizeHint", { values: { px } })}
+        onclick={() => onSize(px)}
+      >{name}</button>
     {/each}
     <input
       type="range"

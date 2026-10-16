@@ -205,6 +205,8 @@ layer (`src-tauri/`), and the Svelte 5 frontend (`src/`). See `docs/ARCHITECTURE
   a type preview (text set in the script, shaped by the same font the export
   writes, 12 to 300 px, typed text / lexicon words / all glyphs / pairs, metric
   lines and advance boxes, and a gap drag that edits the neighbouring bearings),
+  hover descriptions on every tool and widget (audited by a probe across the
+  grid, spacing mode, preview and editor),
   layers (guide/back/fore visibility toggles in the toolbox and View menu; a
   tracing image per glyph imported into `writing/assets/`, placed in font units,
   selected, moved and corner-scaled with the aspect kept, one undo step per

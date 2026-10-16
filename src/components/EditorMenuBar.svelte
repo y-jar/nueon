@@ -231,6 +231,7 @@
         role="menuitem"
         aria-haspopup="true"
         aria-expanded={openMenu === menu}
+        title={$t(`writing.menuHints.${menu}`)}
         onclick={() => toggle(menu)}
         onmouseenter={() => openMenu && (openMenu = menu)}
       >

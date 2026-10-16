@@ -70,6 +70,7 @@
             class:active={kind === k}
             aria-pressed={kind === k}
             data-kind={k}
+            title={`${$t(`writing.nodeType.${k}`)} — ${$t("writing.nodeType.hint")}`}
             onclick={() => setSelectedKind(k)}
           >
             <svg viewBox="0 0 12 12" width="12" height="12" aria-hidden="true">
@@ -94,6 +95,7 @@
       <span class="metric-label">{$t(`writing.metrics.${label}`)}</span>
       <input
         type="number"
+        title={$t("writing.metricsHint")}
         data-spacing={field}
         disabled={field !== "advance" && spacing?.[field as "lsb" | "rsb"] === null}
         value={spacing ? shown(spacing[field as keyof typeof spacing]) : ""}

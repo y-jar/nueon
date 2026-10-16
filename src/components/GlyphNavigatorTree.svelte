@@ -27,6 +27,7 @@
   <button
     class="nav-row"
     class:active={selectedGroup === null}
+    title={$t("writing.allGlyphsHint")}
     onclick={() => onSelectGroup(null)}
   >
     <span>{$t("writing.all")}</span>
@@ -37,6 +38,7 @@
     <button
       class="nav-row"
       class:active={selectedGroup === group}
+      title={$t("writing.groupHint", { values: { group } })}
       onclick={() => onSelectGroup(group)}
     >
       <span>{group}</span>
