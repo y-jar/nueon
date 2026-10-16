@@ -88,9 +88,12 @@ fn path_to_contour(path: &SimpleBezierPath) -> Contour {
     }
 }
 
-fn binary(a: &SimpleBezierPath, b: &SimpleBezierPath, op: BooleanOp) -> Vec<SimpleBezierPath> {
-    let a = PathCombine::Path(vec![a.clone()]);
-    let b = PathCombine::Path(vec![b.clone()]);
+/// Combine two whole sets of paths. Every side can hold several pieces (a
+/// union of disjoint shapes, holes), and every piece must reach the boolean:
+/// dropping all but the first silently loses parts of the shape.
+fn binary(a: &[SimpleBezierPath], b: &[SimpleBezierPath], op: BooleanOp) -> Vec<SimpleBezierPath> {
+    let a = PathCombine::Path(a.to_vec());
+    let b = PathCombine::Path(b.to_vec());
     let operation = match op {
         BooleanOp::Union => PathCombine::Add(vec![a, b]),
         BooleanOp::Difference => PathCombine::Subtract(vec![a, b]),
@@ -102,6 +105,85 @@ fn binary(a: &SimpleBezierPath, b: &SimpleBezierPath, op: BooleanOp) -> Vec<Simp
         }
     };
     path_combine(operation, ACCURACY)
+}
+
+/// Sample a contour's curves into a polygon for containment tests.
+fn flatten(contour: &Contour, steps: usize) -> Vec<Coord2> {
+    let mut points = Vec::new();
+    let nodes = &contour.nodes;
+    let n = nodes.len();
+    if n == 0 {
+        return points;
+    }
+    let segments = if contour.closed && n > 1 {
+        n
+    } else {
+        n.saturating_sub(1)
+    };
+    for i in 0..segments {
+        let cur = &nodes[i];
+        let next = &nodes[(i + 1) % n];
+        let p0 = Coord2(cur.x, cur.y);
+        let p1 = cur
+            .handle_out
+            .map_or(p0, |(hx, hy)| Coord2(cur.x + hx, cur.y + hy));
+        let p2 = next.handle_in.map_or(Coord2(next.x, next.y), |(hx, hy)| {
+            Coord2(next.x + hx, next.y + hy)
+        });
+        let p3 = Coord2(next.x, next.y);
+        for step in 0..steps {
+            let t = step as f64 / steps as f64;
+            points.push(de_casteljau(p0, p1, p2, p3, t));
+        }
+    }
+    points
+}
+
+fn de_casteljau(p0: Coord2, p1: Coord2, p2: Coord2, p3: Coord2, t: f64) -> Coord2 {
+    let lerp = |a: Coord2, b: Coord2| Coord2(a.0 + (b.0 - a.0) * t, a.1 + (b.1 - a.1) * t);
+    let ab = lerp(p0, p1);
+    let bc = lerp(p1, p2);
+    let cd = lerp(p2, p3);
+    let abc = lerp(ab, bc);
+    let bcd = lerp(bc, cd);
+    lerp(abc, bcd)
+}
+
+/// Even-odd containment of a point in a polygon (a ray cast to the right).
+fn polygon_contains(polygon: &[Coord2], point: Coord2) -> bool {
+    let mut inside = false;
+    let n = polygon.len();
+    for i in 0..n {
+        let a = polygon[i];
+        let b = polygon[(i + 1) % n];
+        if (a.1 > point.1) != (b.1 > point.1)
+            && point.0 < (b.0 - a.0) * (point.1 - a.1) / (b.1 - a.1) + a.0
+        {
+            inside = !inside;
+        }
+    }
+    inside
+}
+
+/// Wind holes the other way. `path_combine` returns every subpath wound the
+/// same direction, so a hole (a subpath nested inside another) would fill
+/// solid under the nonzero rule the canvas and the compiled font both use.
+/// Subpaths at an odd nesting depth are reversed: the outline keeps its
+/// direction and holes cut through it, under nonzero and evenodd alike.
+fn wind_holes(contours: &mut [Contour]) {
+    let polygons: Vec<Vec<Coord2>> = contours.iter().map(|c| flatten(c, 32)).collect();
+    for i in 0..contours.len() {
+        let start = Coord2(contours[i].nodes[0].x, contours[i].nodes[0].y);
+        let depth: usize = (0..contours.len())
+            .filter(|&j| i != j && polygon_contains(&polygons[j], start))
+            .count();
+        if depth % 2 == 1 {
+            contours[i].nodes.reverse();
+            for node in &mut contours[i].nodes {
+                std::mem::swap(&mut node.handle_in, &mut node.handle_out);
+            }
+        }
+    }
 }
 
 fn union_all(paths: &[SimpleBezierPath]) -> Vec<SimpleBezierPath> {
@@ -162,13 +244,13 @@ pub fn apply(contours: &[Contour], op: BooleanOp) -> Vec<Contour> {
         BooleanOp::Union => union_all(&paths),
         BooleanOp::Intersect => intersect_all(&paths),
         BooleanOp::Difference => {
-            let front = paths.last().expect("len > 1");
+            let front: Vec<SimpleBezierPath> =
+                paths.last().map(|p| vec![p.clone()]).unwrap_or_default();
             let back = union_all(&paths[..paths.len() - 1]);
             if back.is_empty() {
-                vec![front.clone()]
+                front
             } else {
-                let back = back.into_iter().next().expect("non-empty");
-                binary(&back, front, BooleanOp::Difference)
+                binary(&back, &front, BooleanOp::Difference)
             }
         }
         BooleanOp::Exclude => {
@@ -179,14 +261,14 @@ pub fn apply(contours: &[Contour], op: BooleanOp) -> Vec<Contour> {
             } else if intersection.is_empty() {
                 union
             } else {
-                let union = union.into_iter().next().expect("non-empty");
-                let intersection = intersection.into_iter().next().expect("non-empty");
                 binary(&union, &intersection, BooleanOp::Difference)
             }
         }
     };
 
-    result.iter().map(path_to_contour).collect()
+    let mut contours: Vec<Contour> = result.iter().map(path_to_contour).collect();
+    wind_holes(&mut contours);
+    contours
 }
 
 #[cfg(test)]
@@ -251,6 +333,42 @@ mod tests {
         (a - b).abs() < 0.5
     }
 
+    /// Signed shoelace area over a contour's node positions (exact for the
+    /// corner-node squares used here). A hole comes back wound the other way,
+    /// so summing signed areas lets it cancel its outer contour.
+    fn area(contour: &Contour) -> f64 {
+        let n = contour.nodes.len();
+        if n < 3 {
+            return 0.0;
+        }
+        let mut area = 0.0;
+        for i in 0..n {
+            let a = &contour.nodes[i];
+            let b = &contour.nodes[(i + 1) % n];
+            area += a.x * b.y - b.x * a.y;
+        }
+        area / 2.0
+    }
+
+    fn total_area(contours: &[Contour]) -> f64 {
+        contours.iter().map(area).sum::<f64>().abs()
+    }
+
+    /// Whether the contours' x range covers both `[lo, mid]` and `[hi, hi2]`.
+    fn covers_pieces(contours: &[Contour], lo: f64, mid: f64, hi: f64, hi2: f64) -> bool {
+        let (min_x, _, max_x, _) = bounds(contours);
+        approx(min_x, lo) && approx(max_x, hi2) && contours.len() >= 2 && {
+            let xs: Vec<f64> = contours
+                .iter()
+                .flat_map(|c| c.nodes.iter().map(|n| n.x))
+                .collect();
+            let has_piece = |a: f64, b: f64| {
+                xs.iter().any(|x| approx(*x, a)) && xs.iter().any(|x| approx(*x, b))
+            };
+            has_piece(lo, mid) && has_piece(hi, hi2)
+        }
+    }
+
     #[test]
     fn union_merges_overlapping_squares() {
         let a = square(0.0, 0.0, 100.0, 100.0);
@@ -283,6 +401,106 @@ mod tests {
         let (min_x, min_y, max_x, max_y) = bounds(&result);
         assert!(approx(min_x, 0.0) && approx(min_y, 0.0));
         assert!(approx(max_x, 50.0) && approx(max_y, 100.0));
+    }
+
+    #[test]
+    fn difference_keeps_every_disjoint_piece() {
+        // The front cuts only `a`; `b` is a separate piece of the union and
+        // must survive instead of being dropped with the rest of the union.
+        let a = square(0.0, 0.0, 100.0, 100.0);
+        let b = square(300.0, 0.0, 100.0, 100.0);
+        let front = square(50.0, 0.0, 100.0, 100.0);
+        let result = apply(&[a, b, front], BooleanOp::Difference);
+        assert!(
+            covers_pieces(&result, 0.0, 50.0, 300.0, 400.0),
+            "difference keeps a-minus-front and b: {result:?}"
+        );
+        let expected = 50.0 * 100.0 + 100.0 * 100.0;
+        assert!(
+            (total_area(&result) - expected).abs() < 150.0,
+            "area is a's remainder plus b: {} vs {expected}",
+            total_area(&result)
+        );
+    }
+
+    #[test]
+    fn exclude_keeps_every_disjoint_piece() {
+        // Exclusive-or of the three: `a` keeps only what `front` does not
+        // cover, `b` survives untouched, and `front`'s own remainder is empty.
+        let a = square(0.0, 0.0, 100.0, 100.0);
+        let b = square(300.0, 0.0, 100.0, 100.0);
+        let front = square(50.0, 0.0, 100.0, 100.0);
+        let result = apply(&[a, b, front], BooleanOp::Exclude);
+        assert!(
+            covers_pieces(&result, 0.0, 50.0, 300.0, 400.0),
+            "exclude keeps a-minus-front and b: {result:?}"
+        );
+        let expected = 50.0 * 100.0 + 100.0 * 100.0;
+        assert!(
+            (total_area(&result) - expected).abs() < 150.0,
+            "area is a's remainder plus b: {} vs {expected}",
+            total_area(&result)
+        );
+    }
+
+    #[test]
+    fn intersect_of_disjoint_pieces_is_empty() {
+        let a = square(0.0, 0.0, 100.0, 100.0);
+        let b = square(300.0, 0.0, 100.0, 100.0);
+        let result = apply(&[a, b], BooleanOp::Intersect);
+        assert!(result.is_empty(), "nothing is common to both pieces");
+    }
+
+    #[test]
+    fn difference_keeps_a_hole_as_a_second_contour() {
+        // A ring: the hole must survive as its own contour, not vanish with
+        // the rest of the inner path.
+        let outer = square(0.0, 0.0, 400.0, 400.0);
+        let inner = square(100.0, 100.0, 200.0, 200.0);
+        let result = apply(&[outer, inner], BooleanOp::Difference);
+        assert!(result.len() >= 2, "the hole is its own contour: {result:?}");
+        let (min_x, min_y, max_x, max_y) = bounds(&result);
+        assert!(approx(min_x, 0.0) && approx(min_y, 0.0));
+        assert!(approx(max_x, 400.0) && approx(max_y, 400.0));
+        let holes: Vec<&Contour> = result
+            .iter()
+            .filter(|c| {
+                let (x, y, w, h) = bounds(std::slice::from_ref(c));
+                approx(x, 100.0) && approx(y, 100.0) && approx(w, 300.0) && approx(h, 300.0)
+            })
+            .collect();
+        assert!(!holes.is_empty(), "the hole's outline is present");
+        let outer = result.iter().map(area).sum::<f64>();
+        assert!(
+            outer > 0.0 && holes.iter().all(|h| area(h) < 0.0),
+            "the hole is wound against its outline: signed areas {outer} vs holes {:?}",
+            holes.iter().map(|h| area(h)).collect::<Vec<_>>(),
+        );
+        assert!(
+            (total_area(&result) - (400.0 * 400.0 - 200.0 * 200.0)).abs() < 300.0,
+            "the ring's area is the outer minus the hole: {}",
+            total_area(&result)
+        );
+    }
+
+    #[test]
+    fn difference_of_three_overlapping_shapes_cuts_both_sides() {
+        // `a` and `b` overlap into one piece; the front cuts across it.
+        let a = square(0.0, 0.0, 100.0, 100.0);
+        let b = square(50.0, 0.0, 100.0, 100.0);
+        let front = square(60.0, 20.0, 10.0, 60.0);
+        let result = apply(&[a, b, front], BooleanOp::Difference);
+        let expected = 150.0 * 100.0 - 10.0 * 60.0;
+        assert!(
+            (total_area(&result) - expected).abs() < 150.0,
+            "the union's area minus the front's cut: {} vs {expected}",
+            total_area(&result)
+        );
+        let (min_x, _, max_x, _) = bounds(&result);
+        assert!(
+            approx(min_x, 0.0) && approx(max_x, 150.0),
+            "both sides of the cut survive"
+        );
     }
 
     #[test]

@@ -196,6 +196,14 @@ commit per stage. See `docs/PROBING.md`.
 - **A hidden Fore layer blocks editing, not viewing.** Editing invisible
   outlines would be blind luck, so every tool except the view tools waits; the
   back image stays reachable so a scan can be inspected alone.
+- **A boolean's result is every piece, with holes wound against their
+  outline.** `flo_curves`' `path_combine` returns one subpath per piece, and
+  the first version kept only the first: a union of disjoint shapes silently
+  lost all but one piece on a Difference or Exclude (a dot beside a body
+  vanished; measured, not guessed). Every subpath is now passed through, and
+  subpaths nested inside another (holes, notches) are reversed so the nonzero
+  rule the canvas and the compiled font both use cuts them out — `flo_curves`
+  returns every subpath wound the same way, which filled holes solid.
 - **Bearings follow FontForge.** The left bearing moves the ink and the advance
   together; the right bearing and the advance change only the advance. Only the
   advance is stored: the left bearing is the ink's left edge and the right bearing

@@ -373,6 +373,15 @@ The app's pointerdown handlers call `setPointerCapture(event.pointerId)`. An
 id with no active pointer (2, 3, …) makes that call throw and the gesture never
 starts — every probe that dispatches synthetic PointerEvents uses `pointerId: 1`.
 
+### A loaded desktop flakes the timing probes
+
+The desktop this suite runs on is also the user's working machine: with OBS,
+Discord, Steam and a browser running (load average 4+), probes 31, 106, 111
+and 118 failed two full runs in a row — on a binary that had just passed
+183/183 — and passed again unchanged on the third. ResizeObserver-loop
+errors, zoom-point drift and random-click misses are load, not code. Rerun
+with the desktop idle before investigating any of them.
+
 ### Probe 118 is flaky
 
 `118-random-edit-sequences-never-throw` failed once in four full runs with a
