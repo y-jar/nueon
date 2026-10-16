@@ -113,13 +113,12 @@ export const trashEmpty = (): Promise<number> => invoke("trash_empty");
 export type ExportFormat = "pdf" | "odt";
 
 /** Export the note's current text; resolves to a status message. */
-export const exportDocument = (
+export const exportDocumentDialog = (
   format: ExportFormat,
   notePath: string,
   markdown: string,
-  destination: string,
 ): Promise<string> =>
-  invoke("export_document", { format, notePath, markdown, destination });
+  invoke("export_document_dialog", { format, notePath, markdown });
 
 // -- assets --------------------------------------------------------------
 export type AssetKind = "image" | "text" | "other";
@@ -135,6 +134,9 @@ export interface ImportedAsset {
 
 export const importAsset = (path: string): Promise<ImportedAsset> =>
   invoke("import_asset", { path });
+
+export const assetImportDialog = (): Promise<ImportedAsset> =>
+  invoke("asset_import_dialog");
 /** Copy a dropped file into a notes folder, keeping its own name. Returns the
  * path relative to `notes/`. */
 export const copyIntoNotes = (folder: string, path: string): Promise<string> =>
@@ -959,11 +961,11 @@ export interface BackImage {
 
 export const writingGlyphGet = (id: string): Promise<GlyphOutline | null> =>
   invoke("writing_glyph_get", { id });
-export const writingBackImageImport = (
-  id: string,
-  path: string,
-  force = false,
-): Promise<BackImage> => invoke("writing_back_image_import", { id, path, force });
+export const writingBackImageDialog = (id: string): Promise<BackImage> =>
+  invoke("writing_back_image_dialog", { id });
+
+export const writingBackImageConfirm = (): Promise<BackImage> =>
+  invoke("writing_back_image_confirm");
 
 export const writingBackImagePath = (id: string): Promise<string | null> =>
   invoke("writing_back_image_path", { id });
@@ -1014,10 +1016,25 @@ export interface PreviewShaping {
 
 export const writingPreviewShape = (lines: string[], rtl: boolean): Promise<PreviewShaping> =>
   invoke("writing_preview_shape", { lines, rtl });
-export const writingExportFont = (path: string): Promise<FontExport> =>
-  invoke("writing_export_font", { path });
+export const writingExportFontDialog = (): Promise<FontExport> =>
+  invoke("writing_export_font_dialog");
+
+/** The same bytes the export dialog writes, for comparisons in tests. */
+export const writingFontBytes = (): Promise<number[]> => invoke("writing_font_bytes");
 export const writingImportSvg = (id: string, svg: string): Promise<number> =>
   invoke("writing_import_svg", { id, svg });
+
+export const writingImportSvgDialog = (id: string): Promise<number> =>
+  invoke("writing_import_svg_dialog", { id });
+
+export const writingExportSvgDialog = (id: string): Promise<string> =>
+  invoke("writing_export_svg_dialog", { id });
+
+/** Export app-generated SVG text; the path is chosen on the Rust side. */
+export const writingExportTextDialog = (
+  text: string,
+  defaultName: string,
+): Promise<string> => invoke("writing_export_text_dialog", { text, defaultName });
 
 /** Stubbed pathfinder booleans; the geometry engine lands in a later stage. */
 export const writingPathOperation = (

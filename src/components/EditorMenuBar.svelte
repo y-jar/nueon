@@ -1,8 +1,7 @@
 <!-- Editor menu bar: File/Edit/View/Tools/Metrics/Glyphs/Export dropdowns. -->
 <script lang="ts">
   import { t } from "svelte-i18n";
-  import { open as openDialog, save as saveDialog } from "@tauri-apps/plugin-dialog";
-  import { readTextFile, writeTextFile } from "../lib/files";
+  import * as api from "../lib/api";
   import type { ToolId } from "../lib/writing";
   import {
     GUIDE_FIELDS,
@@ -28,7 +27,7 @@
     exportGlyphSvg,
     exportSpriteSvg,
     finishPath,
-    importSvg,
+    importSvgDialog,
     mirror,
     redo,
     reorder,
@@ -127,32 +126,19 @@
     }
   }
 
-  async function exportText(text: string | null, name: string, label: string) {
+  async function exportText(text: string | null, name: string) {
     if (text === null) return;
-    const path = await saveDialog({
-      defaultPath: name,
-      filters: [{ name: label, extensions: ["svg"] }],
-    });
-    if (!path) return;
     try {
-      await writeTextFile(path, text);
+      const path = await api.writingExportTextDialog(text, name);
       editor.status = `exported ${path}`;
     } catch (e) {
+      if (String(e).includes("cancelled")) return;
       editor.error = String(e);
     }
   }
 
   async function importFile() {
-    const path = await openDialog({
-      multiple: false,
-      filters: [{ name: "SVG", extensions: ["svg"] }],
-    });
-    if (typeof path !== "string") return;
-    try {
-      await importSvg(await readTextFile(path));
-    } catch (e) {
-      editor.error = String(e);
-    }
+    await importSvgDialog();
   }
 
   function run(item: MenuItem) {
@@ -205,14 +191,14 @@
       case "compose": return toggleCompose();
       case "export-svg":
         return void exportGlyphSvg().then((svg) =>
-          exportText(svg, `${editor.glyphMeta?.name ?? "glyph"}.svg`, "SVG"),
+          exportText(svg, `${editor.glyphMeta?.name ?? "glyph"}.svg`),
         );
       case "check-font":
         return void checkFont(false);
       case "export-ttf":
         return void checkFont(true);
       case "export-sprite":
-        return void exportSpriteSvg().then((svg) => exportText(svg, "glyphs.svg", "SVG sprite"));
+        return void exportSpriteSvg().then((svg) => exportText(svg, "glyphs.svg"));
     }
   }
 

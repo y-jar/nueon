@@ -373,11 +373,19 @@ The app's pointerdown handlers call `setPointerCapture(event.pointerId)`. An
 id with no active pointer (2, 3, …) makes that call throw and the gesture never
 starts — every probe that dispatches synthetic PointerEvents uses `pointerId: 1`.
 
+### Rust-run dialogs are manual-tier
+
+The file dialogs now run on the Rust side, so WebDriver cannot drive the
+import/export happy paths; probe 174 covers the refusals (the removed
+commands are gone, an invented path is refused) and the I/O functions are
+unit-tested in `src-tauri/src/security.rs`. Picking a file, cancelling a
+dialog, and the UI staying live while one is open are on the manual QA list.
+
 ### A loaded desktop flakes the timing probes
 
 The desktop this suite runs on is also the user's working machine: with OBS,
 Discord, Steam and a browser running (load average 4+), probes 31, 106, 111,
-118 and once each 128 and 178 failed full runs — on a binary that had just passed 183/183
+118 and once each 128, 145 and 178 failed full runs — on a binary that had just passed 183/183
 unchanged — and each passed again on a later run. ResizeObserver-loop errors,
 zoom-point drift, click misses and random-sequence page errors are load, not
 code. Rerun with the desktop idle before investigating any of them.

@@ -3,7 +3,10 @@
 //! The reusable domain logic lives in `nueon-core`; this crate is the
 //! IPC/service boundary that the Svelte frontend talks to.
 
+use std::path::PathBuf;
+
 mod commands;
+mod security;
 mod state;
 mod tree;
 
@@ -127,6 +130,16 @@ pub fn run() {
                     guard.global.set_window_size(size.width, size.height);
                     let _ = guard.global.save();
                 }
+                // Files the OS dropped onto a window are recorded as one-use
+                // grants: the import commands accept those paths, never a path
+                // JavaScript invented.
+                tauri::WindowEvent::DragDrop(tauri::DragDropEvent::Drop { paths, .. }) => {
+                    let granted: Vec<PathBuf> = paths.to_vec();
+                    let app_state = window.state::<Mutex<AppState>>();
+                    if let Ok(mut guard) = app_state.lock() {
+                        guard.granted_paths.extend(granted);
+                    };
+                }
                 // A secondary window the user closed is forgotten; ones the
                 // app closes itself (quit, workspace switch) stay saved.
                 tauri::WindowEvent::Destroyed if label != "main" => {
@@ -165,13 +178,14 @@ pub fn run() {
             commands::ui_layout_set,
             commands::layout_state_get,
             commands::tiling_save,
-            commands::export_document,
+            commands::export_document_dialog,
             commands::import_detect,
             commands::import_preview,
             commands::import_apply,
             commands::export_table,
             commands::export_anki,
             commands::import_asset,
+            commands::asset_import_dialog,
             commands::copy_into_notes,
             commands::window_spawn,
             commands::window_close_self,
@@ -257,17 +271,20 @@ pub fn run() {
             commands::phonology_apply_table,
             commands::writing_glyph_get,
             commands::writing_glyph_set,
-            commands::writing_back_image_import,
+            commands::writing_back_image_dialog,
+            commands::writing_back_image_confirm,
             commands::writing_back_image_path,
             commands::writing_path_operation,
             commands::writing_export_svg,
             commands::writing_export_sprite,
-            commands::writing_export_font,
+            commands::writing_export_font_dialog,
+            commands::writing_font_bytes,
             commands::writing_validate_font,
             commands::writing_preview_shape,
             commands::writing_import_svg,
-            commands::read_text_file,
-            commands::write_text_file,
+            commands::writing_import_svg_dialog,
+            commands::writing_export_svg_dialog,
+            commands::writing_export_text_dialog,
             commands::translation_options,
             commands::set_translation_options,
             commands::export_presets,

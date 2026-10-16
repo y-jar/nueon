@@ -148,7 +148,6 @@ import {
 } from "./writingLayers";
 import { confirmDialog } from "./feedback.svelte";
 import { convertFileSrc } from "@tauri-apps/api/core";
-import { open as openDialog } from "@tauri-apps/plugin-dialog";
 
 /** The live editor state, shared by the toolbox, canvas, menus and panels. */
 export const editor = $state({
@@ -1890,20 +1889,14 @@ export function cancelGesture(): void {
  */
 export async function addBackImage(): Promise<void> {
   const id = editor.openGlyphId;
-  const outline = editor.outline;
-  if (!id || !outline) return;
-  const picked = await openDialog({
-    multiple: false,
-    filters: [{ name: "Images", extensions: ["png", "jpg", "jpeg", "webp"] }],
-  });
-  if (typeof picked !== "string") return;
-  const importImage = (force: boolean) => api.writingBackImageImport(id, picked, force);
+  if (!id) return;
   let image: api.BackImage;
   try {
-    image = await importImage(false);
+    image = await api.writingBackImageDialog(id);
   } catch (e) {
     const message = String(e);
-    if (!/too large/i.test(message)) {
+    if (message.includes("cancelled")) return;
+    if (!/larger than 10 MB/i.test(message)) {
       editor.error = message;
       return;
     }
@@ -1914,12 +1907,14 @@ export async function addBackImage(): Promise<void> {
     });
     if (!confirmed) return;
     try {
-      image = await importImage(true);
+      image = await api.writingBackImageConfirm();
     } catch (e2) {
       editor.error = String(e2);
       return;
     }
   }
+  const outline = editor.outline;
+  if (!outline) return;
   const next = { ...outline, back_image: image };
   commit(next, "tracing image added");
   editor.imageSelected = true;
@@ -2020,14 +2015,47 @@ export function closeReport(): void {
   editor.report = null;
 }
 
-export async function exportFont(path: string): Promise<boolean> {
+/** Export the font: the path is chosen in a dialog on the Rust side. */
+export async function exportFont(): Promise<boolean> {
   try {
-    const result = await api.writingExportFont(path);
+    const result = await api.writingExportFontDialog();
     say(
       `font exported: ${result.glyphs} glyphs, ${result.lookups} layout lookups, ${result.bytes} bytes`,
     );
     return true;
   } catch (e) {
+    if (String(e).includes("cancelled")) return false;
+    editor.error = String(e);
+    return false;
+  }
+}
+
+/** Import an SVG: the file is chosen in a dialog on the Rust side. */
+export async function importSvgDialog(): Promise<boolean> {
+  if (!editor.openGlyphId) return false;
+  try {
+    const count = await api.writingImportSvgDialog(editor.openGlyphId);
+    await loadOutline(editor.openGlyphId);
+    resetHistory();
+    editor.selection = [];
+    say(`imported ${count} shape${count === 1 ? "" : "s"}`);
+    return true;
+  } catch (e) {
+    if (String(e).includes("cancelled")) return false;
+    editor.error = String(e);
+    return false;
+  }
+}
+
+/** Export the open glyph as an SVG document: the path is chosen on the Rust side. */
+export async function exportSvgDialog(): Promise<boolean> {
+  if (!editor.openGlyphId) return false;
+  try {
+    const path = await api.writingExportSvgDialog(editor.openGlyphId);
+    say(`exported ${path}`);
+    return true;
+  } catch (e) {
+    if (String(e).includes("cancelled")) return false;
     editor.error = String(e);
     return false;
   }

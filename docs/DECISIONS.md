@@ -196,6 +196,18 @@ commit per stage. See `docs/PROBING.md`.
 - **A hidden Fore layer blocks editing, not viewing.** Editing invisible
   outlines would be blind luck, so every tool except the view tools waits; the
   back image stays reachable so a scan can be inspected alone.
+- **Every filesystem path is chosen on the Rust side.** Reads and writes alike
+  used to take any path from JavaScript. The dialogs now run in Rust (the
+  callback API over a oneshot, so no thread blocks and the UI stays live
+  while a dialog is up), reads keep the 8 MB cap, writes are capped at 50 MB
+  and extension-checked (`.svg`/`.ttf` — a bare name gets the extension
+  appended, a different one is refused), and files the OS drops onto a window
+  are recorded as one-use grants that `import_asset` and `copy_into_notes`
+  consume — a path JavaScript invented is refused. The removed commands
+  (`read_text_file`, `write_text_file`, `writing_export_font`,
+  `writing_back_image_import`, `export_document`) are gone with no test-only
+  replacement; the probes cover the refusals, the I/O functions are
+  unit-tested in `security.rs`, and the dialog happy paths are manual-tier.
 - **The asset protocol reaches only the open workspace.** The config scope
   was `**` — every file on the host readable by the webview. It now starts
   empty; the workspace root is allowed when it opens (boot included) and the

@@ -8,6 +8,7 @@ use nueon_core::config::{BackImage, GlyphOutline};
 use nueon_core::font::{Direction, FontIssue, ShapedRun};
 use nueon_core::model::BooleanOp;
 
+use crate::security::{pick_open_file, pick_save_file, read_text_capped, write_bytes_checked};
 use crate::state::AppState;
 
 use super::changed;
@@ -70,21 +71,52 @@ pub fn writing_path_operation(
     Ok(())
 }
 
-/// Import a tracing image for a glyph into `writing/assets/` and set it as
-/// the glyph's back image. Files above the limit need `force` (the UI warns
-/// first); only png, jpg and webp bytes are accepted.
+/// Pick a tracing image in a dialog run on the Rust side and import it for
+/// the glyph. A file above the size limit is refused; the picked path is
+/// stashed so [`writing_back_image_confirm`] can retry it with force after
+/// the UI has warned the user, without picking the file again.
 #[tauri::command]
-pub fn writing_back_image_import(
+pub async fn writing_back_image_dialog(
     app: AppHandle,
     state: State<'_, Shared>,
     id: String,
-    path: String,
-    force: Option<bool>,
 ) -> Result<BackImage, String> {
-    let state = state.lock().map_err(|_| "state poisoned".to_string())?;
+    let Some(path) = pick_open_file(&app, &[("Image", &["png", "jpg", "jpeg", "webp"])]).await?
+    else {
+        return Err("cancelled".to_string());
+    };
+    let mut state = state.lock().map_err(|_| "state poisoned".to_string())?;
+    match state.workspace()?.import_back_image(&id, &path, false) {
+        Ok(image) => {
+            state.pending_back_image = None;
+            drop(state);
+            changed(&app, "writing");
+            Ok(image)
+        }
+        Err(err) if err.to_string().contains("too large") => {
+            state.pending_back_image = Some((id, path));
+            drop(state);
+            Err("the tracing image is larger than 10 MB".to_string())
+        }
+        Err(err) => Err(err.to_string()),
+    }
+}
+
+/// Retry the tracing image the dialog just picked, with force, after the UI
+/// has confirmed the size warning. There is nothing to retry if the stash is
+/// empty (or the glyph changed).
+#[tauri::command]
+pub async fn writing_back_image_confirm(
+    app: AppHandle,
+    state: State<'_, Shared>,
+) -> Result<BackImage, String> {
+    let mut state = state.lock().map_err(|_| "state poisoned".to_string())?;
+    let Some((id, path)) = state.pending_back_image.take() else {
+        return Err("no tracing image to confirm".to_string());
+    };
     let image = state
         .workspace()?
-        .import_back_image(&id, std::path::Path::new(&path), force.unwrap_or(false))
+        .import_back_image(&id, &path, true)
         .map_err(|err| err.to_string())?;
     drop(state);
     changed(&app, "writing");
@@ -143,24 +175,68 @@ pub fn writing_import_svg(
     Ok(count)
 }
 
-/// Read a user-chosen text file (SVG import); the path comes from a dialog.
+/// Import an SVG into the open glyph. The file is chosen in a dialog run on
+/// the Rust side (the callback API, so no thread blocks) and read under the
+/// 8 MB cap; a path string from JavaScript is never trusted with a read.
 #[tauri::command]
-pub fn read_text_file(path: String) -> Result<String, String> {
-    const MAX_BYTES: u64 = 8 * 1024 * 1024;
-    let meta = std::fs::metadata(&path).map_err(|err| err.to_string())?;
-    if !meta.is_file() {
-        return Err(format!("not a regular file: {path}"));
-    }
-    if meta.len() > MAX_BYTES {
-        return Err("file is too large to import".to_string());
-    }
-    std::fs::read_to_string(&path).map_err(|err| err.to_string())
+pub async fn writing_import_svg_dialog(
+    app: AppHandle,
+    state: State<'_, Shared>,
+    id: String,
+) -> Result<usize, String> {
+    let Some(path) = pick_open_file(&app, &[("SVG image", &["svg"])]).await? else {
+        return Err("cancelled".to_string());
+    };
+    let svg = read_text_capped(&path)?;
+    let state = state.lock().map_err(|_| "state poisoned".to_string())?;
+    let count = state
+        .workspace()?
+        .import_glyph_svg(&id, &svg)
+        .map_err(|err| err.to_string())?;
+    drop(state);
+    changed(&app, "writing");
+    Ok(count)
 }
 
-/// Write text to a user-chosen path (SVG export); the path comes from a dialog.
+/// Export app-generated SVG text (a glyph document, a sprite sheet): the
+/// path is chosen in a dialog run on the Rust side and the write is size-
+/// and extension-checked. The text is the app's own output; only the path
+/// must never come from JavaScript.
 #[tauri::command]
-pub fn write_text_file(path: String, text: String) -> Result<(), String> {
-    std::fs::write(&path, text).map_err(|err| err.to_string())
+pub async fn writing_export_text_dialog(
+    app: AppHandle,
+    text: String,
+    default_name: String,
+) -> Result<String, String> {
+    let Some(path) = pick_save_file(&app, &[("SVG image", &["svg"])], Some(&default_name)).await?
+    else {
+        return Err("cancelled".to_string());
+    };
+    let written = write_bytes_checked(&path, text.as_bytes(), "svg")?;
+    Ok(written.display().to_string())
+}
+
+/// Export the open glyph as an SVG document: the path is chosen in a dialog
+/// run on the Rust side and the write is size- and extension-checked.
+#[tauri::command]
+pub async fn writing_export_svg_dialog(
+    app: AppHandle,
+    state: State<'_, Shared>,
+    id: String,
+) -> Result<String, String> {
+    let svg = {
+        let state = state.lock().map_err(|_| "state poisoned".to_string())?;
+        state
+            .workspace()?
+            .export_glyph_svg(&id)
+            .map_err(|err| err.to_string())?
+    };
+    let Some(path) = pick_save_file(&app, &[("SVG image", &["svg"])], None).await? else {
+        return Err("cancelled".to_string());
+    };
+    let written = write_bytes_checked(&path, svg.as_bytes(), "svg")?;
+    changed(&app, "writing");
+    Ok(written.display().to_string())
 }
 
 /// What a font export wrote.
@@ -229,7 +305,23 @@ pub fn writing_validate_font(state: State<'_, Shared>) -> Result<Vec<FontIssue>,
 /// Compile the writing system to a TrueType font, verify it by reading it
 /// back, and write it to a path chosen in a save dialog.
 #[tauri::command]
-pub fn writing_export_font(state: State<'_, Shared>, path: String) -> Result<FontExport, String> {
+pub fn writing_font_bytes(state: State<'_, Shared>) -> Result<Vec<u8>, String> {
+    let state = state.lock().map_err(|_| "state poisoned".to_string())?;
+    let (bytes, _) = state
+        .workspace()?
+        .compile_writing_font()
+        .map_err(|err| err.to_string())?;
+    Ok(bytes)
+}
+
+/// Export the writing system as a TrueType font: the path is chosen in a
+/// dialog run on the Rust side and the write is size- and extension-checked.
+/// `writing_font_bytes` returns the same bytes for tests and the probes.
+#[tauri::command]
+pub async fn writing_export_font_dialog(
+    app: AppHandle,
+    state: State<'_, Shared>,
+) -> Result<FontExport, String> {
     let (bytes, report) = {
         let state = state.lock().map_err(|_| "state poisoned".to_string())?;
         state
@@ -237,7 +329,13 @@ pub fn writing_export_font(state: State<'_, Shared>, path: String) -> Result<Fon
             .compile_writing_font()
             .map_err(|err| err.to_string())?
     };
-    std::fs::write(&path, &bytes).map_err(|err| err.to_string())?;
+    let Some(path) =
+        pick_save_file(&app, &[("TrueType font", &["ttf"])], Some("script.ttf")).await?
+    else {
+        return Err("cancelled".to_string());
+    };
+    write_bytes_checked(&path, &bytes, "ttf").map_err(|err| err.to_string())?;
+    changed(&app, "writing");
     Ok(FontExport {
         glyphs: report.glyphs,
         mapped: report.mapped,

@@ -15,8 +15,6 @@
   import { editor, openGlyph, closeGlyph } from "../lib/writingEditor.svelte";
   import type { GuideField } from "../lib/writingMenus";
   import { deleteGlyphs, dependents, moveToGroup } from "../lib/writingBatch";
-  import { save as saveDialog } from "@tauri-apps/plugin-dialog";
-  import { writeTextFile } from "../lib/files";
   import GlyphNavigatorTree from "./GlyphNavigatorTree.svelte";
   import GlyphGrid from "./GlyphGrid.svelte";
   import GlyphGridControls from "./GlyphGridControls.svelte";
@@ -415,12 +413,7 @@
         const name = config.glyphs.find((g) => g.id === id)?.name ?? id;
         parts.push(`<!-- ${name.replace(/--/g, "-")} -->\n${svg}`);
       }
-      const path = await saveDialog({
-        defaultPath: "glyphs.svg",
-        filters: [{ name: "SVG", extensions: ["svg"] }],
-      });
-      if (!path) return;
-      await writeTextFile(path, parts.join("\n"));
+      await api.writingExportTextDialog(parts.join("\n"), "glyphs.svg");
       error = "";
     } catch (e) {
       error = String(e);

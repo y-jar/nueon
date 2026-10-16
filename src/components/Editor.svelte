@@ -30,8 +30,7 @@
   import { codemirror } from "../lib/editor/action";
   import { invalidateReads } from "../lib/editor/freshness";
   import { shouldApplySave } from "../lib/editor/session";
-  import { open, save } from "@tauri-apps/plugin-dialog";
-  import { EllipsisVertical, Upload } from "@lucide/svelte";
+    import { EllipsisVertical, Upload } from "@lucide/svelte";
   import Popover from "./Popover.svelte";
   import { assetLink, linkLabel } from "../lib/assets";
   import { stripMd } from "../lib/explorer";
@@ -110,22 +109,11 @@
     if (!target || !note) return;
     const name = stripMd(note.split("/").pop() ?? "note");
     try {
-      const destination = await save({
-        defaultPath: `${name}.${format}`,
-        filters: [
-          {
-            name: format === "pdf" ? "PDF document" : "OpenDocument text",
-            extensions: [format],
-          },
-        ],
-      });
-      if (!destination) return;
       ui.status = $t("status.exporting", { values: { name } });
-      ui.status = await api.exportDocument(
+      ui.status = await api.exportDocumentDialog(
         format,
         note,
         target.state.doc.toString(),
-        destination,
       );
     } catch (error) {
       ui.status = $t("status.exportFailed", { values: { error: String(error) } });
@@ -138,17 +126,7 @@
     const note = doc.selected;
     if (!target || !note) return;
     try {
-      const picked = await open({
-        multiple: false,
-        filters: [
-          {
-            name: "Images",
-            extensions: ["png", "jpg", "jpeg", "gif", "webp", "svg", "avif", "bmp"],
-          },
-        ],
-      });
-      if (typeof picked !== "string") return;
-      const asset = await api.importAsset(picked);
+      const asset = await api.assetImportDialog();
       insertImageMarkdown(
         target,
         linkLabel(asset.original_name),

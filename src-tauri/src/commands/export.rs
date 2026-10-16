@@ -13,6 +13,7 @@ use tauri::{AppHandle, State};
 
 use nueon_core::export::{self, resolve_local};
 
+use crate::security::pick_save_file;
 use crate::state::AppState;
 
 type Shared = Mutex<AppState>;
@@ -34,12 +35,41 @@ impl ExportFormat {
     }
 }
 
-/// Export `markdown` (the editor's current text for `note_path`) to
-/// `destination`. Returns a short status message.
+/// Pick the destination in a dialog run on the Rust side, then export. A
+/// path string from JavaScript is never trusted with a write.
 #[tauri::command]
-pub async fn export_document(
+pub async fn export_document_dialog(
     app: AppHandle,
     state: State<'_, Shared>,
+    format: ExportFormat,
+    note_path: String,
+    markdown: String,
+) -> Result<String, String> {
+    let default_name = match Path::new(&note_path).file_stem() {
+        Some(stem) => format!("{}.{}", stem.to_string_lossy(), format.extension()),
+        None => format.extension().to_string(),
+    };
+    let filter_name = match format {
+        ExportFormat::Pdf => "PDF document",
+        ExportFormat::Odt => "OpenDocument text",
+    };
+    let filter_exts = [format.extension()];
+    let Some(destination) = pick_save_file(
+        &app,
+        &[(filter_name, filter_exts.as_slice())],
+        Some(&default_name),
+    )
+    .await?
+    else {
+        return Err("cancelled".to_string());
+    };
+    let destination = destination.display().to_string();
+    export_document_inner(app, &state, format, note_path, markdown, destination).await
+}
+
+async fn export_document_inner(
+    app: AppHandle,
+    state: &State<'_, Shared>,
     format: ExportFormat,
     note_path: String,
     markdown: String,

@@ -52,6 +52,22 @@ the scope table is at the end.
 `phonology_check_words`, `phonology_segments`, `phonology_apply_word`,
 `phonology_apply_table`.
 
+## File paths
+
+Every filesystem path is chosen on the Rust side: the dialogs run there (the
+callback API, so no thread blocks), and the I/O functions that take a path are
+plain and unit-tested (`src-tauri/src/security.rs`: the 8 MB read cap, the
+50 MB write cap, extension checks). Removed outright: `read_text_file`,
+`write_text_file`, `writing_export_font`, `writing_back_image_import`,
+`export_document` — all took a path from JavaScript. `import_asset` and
+`copy_into_notes` remain for OS drag-dropped files only: the drag-drop handler
+records the dropped paths as one-use grants, and both commands consume a
+grant or refuse. The dialog commands: `writing_import_svg_dialog`,
+`writing_export_svg_dialog`, `writing_export_text_dialog` (app-generated SVG
+text), `writing_export_font_dialog` (+ `writing_font_bytes`, the same
+compiled bytes in memory, for tests and probes), `asset_import_dialog` and
+`export_document_dialog` (PDF/ODT).
+
 ## Writing system
 
 `writing_glyph_get`, `writing_glyph_set` (per-glyph outline load/save), and
@@ -71,12 +87,14 @@ the compiled font is cached by `key`). `writing_back_image_import` (import a
 tracing image for a glyph: takes `id`, `path` and `force`, sniffs png/jpg/webp
 bytes, copies the file into `writing/assets/` (deduping identical bytes), sets
 it as the glyph's `back_image` fitted to the em box, returns the
-`{ asset, width, x, y }` reference; files above 10 MB need `force`, which the
-UI asks about first) and `writing_back_image_path` (the absolute path of a
-glyph's back image file, or null, for the webview's asset URL). Both bump the
-`writing` data-changed scope. `read_text_file` / `write_text_file` move SVG
-text to and from paths chosen in a file dialog. The writing config itself
-travels through the generic `config_get`/`config_set` with section `writing`.
+`{ asset, width, x, y }` reference) and `writing_back_image_path` (the absolute
+path of a glyph's back image file, or null, for the webview's asset URL). Both
+bump the `writing` data-changed scope. `writing_back_image_dialog` (pick a
+tracing image in a dialog run on the Rust side and import it; a file over
+10 MB stashes the picked path so `writing_back_image_confirm` can retry it
+with force after the UI's warning, without re-picking). The writing config
+itself travels through the generic `config_get`/`config_set` with section
+`writing`.
 
 ## Version control
 

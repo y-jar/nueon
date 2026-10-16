@@ -1,13 +1,11 @@
 <!-- Vector toolbar: undo/redo, zoom, snap, compose and SVG import/export. -->
 <script lang="ts">
   import { t } from "svelte-i18n";
-  import { open as openDialog, save as saveDialog } from "@tauri-apps/plugin-dialog";
-  import { readTextFile, writeTextFile } from "../lib/files";
+  import * as api from "../lib/api";
   import {
     editor,
     exportFont,
-    exportGlyphSvg,
-    importSvg,
+    importSvgDialog,
     redo,
     fitGlyph,
     zoomActual,
@@ -18,41 +16,22 @@
   } from "../lib/writingEditor.svelte";
 
   async function exportSvg() {
-    const svg = await exportGlyphSvg();
-    if (svg === null) return;
-    const path = await saveDialog({
-      defaultPath: `${editor.glyphMeta?.name ?? "glyph"}.svg`,
-      filters: [{ name: "SVG", extensions: ["svg"] }],
-    });
-    if (!path) return;
+    if (!editor.openGlyphId) return;
     try {
-      await writeTextFile(path, svg);
+      const path = await api.writingExportSvgDialog(editor.openGlyphId);
       editor.status = `exported ${path}`;
     } catch (e) {
+      if (String(e).includes("cancelled")) return;
       editor.error = String(e);
     }
   }
 
   async function exportFontFile() {
-    const path = await saveDialog({
-      defaultPath: "script.ttf",
-      filters: [{ name: "TrueType font", extensions: ["ttf"] }],
-    });
-    if (!path) return;
-    await exportFont(path);
+    await exportFont();
   }
 
   async function importFile() {
-    const path = await openDialog({
-      multiple: false,
-      filters: [{ name: "SVG", extensions: ["svg"] }],
-    });
-    if (typeof path !== "string") return;
-    try {
-      await importSvg(await readTextFile(path));
-    } catch (e) {
-      editor.error = String(e);
-    }
+    await importSvgDialog();
   }
 </script>
 

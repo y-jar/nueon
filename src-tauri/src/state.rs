@@ -17,6 +17,11 @@ pub struct AppState {
     /// The workspace root the asset protocol is currently scoped to, so a
     /// switch can forbid exactly what the previous workspace allowed.
     pub asset_root: Option<PathBuf>,
+    /// One-use grants for paths the OS handed the app (drag-dropped files).
+    /// A path JavaScript invented has no grant and is refused.
+    pub granted_paths: Vec<PathBuf>,
+    /// A tracing image chosen in a dialog, kept for one confirm retry.
+    pub pending_back_image: Option<(String, PathBuf)>,
     /// Secondary windows being closed by the app itself (quit or workspace
     /// switch); their saved layout is kept instead of pruned.
     pub silent_close: HashSet<String>,
@@ -80,6 +85,19 @@ impl AppState {
             silent_close: HashSet::new(),
             preview_font: PreviewCache::default(),
             asset_root: None,
+            granted_paths: Vec::new(),
+            pending_back_image: None,
+        }
+    }
+
+    /// Consume a one-use grant for a path the OS handed the app.
+    pub fn consume_grant(&mut self, path: &Path) -> bool {
+        match self.granted_paths.iter().position(|p| p == path) {
+            Some(at) => {
+                self.granted_paths.remove(at);
+                true
+            }
+            None => false,
         }
     }
 

@@ -20,10 +20,14 @@ tauri-build = { version = "2", features = [] }
 tauri = { version = "2", features = ["protocol-asset"] }
 tauri-plugin-dialog = "2"
 tauri-plugin-opener = "2"
+tokio = { version = "1", features = ["sync"] }
 serde = { version = "1", features = ["derive"] }
 serde_json = "1"
 uuid = { version = "1", features = ["serde"] }
 nueon-core = { path = "../crates/nueon-core" }
+
+[dev-dependencies]
+tempfile = "3"
 
 [features]
 # Production builds embed the built frontend and skip the dev-server URL.

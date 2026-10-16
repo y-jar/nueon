@@ -1,8 +1,7 @@
 <!-- Font export report: problems found per glyph, with a gated export button. -->
 <script lang="ts">
   import { t } from "svelte-i18n";
-  import { save as saveDialog } from "@tauri-apps/plugin-dialog";
-  import { editor, closeReport, exportFont } from "../lib/writingEditor.svelte";
+    import { editor, closeReport, exportFont } from "../lib/writingEditor.svelte";
   import { canExport, groupIssues, summarise } from "../lib/fontReport";
 
   const report = $derived(editor.report);
@@ -23,13 +22,8 @@
   }
 
   async function exportNow() {
-    const path = await saveDialog({
-      defaultPath: "script.ttf",
-      filters: [{ name: "TrueType font", extensions: ["ttf"] }],
-    });
-    if (!path) return;
     closeReport();
-    await exportFont(path);
+    await exportFont();
   }
 </script>
 

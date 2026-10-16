@@ -7737,8 +7737,23 @@ async function main() {
     js(`const v = document.querySelector('.canvas-svg').getAttribute('viewBox').split(' ').map(Number);
       const r = document.querySelector('.canvas-svg').getBoundingClientRect();
       return { fx: (${x} - v[0]) / v[2], fy: (${-y} - v[1]) / v[3] };`);
-  const importScan = (id = "im-a", force = false) =>
-    invokeAsync("writing_back_image_import", { id, path: SCAN_PNG, force });
+  // The tracing-image import is a Rust-run dialog now (never a path from
+  // JavaScript), so the image probes seed the asset file on disk and set the
+  // glyph's back_image through IPC — the same reference the dialog command
+  // writes, with the import's default placement.
+  const importScan = async (id = "im-a") => {
+    fs.mkdirSync(path.join(WORKSPACE, "writing", "assets"), { recursive: true });
+    fs.copyFileSync(SCAN_PNG, path.join(WORKSPACE, "writing", "assets", "probe-scan.png"));
+    const outline = await invokeAsync("writing_glyph_get", { id });
+    await invokeAsync("writing_glyph_set", {
+      id,
+      outline: {
+        ...outline,
+        back_image: { asset: "probe-scan.png", width: 1000, x: 500, y: 300 },
+      },
+    });
+    return { asset: "probe-scan.png", width: 1000, x: 500, y: 300 };
+  };
   // An earlier probe may have left a layer hidden; the drawing probes need
   // all three visible, so set them straight before asserting on the canvas.
   const ensureLayers = async () => {
@@ -7762,13 +7777,9 @@ async function main() {
   await probe("171-layers-toggle-guide-back-fore-and-hidden-fore-blocks-edits", async () => {
     await seedImageGlyph();
     await ensureLayers();
-    const image = await importScan();
+    await importScan();
     await reopenGlyph();
     await ensureLayers();
-    assertEqual(image.asset, "probe-scan.png", "the imported asset name");
-    assertEqual(image.width, 1000, "fitted to the em box by default");
-    assertEqual(image.x, 500, "centred on the em box");
-    assertEqual(image.y, 300, "between ascender and descender");
     await waitJs(`!!document.querySelector('[data-back-image]')`, { label: "the image is drawn" });
     const drawn = await js(`const im = document.querySelector('[data-back-image]');
       return [Number(im.getAttribute('x')), Number(im.getAttribute('y')), Number(im.getAttribute('width')), Number(im.getAttribute('height'))];`);
@@ -7922,10 +7933,15 @@ async function main() {
     await waitJs(`!!document.querySelector('[data-back-image]')`, { label: "undo restored the image" });
     assertEqual(fs.existsSync(path.join(WORKSPACE, "writing", "assets", "probe-scan.png")), true, "still there after undo");
 
-    // A second glyph sharing the same bytes shares the one asset file.
-    await importScan("im-b");
+    // A second glyph referencing the same asset file (the dialog import
+    // dedupes identical bytes; the seeding writes the reference directly).
+    const b0 = await invokeAsync("writing_glyph_get", { id: "im-b" });
+    await invokeAsync("writing_glyph_set", {
+      id: "im-b",
+      outline: { ...b0, back_image: { asset: "probe-scan.png", width: 1000, x: 500, y: 300 } },
+    });
     const b = await invokeAsync("writing_glyph_get", { id: "im-b" });
-    assertEqual(b.back_image.asset, "probe-scan.png", "identical bytes dedupe to one file");
+    assertEqual(b.back_image.asset, "probe-scan.png", "both glyphs reference the one asset file");
     assertEqual(fs.readdirSync(path.join(WORKSPACE, "writing", "assets")).length, 1, "one asset on disk");
 
     // Deleting im-a through the app's own config path sweeps its outline but
@@ -7948,42 +7964,41 @@ async function main() {
     assertEqual(glyphFiles().includes("im-b"), false, "both outline files are swept");
   });
 
-  await probe("174-the-tracing-image-rejects-other-formats-and-warns-above-10-mb", async () => {
+  await probe("174-a-file-path-from-javascript-is-refused-everywhere", async () => {
     await seedImageGlyph();
-    const rejected = async (file, why) => {
+    const gone = async (command, args) => {
       try {
-        await invokeAsync("writing_back_image_import", { id: "im-a", path: file, force: false });
-        throw new Error(`${why}: the import unexpectedly succeeded`);
+        await invokeAsync(command, args);
+        return null;
       } catch (e) {
-        if (!/png, jpg or webp|too large/.test(String(e))) {
-          throw new Error(`${why}: unexpected rejection ${String(e)}`);
-        }
         return String(e);
       }
     };
-    const textFile = path.join(ROOT, "probe-scan.txt");
-    fs.writeFileSync(textFile, "not an image");
-    const msg = await rejected(textFile, "a text file");
-    if (!/png, jpg or webp/.test(msg)) throw new Error(`wrong reason: ${msg}`);
-    const svgFile = path.join(ROOT, "probe-scan.svg");
-    fs.writeFileSync(svgFile, "<svg xmlns='http://www.w3.org/2000/svg'/>");
-    await rejected(svgFile, "an svg is deferred");
-
-    const head = fs.readFileSync(SCAN_PNG);
-    const huge = Buffer.concat([head, Buffer.alloc(10 * 1024 * 1024 + 1)]);
-    const hugeFile = path.join(ROOT, "probe-huge.png");
-    fs.writeFileSync(hugeFile, huge);
-    const big = await rejected(hugeFile, "a file above 10 MB");
-    if (!/too large/.test(big)) throw new Error(`wrong reason: ${big}`);
-    const forced = await invokeAsync("writing_back_image_import", { id: "im-a", path: hugeFile, force: true });
-    assertEqual(forced.asset, "probe-huge.png", "force imports it anyway");
-    // The glyph file stores the reference, never the bytes.
-    const glyphJson = fs.readFileSync(path.join(WORKSPACE, "writing", "glyphs", "im-a"), "utf8");
-    assertEqual(glyphJson.includes('"back_image"'), true, "the glyph file holds the reference");
-    assertEqual(glyphJson.includes("/"), false, "only the bare asset name, never a path");
-    const after = fs.statSync(path.join(WORKSPACE, "writing", "glyphs", "im-a")).size;
-    assertEqual(after < 2048, true, "a 10 MB asset did not leak into the glyph file");
-    await screenshot("p174-guards");
+    // The path-taking commands were removed outright.
+    for (const command of [
+      "writing_back_image_import",
+      "read_text_file",
+      "write_text_file",
+      "writing_export_font",
+      "export_document",
+    ]) {
+      const why = await gone(command, command === "write_text_file" ? { path: "/tmp/x.svg", text: "" } : { path: "/tmp/x.svg" });
+      if (why === null) throw new Error(`${command} still exists with a path from JavaScript`);
+      if (!/not found|unknown/i.test(why)) throw new Error(`${command}: ${why}`);
+    }
+    // The drop-import commands accept only paths the OS handed the app.
+    const file = path.join(ROOT, "probe-scan.png");
+    for (const [command, args] of [
+      ["import_asset", { path: file }],
+      ["copy_into_notes", { folder: "", path: file }],
+    ]) {
+      const why = await gone(command, args);
+      if (why === null) throw new Error(`${command} imported a path JavaScript invented`);
+      if (!/refusing a file path/i.test(why)) throw new Error(`${command}: ${why}`);
+    }
+    // The write checks live behind the Rust-run dialogs (manual QA), and the
+    // read cap, format sniff and 10 MB force rule are Rust-tested.
+    await screenshot("p174-refused-paths");
   });
 
   await probe("175-the-font-key-and-the-exported-bytes-ignore-the-back-image", async () => {
@@ -7995,22 +8010,21 @@ async function main() {
     await typeInPreview("\ue010\ue011");
     await idle(600);
     const key0 = await js(`return document.querySelector('[data-testid="preview-scroll"]').dataset.key;`);
-    const export0 = path.join(ROOT, "probe-font-0.ttf");
-    await invokeAsync("writing_export_font", { path: export0 });
-    assertEqual(fs.existsSync(export0), true, "the first export landed");
+    const export0 = await invokeAsync("writing_font_bytes", {});
+    assertEqual(export0.length > 0, true, "the font compiled to bytes");
 
-    // The import itself happens through IPC, then the revision bump the
-    // backend fires makes the preview re-shape (probe 166 covers that path).
+    // The tracing image is seeded through IPC (the import is a Rust-run
+    // dialog now); the revision bump the write fires makes the preview
+    // re-shape (probe 166 covers that path).
     await importScan();
     await idle(900);
     const key1 = await js(`return document.querySelector('[data-testid="preview-scroll"]').dataset.key;`);
     assertEqual(key1, key0, "the preview's font key is unchanged by editor-only material");
-    const export1 = path.join(ROOT, "probe-font-1.ttf");
-    await invokeAsync("writing_export_font", { path: export1 });
+    const export1 = await invokeAsync("writing_font_bytes", {});
     assertEqual(
-      fs.readFileSync(export1).equals(fs.readFileSync(export0)),
+      JSON.stringify(export1) === JSON.stringify(export0),
       true,
-      "the exported TTF is byte-identical with a tracing image set",
+      "the compiled TTF is byte-identical with a tracing image set",
     );
     const check = await invokeAsync("writing_validate_font", {});
     assertEqual(check.some((i) => i.severity === "error"), false, "no export blocker appeared");
