@@ -196,6 +196,16 @@ commit per stage. See `docs/PROBING.md`.
 - **A hidden Fore layer blocks editing, not viewing.** Editing invisible
   outlines would be blind luck, so every tool except the view tools waits; the
   back image stays reachable so a scan can be inspected alone.
+- **A CSP is set, and the starting baseline needed nothing loosened.**
+  `default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline';
+  img-src 'self' data: blob: asset: http://asset.localhost; font-src 'self'
+  data: blob:; connect-src 'self' ipc: http://ipc.localhost`. `unsafe-inline`
+  styles are what Svelte and KaTeX inject; `blob:` fonts are the type
+  preview's `FontFace`; `asset:`/`asset.localhost` images are the tracing
+  images and note assets; `ipc:` is Tauri's IPC on Linux. Verified by the
+  full probe suite (math, preview, tracing images, asset viewer) with zero
+  CSP violation messages; the multi-window tear-off check is on the manual
+  QA list.
 - **HTML blocks render through an allowlist sanitiser, never raw.** A note's
   HTML block is arbitrary user content that used to go straight into
   `innerHTML` with the app's CSP unset, so any note could run script.
