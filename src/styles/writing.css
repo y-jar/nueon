@@ -415,6 +415,23 @@
   stroke-width: 1;
 }
 
+.canvas-svg .measure-line {
+  stroke: var(--accent);
+  stroke-width: 1;
+  stroke-dasharray: 4 3;
+  vector-effect: non-scaling-stroke;
+  pointer-events: none;
+}
+
+.canvas-svg .measure-dot {
+  fill: var(--accent);
+  pointer-events: none;
+}
+
+.canvas-svg .outline.preview {
+  fill: none;
+}
+
 .canvas-svg .back-image {
   pointer-events: none;
 }
@@ -982,6 +999,9 @@
 .canvas-svg.tool-hand { cursor: grab; }
 .canvas-svg.tool-hand:active, .canvas-svg.panning { cursor: grabbing; }
 .canvas-svg.tool-zoom { cursor: zoom-in; }
+.canvas-svg.tool-knife { cursor: crosshair; }
+.canvas-svg.tool-measure { cursor: crosshair; }
+.canvas-svg.tool-freehand { cursor: crosshair; }
 
 .canvas-svg .element-selection {
   fill: none;

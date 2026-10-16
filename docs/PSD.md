@@ -207,6 +207,12 @@ layer (`src-tauri/`), and the Svelte 5 frontend (`src/`). See `docs/ARCHITECTURE
   lines and advance boxes, and a gap drag that edits the neighbouring bearings),
   hover descriptions on every tool and widget (audited by a probe across the
   grid, spacing mode, preview and editor),
+  a knife (K: cut a contour exactly where clicked, shape-preserving by de
+  Casteljau subdivision, one undo step), a measure tool (R: a dashed line and
+  the info bar's distance/angle while dragging, no edits, works with the fore
+  layer hidden) and freehand drawing (F: the raw stroke previews, on release a
+  fitted open path within 2 units, at most 12 nodes, Catmull-Rom handles,
+  worst-point refinement, a straight stroke becomes its two ends),
   layers (guide/back/fore visibility toggles in the toolbox and View menu; a
   tracing image per glyph imported into `writing/assets/`, placed in font units,
   selected, moved and corner-scaled with the aspect kept, one undo step per
@@ -298,6 +304,10 @@ layer (`src-tauri/`), and the Svelte 5 frontend (`src/`). See `docs/ARCHITECTURE
   both mutation-checked, `writingLayers.test.ts` (layer toggles, the
   hidden-fore edit block, the image rectangle, corner hits, corner scaling
   with the anchor and aspect and the min clamp; every mutation caught),
+  `writingFreehand.test.ts` (straight collapse, quarter/half circle budgets, cap,
+  order and clean ends, short strokes; every mutation caught or justified),
+  `knifeCutAt` tests in `writingCommands.test.ts` (exact shape preservation by
+  de Casteljau correspondence, open/closed/node/boundary/wild-t cases),
   `typePreview.test.ts` (size range, placement and wrapping, sample text, gap hit
   and drag; mutation-checked), Rust tests for `shape.rs` (cross-checked with
   `hb-shape`), the preview font equalling the exported font, the font key and the

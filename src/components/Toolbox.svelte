@@ -14,6 +14,9 @@
     PenLine,
     PenTool,
     Ruler,
+    RulerDimensionLine,
+    Scissors,
+    Spline,
     Shapes,
     ZoomIn,
   } from "@lucide/svelte";
@@ -33,6 +36,9 @@
     Shapes,
     FlipHorizontal2,
     Eraser,
+    Scissors,
+    RulerDimensionLine,
+    Spline,
   } as const;
 
   const byId = new Map(TOOLS.map((tool) => [tool.id, tool]));

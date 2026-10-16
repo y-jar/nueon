@@ -134,6 +134,21 @@ new-note button.
 
 ## Writing system editor
 
+- ~~Knife (K): cut a contour exactly where clicked (the Eraser keeps its
+  boundary cut and node delete).~~ (stage 7)
+- ~~Measure (R): drag between two points for their distance and angle, no
+  edits, works with the fore layer hidden.~~ (stage 7)
+- ~~Freehand (F): draw a stroke, fitted on release into a few Bezier nodes
+  (2-unit error budget, 12-node cap, Catmull-Rom tangents, worst-point
+  refinement).~~ (stage 7)
+- A knife **drag across** many contours, cutting every edge it crosses (the
+  shipped knife cuts one contour per click): needs edge-intersection maths
+  over the whole outline.
+- Freehand **pressure/width** and **stroke closing** (detecting that the pen
+  returned to the start and closing the contour): the brush already covers
+  variable width via the nib.
+- Measure **persistent rulers** and snapping the measurement onto nodes and
+  edges (the shipped measure is a free drag readout).
 - Rulers along the top and left, and dragging a guide out of a ruler. Skipped in
   the polish pass because the viewport model and info bar already cover reading
   positions; revisit if the info bar proves not enough.

@@ -158,6 +158,21 @@ commit per stage. See `docs/PROBING.md`.
   font read only glyphs' metadata, contours and advances, so a tracing image
   cannot invalidate the preview cache or change an export — both are tested
   byte-for-byte.
+- **The Knife cuts at the exact clicked point; the Eraser keeps its boundary
+  cut.** Two cutters would be one too many, but they answer different gestures:
+  the Eraser deletes nodes and cuts at node boundaries, the Knife only cuts,
+  exactly where you click (exact de Casteljau subdivision, so the shape is
+  untouched), which is what tracing into pieces actually wants.
+- **The Measure tool is a view tool, not an edit tool.** It changes nothing, so
+  it stays available with the fore layer hidden (Hand and Zoom are its company),
+  and it borrows the info bar's existing distance-and-angle readout instead of a
+  new one.
+- **The Freehand fit is worst-point refinement, not a curve-fitting library.**
+  Catmull-Rom handles on the ends, then add the drawn point the path misses most
+  until within 2 units or 12 nodes. An RDP pre-pass was dropped after mutation
+  testing showed the refinement loop reproduces it for every tested stroke.
+  Accepted as unobservable: which of two equally-missed points the pick takes
+  first (a tie has no effect on the result).
 - **A hidden Fore layer blocks editing, not viewing.** Editing invisible
   outlines would be blind luck, so every tool except the view tools waits; the
   back image stays reachable so a scan can be inspected alone.

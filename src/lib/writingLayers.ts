@@ -23,7 +23,7 @@ export function toggleLayer(layers: LayerState, which: LayerId): LayerState {
  * invisible outlines, so it waits until Fore shows again.
  */
 export function editsBlocked(layers: LayerState, tool: string): boolean {
-  return !layers.fore && tool !== "hand" && tool !== "zoom";
+  return !layers.fore && tool !== "hand" && tool !== "zoom" && tool !== "measure";
 }
 
 /** Smallest image width in font units a corner drag can leave behind. */

@@ -6286,7 +6286,7 @@ async function main() {
     };`);
     assertEqual(info.groups, 5, "five groups: the tools and the layers");
     assertEqual(info.seps, 4, "separators between groups");
-    assertEqual(info.tools.length, 10, "ten tools");
+    assertEqual(info.tools.length, 13, "thirteen tools");
     for (const [id, title, icon] of info.tools) {
       if (!icon) throw new Error(`${id} has no icon`);
       if (!/\([A-Z]\)/.test(title)) throw new Error(`${id} tooltip lacks its shortcut: ${title}`);
@@ -8055,6 +8055,146 @@ async function main() {
     await click('.glyph-tile[data-kind="glyph"]');
     await waitJs(`!!document.querySelector('.canvas-svg')`, { label: "editor" });
     await audit("the vector editor");
+  });
+
+  // -- probes 177-: the knife, measure and freehand tools --------------------
+  const glyphOutline = () => invokeAsync("writing_glyph_get", { id: "im-a" });
+
+  await probe("177-the-knife-cuts-a-contour-exactly-where-clicked", async () => {
+    await seedImageGlyph();
+    await ensureLayers();
+    await tool("v");
+    await drawSquare();
+    await tool("k");
+    assertEqual(
+      await js(`return document.querySelector('.toolbox .tool[data-tool="knife"]')?.classList.contains('active');`),
+      true,
+      "the knife is active",
+    );
+    // The seeded square's top edge, half way along it.
+    const before = await glyphOutline();
+    const square = before.elements[0];
+    if (!(square && square.kind === "contour" && square.nodes.length === 4)) {
+      throw new Error(`no square to cut: ${JSON.stringify(before.elements.map((e) => (e.kind === "contour" ? e.nodes.length : "component")))}`);
+    }
+    const minX = Math.min(...square.nodes.map((n) => n.x));
+    const maxX = Math.max(...square.nodes.map((n) => n.x));
+    const topY = Math.max(...square.nodes.map((n) => n.y));
+    const cutX = (minX + maxX) / 2;
+    const spot = await storageToCanvas(cutX, topY);
+    await click1(spot.fx, spot.fy);
+    await idle(300);
+    const after = await glyphOutline();
+    const cut = after.elements.find((e) => e.kind === "contour" && !e.closed && e.nodes.length === 6);
+    if (!cut) throw new Error(`no open contour of six nodes: ${JSON.stringify(after.elements.map((e) => e.kind === "contour" ? { closed: e.closed, n: e.nodes.length } : "component"))}`);
+    assertEqual(Math.abs(cut.nodes[0].x - cutX) < 0.01 && Math.abs(cut.nodes[0].y - topY) < 0.01, true, "the path starts at the exact click point");
+    assertEqual(cut.nodes[0].x === cut.nodes[5].x && cut.nodes[0].y === cut.nodes[5].y, true, "and ends on the same point");
+    await key("z", { ctrlKey: true });
+    await idle(300);
+    const undone = await glyphOutline();
+    assertEqual(undone.elements.some((e) => e.kind === "contour" && e.closed && e.nodes.length === 4), true, "one undo restores the closed square");
+    // Clicking exactly on a node cuts at that boundary.
+    const nodeSpot = await storageToCanvas(square.nodes[1].x, square.nodes[1].y);
+    await click1(nodeSpot.fx, nodeSpot.fy);
+    await idle(300);
+    const atNode = await glyphOutline();
+    const openedAtNode = atNode.elements.find((e) => e.kind === "contour" && !e.closed);
+    if (!openedAtNode) throw new Error("clicking a node did not cut");
+    assertEqual(openedAtNode.nodes.length, 4, "a node click rotates the contour open without inserting a node");
+    assertEqual(openedAtNode.nodes[0].x === square.nodes[1].x && openedAtNode.nodes[0].y === square.nodes[1].y, true, "the clicked node becomes the opening");
+    await screenshot("p177-knife");
+  });
+
+  await probe("178-the-measure-tool-reads-distance-and-angle-without-editing", async () => {
+    await seedImageGlyph();
+    await ensureLayers();
+    await tool("v");
+    await drawSquare();
+    const before = await glyphOutline();
+    const elements0 = before.elements.length;
+    await tool("r");
+    assertEqual(
+      await js(`return document.querySelector('.toolbox .tool[data-tool="measure"]')?.classList.contains('active');`),
+      true,
+      "the measure tool is active",
+    );
+    const a = await storageToCanvas(0, 800);
+    const b = await storageToCanvas(300, 500);
+    await fire("pointerdown", a.fx, a.fy);
+    await fire("pointermove", (a.fx + b.fx) / 2, (a.fy + b.fy) / 2);
+    await fire("pointermove", b.fx, b.fy);
+    const measure = await js(`return document.querySelector('[data-info="measure"]')?.textContent ?? '';`);
+    if (!/d \d+/.test(measure) || !/\u2220 \d+/.test(measure)) {
+      throw new Error(`no distance and angle read while dragging: ${JSON.stringify(measure)}`);
+    }
+    assertEqual(await js(`return document.querySelectorAll('[data-measure]').length;`), 3, "a dashed line with two end dots");
+    await fire("pointerup", b.fx, b.fy);
+    assertEqual(await js(`return document.querySelectorAll('[data-measure]').length;`), 0, "the line leaves with the pointer");
+    assertEqual(await js(`return !!document.querySelector('[data-info="measure"]');`), false, "the readout leaves too");
+    const after = await glyphOutline();
+    assertEqual(after.elements.length, elements0, "measuring changed nothing");
+    // Measuring works while the fore layer is hidden: it is viewing, not editing.
+    await js(`document.querySelector('[data-layer="fore"]').click(); return true;`);
+    await tool("r");
+    await fire("pointerdown", a.fx, a.fy);
+    await fire("pointermove", b.fx, b.fy);
+    const hidden = await js(`return document.querySelector('[data-info="measure"]')?.textContent ?? '';`);
+    if (!/d \d+/.test(hidden)) throw new Error(`no readout with the fore layer hidden: ${JSON.stringify(hidden)}`);
+    await fire("pointerup", b.fx, b.fy);
+    await js(`document.querySelector('[data-layer="fore"]').click(); return true;`);
+    await screenshot("p178-measure");
+  });
+
+  await probe("179-freehand-draws-a-path-of-a-few-fitted-nodes", async () => {
+    await seedImageGlyph();
+    await ensureLayers();
+    await freshGlyph();
+    await tool("f");
+    assertEqual(
+      await js(`return document.querySelector('.toolbox .tool[data-tool="freehand"]')?.classList.contains('active');`),
+      true,
+      "the freehand tool is active",
+    );
+    // An arc from left to right, the way a drag delivers points.
+    const arc = [];
+    for (let i = 0; i <= 40; i++) {
+      const t = i / 40;
+      arc.push([0.25 + t * 0.5, 0.5 - Math.sin(t * Math.PI) * 0.15]);
+    }
+    await fire("pointerdown", arc[0][0], arc[0][1]);
+    for (const [fx, fy] of arc.slice(1)) await fire("pointermove", fx, fy);
+    assertEqual(
+      await js(`return !!document.querySelector('.canvas-svg .outline.preview');`),
+      true,
+      "the raw stroke previews while drawing",
+    );
+    await fire("pointerup", arc[arc.length - 1][0], arc[arc.length - 1][1]);
+    await idle(300);
+    let outline = await glyphOutline();
+    const fitted = outline.elements.find((e) => e.kind === "contour" && !e.closed);
+    if (!fitted) throw new Error("the freehand stroke did not become a path");
+    assertEqual(fitted.nodes.length >= 2, true, "at least the two ends");
+    assertEqual(fitted.nodes.length <= 12, true, `at most 12 fitted nodes, got ${fitted.nodes.length}`);
+    assertEqual(fitted.nodes[0].handle_in, undefined, "the path starts clean");
+    await key("z", { ctrlKey: true });
+    await idle(300);
+    outline = await glyphOutline();
+    assertEqual(outline.elements.some((e) => e.kind === "contour"), false, "one undo removes the fitted path");
+
+    // A near-straight stroke collapses to two plain nodes.
+    await tool("f");
+    const straight = [];
+    for (let i = 0; i <= 20; i++) straight.push([0.3 + (i / 20) * 0.4, 0.5]);
+    await fire("pointerdown", straight[0][0], straight[0][1]);
+    for (const [fx, fy] of straight.slice(1)) await fire("pointermove", fx, fy);
+    await fire("pointerup", straight[straight.length - 1][0], straight[straight.length - 1][1]);
+    await idle(300);
+    outline = await glyphOutline();
+    const line = outline.elements.find((e) => e.kind === "contour" && !e.closed);
+    if (!line) throw new Error("the straight stroke did not become a path");
+    assertEqual(line.nodes.length, 2, "a straight stroke is just its two ends");
+    assertEqual(line.nodes[0].handle_out, undefined, "with no handles");
+    await screenshot("p179-freehand");
   });
 }
 

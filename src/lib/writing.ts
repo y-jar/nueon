@@ -53,7 +53,10 @@ export type ToolId =
   | "brush"
   | "shapes"
   | "mirror"
-  | "eraser";
+  | "eraser"
+  | "knife"
+  | "measure"
+  | "freehand";
 
 export interface Tool {
   id: ToolId;
@@ -78,6 +81,9 @@ export const TOOL_SHORTCUTS: Record<ToolId, string> = {
   shapes: "S",
   mirror: "M",
   eraser: "E",
+  knife: "K",
+  measure: "R",
+  freehand: "F",
 };
 
 /**
@@ -95,13 +101,16 @@ const TOOL_META: Record<ToolId, { label: string; icon: string; what: string }> =
   pen: { label: "Pen", icon: "PenTool", what: "Draw paths" },
   node: { label: "Node Mod", icon: "CircleDot", what: "Change node type, add nodes" },
   brush: { label: "Brush", icon: "Brush", what: "Calligraphic stroke" },
+  knife: { label: "Knife", icon: "Scissors", what: "Click a contour to cut it open exactly there" },
+  measure: { label: "Measure", icon: "RulerDimensionLine", what: "Drag between two points to read their distance and angle" },
+  freehand: { label: "Freehand", icon: "Spline", what: "Draw a path; it becomes a few fitted Bezier nodes" },
   shapes: { label: "Shapes", icon: "Shapes", what: "Rectangle, ellipse, polygon, star, line" },
   mirror: { label: "Mirror/Flip", icon: "FlipHorizontal2", what: "Flip the selection" },
   eraser: { label: "Eraser", icon: "Eraser", what: "Delete nodes, cut edges" },
 };
 
 const ORDER: ToolId[] = [
-  "select", "direct", "hand", "zoom", "pen", "node", "brush", "shapes", "mirror", "eraser",
+  "select", "direct", "hand", "zoom", "measure", "pen", "freehand", "node", "brush", "shapes", "mirror", "eraser", "knife",
 ];
 
 export const TOOLS: Tool[] = ORDER.map((id) => {
@@ -118,9 +127,9 @@ export const TOOLS: Tool[] = ORDER.map((id) => {
 
 export const TOOL_GROUPS: { id: string; tools: ToolId[] }[] = [
   { id: "select", tools: ["select", "direct"] },
-  { id: "view", tools: ["hand", "zoom"] },
-  { id: "draw", tools: ["pen", "brush", "shapes"] },
-  { id: "edit", tools: ["node", "mirror", "eraser"] },
+  { id: "view", tools: ["hand", "zoom", "measure"] },
+  { id: "draw", tools: ["pen", "freehand", "brush", "shapes"] },
+  { id: "edit", tools: ["node", "mirror", "eraser", "knife"] },
 ];
 
 /** The tool bound to a pressed key, ignoring case. */

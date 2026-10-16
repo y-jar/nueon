@@ -209,7 +209,8 @@ import {
 test("TOOLS now lists select, direct, hand, zoom and the drawing tools", () => {
   const ids = TOOLS.map((t) => t.id);
   assert.deepEqual(ids, [
-    "select", "direct", "hand", "zoom", "pen", "node", "brush", "shapes", "mirror", "eraser",
+    "select", "direct", "hand", "zoom", "measure", "pen", "freehand", "node", "brush", "shapes",
+    "mirror", "eraser", "knife",
   ]);
   assert.equal(new Set(ids).size, ids.length);
 });
@@ -220,8 +221,8 @@ test("the default tool is select", () => {
 
 test("the tool shortcuts are the ones asked for", () => {
   assert.deepEqual(TOOL_SHORTCUTS, {
-    select: "V", direct: "A", hand: "H", zoom: "Z", pen: "P",
-    node: "N", brush: "B", shapes: "S", mirror: "M", eraser: "E",
+    select: "V", direct: "A", hand: "H", zoom: "Z", measure: "R", pen: "P", freehand: "F",
+    node: "N", brush: "B", shapes: "S", mirror: "M", eraser: "E", knife: "K",
   });
 });
 

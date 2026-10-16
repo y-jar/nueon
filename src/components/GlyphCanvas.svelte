@@ -630,6 +630,19 @@
       </g>
     {/if}
     {/if}
+    {#if editor.measureLine}
+      {@const m = editor.measureLine}
+      <line
+        class="measure-line"
+        data-measure
+        x1={m.from.x}
+        y1={flipY(m.from.y)}
+        x2={m.to.x}
+        y2={flipY(m.to.y)}
+      />
+      <circle class="measure-dot" data-measure cx={m.from.x} cy={flipY(m.from.y)} r={4 * handleScale} />
+      <circle class="measure-dot" data-measure cx={m.to.x} cy={flipY(m.to.y)} r={4 * handleScale} />
+    {/if}
     {#if editor.zoomBox}
       <rect
         class="marquee zoom-box"

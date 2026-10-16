@@ -427,6 +427,61 @@ export function knifeCut(
   return replace(parts);
 }
 
+/**
+ * Cut a contour at the exact nearest point of one segment, by inserting that
+ * point (a de Casteljau split, so the shape is untouched) and opening the
+ * contour through it. A closed contour becomes one open path whose two ends
+ * are the cut point, each carrying one half's handles; an open one splits in
+ * two. A `t` on a node cuts at that boundary instead, and a straight segment's
+ * cut point has no handles.
+ */
+export function knifeCutAt(
+  outline: GlyphOutline,
+  element: number,
+  segment: number,
+  t: number,
+): GlyphOutline {
+  const source = outline.elements[element];
+  if (!source || !isContour(source)) return outline;
+  const count = source.nodes.length;
+  if (count < 2) return outline;
+  if (!Number.isFinite(t) || segment < 0 || segment >= count) return outline;
+  if (t < 1e-6) return knifeCut(outline, element, segment);
+  if (t > 1 - 1e-6) {
+    const after = source.closed ? (segment + 1) % count : segment + 1;
+    if (!source.closed && after > count - 2) return outline;
+    return knifeCut(outline, element, after);
+  }
+  const split = splitSegment(outline, element, segment, t);
+  const divided = split.elements[element];
+  if (!divided || !isContour(divided)) return outline;
+  const nodes = divided.nodes;
+  const cutIndex = segment + 1;
+  const at = nodes[cutIndex];
+  const firstHalf: GlyphNode = { ...at, handle_out: undefined };
+  const secondHalf: GlyphNode = { ...at, handle_in: undefined };
+  const replace = (parts: ContourElement[]): GlyphOutline => {
+    const elements = split.elements.slice();
+    elements.splice(element, 1, ...parts);
+    return { ...split, elements };
+  };
+  if (divided.closed) {
+    const path: GlyphNode[] = [];
+    for (let k = 0; k <= count; k++) path.push(nodes[(cutIndex + k) % (count + 1)]);
+    path[0] = secondHalf;
+    path.push(firstHalf);
+    return replace([{ ...divided, nodes: path, closed: false }]);
+  }
+  const head = nodes.slice(0, cutIndex + 1);
+  const tail = nodes.slice(cutIndex);
+  head[head.length - 1] = firstHalf;
+  tail[0] = secondHalf;
+  const parts: ContourElement[] = [];
+  if (head.length >= 2) parts.push({ ...divided, nodes: head, closed: false });
+  if (tail.length >= 2) parts.push({ ...divided, nodes: tail, closed: false });
+  return replace(parts);
+}
+
 /** A contour for a shape dragged from `a` to `b`. */
 export function shapeContour(
   kind: ShapeKind,

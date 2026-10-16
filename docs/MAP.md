@@ -151,6 +151,7 @@ and regenerate.
 - `writingComponents.ts` — Pure component resolution for the glyph canvas: transform, flatten, expand.
 - `writingEditor.svelte.ts` — Vector-editor state: the open glyph, tools, selection, history and gestures.
 - `writingForms.ts` — Pure helpers for a glyph's positional forms (initial, medial, final).
+- `writingFreehand.ts` — Fitting a freehand stroke into a few Bezier nodes: a standard
 - `writingGrid.ts` — Pure logic for the glyph grid: cells, filters, progress, cell geometry and the virtual window.
 - `writingInfo.ts` — Pure helpers for the editor's visual language: guide labels, the info bar, contour direction.
 - `writingLayers.ts` — Back-layer and layer-visibility maths for the vector editor, pure so it can

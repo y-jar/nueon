@@ -15,6 +15,7 @@ import {
   hitNode,
   isContour,
   knifeCut,
+  knifeCutAt,
   mirrorElements,
   moveNodes,
   nearestSegment,
@@ -132,6 +133,7 @@ import {
   isOpenEndpoint,
   type SnapResult,
 } from "./writingSnap";
+import { fitFreehand, freehandPreview } from "./writingFreehand";
 import {
   backImageRect,
   backRectCorners,
@@ -187,6 +189,8 @@ export const editor = $state({
   cursor: null as Point | null,
   /** Where the current gesture began, for distance and angle in the info bar. */
   gestureFrom: null as Point | null,
+  /** The Measure tool's line, from `from` to the pointer; null when not measuring. */
+  measureLine: null as { from: Point; to: Point } | null,
   /** What the pointer is over in the Direct tool, for hover highlight; written only when it changes. */
   hover: null as { kind: string; key: string } | null,
   composeOpen: false,
@@ -254,6 +258,8 @@ let drag:
   | { kind: "pivot"; box: Box }
   | { kind: "elements-marquee"; from: Point; additive: boolean }
   | { kind: "brush"; points: Point[] }
+  | { kind: "freehand"; points: Point[] }
+  | { kind: "measure"; from: Point }
   | null = null;
 
 function syncHistoryFlags(): void {
@@ -889,6 +895,9 @@ const TOOL_HINT: Record<ToolId, string> = {
   shapes: "Shapes: drag to place the chosen shape",
   mirror: "Mirror/Flip: click to flip the selection (Shift for vertical)",
   eraser: "Eraser: click a node to delete it, click an edge to cut it",
+  knife: "Knife: click an edge to cut the contour open exactly where you click",
+  measure: "Measure: drag between two points to read their distance and angle",
+  freehand: "Freehand: draw a path; it becomes a few fitted Bezier nodes on release",
 };
 
 export function toolHint(tool: ToolId): string {
@@ -1241,6 +1250,37 @@ export function pointerDown(raw: Point, mods: Modifiers): void {
       drag = { kind: "brush", points: [raw] };
       return;
     }
+    case "freehand": {
+      drag = { kind: "freehand", points: [raw] };
+      editor.preview = freehandPreview([raw]);
+      return;
+    }
+    case "measure": {
+      drag = { kind: "measure", from: raw };
+      editor.measureLine = { from: raw, to: raw };
+      return;
+    }
+    case "knife": {
+      const nodeHit = hitNode(outline, raw, radius);
+      if (nodeHit) {
+        const element = outline.elements[nodeHit.element];
+        if (isContour(element) && element.nodes.length >= 2) {
+          const count = element.nodes.length;
+          const before = element.closed
+            ? (nodeHit.node - 1 + count) % count
+            : Math.max(0, nodeHit.node - 1);
+          commit(knifeCut(outline, nodeHit.element, before), "contour cut at the node");
+        }
+        return;
+      }
+      const seg = nearestSegment(outline, raw, NODE_MOD_LINE_PX / editor.zoom);
+      if (seg) {
+        commit(knifeCutAt(outline, seg.element, seg.segment, seg.t), "contour cut");
+        return;
+      }
+      say(TOOL_HINT.knife);
+      return;
+    }
   }
 }
 
@@ -1480,6 +1520,14 @@ export function pointerMove(raw: Point, mods: Modifiers): void {
   } else if (drag.kind === "brush") {
     drag.points.push(raw);
     editor.preview = brushContour(drag.points, editor.nibWidth, editor.nibAngle);
+  } else if (drag.kind === "freehand") {
+    const last = drag.points[drag.points.length - 1];
+    if (Math.hypot(raw.x - last.x, raw.y - last.y) >= 1) {
+      drag.points.push(raw);
+      editor.preview = freehandPreview(drag.points);
+    }
+  } else if (drag.kind === "measure") {
+    editor.measureLine = { from: drag.from, to: raw };
   } else if (drag.kind === "marquee") {
     editor.marquee = { a: drag.from, b: raw };
   }
@@ -1651,6 +1699,12 @@ export function pointerUp(raw: Point, mods: Modifiers): void {
     editor.preview = null;
     const stroke = brushContour(finished.points, editor.nibWidth, editor.nibAngle);
     if (stroke) commit(addElement(editor.outline, stroke), "stroke added");
+  } else if (finished.kind === "freehand") {
+    editor.preview = null;
+    const fitted = fitFreehand(finished.points);
+    if (fitted) commit(addElement(editor.outline, fitted), "freehand path added");
+  } else if (finished.kind === "measure") {
+    editor.measureLine = null;
   } else if (finished.kind === "marquee") {
     const box = editor.marquee;
     editor.marquee = null;

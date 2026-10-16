@@ -26,6 +26,7 @@ test("editsBlocked only allows the view tools while fore is hidden", () => {
   assert.equal(editsBlocked(hidden, "eraser"), true);
   assert.equal(editsBlocked(hidden, "hand"), false);
   assert.equal(editsBlocked(hidden, "zoom"), false);
+  assert.equal(editsBlocked(hidden, "measure"), false, "measuring is viewing, not editing");
   assert.equal(editsBlocked(DEFAULT_LAYERS, "pen"), false);
 });
 

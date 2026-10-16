@@ -877,6 +877,9 @@ gesture is one history step, like a node drag.
 | S | Shapes | |
 | M | Mirror/Flip | |
 | E | Eraser | |
+| K | Knife | Click an edge to cut the contour open at that exact point; clicking a node opens it there |
+| R | Measure | Drag between two points: dashed line on the canvas, distance and angle in the info bar; no edits, works with the fore layer hidden |
+| F | Freehand | Draw a stroke; on release it becomes an open path of a few fitted Bezier nodes (within 2 units, at most 12 nodes; a straight stroke is just its two ends) |
 | Space (held) | Temporary Hand | Returns to the chosen tool on release |
 | Middle-drag | Pan | In any tool |
 | Ctrl+wheel | Zoom about the cursor | sqrt(2) per notch |
@@ -903,9 +906,22 @@ gesture is one history step, like a node drag.
 | Ctrl+Z, Ctrl+Shift+Z, Ctrl+Y | Undo, redo | |
 | Enter, Esc | Finish path, cancel | |
 
-Reserved for later: K knife, R measure, F freehand (stage 7). Every tool
-shortcut is a bare letter not used by another binding; `RESERVED_KEYS` and a
-test in `src/lib/writing.test.ts` guard that.
+Every tool shortcut is a bare letter not used by another binding;
+`RESERVED_KEYS` and a test in `src/lib/writing.test.ts` guard that.
+
+The Knife cuts where you click, not where a node happens to be: the clicked
+segment is split there by exact de Casteljau subdivision, so the shape is
+untouched (`knifeCutAt` in `src/lib/writingCommands.ts`, unit-tested for exact
+shape preservation). A closed contour opens into one path whose two ends are the
+cut point, each carrying one half's handles; an open one splits in two. The
+Eraser keeps its own boundary cut and node delete.
+
+The Freehand fit (`src/lib/writingFreehand.ts`, mutation-checked) is
+deliberately simple: the stroke is thinned, a near-straight one collapses to its
+two ends, and otherwise the two ends become smooth nodes with Catmull-Rom
+handles and the drawn point the path misses most adds a node there, until every
+drawn point is within 2 units or the path reaches 12 nodes. What you see while
+drawing is the raw stroke, not the fit.
 
 
 ## IPC commands

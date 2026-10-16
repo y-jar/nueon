@@ -24,6 +24,7 @@ import {
   hitNode,
   isContour,
   knifeCut,
+  knifeCutAt,
   mirrorElements,
   moveNodes,
   nearestSegment,
@@ -40,6 +41,7 @@ import {
   unionBounds,
 } from "./writingCommands.ts";
 import type { GlyphOutline } from "./api.ts";
+import { curvePoint } from "./writingBezier.ts";
 
 function square(x: number, y: number, size = 100) {
   return shapeContour("rect", { x, y }, { x: x + size, y: y + size });
@@ -157,6 +159,106 @@ test("nearestSegment finds a point on an edge", () => {
   assert.equal(hit.segment, 0);
   assert.ok(Math.abs(hit.t - 0.5) < 0.05);
   assert.equal(nearestSegment(outline, { x: 50, y: 50 }, 5), null);
+});
+
+/** Two curve points are the same geometric point (exact for de Casteljau). */
+function samePoint(
+  a: { x: number; y: number },
+  b: { x: number; y: number },
+  where: string,
+  eps = 1e-9,
+) {
+  assert.ok(Math.hypot(a.x - b.x, a.y - b.y) < eps, `${where}: ${a.x},${a.y} vs ${b.x},${b.y}`);
+}
+
+test("knifeCutAt opens a closed contour through the exact click point, shape kept", () => {
+  const circle = addElement(emptyOutline(), shapeContour("ellipse", { x: 0, y: 0 }, { x: 100, y: 100 }));
+  const before = nodesOf(circle);
+  const n = before.length;
+  const after = knifeCutAt(circle, 0, 0, 0.5);
+  const nodes = nodesOf(after);
+  assert.ok(isContour(after.elements[0]) && !after.elements[0].closed, "opened");
+  assert.equal(nodes.length, n + 2, "the cut point appears at both ends");
+  samePoint(nodes[0], nodes[nodes.length - 1], "the two ends are the cut point");
+  const exact = curvePoint(before[0], before[1], 0.5);
+  samePoint(nodes[0], exact, "the exact point of the segment at t");
+  for (const u of [0.2, 0.7]) {
+    samePoint(
+      curvePoint(nodes[0], nodes[1], u),
+      curvePoint(before[0], before[1], 0.5 + u * 0.5),
+      "the path out of the cut is the segment's second half",
+    );
+    samePoint(
+      curvePoint(nodes[n - 1 + 1], nodes[n + 1], u),
+      curvePoint(before[0], before[1], u * 0.5),
+      "the path into the cut is the segment's first half",
+    );
+    samePoint(curvePoint(nodes[1], nodes[2], u), curvePoint(before[1], before[2], u), "the next segment is intact");
+    samePoint(
+      curvePoint(nodes[n - 1], nodes[n], u),
+      curvePoint(before[n - 1], before[0], u),
+      "the segment before the cut node is intact",
+    );
+  }
+});
+
+test("knifeCutAt splits an open contour into two at the click point", () => {
+  const line = addElement(
+    emptyOutline(),
+    newContour(
+      [
+        { x: 0, y: 0 },
+        { x: 100, y: 10 },
+        { x: 200, y: 0 },
+      ],
+      false,
+    ),
+  );
+  const before = nodesOf(line);
+  const parts = knifeCutAt(line, 0, 0, 0.5);
+  assert.equal(parts.elements.length, 2, "two open paths");
+  const head = nodesOf(parts, 0);
+  const tail = nodesOf(parts, 1);
+  assert.equal(head.length + tail.length, before.length + 2, "the cut point appears at both ends");
+  samePoint(head[head.length - 1], tail[0], "both paths meet at the cut point");
+  for (const u of [0.2, 0.7]) {
+    samePoint(
+      curvePoint(head[0], head[1], u),
+      curvePoint(before[0], before[1], u * 0.5),
+      "the head ends on the segment's first half",
+    );
+    samePoint(
+      curvePoint(tail[0], tail[1], u),
+      curvePoint(before[0], before[1], 0.5 + u * 0.5),
+      "the tail leaves on the segment's second half",
+    );
+    samePoint(curvePoint(tail[1], tail[2], u), curvePoint(before[1], before[2], u), "the next segment is intact");
+  }
+});
+
+test("knifeCutAt clamps a wild t and refuses a bad segment", () => {
+  const box = addElement(emptyOutline(), square(0, 0));
+  assert.deepEqual(knifeCutAt(box, 0, 0, -0.4), knifeCut(box, 0, 0), "a t before the segment cuts its boundary");
+  assert.equal(
+    knifeCutAt(box, 0, 0, 1.4).elements.length,
+    1,
+    "a t past the segment cuts the next boundary",
+  );
+  assert.deepEqual(knifeCutAt(box, 0, 99, 0.5), box, "a segment out of range changes nothing");
+  assert.deepEqual(knifeCutAt(box, 0, 0, Number.NaN), box, "a non-finite t changes nothing");
+});
+
+test("knifeCutAt on a node or a bad target is a boundary cut or no-op", () => {
+  const box = addElement(emptyOutline(), square(0, 0));
+  const boundary = knifeCut(box, 0, 0);
+  assert.deepEqual(knifeCutAt(box, 0, 0, 0), boundary, "t on a node cuts the boundary");
+  assert.equal(knifeCutAt(box, 0, 0, 1).elements.length, 1, "t on the far node rotates the same contour open");
+  assert.equal(nodesOf(knifeCutAt(box, 0, 0, 1)).length, 4, "opened at the next node, nothing inserted");
+  assert.equal(knifeCutAt(box, 9, 0, 0.5).elements.length, 1, "a bad element is a no-op");
+  const straight = nodesOf(knifeCutAt(box, 0, 0, 0.5));
+  assert.equal(straight.length, 6, "a square's mid-edge cut inserts the point at both ends");
+  assert.equal(straight[0].handle_in, undefined, "a straight segment's cut point carries no handle in");
+  assert.equal(straight[0].handle_out, undefined, "a straight segment's cut point carries no handle out");
 });
 
 test("knifeCut opens a closed contour and splits an open one", () => {
