@@ -7,6 +7,7 @@ mod morphology;
 mod phonology;
 mod profile;
 mod settings;
+mod svg_import;
 mod translation;
 mod writing_system;
 
@@ -25,6 +26,7 @@ pub use phonology::{
 };
 pub use profile::{Profile, PROFILE_FORMAT, PROFILE_VERSION};
 pub use settings::{GridViewState, SortSpec, UiLayout, WorkspaceSettings};
+pub use svg_import::import_svg;
 pub use translation::{
     AffixKind, AffixRule, TableRole, TableRoleConfig, TranslationConfig, TranslationMode,
     TranslationOptions,

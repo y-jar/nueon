@@ -250,7 +250,16 @@ layer (`src-tauri/`), and the Svelte 5 frontend (`src/`). See `docs/ARCHITECTURE
   scale, rotate, translate order and surviving cycles and missing glyphs);
   Direct Select picks one, Delete removes it, and Edit/Tools > Expand component
   (Ctrl+Shift+E) replaces it in place with editable contours; SVG export/import and multi-select batch actions
-  (group, advance width, export, delete) are wired. Pathfinder booleans are in
+  (group, advance width, export, delete) are wired. The glyph import is still
+  the naive `<path d>` scan; a real importer core is built and tested
+  (`crates/nueon-core/src/config/svg_import.rs`: a roxmltree parse with DTDs
+  refused so no entity is ever fetched, translate/scale/rotate/matrix
+  accumulated from ancestors and applied to whole paths so handle deltas share
+  the node space, `<path>` with arcs plus rect/rounded-rect/ellipse/circle/
+  line/polyline/polygon through kurbo, the root viewBox fitted to the em box —
+  uniform scale, centred on the narrower axis, y flipped, the SVG's own units
+  kept without one — and non-drawn elements counted in a skipped-kinds report)
+  but not yet wired into it. Pathfinder booleans are in
   `crates/nueon-core/src/model/pathfinder.rs` (`flo_curves`, curve-preserving)
   and component flattening in `crates/nueon-core/src/workspace/writing.rs`.
   TrueType export is built: `crates/nueon-core/src/font/` converts cubic
@@ -295,7 +304,9 @@ layer (`src-tauri/`), and the Svelte 5 frontend (`src/`). See `docs/ARCHITECTURE
   round-trip, font compilation read back through `read-fonts`, and verified
   against FreeType via fontconfig and ImageMagick: the exported circle glyph
   rendered with 0.785 ink coverage, pi/4, so curves survive the cubic to
-  quadratic conversion); node `tabs.test.ts` (`isSingletonTab("writing")`),
+  quadratic conversion), cargo `svg_import` tests (Inkscape/Illustrator-style
+  documents, ancestor transform composition, the viewBox fitted and y flipped,
+  arcs through their top, shape extremes, skipped kinds, DTD refusal); node `tabs.test.ts` (`isSingletonTab("writing")`),
   `writing.test.ts` (glyph grouping, sound coverage, tool registry, guide
   rails, bounds, path data), `writingCommands.test.ts` (node/handle edits,
   shapes, transforms, align/distribute, layer order, brush), `history.test.ts`,
