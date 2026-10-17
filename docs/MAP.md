@@ -115,11 +115,10 @@ and regenerate.
 - `dictionary.ts` — Dictionary column types and part-of-speech classes.
 - `errors.ts` — Classifies browser errors that are noise and must not reach the error bar.
 - `explorer.ts` — Note-tree helpers: flattening, name stripping, unique paths.
-- `exports.ts` — Profile/workspace export and import dialogs.
+- `exports.ts` — Profile/workspace export and import: every path is chosen on the Rust
 - `feedback.svelte.ts` — User feedback and preferences: confirmation dialogs, toasts, suppressed
 - `fileActions.ts` — Reveal in the file manager and open in the default app.
 - `fileDrop.ts` — OS file-drop onto the workspace (the drop bridge).
-- `files.ts` — Whole-file text read/write through the Tauri backend (for SVG import/export).
 - `fontReport.ts` — Pure helpers for the font export validation report.
 - `gridView.ts` — Grid column visibility/sort/width normalization.
 - `history.ts` — A small snapshot undo/redo stack, separate from the app's git history.
