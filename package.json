@@ -1,7 +1,7 @@
 {
   "name": "nueon",
   "private": true,
-  "version": "26.10.11",
+  "version": "26.10.16",
   "description": "Conlang editor: Markdown notes, a dictionary grid, etymology and a translation builder.",
   "author": "y-jar",
   "license": "MIT",

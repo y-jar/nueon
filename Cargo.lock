@@ -2223,7 +2223,7 @@ checksum = "650eef8c711430f1a879fdd01d4745a7deea475becfb90269c06775983bbf086"
 
 [[package]]
 name = "nueon-core"
-version = "26.10.11"
+version = "26.10.16"
 dependencies = [
  "flo_curves",
  "harfrust",
@@ -2244,7 +2244,7 @@ dependencies = [
 
 [[package]]
 name = "nueon-tauri"
-version = "26.10.11"
+version = "26.10.16"
 dependencies = [
  "gtk",
  "nueon-core",

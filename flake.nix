@@ -37,7 +37,7 @@
       # The Vite/Svelte frontend, built with a lockfile-pinned npm closure.
       frontend = pkgs.buildNpmPackage {
         pname = "nueon-frontend";
-        version = "26.10.11";
+        version = "26.10.16";
         src = ./.;
         # Node 22 to match the dev shell and CI (the nixpkgs default drifts).
         nodejs = pkgs.nodejs_22;
@@ -55,7 +55,7 @@
       packages.${system} = {
         default = pkgs.rustPlatform.buildRustPackage {
         pname = "nueon";
-        version = "26.10.11";
+        version = "26.10.16";
         src = ./.;
         cargoLock.lockFile = ./Cargo.lock;
 
@@ -120,7 +120,7 @@
         #   nix-prefetch-url --type sha256 <the deb url below>
         nueon-bin = pkgs.stdenv.mkDerivation (finalAttrs: {
         pname = "nueon-bin";
-        version = "26.10.11";
+        version = "26.10.16";
         src = pkgs.fetchurl {
           url = "https://github.com/y-jar/nueon/releases/download/v${finalAttrs.version}/nueon_${finalAttrs.version}_amd64.deb";
           hash = "sha256-g0Qm/blprvvoYTajDdnuy3FFrcv5bVqTaofZAkvMVw0=";
