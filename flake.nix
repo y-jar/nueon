@@ -3,57 +3,57 @@
 
   inputs.nixpkgs.url = "github:nixos/nixpkgs/nixos-26.05";
 
-  outputs =
-    { self, nixpkgs }:
-    let
-      system = "x86_64-linux";
-      pkgs = import nixpkgs { inherit system; };
+  outputs = {
+    self,
+    nixpkgs,
+  }: let
+    system = "x86_64-linux";
+    pkgs = import nixpkgs {inherit system;};
 
-      tauriLibs = with pkgs; [
-        webkitgtk_4_1
-        gtk3
-        libsoup_3
-        librsvg
-        gdk-pixbuf
-        glib
-        cairo
-        pango
-        harfbuzz
-        openssl
-      ];
-      guiLibs = with pkgs; [
-        libGL
-        libxkbcommon
-        wayland
-        libx11
-        libxcursor
-        libxi
-        libxrandr
-        fontconfig
-        freetype
-      ];
-      runtimeLibs = tauriLibs ++ guiLibs;
+    tauriLibs = with pkgs; [
+      webkitgtk_4_1
+      gtk3
+      libsoup_3
+      librsvg
+      gdk-pixbuf
+      glib
+      cairo
+      pango
+      harfbuzz
+      openssl
+    ];
+    guiLibs = with pkgs; [
+      libGL
+      libxkbcommon
+      wayland
+      libx11
+      libxcursor
+      libxi
+      libxrandr
+      fontconfig
+      freetype
+    ];
+    runtimeLibs = tauriLibs ++ guiLibs;
 
-      # The Vite/Svelte frontend, built with a lockfile-pinned npm closure.
-      frontend = pkgs.buildNpmPackage {
-        pname = "nueon-frontend";
-        version = "26.10.16";
-        src = ./.;
-        # Node 22 to match the dev shell and CI (the nixpkgs default drifts).
-        nodejs = pkgs.nodejs_22;
-        npmDepsHash = "sha256-XqhwcnaQFsaNeNFi2RFGVzYtXatUbvXOqQMi2STr1ow=";
-        npmBuildScript = "build";
-        installPhase = ''
-          runHook preInstall
-          mkdir -p $out
-          cp -r dist/. $out/
-          runHook postInstall
-        '';
-      };
-    in
-    {
-      packages.${system} = {
-        default = pkgs.rustPlatform.buildRustPackage {
+    # The Vite/Svelte frontend, built with a lockfile-pinned npm closure.
+    frontend = pkgs.buildNpmPackage {
+      pname = "nueon-frontend";
+      version = "26.10.16";
+      src = ./.;
+      # Node 22 to match the dev shell and CI (the nixpkgs default drifts).
+      nodejs = pkgs.nodejs_22;
+      npmDepsHash = "sha256-6tQaahX4BSeBjp1nrfstv2zjqrI0ajIuhmJiXYrfktI=";
+      npmBuildScript = "build";
+      installPhase = ''
+        runHook preInstall
+        mkdir -p $out
+        cp -r dist/. $out/
+        runHook postInstall
+      '';
+    };
+  in {
+    packages.${system} = {
+      default = pkgs.rustPlatform.buildRustPackage {
         pname = "nueon";
         version = "26.10.16";
         src = ./.;
@@ -115,15 +115,15 @@
         '';
       };
 
-        # Precompiled binary fetched from a GitHub release .deb and patched for
-        # Nix. Update `version` and refresh `hash` after publishing a release:
-        #   nix-prefetch-url --type sha256 <the deb url below>
-        nueon-bin = pkgs.stdenv.mkDerivation (finalAttrs: {
+      # Precompiled binary fetched from a GitHub release .deb and patched for
+      # Nix. Update `version` and refresh `hash` after publishing a release:
+      #   nix-prefetch-url --type sha256 <the deb url below>
+      nueon-bin = pkgs.stdenv.mkDerivation (finalAttrs: {
         pname = "nueon-bin";
         version = "26.10.16";
         src = pkgs.fetchurl {
           url = "https://github.com/y-jar/nueon/releases/download/v${finalAttrs.version}/nueon_${finalAttrs.version}_amd64.deb";
-          hash = "sha256-g0Qm/blprvvoYTajDdnuy3FFrcv5bVqTaofZAkvMVw0=";
+          hash = "0hbzkq2xn0h0h7s86d945mdw04bialc9nfdpm71y3v7yi40xbzgk";
         };
         nativeBuildInputs = with pkgs; [
           dpkg
@@ -147,11 +147,11 @@
             --set WEBKIT_DISABLE_COMPOSITING_MODE 1
           runHook postInstall
         '';
-        });
-      };
-
-      # Single source of truth: shell.nix defines the dev environment, tools,
-      # and `loom-*` commands (also reachable through short aliases in-shell).
-      devShells.${system}.default = import ./shell.nix { inherit pkgs; };
+      });
     };
+
+    # Single source of truth: shell.nix defines the dev environment, tools,
+    # and `loom-*` commands (also reachable through short aliases in-shell).
+    devShells.${system}.default = import ./shell.nix {inherit pkgs;};
+  };
 }
