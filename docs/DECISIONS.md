@@ -303,6 +303,27 @@ commit per stage. See `docs/PROBING.md`.
 - **Probe 22 is intermittently flaky** (translator clause canvas), on builds
   before and after this pass; it is unrelated to the writing system.
 
+## Data-changed invalidation
+
+- **Seven scopes, no section vocabulary.** Table roles, profile import and
+  every `config_set` section share the one `config` scope. Rejected: a
+  `phonology` scope or section-aware payloads — config events are rare, the
+  refetches they cause are cheap read-only commands, and a section vocabulary
+  is a second thing every new emitter must keep in sync. The pref commands
+  that would make `config` noisy (layout, line numbers, keybinds) emit
+  nothing and are single-window.
+- **`translation` was a dead scope.** Four backend emit sites and zero
+  frontend consumers; morphology config, presets and affix rules written
+  through it never reached the panels holding copies. `docs/IPC.md` had
+  documented a reload that never existed.
+- **Load-once caches were the pattern, not the exception.** The reported bug
+  was the Morphology store, but the audit found the same shape in the
+  Translation panel, the affix rules, ParadigmGrid, PhonologyView after
+  wizard/profile writes, Settings behind the wizard, Inspector's phonology
+  copy and FeatureEditor's derived cache. The writing views' revision
+  counters were the one working pattern, so the fix generalizes them into
+  one scope registry every consumer declares against (see `docs/STATE.md`).
+
 ## Deferred, not abandoned
 
 Block links, setext-heading resolution, remotes/push, sentence-level grids,

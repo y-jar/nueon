@@ -42,6 +42,39 @@ Svelte 5 runes. One reactive `ui` object is the single source of truth
 - **Mutations go through the action modules**, never straight into `ui` from a
   component, so there is one place to enforce invariants.
 
+## Data-changed consumers (audit)
+
+Every frontend store or panel that holds a copy of backend data, and which
+`data-changed` scopes reach it today. This is the pre-registry audit that
+drove the invalidation fix; the registry stage moves the "reached by" column
+into explicit scope declarations. Keep the table in sync when adding a
+consumer (see `docs/IPC.md` for the scope table).
+
+| Consumer | Holds | Should invalidate | Reached by today | Verdict |
+|---|---|---|---|---|
+| `MorphologyStore` (`src/lib/morphology.svelte.ts`) | morphology config, morphemes, lexicon | dictionary, config, translation, workspace, vcs | nothing; its own writes only | stale — the reported bug |
+| `Translation.svelte` | presets, grammar, options, morphology copy | translation, config, dictionary, workspace, vcs | own saves; `morphologyRevision` | partial |
+| `MorphologyView.svelte` local `affixes` | translation options | translation, config | mount only | stale |
+| `translation/ParadigmGrid.svelte` | one class's paradigm grid | translation, config, dictionary | `morphologyRevision` | partial |
+| `PhonologyView.svelte` | phonology config | config | `phonologyRevision` (Settings only) | partial |
+| `WritingPanel.svelte` | writing + phonology config | writing, config, vcs | revision string + window focus | partial |
+| `WritingSystemView.svelte` | writing + phonology config, outlines | writing, config, vcs | revision string + focus + reload guard | partial |
+| `Settings.svelte` (open) | language, grammar, roles, phonology, morphology | config, translation, dictionary | nothing while open | stale while open |
+| `Inspector.svelte` | phonology copy, known tags | config, dictionary | `phonologyRevision`; tags on `ui.root` | partial (draft guards are by design) |
+| `translation/FeatureEditor.svelte` | per-column feature values | dictionary, config | mount only | stale |
+| `Grid.svelte` / `TablesPanel` / quarantine | table data via `doc.table` | dictionary | the dictionary branch | fresh |
+| shared slices: `tree`, `wordIndex`, `tables`, `fixesTables` | workspace-derived indexes | notes, dictionary, config, workspace | the listener branches | fresh (a trash-renamed fixes table waits for the next config/workspace event) |
+| `GitPanel.svelte` | vcs state, log, status | vcs, workspace | `vcsRevision` | fresh |
+| Editor / open notes | note buffers | notes, vcs | `reloadOpenNotes` + freshness generations | fresh |
+
+Backend emit gaps the audit flagged: `vcs_checkout`/`vcs_revert_file` never
+emit `config` (all config-derived views go stale after a checkout), `undo`/
+`redo` omit `notes` when the step rewrote note files, `save_note` emits
+nothing (an open note in a second window goes stale), and the pref commands
+(`set_keybind`, `set_editor_line_numbers`, `ui_layout_set`, `tiling_save`,
+`grid_view_set`, `recent_record`) emit nothing by design — single-window,
+self-contained consumers.
+
 ## Overlays
 
 Overlays are driven by `ui` fields and rendered by their own component:

@@ -137,15 +137,27 @@ itself travels through the generic `config_get`/`config_set` with section
 After a mutation the backend emits `data-changed` with a scope, and the frontend
 (`src/lib/data.svelte.ts`) refreshes the matching slice:
 
-| scope | emitted by | frontend action |
+| scope | emitted by (sites) | frontend action |
 |---|---|---|
-| `workspace` | workspace open/remove/rename, import | refresh workspaces, tree, index, tables |
-| `notes` | note/folder create/rename/delete, asset ops, vcs checkout | refresh tree + reload open notes |
-| `dictionary` | table/word/tag edits, import | reload word index + tables |
-| `config` | set table role, layout/line-number/keybind prefs | reload fixes tables (and prefs) |
-| `translation` | preset edits, morphology writes | (translation panel reloads) |
-| `writing` | glyph outline save | bump `writingRevision` (editor refetches) |
-| `vcs` | git commits/checkouts | bump revision + reload open notes |
+| `workspace` (8) | workspace open/create/remove/rename/set-path/delete-from-disk, zip import | refresh workspaces, tree, word index, fixes tables, tables |
+| `notes` (15) | note/folder create/rename/delete, asset import/copy, word-rename link rewrite, `phonology_apply_table`, `import_apply`, trash restore (note), workspace create/open, vcs checkout/revert | refresh tree + reload open notes |
+| `dictionary` (26) | table/word/tag edits (18), undo/redo, `create_translation_word`, `normalize_class_values`, `phonology_apply_table`, `import_apply`, trash restore (table), vcs checkout | reload word index + tables |
+| `config` (3) | `config_set` (any section: language/grammar/phonology/writing/translation), `set_table_role`, `profile_import` | reload fixes tables — nothing else, so every other config-derived consumer (morphology, translation options, phonology, writing config) goes stale |
+| `translation` (4) | preset save/delete, `set_translation_morphology`, `set_translation_options` | nothing — no consumer listens |
+| `writing` (8) | glyph outline save, path ops, back image, SVG import, SVG/font export | bump `writingRevision` (writing views refetch) |
+| `vcs` (8) | commit, checkout, branch, init, revert, prompt dismiss, autocheck-in pump | bump `vcsRevision` + reload open notes |
+
+Known gaps flagged by the audit: checkout/revert emit no `config` though they
+can rewrite every config file; `undo`/`redo` omit `notes` when the step rewrote
+note files; `profile_import` rewrites language/phonology/grammar/translation/
+writing wholesale but emits only `config`. Commands that mutate but emit
+nothing: `save_note` (an open note in a second window goes stale),
+`import_asset`, `grid_view_set`, `ui_layout_set`, `tiling_save`,
+`window_spawn`, `dismiss_warning`, `suppress_confirm`,
+`clear_suppressed_confirms`, `set_editor_line_numbers`, `set_keybind`,
+`reset_keybinds`, `recent_record`, `trash_purge`, `trash_empty` — the
+pref/layout ones are single-window by design; `save_note` and `import_asset`
+are real gaps.
 
 Any new mutating command must pick the scope whose consumers it affects and
 emit it, otherwise the frontend will silently go stale.
