@@ -16,6 +16,7 @@
   import WordPicker from "./translation/WordPicker.svelte";
 
   import { consumerShown } from "../lib/invalidation.svelte";
+  import { ui } from "../lib/state.svelte";
 
   onMount(() => consumerShown("morphology"));
 
@@ -23,12 +24,25 @@
   let affixes = $state<api.AffixRule[]>([]);
   let rulesError = $state("");
 
-  onMount(async () => {
+  async function loadRules() {
     try {
       affixes = (await api.translationOptions()).affixes;
+      rulesError = "";
     } catch (e) {
       rulesError = String(e);
     }
+  }
+
+  onMount(loadRules);
+
+  // Affix rules written elsewhere (the Translation panel, a profile import)
+  // ride the translation/config revisions; reload rather than go stale.
+  let rulesSeen = $state(`${ui.revision.translation}:${ui.revision.config}`);
+  $effect(() => {
+    const now = `${ui.revision.translation}:${ui.revision.config}`;
+    if (now === rulesSeen) return;
+    rulesSeen = now;
+    void loadRules();
   });
 
   // Recompute the preview whenever the word, selections, picked morphemes or

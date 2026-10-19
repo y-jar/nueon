@@ -80,17 +80,17 @@ Every frontend store or panel that holds a copy of backend data, and which
 | Consumer | Holds | Should invalidate | Reached by | Verdict |
 |---|---|---|---|---|
 | `MorphologyStore` (`src/lib/morphology.svelte.ts`) | morphology config, morphemes, lexicon | dictionary, config, translation, workspace, vcs | the registry (all five) | fresh |
-| `Translation.svelte` | presets, grammar, options, morphology copy | translation, config, dictionary, workspace, vcs | `ui.revision.translation`/`config` (morphology copy); presets/options local only | partial — presets/options still reload on remount |
-| `MorphologyView.svelte` local `affixes` | translation options | translation, config | mount only | stale |
+| `Translation.svelte` | presets, grammar, options, morphology copy | translation, config, dictionary, workspace, vcs | the registry (translation, config, workspace; mounted per tab, own writes suppressed) | fresh |
+| `MorphologyView.svelte` local `affixes` | translation options | translation, config | `ui.revision.translation`/`config` (seen-guard) | fresh |
 | `translation/ParadigmGrid.svelte` | one class's paradigm grid | translation, config, dictionary | `ui.revision.translation`/`config` | fresh (dictionary refetch rides the store) |
 | `PhonologyView.svelte` | phonology config | config | `ui.revision.config` | fresh (checkout misses — see gaps) |
 | `WritingPanel.svelte` | writing + phonology config | writing, config, vcs | `ui.revision.writing`/`config` + window focus | fresh (checkout misses) |
 | `WritingSystemView.svelte` | writing + phonology config, outlines | writing, config, vcs | revision counters + focus + reload guard | fresh (checkout misses) |
-| `Settings.svelte` (open) | language, grammar, roles, phonology, morphology | config, translation, dictionary | nothing while open | stale while open |
-| `Inspector.svelte` | phonology copy, known tags | config, dictionary | phonology via `ui.revision.config`; tags on `ui.root` | partial (draft guards are by design) |
-| `translation/FeatureEditor.svelte` | per-column feature values | dictionary, config | mount only | stale |
+| `Settings.svelte` (open) | language, grammar, roles, phonology, morphology | config, translation, dictionary | the registry (mounted while the modal is open; own writes suppressed, pending-save guard) | fresh |
+| `Inspector.svelte` | phonology copy, known tags | config, dictionary | `ui.revision.config`/`.dictionary` | fresh (draft guards are by design) |
+| `translation/FeatureEditor.svelte` | per-column feature values | dictionary | cache wiped on `ui.revision.dictionary` | fresh |
 | `Grid.svelte` / `TablesPanel` / quarantine | table data via `doc.table` | dictionary | the dictionary branch | fresh |
-| shared slices: `tree`, `wordIndex`, `tables`, `fixesTables` | workspace-derived indexes | notes, dictionary, config, workspace | the registry | fresh (a trash-renamed fixes table waits for the next config/workspace event) |
+| shared slices: `tree`, `wordIndex`, `tables`, `fixesTables` | workspace-derived indexes | notes, dictionary, config, workspace | the registry | fresh |
 | `GitPanel.svelte` | vcs state, log, status | vcs, workspace | `ui.revision.vcs` | fresh |
 | Editor / open notes | note buffers | notes, vcs | `reloadOpenNotes` + freshness generations | fresh |
 

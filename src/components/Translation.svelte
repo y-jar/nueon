@@ -1,9 +1,14 @@
 <!-- Translation activity: builder + runner. -->
 <script lang="ts">
-  import { onMount } from "svelte";
+  import { onDestroy, onMount } from "svelte";
   import { t } from "svelte-i18n";
     import * as api from "../lib/api";
   import { ui, activeDoc } from "../lib/state.svelte";
+  import {
+    registerInvalidation,
+    unregisterInvalidation,
+    withOwnWrite,
+  } from "../lib/invalidation.svelte";
   import TranslationToolbar from "./translation/TranslationToolbar.svelte";
   import FeatureBar from "./translation/FeatureBar.svelte";
   import SlotPalette from "./translation/SlotPalette.svelte";
@@ -64,7 +69,27 @@
     ),
   );
 
-  onMount(load);
+  // Presets, grammar, options and morphology follow data-changed events made
+  // anywhere (Settings, the Morphology activity, another window); this
+  // panel's own writes are skipped so they cannot fight local edits.
+  const invalidationId = `translation-${crypto.randomUUID()}`;
+
+  onMount(() => {
+    registerInvalidation({
+      id: invalidationId,
+      scopes: ["translation", "config", "workspace"],
+      reload: async () => {
+        await load();
+        await run();
+      },
+      visible: () =>
+        ui.activity === "translation" ||
+        ui.groups.some((group) => group.doc.view === "translation"),
+    });
+    void load();
+  });
+
+  onDestroy(() => unregisterInvalidation(invalidationId));
 
   async function load() {
     await loadPresets();
@@ -118,7 +143,9 @@
 
   async function persistOptions() {
     try {
-      await api.setTranslationOptions({ separator, affixes, mode });
+      await withOwnWrite(invalidationId, ["translation"], () =>
+        api.setTranslationOptions({ separator, affixes, mode }),
+      );
       error = "";
     } catch (e) {
       error = String(e);
@@ -149,19 +176,6 @@
     void run();
   }
 
-  // Reload features and re-run when the morphology config is written
-  // elsewhere (the Morphology activity, Settings, a profile import).
-  let seenRevision = `${ui.revision.translation}:${ui.revision.config}`;
-  $effect(() => {
-    const now = `${ui.revision.translation}:${ui.revision.config}`;
-    if (now === seenRevision) return;
-    seenRevision = now;
-    void (async () => {
-      await loadMorphology();
-      await run();
-    })();
-  });
-
   async function exportPresets() {
     try {
       await api.exportPresetsDialog(presets);
@@ -175,9 +189,11 @@
   async function importPresets() {
     try {
       const imported = await api.importPresetsDialog();
-      for (const preset of imported) {
-        await api.savePreset(preset);
-      }
+      await withOwnWrite(invalidationId, ["translation"], async () => {
+        for (const preset of imported) {
+          await api.savePreset(preset);
+        }
+      });
       await loadPresets();
       error = "";
     } catch (e) {
@@ -211,7 +227,9 @@
 
   async function savePreset() {
     try {
-      await api.savePreset(grid());
+      await withOwnWrite(invalidationId, ["translation"], () =>
+        api.savePreset(grid()),
+      );
       await loadPresets();
       error = "";
     } catch (e) {
@@ -237,7 +255,9 @@
   }
 
   async function deletePreset(name: string) {
-    await api.deletePreset(name);
+    await withOwnWrite(invalidationId, ["translation"], () =>
+      api.deletePreset(name),
+    );
     await loadPresets();
   }
 

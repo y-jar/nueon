@@ -139,8 +139,9 @@ frontend routes it through the invalidation registry
 (`src/lib/invalidation.svelte.ts`): consumers declare the scopes that
 invalidate the data they hold; visible ones reload (debounced 150 ms, so a
 burst coalesces), hidden ones go stale and reload when shown, and a
-consumer's own writes are skipped for it alone. The registry also bumps the
-per-scope `ui.revision` counter that effect-based consumers read.
+consumer's own writes are skipped for it alone — exactly one echo event per
+write, so later events still reload. The registry also bumps the per-scope
+`ui.revision` counter that effect-based consumers read.
 
 | scope | emitted by (sites) | frontend action |
 |---|---|---|

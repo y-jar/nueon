@@ -8750,6 +8750,138 @@ async function main() {
     }
     await screenshot("p196-burst-coalesced");
   });
+
+  // -- probes 197-202: the remaining data-changed consumers ------------------
+
+  await probe("197-affix-rules-written-elsewhere-appear-in-the-drawer", async () => {
+    await openMorphology("Endings");
+    const options = await invokeAsync("translation_options", {});
+    await invokeAsync("set_translation_options", {
+      options: {
+        ...options,
+        affixes: [
+          ...(options.affixes ?? []),
+          { kind: "suffix", english: "probeze", conlang: "zex" },
+        ],
+      },
+    });
+    await waitJs(
+      `[...document.querySelectorAll('.morphology-view .morph-drawer .row .mono')].some((el) =>
+        el.textContent.includes('probeze'))`,
+      { label: "the drawer shows the externally added affix rule", timeout: 5000 },
+    );
+    await screenshot("p197-affix-drawer");
+  });
+
+  await probe("198-a-preset-saved-elsewhere-appears-in-the-translation-panel", async () => {
+    await openActivity("Translation");
+    await waitJs(`!!document.querySelector('.translation')`, { label: "translation panel" });
+    // The preset picker only exists in the rule-tree mode.
+    const gridded = await js(`const b = [...document.querySelectorAll('.translation-toolbar .mode-switch button')]
+        .find((x) => x.textContent.trim() === 'Rule tree');
+      if (b) { b.click(); return true; }
+      return false;`);
+    if (!gridded) throw new Error("no Rule tree mode button");
+    await waitJs(`!!document.querySelector('.translation select')`, { label: "preset picker" });
+    await invokeAsync("save_preset", {
+      grid: { preset_name: "probe-preset", slots: [{ kind: "required_tag", tag: "Subject" }] },
+    });
+    await waitJs(
+      `[...document.querySelectorAll('.translation select option')].some((o) =>
+        o.value === 'probe-preset' || o.textContent.includes('probe-preset'))`,
+      { label: "the preset picker lists the externally saved preset", timeout: 5000 },
+    );
+    await screenshot("p198-preset-listed");
+  });
+
+  await probe("199-a-role-set-elsewhere-shows-in-the-open-settings-modal", async () => {
+    await openMorphology();
+    await invokeAsync("create_table", { name: "cfgprobe" });
+    const opened = await js(`const b = document.querySelector('.activity[title="Settings"]');
+      if (b) b.click();
+      return !!b;`);
+    if (!opened) throw new Error("no Settings button");
+    await waitJs(`!!document.querySelector('.settings-nav')`, { label: "settings modal" });
+    const tabbed = await js(`const b = [...document.querySelectorAll('.settings-nav button')]
+        .find((x) => x.textContent.trim() === 'Tables');
+      if (b) b.click();
+      return !!b;`);
+    if (!tabbed) throw new Error("no Tables tab");
+    await waitJs(
+      `[...document.querySelectorAll('.settings .rule .grow')].some((x) => x.textContent.trim() === 'cfgprobe')`,
+      { label: "cfgprobe row in Tables" },
+    );
+    // Flip the role from outside the modal, like another window would.
+    await invokeAsync("set_table_role", { table: "cfgprobe", role: "fixes" });
+    await waitJs(
+      `(() => {
+         const row = [...document.querySelectorAll('.settings .rule')]
+           .find((r) => r.querySelector('.grow')?.textContent.trim() === 'cfgprobe');
+         return !!row && row.querySelector('select').value === 'fixes';
+       })()`,
+      { label: "the open modal shows the new role without reopening", timeout: 5000 },
+    );
+    await screenshot("p199-settings-role");
+    await js(`const b = document.querySelector('.modal-head button'); if (b) b.click(); return true;`);
+  });
+
+  await probe("200-a-phonology-config-replace-shows-in-the-chart", async () => {
+    await openActivity("Phonology");
+    await waitJs(`!!document.querySelector('.ipa-table')`, { label: "phonology chart" });
+    const config = await invokeAsync("config_get", { section: "phonology" });
+    await invokeAsync("config_set", {
+      section: "phonology",
+      value: {
+        ...config,
+        phonemes: [...(config.phonemes ?? []), { symbol: "ɣ", kind: "consonant" }],
+      },
+    });
+    await waitJs(
+      `[...document.querySelectorAll('.phoneme-chip .symbol')].some((el) =>
+        el.textContent.trim() === 'ɣ')`,
+      { label: "the externally added phoneme shows", timeout: 5000 },
+    );
+    await screenshot("p200-phonology-external");
+  });
+
+  await probe("201-inherent-feature-values-follow-word-edits", async () => {
+    await openMorphology("Endings");
+    const id = await invokeAsync("create_word", { table: "lex", wordname: "decler" });
+    await invokeAsync("set_word_value", {
+      table: "lex",
+      id,
+      tag: "decl",
+      value: { type: "text", value: "3" },
+    });
+    await waitJs(
+      `[...document.querySelectorAll('.feature-editor .value-chip.read-only')].some((el) =>
+        el.textContent.trim() === '3')`,
+      { label: "the inherent feature picks up the new column value", timeout: 5000 },
+    );
+    await screenshot("p201-derived-values");
+  });
+
+  await probe("202-a-tag-added-elsewhere-appears-in-the-known-tags-datalist", async () => {
+    await openActivity("Dictionary");
+    await waitJs(`!!document.querySelector('.table-list')`, { label: "tables panel" });
+    const opened = await js(`const b = [...document.querySelectorAll('.table-list .table-row .tree-name')]
+        .find((x) => x.textContent.trim().startsWith('lex'));
+      if (b) b.click();
+      return !!b;`);
+    if (!opened) throw new Error("no lex table row");
+    await waitJs(`!!document.querySelector('.popover-trigger')`, { label: "grid toolbar" });
+    const popover = await js(`const b = [...document.querySelectorAll('.popover-trigger')]
+        .find((x) => x.textContent.includes('Tags'));
+      if (b) { b.click(); return true; }
+      return false;`);
+    if (!popover) throw new Error("no Tags popover trigger");
+    await invokeAsync("add_tag", { table: "lex", name: "probetag", kind: "text" });
+    await waitJs(`!!document.querySelector('#known-tags option[value="probetag"]')`, {
+      label: "the externally added tag appears in the datalist",
+      timeout: 5000,
+    });
+    await screenshot("p202-known-tags");
+  });
 }
 
 try {

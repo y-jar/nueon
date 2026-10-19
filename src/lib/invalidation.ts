@@ -56,17 +56,21 @@ export interface TimerApi {
 
 /** Debounce window that coalesces a burst of events into one reload. */
 export const DEBOUNCE_MS = 150;
-/** How long after an own write settles its echo events are skipped. */
+/** How long after an own write settles its echo event may arrive. */
 export const OWN_WRITE_GRACE_MS = 750;
 
 interface Entry {
   spec: ConsumerSpec;
   stale: boolean;
   timer: TimerHandle | null;
-  /** Scope → deadline; events before it were caused by the own write. */
+  /** Scope → deadline; an echo past it no longer counts. */
   suppressUntil: Partial<Record<Scope, number>>;
   /** Scope → count of own writes in flight. */
   writing: Partial<Record<Scope, number>>;
+  /** Scope → count of echo events still expected from own writes. An own
+   * write echoes exactly once (in flight or within the grace window after
+   * it settles); anything after that is an external change and reloads. */
+  echoes: Partial<Record<Scope, number>>;
 }
 
 export class InvalidationCore {
@@ -94,6 +98,7 @@ export class InvalidationCore {
       timer: null,
       suppressUntil: {},
       writing: {},
+      echoes: {},
     });
   }
 
@@ -114,7 +119,7 @@ export class InvalidationCore {
     const now = this.timers.now();
     for (const entry of this.entries.values()) {
       if (!entry.spec.scopes.includes(scope)) continue;
-      if (this.ownWriteActive(entry, scope, now)) continue;
+      if (this.ownWriteSkip(entry, scope, now)) continue;
       if (!this.visible(entry)) {
         if (entry.timer !== null) {
           this.timers.clearTimeout(entry.timer);
@@ -152,9 +157,9 @@ export class InvalidationCore {
   }
 
   /**
-   * Wrap a mutating write: the event it causes is skipped for this consumer
-   * alone (it already holds what it wrote); every other consumer still
-   * reloads.
+   * Wrap a mutating write: the one event it causes is skipped for this
+   * consumer alone (it already holds what it wrote); every other consumer
+   * still reloads, and so does this one for any further event.
    */
   async withOwnWrite<T>(
     id: string,
@@ -165,6 +170,7 @@ export class InvalidationCore {
     if (!entry) return write();
     for (const scope of scopes) {
       entry.writing[scope] = (entry.writing[scope] ?? 0) + 1;
+      entry.echoes[scope] = (entry.echoes[scope] ?? 0) + 1;
     }
     try {
       return await write();
@@ -176,10 +182,21 @@ export class InvalidationCore {
     }
   }
 
-  private ownWriteActive(entry: Entry, scope: Scope, now: number): boolean {
-    if ((entry.writing[scope] ?? 0) > 0) return true;
-    const until = entry.suppressUntil[scope];
-    return until !== undefined && now < until;
+  /** Is this event the echo of the consumer's own write? */
+  private ownWriteSkip(entry: Entry, scope: Scope, now: number): boolean {
+    if ((entry.writing[scope] ?? 0) > 0) {
+      entry.echoes[scope] = Math.max(0, (entry.echoes[scope] ?? 0) - 1);
+      return true;
+    }
+    if (
+      (entry.echoes[scope] ?? 0) > 0 &&
+      now < (entry.suppressUntil[scope] ?? 0)
+    ) {
+      entry.echoes[scope] = Math.max(0, (entry.echoes[scope] ?? 0) - 1);
+      return true;
+    }
+    entry.echoes[scope] = 0;
+    return false;
   }
 
   private visible(entry: Entry): boolean {

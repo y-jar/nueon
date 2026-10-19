@@ -485,6 +485,8 @@
   });
 
   $effect(() => {
+    // New tags from other windows/imports ride the dictionary revision.
+    void ui.revision.dictionary;
     if (ui.root) {
       api.knownTagNames().then((names) => (knownTags = names)).catch(() => {});
       api

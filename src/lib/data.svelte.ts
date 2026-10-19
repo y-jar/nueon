@@ -120,7 +120,7 @@ export async function init(): Promise<void> {
   });
   registerInvalidation({
     id: "fixesTables",
-    scopes: ["workspace", "config"],
+    scopes: ["workspace", "config", "dictionary"],
     reload: loadFixesTables,
   });
   registerInvalidation({

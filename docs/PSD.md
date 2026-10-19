@@ -100,21 +100,31 @@ layer (`src-tauri/`), and the Svelte 5 frontend (`src/`). See `docs/ARCHITECTURE
   frontend registry (`src/lib/invalidation.svelte.ts`) routes each scope to
   the consumers that declared it: visible ones reload (debounced 150 ms, so a
   burst of edits coalesces into one refetch), hidden ones go stale and reload
-  when shown, and a consumer's own writes are skipped for it alone so they
-  cannot loop. Effect-based consumers read the per-scope `ui.revision`
-  counters the registry bumps. The Morphology store (classes, morphemes,
-  lexicon) declares dictionary, config, translation, workspace and vcs: the
-  sidebar follows word/table-role/config changes made anywhere without the
-  refresh button; a reload keeps the user's work coherent (a deleted selected
-  word clears the preview; compose chips whose backing entry vanished are
-  struck out as missing, not dropped).
+  when shown, and a consumer's own writes are skipped for it alone — exactly
+  one echo event per write — so they cannot loop while later events still
+  reload. Effect-based consumers read the per-scope `ui.revision` counters
+  the registry bumps. Registered consumers: the Morphology store
+  (dictionary, config, translation, workspace, vcs — the sidebar follows
+  word/table-role/config changes made anywhere without the refresh button;
+  a reload keeps the user's work coherent: a deleted selected word clears
+  the preview, compose chips whose backing entry vanished are struck out as
+  missing, not dropped), the Translation panel (translation, config,
+  workspace; presets/options/grammar, own writes suppressed), the Settings
+  modal (config, translation, dictionary, mounted while open, pending-save
+  guard), and the shared slices. Counter-based: PhonologyView, the writing
+  views, Inspector, ParadigmGrid, the affix-rules drawer (translation +
+  config), FeatureEditor's per-column value cache and the known-tags
+  datalists (dictionary).
 - **Where.** `src/lib/invalidation.ts` (pure core, unit-tested),
   `src/lib/invalidation.svelte.ts` (wiring), `src/lib/data.svelte.ts`
-  (listener), `src/lib/morphology.svelte.ts` (registration).
-- **Proof.** probes 186–196 (word add/rename/delete, affix row, role flip,
+  (listener), `src/lib/morphology.svelte.ts` (registration),
+  `src/components/Translation.svelte`, `src/components/Settings.svelte`.
+- **Proof.** probes 186–202 (word add/rename/delete, affix row, role flip,
   undo/redo, config replace, workspace switch, trash restore,
-  hidden-then-shown, 50-edit burst coalescing); `src/lib/invalidation.test.ts`
-  (fan-out, coalescing, own-write suppression, stale-when-hidden).
+  hidden-then-shown, 50-edit burst coalescing, affix drawer, preset list,
+  role in the open Settings modal, phonology replace, inherent feature
+  values, known-tags datalist); `src/lib/invalidation.test.ts` (fan-out,
+  coalescing, own-write echo suppression, stale-when-hidden).
 
 ## Phonology
 

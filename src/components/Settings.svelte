@@ -1,9 +1,14 @@
 <!-- Settings content: language, tables, keybinds. -->
 <script lang="ts">
-  import { onMount } from "svelte";
+  import { onDestroy, onMount } from "svelte";
   import { t } from "svelte-i18n";
     import * as api from "../lib/api";
   import { exportProfileDialog } from "../lib/exports";
+  import {
+    registerInvalidation,
+    unregisterInvalidation,
+    withOwnWrite,
+  } from "../lib/invalidation.svelte";
   import {
     ui,
     openSetupWizard,
@@ -59,7 +64,20 @@
   let status = $state("");
   let error = $state("");
 
-  onMount(load);
+  // The modal is mounted only while open, so the registration lives exactly
+  // that long: config/translation/dictionary events made elsewhere (the
+  // setup wizard behind the modal, another window) refresh it; its own
+  // writes are skipped, and a reload waits out a pending debounced save.
+  onMount(() => {
+    registerInvalidation({
+      id: "settings",
+      scopes: ["config", "translation", "dictionary"],
+      reload: () => (soundTimer || pluralTimer ? undefined : load()),
+    });
+    void load();
+  });
+
+  onDestroy(() => unregisterInvalidation("settings"));
 
   async function load() {
     try {
@@ -99,11 +117,13 @@
       phonology.phonemes.filter((phoneme) => phoneme.kind === "other"),
     );
     try {
-      await api.phonologySet({
-        phonemes,
-        syllables: phonology.syllables,
-        rules: phonology.rules,
-      });
+      await withOwnWrite("settings", ["config"], () =>
+        api.phonologySet({
+          phonemes,
+          syllables: phonology.syllables,
+          rules: phonology.rules,
+        }),
+      );
       phonology = { phonemes, syllables: phonology.syllables, rules: phonology.rules };
       status = $t("settings.saved");
       error = "";
@@ -120,7 +140,9 @@
   async function savePlural() {
     const next = setPluralEnding(morphology, pluralSurface, pluralKind);
     try {
-      await api.setTranslationMorphology(next);
+      await withOwnWrite("settings", ["translation"], () =>
+        api.setTranslationMorphology(next),
+      );
       morphology = next;
       status = $t("settings.saved");
       error = "";
@@ -132,7 +154,9 @@
   /** Strip a leading '#' from the class column's values across all tables. */
   async function cleanClassValues() {
     try {
-      const count = await api.normalizeClassValues(classInfo?.resolved ?? null);
+      const count = await withOwnWrite("settings", ["dictionary"], () =>
+        api.normalizeClassValues(classInfo?.resolved ?? null),
+      );
       status = $t("settings.cleanedClassValues", { values: { count } });
       error = "";
       await load();
@@ -148,7 +172,9 @@
       class_column: value || null,
     };
     try {
-      await api.setTranslationMorphology(next);
+      await withOwnWrite("settings", ["translation"], () =>
+        api.setTranslationMorphology(next),
+      );
       morphology = next;
       classInfo = await api.classColumnGet();
       status = $t("settings.saved");
@@ -171,7 +197,9 @@
 
   async function importProfile() {
     try {
-      await api.profileImportDialog();
+      await withOwnWrite("settings", ["config"], () =>
+        api.profileImportDialog(),
+      );
       await load();
       status = $t("settings.saved");
       error = "";
@@ -194,7 +222,9 @@
     surface: string | null = null,
   ) {
     try {
-      await api.setTableRole(table, role, trigger, surface);
+      await withOwnWrite("settings", ["config"], () =>
+        api.setTableRole(table, role, trigger, surface),
+      );
       tableRoles = {
         ...tableRoles,
         [table]: { role, trigger, surface },
@@ -214,7 +244,9 @@
 
   async function saveLanguage() {
     try {
-      await api.languageSet({ ...language });
+      await withOwnWrite("settings", ["config"], () =>
+        api.languageSet({ ...language }),
+      );
       applyDirection();
       status = $t("settings.saved");
       error = "";
@@ -225,7 +257,9 @@
 
   async function saveGrammar() {
     try {
-      await api.grammarSet({ rules });
+      await withOwnWrite("settings", ["config"], () =>
+        api.grammarSet({ rules }),
+      );
       status = $t("settings.saved");
       error = "";
     } catch (e) {

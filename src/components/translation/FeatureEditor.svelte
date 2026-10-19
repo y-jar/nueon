@@ -15,8 +15,14 @@
 
   /** Distinct values read from a bound column, cached by table+column. */
   let derived = $state<Record<string, string[]>>({});
+  /** The cache dies with any dictionary event (edits change column values). */
+  let derivedSeen = ui.revision.dictionary;
 
   $effect(() => {
+    if (ui.revision.dictionary !== derivedSeen) {
+      derivedSeen = ui.revision.dictionary;
+      derived = {};
+    }
     for (const feature of morphology.features) {
       const column = feature.column;
       if (!column) continue;

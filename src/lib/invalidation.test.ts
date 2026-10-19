@@ -127,23 +127,43 @@ test("a burst of events coalesces into one reload per quiet window", () => {
 
 // -- own-write suppression ---------------------------------------------------
 
-test("own writes skip their own events; other consumers still reload", async () => {
+test("an own write's in-flight echo is skipped; others still reload", async () => {
   const { timers, core, tracked } = makeCore();
   const a = tracked("morphology", ["translation"]);
   const b = tracked("translation-panel", ["translation"]);
   await core.withOwnWrite("morphology", ["translation"], async () => {
     core.notify("translation");
     timers.advance(DEBOUNCE_MS);
-    assert.equal(a.reloads.length, 0, "the writer skipped its own event");
+    assert.equal(a.reloads.length, 0, "the writer skipped its own echo");
     assert.equal(b.reloads.length, 1, "the other consumer still reloaded");
   });
   core.notify("translation");
   timers.advance(DEBOUNCE_MS);
-  assert.equal(a.reloads.length, 0, "events inside the grace window are skipped");
+  assert.equal(
+    a.reloads.length,
+    1,
+    "an external change right after the echo reloads",
+  );
+});
+
+test("an own write's late echo is skipped; a change after it reloads", async () => {
+  const { timers, core, tracked } = makeCore();
+  const a = tracked("morphology", ["translation"]);
+  await core.withOwnWrite("morphology", ["translation"], async () => {});
+  core.notify("translation");
+  timers.advance(DEBOUNCE_MS);
+  assert.equal(a.reloads.length, 0, "the late echo is skipped");
+  core.notify("translation");
+  timers.advance(DEBOUNCE_MS);
+  assert.equal(
+    a.reloads.length,
+    1,
+    "a second event inside the grace window is an external change and reloads",
+  );
   timers.advance(OWN_WRITE_GRACE_MS + 1);
   core.notify("translation");
   timers.advance(DEBOUNCE_MS);
-  assert.equal(a.reloads.length, 1, "after the grace window events reload again");
+  assert.equal(a.reloads.length, 2, "after the grace window events reload again");
 });
 
 // -- stale when hidden -------------------------------------------------------
