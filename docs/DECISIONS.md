@@ -317,12 +317,34 @@ commit per stage. See `docs/PROBING.md`.
   through it never reached the panels holding copies. `docs/IPC.md` had
   documented a reload that never existed.
 - **Load-once caches were the pattern, not the exception.** The reported bug
-  was the Morphology store, but the audit found the same shape in the
-  Translation panel, the affix rules, ParadigmGrid, PhonologyView after
-  wizard/profile writes, Settings behind the wizard, Inspector's phonology
-  copy and FeatureEditor's derived cache. The writing views' revision
-  counters were the one working pattern, so the fix generalizes them into
-  one scope registry every consumer declares against (see `docs/STATE.md`).
+  was the Morphology store (load once, refresh only by button), but the audit
+  found the same shape in the Translation panel, the affix rules,
+  ParadigmGrid, PhonologyView after wizard/profile writes, Settings behind
+  the wizard, Inspector's phonology copy and FeatureEditor's derived cache.
+  Even a workspace switch left the Morphology store holding the previous
+  workspace's words.
+- **One registry with an echo budget, not per-listener branches.** The fix
+  routes every event through one registry (a pure, unit-tested core plus the
+  wiring): consumers declare the scopes that invalidate them; visible ones
+  reload debounced 150 ms (a burst of 50 edits is one refetch), hidden ones
+  go stale and reload when shown. The first own-write design — a flat time
+  window after a write settles — was caught by a probe: a panel's own write
+  swallowed an *external* change that landed inside the window, so the
+  window became a per-write budget of exactly one echo event; anything
+  after the echo is an external change and reloads. The four bespoke
+  revision counters (writing, phonology, morphology, vcs) each fed exactly
+  one hand-wired writer and missed every other writer; the registry's
+  per-scope `ui.revision` replaced them, and effect-based consumers (the
+  writing views, PhonologyView, Inspector, ParadigmGrid, FeatureEditor)
+  read it as an `$effect` dep instead of registering.
+- **Backend emitters fixed with the frontend.** `changed_after_disk_change`
+  (checkout/revert) now also emits `config` — a checkout can rewrite any
+  config file, and every config-derived view went stale after one;
+  `undo`/`redo` emit `notes` when the applied step rewrote note files (an
+  undone word rename used to leave the open note showing the rewritten
+  link); `import_asset` emits `notes` like its dialog twin. Left flagged:
+  `save_note` emits nothing, so an open note in a second window goes stale
+  (fixing it needs window identity in the payload — deferred).
 
 ## Deferred, not abandoned
 

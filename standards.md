@@ -66,6 +66,24 @@ docs: module headers + generated source map
   `refreshLibrary` already does.
   is how `88` used to throw.
 
+## Data-changed invalidation
+
+- Every store or panel that caches backend data must declare which
+  `data-changed` scopes invalidate it — `registerInvalidation` for
+  store-like consumers, or a dep on the matching `ui.revision` counter for
+  effect-based ones — and a probe must cover at least one change of each
+  declared scope. The audit table in `docs/STATE.md` lists every consumer.
+- Every new mutating command must emit the scope its consumers depend on
+  (`changed(&app, ...)`; checkout/revert go through `changed_after_disk_change`),
+  otherwise the frontend will silently go stale. `save_note` is the known
+  remaining gap (an open note in a second window).
+- No bespoke revision counters: the registry's per-scope `ui.revision` is
+  the only one. The four ad-hoc counters it replaced each fed exactly one
+  hand-wired writer and missed every other.
+- An own write skips exactly one echo event per write for its writer alone;
+  anything after that is an external change and reloads. A store's reload
+  compares before assigning, so a redundant refetch writes nothing reactive.
+
 ## Docs
 
 - `docs/PSD.md` is the living spec: any stage that changes behaviour updates its
