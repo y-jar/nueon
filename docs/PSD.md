@@ -119,12 +119,14 @@ layer (`src-tauri/`), and the Svelte 5 frontend (`src/`). See `docs/ARCHITECTURE
   `src/lib/invalidation.svelte.ts` (wiring), `src/lib/data.svelte.ts`
   (listener), `src/lib/morphology.svelte.ts` (registration),
   `src/components/Translation.svelte`, `src/components/Settings.svelte`.
-- **Proof.** probes 186–202 (word add/rename/delete, affix row, role flip,
+- **Proof.** probes 186–204 (word add/rename/delete, affix row, role flip,
   undo/redo, config replace, workspace switch, trash restore,
   hidden-then-shown, 50-edit burst coalescing, affix drawer, preset list,
   role in the open Settings modal, phonology replace, inherent feature
-  values, known-tags datalist); `src/lib/invalidation.test.ts` (fan-out,
-  coalescing, own-write echo suppression, stale-when-hidden).
+  values, known-tags datalist, reverted config file, undo reloading an open
+  note); `src/lib/invalidation.test.ts` (fan-out, coalescing, own-write echo
+  suppression, stale-when-hidden) and cargo `undo_and_redo_report` (the
+  notes outcome).
 
 ## Phonology
 

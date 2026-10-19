@@ -359,6 +359,43 @@ fn auto_checkin_never_commits_trash_contents() {
 }
 
 #[test]
+fn undo_and_redo_report_whether_the_step_rewrote_notes() {
+    let dir = tempfile::tempdir().unwrap();
+    let mut ws = Workspace::new(dir.path()).unwrap();
+    ws.create_table("verbs").unwrap();
+    let id = ws.create_entry("verbs", "kala").unwrap().unwrap();
+    // A note that the rename's link rewrite touches.
+    ws.create_note_with_content("probe.md", "see [[kala]]\n")
+        .unwrap();
+
+    ws.rename_word("verbs", id, "kalo").unwrap();
+    assert_eq!(
+        std::fs::read_to_string(dir.path().join("notes/probe.md")).unwrap(),
+        "see [[kalo]]\n",
+        "the rename rewrote the link on disk"
+    );
+
+    let outcome = ws.undo().unwrap();
+    assert!(outcome.applied);
+    assert!(
+        outcome.notes,
+        "the step rewrote a note; callers must emit notes"
+    );
+    assert_eq!(
+        std::fs::read_to_string(dir.path().join("notes/probe.md")).unwrap(),
+        "see [[kala]]\n"
+    );
+
+    let outcome = ws.redo().unwrap();
+    assert!(outcome.applied);
+    assert!(outcome.notes);
+    assert_eq!(
+        std::fs::read_to_string(dir.path().join("notes/probe.md")).unwrap(),
+        "see [[kalo]]\n"
+    );
+}
+
+#[test]
 fn deleting_a_table_trashes_it_and_dictionary_undo_restores_it_without_duplicates() {
     let dir = tempfile::tempdir().unwrap();
     let mut ws = Workspace::new(dir.path()).unwrap();
@@ -372,7 +409,7 @@ fn deleting_a_table_trashes_it_and_dictionary_undo_restores_it_without_duplicate
     assert!(ws.delete_table("verbs").unwrap().is_none());
 
     // Undo is an ordinary dictionary step and drops the redundant copy.
-    assert!(ws.undo().unwrap());
+    assert!(ws.undo().unwrap().applied);
     assert!(dir.path().join("dictionary/verbs").exists());
     assert!(ws
         .dictionary
@@ -387,7 +424,7 @@ fn deleting_a_table_trashes_it_and_dictionary_undo_restores_it_without_duplicate
     );
 
     // Redo deletes again, and even that goes to the trash, not nowhere.
-    assert!(ws.redo().unwrap());
+    assert!(ws.redo().unwrap().applied);
     assert!(!dir.path().join("dictionary/verbs").exists());
     assert_eq!(trash_entries(dir.path()).len(), 1);
     let restored = Workspace::load(dir.path()).unwrap();
@@ -419,7 +456,7 @@ fn restoring_a_trashed_table_is_undoable_and_never_overwrites() {
     );
     assert!(ws.list_trash().is_empty());
 
-    assert!(ws.undo().unwrap(), "restoring is an undoable step");
+    assert!(ws.undo().unwrap().applied, "restoring is an undoable step");
     assert!(ws.dictionary.table("verbs (restored)").is_none());
 }
 
@@ -544,7 +581,7 @@ fn undoing_a_slug_variant_rename_keeps_the_tables_file() {
         let id = ws.create_entry(from, "kala").unwrap().unwrap();
         ws.rename_table(from, to).unwrap();
 
-        assert!(ws.undo().unwrap()); // back to the original name
+        assert!(ws.undo().unwrap().applied); // back to the original name
 
         let reloaded = Workspace::load(dir.path()).unwrap();
         let table = reloaded.dictionary.table(from).unwrap_or_else(|| {
@@ -571,10 +608,10 @@ fn undo_and_redo_only_touch_files_they_own() {
     // A table the app is not undoing, edited by hand on disk.
     let nouns_before = std::fs::read(dir.path().join("dictionary/nouns")).unwrap();
 
-    assert!(ws.undo().unwrap()); // un-add "kala"
-    assert!(ws.undo().unwrap()); // un-create "nouns" (deletes its file)
-    assert!(ws.redo().unwrap());
-    assert!(ws.redo().unwrap());
+    assert!(ws.undo().unwrap().applied); // un-add "kala"
+    assert!(ws.undo().unwrap().applied); // un-create "nouns" (deletes its file)
+    assert!(ws.redo().unwrap().applied);
+    assert!(ws.redo().unwrap().applied);
 
     assert_eq!(
         std::fs::read_to_string(&unknown).unwrap(),
@@ -601,7 +638,7 @@ fn undo_does_not_rewrite_tables_it_did_not_change() {
     std::fs::write(&nouns, r#"{"name":"nouns","tags":[],"entries":[]}  "#).unwrap();
     let hand_edited = std::fs::read(&nouns).unwrap();
 
-    assert!(ws.undo().unwrap()); // only "verbs" changes
+    assert!(ws.undo().unwrap().applied); // only "verbs" changes
     assert_eq!(std::fs::read(&nouns).unwrap(), hand_edited);
 }
 
@@ -820,7 +857,7 @@ fn set_values_batches_and_one_undo_restores_all() {
     );
 
     // A single undo reverts the whole batch.
-    assert!(ws.undo().unwrap());
+    assert!(ws.undo().unwrap().applied);
     for id in [a, b, c] {
         assert!(ws
             .dictionary
@@ -859,7 +896,7 @@ fn delete_entry_with_reassigns_or_orphans_children() {
     assert!(!ws.dictionary.get_entry("t", child_b).unwrap().has_parent());
 
     // One undo restores every change at once.
-    assert!(ws.undo().unwrap());
+    assert!(ws.undo().unwrap().applied);
     assert!(ws.dictionary.get_entry("t", root).is_some());
     assert_eq!(
         ws.dictionary.get_entry("t", child_a).unwrap().parents(),
@@ -1449,7 +1486,7 @@ fn undo_and_redo_of_a_rename_keep_the_tables_file_on_a_slug_collision() {
         let id = ws.create_entry(from, "kala").unwrap().unwrap();
 
         assert!(ws.rename_table(from, to).unwrap());
-        assert!(ws.undo().unwrap());
+        assert!(ws.undo().unwrap().applied);
         assert!(ws.dictionary.table(from).is_some());
         assert!(ws
             .dictionary
@@ -1467,7 +1504,7 @@ fn undo_and_redo_of_a_rename_keep_the_tables_file_on_a_slug_collision() {
             .iter()
             .any(|e| e.id == id));
 
-        assert!(ws.redo().unwrap());
+        assert!(ws.redo().unwrap().applied);
         assert_eq!(ws.dictionary.table(to).unwrap().entries[0].id, id);
         let reloaded = Workspace::load(dir.path()).unwrap();
         assert!(reloaded
@@ -1490,7 +1527,7 @@ fn undo_and_redo_of_a_delete_keep_using_the_same_file_across_a_collision() {
     ws.create_entry("roots", "two").unwrap();
 
     ws.delete_table("roots").unwrap();
-    assert!(ws.undo().unwrap());
+    assert!(ws.undo().unwrap().applied);
     assert_eq!(
         ws.dictionary.table("Roots").unwrap().entries[0].wordname,
         "one"
@@ -1509,7 +1546,7 @@ fn undo_and_redo_of_a_delete_keep_using_the_same_file_across_a_collision() {
         "two"
     );
 
-    assert!(ws.redo().unwrap());
+    assert!(ws.redo().unwrap().applied);
     assert!(ws.dictionary.table("roots").is_none());
     assert_eq!(
         ws.dictionary.table("Roots").unwrap().entries[0].wordname,
@@ -1523,7 +1560,7 @@ fn undo_of_an_empty_tables_creation_skips_the_trash() {
     let mut ws = Workspace::new(dir.path()).unwrap();
     ws.create_table("fresh").unwrap();
 
-    assert!(ws.undo().unwrap());
+    assert!(ws.undo().unwrap().applied);
     assert!(ws.dictionary.table("fresh").is_none());
     assert!(
         ws.list_trash().is_empty(),
@@ -1533,8 +1570,8 @@ fn undo_of_an_empty_tables_creation_skips_the_trash() {
     // A table that actually holds a word is still trashed on undo.
     ws.create_table("has-words").unwrap();
     ws.create_entry("has-words", "kala").unwrap();
-    assert!(ws.undo().unwrap()); // un-add "kala"
-    assert!(ws.undo().unwrap()); // un-create "has-words"
+    assert!(ws.undo().unwrap().applied); // un-add "kala"
+    assert!(ws.undo().unwrap().applied); // un-create "has-words"
     assert_eq!(
         ws.list_trash().len(),
         0,
@@ -1545,7 +1582,7 @@ fn undo_of_an_empty_tables_creation_skips_the_trash() {
     ws.create_entry("stays", "kala").unwrap();
     let _ = ws.redo(); // no-op, nothing to redo
     assert!(ws.delete_table("stays").unwrap().is_some());
-    assert!(ws.undo().unwrap()); // un-delete: brings it back
+    assert!(ws.undo().unwrap().applied); // un-delete: brings it back
     assert_eq!(
         ws.list_trash().len(),
         0,
@@ -1857,11 +1894,11 @@ fn undo_and_redo_restore_dictionary_and_persist() {
     assert!(ws.can_undo());
     assert!(!ws.can_redo());
 
-    assert!(ws.undo().unwrap());
+    assert!(ws.undo().unwrap().applied);
     assert!(ws.dictionary.table("verbs").unwrap().entries.is_empty());
     assert!(ws.can_redo());
 
-    assert!(ws.redo().unwrap());
+    assert!(ws.redo().unwrap().applied);
     assert_eq!(ws.dictionary.table("verbs").unwrap().entries.len(), 1);
 
     let reloaded = Workspace::load(dir.path()).unwrap();
@@ -1876,7 +1913,7 @@ fn undo_restores_a_deleted_table_file() {
     ws.delete_table("verbs").unwrap();
     assert!(ws.dictionary.table("verbs").is_none());
 
-    assert!(ws.undo().unwrap());
+    assert!(ws.undo().unwrap().applied);
     assert!(ws.dictionary.table("verbs").is_some());
     let reloaded = Workspace::load(dir.path()).unwrap();
     assert!(reloaded.dictionary.table("verbs").is_some());
@@ -2112,14 +2149,14 @@ fn renaming_a_word_rewrites_its_note_links_and_undo_restores_them() {
     let note = ws.read_note("lore.md").unwrap();
     assert_eq!(note, "see [[kaka]] and ![[kaka|dog]]");
 
-    assert!(ws.undo().unwrap());
+    assert!(ws.undo().unwrap().applied);
     assert_eq!(ws.dictionary.get_entry("lex", id).unwrap().wordname, "kala");
     assert_eq!(
         ws.read_note("lore.md").unwrap(),
         "see [[kala]] and ![[kala|dog]]"
     );
 
-    assert!(ws.redo().unwrap());
+    assert!(ws.redo().unwrap().applied);
     assert_eq!(
         ws.read_note("lore.md").unwrap(),
         "see [[kaka]] and ![[kaka|dog]]"

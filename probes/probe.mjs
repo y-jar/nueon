@@ -8882,6 +8882,67 @@ async function main() {
     });
     await screenshot("p202-known-tags");
   });
+
+  // -- probes 203-204: disk-side and undo changes reach the right scopes ----
+
+  await probe("203-a-reverted-config-file-refreshes-config-derived-views", async () => {
+    // A commit so HEAD exists for the revert to go back to.
+    await invokeAsync("create_word", { table: "lex", wordname: "headw" });
+    await invokeAsync("vcs_commit", { message: "probe stage 4 base" });
+    await openActivity("Phonology");
+    await waitJs(`!!document.querySelector('.ipa-table')`, { label: "phonology chart" });
+    const config = await invokeAsync("config_get", { section: "phonology" });
+    await invokeAsync("config_set", {
+      section: "phonology",
+      value: {
+        ...config,
+        phonemes: [...(config.phonemes ?? []), { symbol: "ʧ", kind: "consonant" }],
+      },
+    });
+    await waitJs(
+      `[...document.querySelectorAll('.phoneme-chip .symbol')].some((el) =>
+        el.textContent.trim() === 'ʧ')`,
+      { label: "the phoneme shows before the revert" },
+    );
+    // Revert the config file to HEAD: the chart must follow without a remount.
+    await invokeAsync("vcs_revert_file", { path: "config/phonology" });
+    await waitJs(
+      `![...document.querySelectorAll('.phoneme-chip .symbol')].some((el) =>
+        el.textContent.trim() === 'ʧ')`,
+      { label: "the reverted phoneme disappears from the chart", timeout: 5000 },
+    );
+    await screenshot("p203-revert-config-view");
+  });
+
+  await probe("204-undoing-a-word-rename-reloads-the-open-note", async () => {
+    const id = await invokeAsync("create_word", { table: "lex", wordname: "renamable" });
+    await invokeAsync("create_note_with_content", {
+      relPath: "linkprobe.md",
+      content: "see [[renamable]] here\n",
+    });
+    await openActivity("Notes");
+    await waitJs(`!!document.querySelector('.tree-row[data-path="linkprobe.md"] .tree-name')`, {
+      label: "the new note's tree row",
+    });
+    await openNote("linkprobe.md");
+    await waitJs(
+      `!!document.querySelector('.cm-content')?.textContent.includes('renamable')`,
+      { label: "the note opened with the link" },
+    );
+    // The forward rename rewrites the link and reloads the open note.
+    await invokeAsync("rename_word", { table: "lex", id, wordname: "renamed" });
+    await waitJs(
+      `!!document.querySelector('.cm-content')?.textContent.includes('renamed')`,
+      { label: "the link was rewritten forward" },
+    );
+    // Undo rewrites the note file back; the open editor must follow.
+    await invokeAsync("undo", {});
+    await waitJs(
+      `!!document.querySelector('.cm-content')?.textContent.includes('renamable')`,
+      { label: "undo reloaded the open note", timeout: 5000 },
+    );
+    await screenshot("p204-undo-reloads-note");
+  });
 }
 
 try {

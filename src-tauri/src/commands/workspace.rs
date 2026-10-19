@@ -448,30 +448,36 @@ pub fn tiling_save(
 #[tauri::command]
 pub fn undo(app: AppHandle, state: State<'_, Shared>) -> Result<bool, String> {
     let mut state = state.lock().map_err(|_| "state poisoned".to_string())?;
-    let did = state
+    let outcome = state
         .workspace_mut()?
         .undo()
         .map_err(|err| err.to_string())?;
     drop(state);
-    if did {
+    if outcome.applied {
         changed(&app, "dictionary");
+        if outcome.notes {
+            changed(&app, "notes");
+        }
     }
-    Ok(did)
+    Ok(outcome.applied)
 }
 
 /// Redo the last undone dictionary edit; returns `false` if none.
 #[tauri::command]
 pub fn redo(app: AppHandle, state: State<'_, Shared>) -> Result<bool, String> {
     let mut state = state.lock().map_err(|_| "state poisoned".to_string())?;
-    let did = state
+    let outcome = state
         .workspace_mut()?
         .redo()
         .map_err(|err| err.to_string())?;
     drop(state);
-    if did {
+    if outcome.applied {
         changed(&app, "dictionary");
+        if outcome.notes {
+            changed(&app, "notes");
+        }
     }
-    Ok(did)
+    Ok(outcome.applied)
 }
 
 /// Whether the one-time warning `key` has been silenced.

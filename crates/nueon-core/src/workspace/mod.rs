@@ -18,6 +18,7 @@ mod vcs;
 mod writing;
 
 pub use assets::{AssetKind, ImportedAsset, ASSETS_DIR};
+pub use history::StepOutcome;
 pub use note::NoteFile;
 pub use storage::{StorageError, CONFIG_DIR, DICTIONARY_DIR, NOTES_DIR};
 pub use table_files::QuarantineWarning;

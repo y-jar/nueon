@@ -122,10 +122,13 @@ pub fn vcs_checkout(app: AppHandle, state: State<'_, Shared>, name: String) -> R
     Ok(())
 }
 
-/// Tell every window that files changed behind the app's back.
+/// Tell every window that files changed behind the app's back. A checkout or
+/// revert can rewrite any file: notes, dictionary tables and every config
+/// section, so all three scopes fire.
 fn changed_after_disk_change(app: &AppHandle) {
     changed(app, "notes");
     changed(app, "dictionary");
+    changed(app, "config");
     changed(app, "vcs");
 }
 

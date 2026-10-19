@@ -83,9 +83,9 @@ Every frontend store or panel that holds a copy of backend data, and which
 | `Translation.svelte` | presets, grammar, options, morphology copy | translation, config, dictionary, workspace, vcs | the registry (translation, config, workspace; mounted per tab, own writes suppressed) | fresh |
 | `MorphologyView.svelte` local `affixes` | translation options | translation, config | `ui.revision.translation`/`config` (seen-guard) | fresh |
 | `translation/ParadigmGrid.svelte` | one class's paradigm grid | translation, config, dictionary | `ui.revision.translation`/`config` | fresh (dictionary refetch rides the store) |
-| `PhonologyView.svelte` | phonology config | config | `ui.revision.config` | fresh (checkout misses — see gaps) |
-| `WritingPanel.svelte` | writing + phonology config | writing, config, vcs | `ui.revision.writing`/`config` + window focus | fresh (checkout misses) |
-| `WritingSystemView.svelte` | writing + phonology config, outlines | writing, config, vcs | revision counters + focus + reload guard | fresh (checkout misses) |
+| `PhonologyView.svelte` | phonology config | config | `ui.revision.config` | fresh |
+| `WritingPanel.svelte` | writing + phonology config | writing, config, vcs | `ui.revision.writing`/`config` + window focus | fresh |
+| `WritingSystemView.svelte` | writing + phonology config, outlines | writing, config, vcs | revision counters + focus + reload guard | fresh |
 | `Settings.svelte` (open) | language, grammar, roles, phonology, morphology | config, translation, dictionary | the registry (mounted while the modal is open; own writes suppressed, pending-save guard) | fresh |
 | `Inspector.svelte` | phonology copy, known tags | config, dictionary | `ui.revision.config`/`.dictionary` | fresh (draft guards are by design) |
 | `translation/FeatureEditor.svelte` | per-column feature values | dictionary | cache wiped on `ui.revision.dictionary` | fresh |
@@ -94,13 +94,14 @@ Every frontend store or panel that holds a copy of backend data, and which
 | `GitPanel.svelte` | vcs state, log, status | vcs, workspace | `ui.revision.vcs` | fresh |
 | Editor / open notes | note buffers | notes, vcs | `reloadOpenNotes` + freshness generations | fresh |
 
-Backend emit gaps the audit flagged: `vcs_checkout`/`vcs_revert_file` never
-emit `config` (all config-derived views go stale after a checkout), `undo`/
-`redo` omit `notes` when the step rewrote note files, `save_note` emits
-nothing (an open note in a second window goes stale), and the pref commands
-(`set_keybind`, `set_editor_line_numbers`, `ui_layout_set`, `tiling_save`,
-`grid_view_set`, `recent_record`) emit nothing by design — single-window,
-self-contained consumers.
+Backend emit gaps the audit flagged, since fixed: `vcs_checkout`/
+`vcs_revert_file` now emit `config` too (config-derived views refresh after
+a checkout), `undo`/`redo` emit `notes` when the applied step rewrote note
+files, and `import_asset` emits `notes` like its dialog twin. Still open:
+`save_note` emits nothing (an open note in a second window goes stale), and
+the pref commands (`set_keybind`, `set_editor_line_numbers`,
+`ui_layout_set`, `tiling_save`, `grid_view_set`, `recent_record`) emit
+nothing by design — single-window, self-contained consumers.
 
 ## Overlays
 

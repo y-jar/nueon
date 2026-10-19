@@ -47,16 +47,23 @@ pub async fn asset_import_dialog(
 /// be one the OS handed the app (recorded as a one-use grant by the
 /// drag-drop handler); a path JavaScript invented is refused.
 #[tauri::command]
-pub fn import_asset(state: State<'_, Shared>, path: String) -> Result<ImportedAsset, String> {
+pub fn import_asset(
+    app: AppHandle,
+    state: State<'_, Shared>,
+    path: String,
+) -> Result<ImportedAsset, String> {
     let source = PathBuf::from(&path);
     let mut state = state.lock().map_err(|_| "state poisoned".to_string())?;
     if !state.consume_grant(&source) {
         return Err("refusing a file path that was not dropped onto the app".to_string());
     }
-    state
+    let imported = state
         .workspace_mut()?
         .import_asset(source)
-        .map_err(|err| err.to_string())
+        .map_err(|err| err.to_string())?;
+    drop(state);
+    changed(&app, "notes");
+    Ok(imported)
 }
 
 /// Copy a file dropped on the explorer into `folder` of `notes/`, keeping its

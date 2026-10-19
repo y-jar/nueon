@@ -17,6 +17,15 @@ pub(crate) struct Step {
     pub(crate) notes: Vec<NoteEdit>,
 }
 
+/// What an undo/redo applied, so the caller can notify the right slices.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
+pub struct StepOutcome {
+    /// Whether a step was applied at all.
+    pub applied: bool,
+    /// Whether the step rewrote note files on disk.
+    pub notes: bool,
+}
+
 #[derive(Debug)]
 pub(crate) struct History {
     pub(crate) undo: Vec<Step>,
@@ -79,9 +88,9 @@ impl Workspace {
 
     /// Restore the previous dictionary snapshot (and any notes it rewrote) and
     /// persist it.
-    pub fn undo(&mut self) -> Result<bool, StorageError> {
+    pub fn undo(&mut self) -> Result<StepOutcome, StorageError> {
         let Some(previous) = self.history.undo.pop() else {
-            return Ok(false);
+            return Ok(StepOutcome::default());
         };
         // Touch the disk first: if that fails the snapshot goes back on the
         // stack and memory is unchanged.
@@ -90,6 +99,7 @@ impl Workspace {
             self.history.undo.push(previous);
             return Err(err);
         }
+        let notes = !previous.notes.is_empty();
         for edit in &previous.notes {
             storage::write_existing_note(&self.notes_dir(), &edit.path, &edit.before, None)?;
         }
@@ -99,20 +109,24 @@ impl Workspace {
             notes: previous.notes,
         });
         self.mark_change(Instant::now(), "nueon: undo");
-        Ok(true)
+        Ok(StepOutcome {
+            applied: true,
+            notes,
+        })
     }
 
     /// Re-apply the next dictionary snapshot (and any note rewrites) and
     /// persist it.
-    pub fn redo(&mut self) -> Result<bool, StorageError> {
+    pub fn redo(&mut self) -> Result<StepOutcome, StorageError> {
         let Some(next) = self.history.redo.pop() else {
-            return Ok(false);
+            return Ok(StepOutcome::default());
         };
         let before = self.dictionary.clone();
         if let Err(err) = self.write_dictionary_diff(&before, &next.dictionary) {
             self.history.redo.push(next);
             return Err(err);
         }
+        let notes = !next.notes.is_empty();
         for edit in &next.notes {
             storage::write_existing_note(&self.notes_dir(), &edit.path, &edit.after, None)?;
         }
@@ -122,7 +136,10 @@ impl Workspace {
             notes: next.notes,
         });
         self.mark_change(Instant::now(), "nueon: redo");
-        Ok(true)
+        Ok(StepOutcome {
+            applied: true,
+            notes,
+        })
     }
 
     /// Bring the table files in line with a restored snapshot by touching

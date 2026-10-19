@@ -146,23 +146,23 @@ write, so later events still reload. The registry also bumps the per-scope
 | scope | emitted by (sites) | frontend action |
 |---|---|---|
 | `workspace` (8) | workspace open/create/remove/rename/set-path/delete-from-disk, zip import | reload workspaces, tree, word index, fixes tables, tables; registered consumers (morphology) reload |
-| `notes` (15) | note/folder create/rename/delete, asset import/copy, word-rename link rewrite, `phonology_apply_table`, `import_apply`, trash restore (note), workspace create/open, vcs checkout/revert | refresh tree + reload open notes |
-| `dictionary` (26) | table/word/tag edits (18), undo/redo, `create_translation_word`, `normalize_class_values`, `phonology_apply_table`, `import_apply`, trash restore (table), vcs checkout | reload word index + tables; registered consumers (morphology) reload |
-| `config` (3) | `config_set` (any section: language/grammar/phonology/writing/translation), `set_table_role`, `profile_import` | reload fixes tables; bump `ui.revision.config` (phonology, writing views, Inspector, Translation, ParadigmGrid) and registered consumers (morphology) reload |
+| `notes` (17) | note/folder create/rename/delete, asset import/copy/drop, word-rename link rewrite, `phonology_apply_table`, `import_apply`, trash restore (note), workspace create/open, vcs checkout/revert, undo/redo (when the step rewrote note files) | refresh tree + reload open notes |
+| `dictionary` (25) | table/word/tag edits (18), undo/redo, `create_translation_word`, `normalize_class_values`, `phonology_apply_table`, `import_apply`, trash restore (table), vcs checkout | reload word index + tables; registered consumers (morphology) reload |
+| `config` (4) | `config_set` (any section: language/grammar/phonology/writing/translation), `set_table_role`, `profile_import`, vcs checkout/revert | reload fixes tables; bump `ui.revision.config` (phonology, writing views, Inspector, Translation, ParadigmGrid) and registered consumers (morphology) reload |
 | `translation` (4) | preset save/delete, `set_translation_morphology`, `set_translation_options` | bump `ui.revision.translation` (the Translation panel, ParadigmGrid) and reload the morphology store |
 | `writing` (8) | glyph outline save, path ops, back image, SVG import, SVG/font export | bump `ui.revision.writing` (writing views refetch) |
-| `vcs` (8) | commit, checkout, branch, init, revert, prompt dismiss, autocheck-in pump | bump `ui.revision.vcs` (Source Control panel) + reload open notes |
+| `vcs` (7) | commit, checkout, branch, init, revert, prompt dismiss, autocheck-in pump | bump `ui.revision.vcs` (Source Control panel) + reload open notes |
 
-Known gaps flagged by the audit: checkout/revert emit no `config` though they
-can rewrite every config file (config-derived views go stale after a
-checkout), and `undo`/`redo` omit `notes` when the step rewrote note files.
-Commands that mutate but emit nothing: `save_note` (an open note in a second
-window goes stale), `import_asset`, `grid_view_set`, `ui_layout_set`,
-`tiling_save`, `window_spawn`, `dismiss_warning`, `suppress_confirm`,
-`clear_suppressed_confirms`, `set_editor_line_numbers`, `set_keybind`,
-`reset_keybinds`, `recent_record`, `trash_purge`, `trash_empty` — the
-pref/layout ones are single-window by design; `save_note` and `import_asset`
-are real gaps.
+Checkout and revert go through `changed_after_disk_change`, which fires
+notes + dictionary + config + vcs (a checkout can rewrite any file). Undo and
+redo fire `dictionary`, plus `notes` when the applied step rewrote note files
+(a rename's link rewrite). Remaining no-emit commands, flagged by the audit:
+`save_note` (an open note in a second window goes stale), `grid_view_set`,
+`ui_layout_set`, `tiling_save`, `window_spawn`, `dismiss_warning`,
+`suppress_confirm`, `clear_suppressed_confirms`, `set_editor_line_numbers`,
+`set_keybind`, `reset_keybinds`, `recent_record`, `trash_purge`,
+`trash_empty` — the pref/layout ones are single-window by design; `save_note`
+is a real gap.
 
 Any new mutating command must pick the scope whose consumers it affects and
 emit it, otherwise the frontend will silently go stale. Any new store or
