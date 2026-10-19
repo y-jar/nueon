@@ -105,8 +105,6 @@
         rules: phonology.rules,
       });
       phonology = { phonemes, syllables: phonology.syllables, rules: phonology.rules };
-      // Let the Phonology tab reload from the new config.
-      ui.phonologyRevision += 1;
       status = $t("settings.saved");
       error = "";
     } catch (e) {

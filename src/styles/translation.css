@@ -631,6 +631,16 @@
   color: var(--accent);
 }
 
+.compose-chip.missing {
+  opacity: 0.55;
+  border-style: dashed;
+}
+
+.compose-chip.missing .mono,
+.compose-chip.missing .muted {
+  text-decoration: line-through;
+}
+
 .compose-chip button {
   padding: 0 2px;
   border: none;

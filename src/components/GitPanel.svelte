@@ -23,7 +23,7 @@
 
   $effect(() => {
     // Re-run on workspace switch and on any vcs event.
-    void ui.vcsRevision;
+    void ui.revision.vcs;
     void ui.root;
     reload();
   });

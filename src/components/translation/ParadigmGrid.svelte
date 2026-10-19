@@ -15,11 +15,12 @@
   let filterFeature = $state("");
   let filterValue = $state("");
 
-  // Refetch when the class changes or the config is written (our own edits
-  // bump `morphologyRevision`).
+  // Refetch when the class changes or the morphology config is written —
+  // our own edits land through the same translation/config revision.
   $effect(() => {
     void classId;
-    void ui.morphologyRevision;
+    void ui.revision.translation;
+    void ui.revision.config;
     void load();
   });
 

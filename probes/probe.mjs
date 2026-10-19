@@ -8471,6 +8471,285 @@ async function main() {
     );
     await screenshot("p185-asset-scope");
   });
+
+  // -- probes 186-196: data-changed keeps the Morphology sidebar live --------
+  // Every mutation goes through the app's own commands (invokeAsync), the way
+  // a grid edit in another pane or window would; the sidebar must follow with
+  // no refresh-button press.
+
+  const morphMode = async (label) => {
+    const ok = await js(`const b = [...document.querySelectorAll('.morphology-view .mode-switch button')]
+        .find((x) => x.textContent.trim() === ${JSON.stringify(label)});
+      if (b) b.click();
+      return !!b;`);
+    if (!ok) throw new Error(`no ${label} mode button`);
+  };
+
+  const openMorphology = async (mode = "Compose") => {
+    await openActivity("Morphology");
+    await waitJs(
+      `!!document.querySelector('.morphology-view') && !!document.querySelector('.morphology-sidebar')`,
+      { label: "morphology view and sidebar" },
+    );
+    await morphMode(mode);
+    await idle(500);
+  };
+
+  const sidebarHas = (selector, text, exact = false) =>
+    waitJs(
+      `[...document.querySelectorAll(${JSON.stringify(selector)})].some((el) => {
+         const t = el.textContent.trim();
+         return ${exact} ? t === ${JSON.stringify(text)} : t.includes(${JSON.stringify(text)});
+       })`,
+      { label: `sidebar ${selector} shows ${text}`, timeout: 5000 },
+    );
+
+  const sidebarLacks = (selector, text, exact = false) =>
+    waitJs(
+      `![...document.querySelectorAll(${JSON.stringify(selector)})].some((el) => {
+         const t = el.textContent.trim();
+         return ${exact} ? t === ${JSON.stringify(text)} : t.includes(${JSON.stringify(text)});
+       })`,
+      { label: `sidebar ${selector} dropped ${text}`, timeout: 5000 },
+    );
+
+  await probe("186-a-word-added-elsewhere-appears-in-the-lexicon", async () => {
+    await openMorphology();
+    await invokeAsync("create_word", { table: "lex", wordname: "glosa" });
+    await sidebarHas(".morphology-sidebar .word-row", "glosa");
+    await screenshot("p186-grid-word-in-lexicon");
+  });
+
+  await probe("187-an-affix-row-added-to-a-fixes-table-appears-in-morphemes", async () => {
+    await openMorphology();
+    await invokeAsync("create_translation_word", {
+      table: "fixes",
+      wordname: "-zap",
+      definition: "probe zap",
+      tags: [],
+      pos: null,
+    });
+    await sidebarHas(".morphology-sidebar .morpheme-row .mono", "zap", true);
+    await screenshot("p187-affix-row-in-morphemes");
+  });
+
+  await probe("188-flipping-a-tables-role-makes-morphemes-appear-and-disappear", async () => {
+    await openMorphology();
+    await invokeAsync("create_table", { name: "rollfix" });
+    await invokeAsync("set_table_role", { table: "rollfix", role: "fixes" });
+    await invokeAsync("create_translation_word", {
+      table: "rollfix",
+      wordname: "-roll",
+      definition: "probe roll",
+      tags: [],
+      pos: null,
+    });
+    await sidebarHas(".morphology-sidebar .morpheme-row .mono", "roll", true);
+    await invokeAsync("set_table_role", { table: "rollfix", role: "vocab" });
+    await sidebarLacks(".morphology-sidebar .morpheme-row .mono", "roll", true);
+    await invokeAsync("set_table_role", { table: "rollfix", role: "fixes" });
+    await sidebarHas(".morphology-sidebar .morpheme-row .mono", "roll", true);
+    await screenshot("p188-role-flip-morphemes");
+  });
+
+  await probe("189-a-word-renamed-elsewhere-updates-the-lexicon", async () => {
+    await openMorphology();
+    const id = await invokeAsync("create_word", { table: "lex", wordname: "renamy" });
+    await sidebarHas(".morphology-sidebar .word-row", "renamy");
+    await invokeAsync("rename_word", { table: "lex", id, wordname: "renamed" });
+    await sidebarHas(".morphology-sidebar .word-row", "renamed");
+    await sidebarLacks(".morphology-sidebar .word-row", "renamy");
+    await screenshot("p189-rename-in-lexicon");
+  });
+
+  await probe("190-deleting-the-word-being-inflected-clears-the-selection", async () => {
+    await openMorphology("Inflect");
+    const id = await invokeAsync("create_word", { table: "lex", wordname: "infly" });
+    await sidebarHas(".morphology-sidebar .word-row", "infly");
+    const picked = await js(`const row = [...document.querySelectorAll('.morphology-sidebar .word-row')]
+        .find((el) => el.textContent.includes('infly'));
+      if (!row) return false;
+      row.click();
+      return true;`);
+    if (!picked) throw new Error("no infly word row to click");
+    await waitJs(
+      `[...document.querySelectorAll('.morphology-view .section-title')].some((el) =>
+        el.textContent.includes('infly'))`,
+      { label: "infly selected for inflection" },
+    );
+    await invokeAsync("delete_word", { table: "lex", id, reassignments: [], cascade: false });
+    await waitJs(
+      `![...document.querySelectorAll('.morphology-view .section-title')].some((el) =>
+        el.textContent.includes('infly'))`,
+      { label: "the deleted word is no longer selected" },
+    );
+    await screenshot("p190-deleted-selection-cleared");
+  });
+
+  await probe("191-undo-and-redo-of-a-word-add-follows-the-sidebar", async () => {
+    await openMorphology();
+    await invokeAsync("create_word", { table: "lex", wordname: "undula" });
+    await sidebarHas(".morphology-sidebar .word-row", "undula");
+    await invokeAsync("undo", {});
+    await sidebarLacks(".morphology-sidebar .word-row", "undula");
+    await invokeAsync("redo", {});
+    await sidebarHas(".morphology-sidebar .word-row", "undula");
+    await screenshot("p191-undo-redo-sidebar");
+  });
+
+  await probe("192-a-translation-config-replace-adds-the-new-class", async () => {
+    await openMorphology("Endings");
+    const value = await invokeAsync("config_get", { section: "translation" });
+    await invokeAsync("config_set", {
+      section: "translation",
+      value: {
+        ...value,
+        morphology: {
+          ...value.morphology,
+          paradigms: [
+            ...(value.morphology?.paradigms ?? []),
+            { class: "probeadj", rows: [] },
+          ],
+        },
+      },
+    });
+    await sidebarHas(".morphology-sidebar .class-row .grow", "probeadj", true);
+    await screenshot("p192-config-replace-class");
+  });
+
+  await probe("193-switching-workspaces-refreshes-the-morphology-data", async () => {
+    await openMorphology();
+    await invokeAsync("create_word", { table: "lex", wordname: "marker" });
+    await sidebarHas(".morphology-sidebar .word-row", "marker");
+    await invokeAsync("workspace_create", {
+      name: "probe2",
+      destination: path.join(ROOT, "ws"),
+    });
+    await waitJs(`document.querySelectorAll('.morphology-sidebar .word-row').length === 0`, {
+      label: "the fresh workspace has an empty lexicon",
+    });
+    await invokeAsync("workspace_open", { path: WORKSPACE });
+    await sidebarHas(".morphology-sidebar .word-row", "marker");
+    await screenshot("p193-workspace-switch");
+  });
+
+  await probe("194-a-trashed-fixes-table-restore-brings-morphemes-back", async () => {
+    await openMorphology();
+    await invokeAsync("create_table", { name: "trashfix" });
+    await invokeAsync("set_table_role", { table: "trashfix", role: "fixes" });
+    await invokeAsync("create_translation_word", {
+      table: "trashfix",
+      wordname: "-tro",
+      definition: "probe trash",
+      tags: [],
+      pos: null,
+    });
+    await sidebarHas(".morphology-sidebar .morpheme-row .mono", "tro", true);
+    const record = await invokeAsync("delete_table", { name: "trashfix" });
+    if (!record) throw new Error("delete_table returned no trash record");
+    await sidebarLacks(".morphology-sidebar .morpheme-row .mono", "tro", true);
+    await invokeAsync("trash_restore", { id: record.id });
+    await sidebarHas(".morphology-sidebar .morpheme-row .mono", "tro", true);
+    await screenshot("p194-trash-restore-morphemes");
+  });
+
+  await probe("195-changes-made-while-morphology-is-hidden-appear-when-shown", async () => {
+    await openMorphology();
+    await invokeAsync("create_word", { table: "lex", wordname: "lurker" });
+    await sidebarHas(".morphology-sidebar .word-row", "lurker");
+    await openActivity("Dictionary");
+    await waitJs(`!document.querySelector('.morphology-sidebar')`, {
+      label: "the morphology sidebar unmounted",
+    });
+    await invokeAsync("create_word", { table: "lex", wordname: "sneaky" });
+    await idle(400);
+    await openActivity("Morphology");
+    await waitJs(`!!document.querySelector('.morphology-sidebar')`, {
+      label: "the morphology sidebar back",
+    });
+    await sidebarHas(".morphology-sidebar .word-row", "sneaky");
+    await screenshot("p195-fresh-on-show");
+  });
+
+  await probe("196-a-burst-of-50-edits-causes-a-few-refetches-not-50", async () => {
+    await openMorphology();
+    const burstId = await invokeAsync("create_word", { table: "lex", wordname: "burstw" });
+    await sidebarHas(".morphology-sidebar .word-row", "burstw");
+    // `__TAURI_INTERNALS__.invoke` is non-writable, so count refetches at the
+    // transport: every invoke is a fetch to ipc://localhost/<command>.
+    await js(`window.__probeFetch = window.fetch;
+      window.__probeCounts = {};
+      window.fetch = function (input, init) {
+        try {
+          const url = typeof input === "string" ? input : String(input && input.url);
+          if (url.startsWith("ipc://")) {
+            const cmd = url.split("?")[0].split("/").pop();
+            if (cmd) window.__probeCounts[cmd] = (window.__probeCounts[cmd] ?? 0) + 1;
+          }
+        } catch (e) {}
+        return window.__probeFetch.apply(this, arguments);
+      };
+      return true;`);
+    const burst = await wd("POST", `/session/${sessionId}/execute/async`, {
+      script: `const done = arguments[arguments.length - 1];
+        Promise.all(Array.from({ length: 50 }, (_, i) =>
+          window.__TAURI_INTERNALS__.invoke("set_word_value", {
+            table: "lex", id: ${JSON.stringify(burstId)}, tag: "english",
+            value: { type: "text", value: "v" + i } })))
+          .then(() => done({ ok: true }))
+          .catch((e) => done({ ok: false, e: String(e) }));`,
+      args: [],
+    });
+    if (!burst?.ok) throw new Error(`the edit burst failed: ${burst?.e}`);
+    await idle(700);
+    const counts = await js(`window.fetch = window.__probeFetch;
+      return window.__probeCounts;`);
+    console.log("BURST-REFETCHES", JSON.stringify(counts));
+    for (const cmd of [
+      "word_index",
+      "list_tables",
+      "translation_morphology",
+      "list_morphemes",
+      "lexicon",
+    ]) {
+      const n = counts[cmd] ?? 0;
+      if (n > 5) throw new Error(`${cmd} refetched ${n} times for a 50-edit burst (want <= 5)`);
+    }
+    // Nobody touching the page for 3 s: no long frame gap or late timer, so
+    // the invalidation effects cannot be looping.
+    const idleCost = await js(`
+      return await new Promise((resolve) => {
+        const gaps = [];
+        const lates = [];
+        let lastFrame = performance.now();
+        let lastTimer = performance.now();
+        let running = true;
+        const frame = () => {
+          const now = performance.now();
+          gaps.push(now - lastFrame);
+          lastFrame = now;
+          if (running) requestAnimationFrame(frame);
+        };
+        requestAnimationFrame(frame);
+        const timer = setInterval(() => {
+          const now = performance.now();
+          lates.push(now - lastTimer - 10);
+          lastTimer = now;
+        }, 10);
+        setTimeout(() => {
+          running = false;
+          clearInterval(timer);
+          resolve({
+            framesOver50ms: gaps.filter((x) => x > 50).length,
+            timerLateOver50ms: lates.filter((x) => x > 50).length,
+          });
+        }, 3000);
+      });`);
+    if (idleCost.framesOver50ms > 0 || idleCost.timerLateOver50ms > 0) {
+      throw new Error(`idle page blocks: ${JSON.stringify(idleCost)}`);
+    }
+    await screenshot("p196-burst-coalesced");
+  });
 }
 
 try {

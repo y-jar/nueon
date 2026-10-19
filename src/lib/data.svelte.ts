@@ -3,6 +3,7 @@
 import { listen } from "@tauri-apps/api/event";
 import * as api from "./api";
 import { clearDoc, makeGroup, ui } from "./store.svelte";
+import { registerInvalidation, notifyDataChanged } from "./invalidation.svelte";
 import { activateNeighbor, syncGroupTable } from "./tabs.svelte";
 import { restoreMainTiling } from "./layout.svelte";
 import { reloadOpenNotes } from "./notes.svelte";
@@ -102,28 +103,39 @@ export async function init(): Promise<void> {
   } catch {
     // Best-effort; suppression just won't apply across reloads.
   }
-  await listen("data-changed", async (event) => {
+  registerInvalidation({
+    id: "workspaces",
+    scopes: ["workspace"],
+    reload: refreshWorkspaces,
+  });
+  registerInvalidation({
+    id: "tree",
+    scopes: ["workspace", "notes"],
+    reload: refreshTree,
+  });
+  registerInvalidation({
+    id: "wordIndex",
+    scopes: ["workspace", "dictionary"],
+    reload: loadWordIndex,
+  });
+  registerInvalidation({
+    id: "fixesTables",
+    scopes: ["workspace", "config"],
+    reload: loadFixesTables,
+  });
+  registerInvalidation({
+    id: "tables",
+    scopes: ["workspace", "dictionary"],
+    reload: refreshTables,
+  });
+  registerInvalidation({
+    id: "openNotes",
+    scopes: ["notes", "vcs"],
+    reload: reloadOpenNotes,
+  });
+  await listen("data-changed", (event) => {
     const scope = (event.payload as { scope?: string }).scope;
-    if (scope === "workspace") {
-      await refreshWorkspaces();
-      await refreshTree();
-      await loadWordIndex();
-      await loadFixesTables();
-      await refreshTables();
-    } else if (scope === "notes") {
-      await refreshTree();
-      await reloadOpenNotes();
-    } else if (scope === "dictionary") {
-      await loadWordIndex();
-      await refreshTables();
-    } else if (scope === "config") {
-      await loadFixesTables();
-    } else if (scope === "writing") {
-      ui.writingRevision += 1;
-    } else if (scope === "vcs") {
-      ui.vcsRevision += 1;
-      await reloadOpenNotes();
-    }
+    if (typeof scope === "string") notifyDataChanged(scope);
   });
 }
 

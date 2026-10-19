@@ -61,7 +61,7 @@
 
   // The sound inventory drives the hints; reload when it changes elsewhere.
   $effect(() => {
-    void ui.phonologyRevision;
+    void ui.revision.config;
     if (!ui.root) {
       phonology = null;
       return;

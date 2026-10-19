@@ -33,12 +33,13 @@
 
   onMount(load);
 
-  // Reload when another editor (Settings' sound-class fields) writes the
-  // phonology config, so this view's local copy cannot clobber it.
-  let revisionSeen = ui.phonologyRevision;
+  // Reload when another editor (Settings' sound-class fields, the setup
+  // wizard, a profile import) writes the phonology config — it rides the
+  // config scope — so this view's local copy cannot clobber it.
+  let revisionSeen = ui.revision.config;
   $effect(() => {
-    if (ui.phonologyRevision === revisionSeen) return;
-    revisionSeen = ui.phonologyRevision;
+    if (ui.revision.config === revisionSeen) return;
+    revisionSeen = ui.revision.config;
     void load();
   });
 

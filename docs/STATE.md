@@ -15,7 +15,8 @@ Svelte 5 runes. One reactive `ui` object is the single source of truth
   tree), `layoutReady`.
 - **Workspace data** — `root`, `tree` (note tree), `tables`, `wordIndex`,
   `nameById`, `fixesTables`, `noteHeadings`, `scrollToHeading`, `quarantine`,
-  `vcsRevision`, `phonologyRevision`, `morphologyRevision`.
+  `revision` (per-scope data-changed counters; see the invalidation registry
+  below).
 - **Transient UI** — `contextMenu`, `dragPath`, `dragTab`, `renameTarget`,
   `tableRenameTarget`, `newRequest`, `collapseAllSignal`, `status`.
 
@@ -42,29 +43,55 @@ Svelte 5 runes. One reactive `ui` object is the single source of truth
 - **Mutations go through the action modules**, never straight into `ui` from a
   component, so there is one place to enforce invariants.
 
+## Data-changed invalidation registry
+
+One mechanism keeps every backend-data cache in the frontend fresh
+(`src/lib/invalidation.svelte.ts` over the pure core in
+`src/lib/invalidation.ts`):
+
+- **Register, don't re-derive.** A store or panel that caches backend data
+  registers the scopes that invalidate it: `registerInvalidation({ id,
+  scopes, reload, visible?, needsLoad? })`. The listener in
+  `data.svelte.ts` routes every `data-changed` event through the registry.
+- **Debounce and coalesce.** Reloads run after a 150 ms quiet window, so a
+  burst of events (a bulk edit, an import) costs one refetch, not one per
+  event.
+- **Own writes are skipped for their writer alone.** A mutating write wrapped
+  in `withOwnWrite(id, scopes, fn)` suppresses its echo event for that
+  consumer; every other consumer still reloads. Stores also compare before
+  assigning so a redundant refetch writes nothing reactive.
+- **Hidden means stale, not background-fetching.** A consumer that is not on
+  screen only goes stale; its components call `consumerShown(id)` on mount,
+  which reloads then (and performs the first load via `needsLoad`).
+- **Effect-based consumers read `ui.revision`.** The registry bumps a
+  per-scope counter on every event; a component that holds a copy in local
+  state adds the counter(s) to its `$effect` deps (the seen-guard pattern:
+  capture, compare, reload).
+- **The shared slices are consumers too.** The workspace, tree, word index,
+  fixes tables, tables and open-notes reloaders registered in `init()` ride
+  the same registry (they were the listener's old ad-hoc branches).
+
 ## Data-changed consumers (audit)
 
 Every frontend store or panel that holds a copy of backend data, and which
-`data-changed` scopes reach it today. This is the pre-registry audit that
-drove the invalidation fix; the registry stage moves the "reached by" column
-into explicit scope declarations. Keep the table in sync when adding a
-consumer (see `docs/IPC.md` for the scope table).
+`data-changed` scopes reach it. Keep the table in sync when adding a consumer
+(see `docs/IPC.md` for the scope table).
 
-| Consumer | Holds | Should invalidate | Reached by today | Verdict |
+| Consumer | Holds | Should invalidate | Reached by | Verdict |
 |---|---|---|---|---|
-| `MorphologyStore` (`src/lib/morphology.svelte.ts`) | morphology config, morphemes, lexicon | dictionary, config, translation, workspace, vcs | nothing; its own writes only | stale — the reported bug |
-| `Translation.svelte` | presets, grammar, options, morphology copy | translation, config, dictionary, workspace, vcs | own saves; `morphologyRevision` | partial |
+| `MorphologyStore` (`src/lib/morphology.svelte.ts`) | morphology config, morphemes, lexicon | dictionary, config, translation, workspace, vcs | the registry (all five) | fresh |
+| `Translation.svelte` | presets, grammar, options, morphology copy | translation, config, dictionary, workspace, vcs | `ui.revision.translation`/`config` (morphology copy); presets/options local only | partial — presets/options still reload on remount |
 | `MorphologyView.svelte` local `affixes` | translation options | translation, config | mount only | stale |
-| `translation/ParadigmGrid.svelte` | one class's paradigm grid | translation, config, dictionary | `morphologyRevision` | partial |
-| `PhonologyView.svelte` | phonology config | config | `phonologyRevision` (Settings only) | partial |
-| `WritingPanel.svelte` | writing + phonology config | writing, config, vcs | revision string + window focus | partial |
-| `WritingSystemView.svelte` | writing + phonology config, outlines | writing, config, vcs | revision string + focus + reload guard | partial |
+| `translation/ParadigmGrid.svelte` | one class's paradigm grid | translation, config, dictionary | `ui.revision.translation`/`config` | fresh (dictionary refetch rides the store) |
+| `PhonologyView.svelte` | phonology config | config | `ui.revision.config` | fresh (checkout misses — see gaps) |
+| `WritingPanel.svelte` | writing + phonology config | writing, config, vcs | `ui.revision.writing`/`config` + window focus | fresh (checkout misses) |
+| `WritingSystemView.svelte` | writing + phonology config, outlines | writing, config, vcs | revision counters + focus + reload guard | fresh (checkout misses) |
 | `Settings.svelte` (open) | language, grammar, roles, phonology, morphology | config, translation, dictionary | nothing while open | stale while open |
-| `Inspector.svelte` | phonology copy, known tags | config, dictionary | `phonologyRevision`; tags on `ui.root` | partial (draft guards are by design) |
+| `Inspector.svelte` | phonology copy, known tags | config, dictionary | phonology via `ui.revision.config`; tags on `ui.root` | partial (draft guards are by design) |
 | `translation/FeatureEditor.svelte` | per-column feature values | dictionary, config | mount only | stale |
 | `Grid.svelte` / `TablesPanel` / quarantine | table data via `doc.table` | dictionary | the dictionary branch | fresh |
-| shared slices: `tree`, `wordIndex`, `tables`, `fixesTables` | workspace-derived indexes | notes, dictionary, config, workspace | the listener branches | fresh (a trash-renamed fixes table waits for the next config/workspace event) |
-| `GitPanel.svelte` | vcs state, log, status | vcs, workspace | `vcsRevision` | fresh |
+| shared slices: `tree`, `wordIndex`, `tables`, `fixesTables` | workspace-derived indexes | notes, dictionary, config, workspace | the registry | fresh (a trash-renamed fixes table waits for the next config/workspace event) |
+| `GitPanel.svelte` | vcs state, log, status | vcs, workspace | `ui.revision.vcs` | fresh |
 | Editor / open notes | note buffers | notes, vcs | `reloadOpenNotes` + freshness generations | fresh |
 
 Backend emit gaps the audit flagged: `vcs_checkout`/`vcs_revert_file` never

@@ -123,6 +123,8 @@ and regenerate.
 - `gridView.ts` — Grid column visibility/sort/width normalization.
 - `history.ts` — A small snapshot undo/redo stack, separate from the app's git history.
 - `i18n.ts` — Locale initialisation for svelte-i18n.
+- `invalidation.svelte.ts` — Wiring for the data-changed invalidation registry (see ./invalidation.ts).
+- `invalidation.ts` — Pure core of the data-changed invalidation registry.
 - `ipa.ts` — IPA chart data and phoneme feature helpers.
 - `keybindings.ts` — Keybinding definitions, formatting and reserved combos.
 - `layout.svelte.ts` — Tiling layout: tab drag between panes/windows, split/merge and persistence.

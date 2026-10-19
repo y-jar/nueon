@@ -7,8 +7,9 @@
     PIECE_DRAG_TYPE,
     morphology as store,
   } from "../lib/morphology.svelte";
+  import { consumerShown } from "../lib/invalidation.svelte";
 
-  onMount(() => void store.load());
+  onMount(() => consumerShown("morphology"));
 
   let wordFilter = $state("");
   let morphFilter = $state("");

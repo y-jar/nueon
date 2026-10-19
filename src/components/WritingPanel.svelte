@@ -30,10 +30,10 @@
   onMount(() => void load());
 
   // The writing tab saves through config_set, which bumps the config scope;
-  // reload on any writing/phonology revision so the list never goes stale.
-  let seen = $state(`${ui.writingRevision}:${ui.phonologyRevision}`);
+  // reload on any writing/config revision so the list never goes stale.
+  let seen = $state(`${ui.revision.writing}:${ui.revision.config}`);
   $effect(() => {
-    const now = `${ui.writingRevision}:${ui.phonologyRevision}`;
+    const now = `${ui.revision.writing}:${ui.revision.config}`;
     if (now === seen) return;
     seen = now;
     void load();

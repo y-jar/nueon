@@ -15,7 +15,9 @@
   import SaveWordForm from "./translation/SaveWordForm.svelte";
   import WordPicker from "./translation/WordPicker.svelte";
 
-  onMount(() => void store.load());
+  import { consumerShown } from "../lib/invalidation.svelte";
+
+  onMount(() => consumerShown("morphology"));
 
   // The english → conlang affix rules live in the translation options.
   let affixes = $state<api.AffixRule[]>([]);

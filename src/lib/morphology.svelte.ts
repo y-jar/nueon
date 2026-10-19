@@ -8,6 +8,11 @@
 import * as api from "./api";
 import { ui } from "./state.svelte";
 import { POS_CLASSES } from "./dictionary";
+import {
+  consumerFresh,
+  registerInvalidation,
+  withOwnWrite,
+} from "./invalidation.svelte";
 
 /** The drag payload type for pieces dragged from the sidebar to the strip. */
 export const PIECE_DRAG_TYPE = "application/x-nueon-piece";
@@ -19,6 +24,9 @@ export interface ComposeChip {
   id: string;
   label: string;
   gloss: string;
+  /** The backing word/morpheme vanished (deleted, or its table's role
+   * changed): kept on the strip, struck out, not sent to compose. */
+  missing?: boolean;
 }
 
 class MorphologyStore {
@@ -41,25 +49,79 @@ class MorphologyStore {
   composed = $state<api.Inflection | null>(null);
   loaded = $state(false);
   error = $state("");
+  /** Guards async reload continuations: only the newest reload writes. */
+  private reloadGen = 0;
 
-  /** Load the config once; `force` refetches after an external change. */
-  async load(force = false): Promise<void> {
-    if (this.loaded && !force) return;
+  /** Refetch everything and keep the user's work coherent. */
+  async reload(): Promise<void> {
+    const gen = ++this.reloadGen;
     try {
       const [morphology, morphemes, lexicon] = await Promise.all([
         api.translationMorphology(),
         api.listMorphemes(),
         api.lexicon(),
       ]);
-      this.morphology = morphology;
-      this.morphemes = morphemes;
-      this.lexicon = lexicon;
+      if (gen !== this.reloadGen) return;
+      if (JSON.stringify(morphology) !== JSON.stringify(this.morphology)) {
+        this.morphology = morphology;
+      }
+      if (JSON.stringify(morphemes) !== JSON.stringify(this.morphemes)) {
+        this.morphemes = morphemes;
+      }
+      if (JSON.stringify(lexicon) !== JSON.stringify(this.lexicon)) {
+        this.lexicon = lexicon;
+      }
+      this.reconcile(lexicon, morphemes);
       this.error = "";
     } catch (e) {
-      this.error = String(e);
+      if (gen === this.reloadGen) this.error = String(e);
     } finally {
-      this.loaded = true;
+      if (gen === this.reloadGen) this.loaded = true;
     }
+  }
+
+  /**
+   * Keep the user's work coherent after an external reload: a deleted
+   * selected word clears the preview; compose chips whose backing entry
+   * vanished are marked missing instead of dropped.
+   */
+  private reconcile(
+    lexicon: api.LexiconWord[],
+    morphemes: api.MorphemeInfo[],
+  ): void {
+    if (
+      this.selectedWord &&
+      !lexicon.some((word) => word.id === this.selectedWord)
+    ) {
+      this.selectedWord = null;
+      this.inflection = null;
+      this.selections = {};
+      this.manual = [];
+    }
+    let changed = false;
+    const next = this.pieces.map((piece) => {
+      const missing = !(
+        piece.kind === "word"
+          ? lexicon.some((word) => word.id === piece.id)
+          : morphemes.some((morpheme) => morpheme.wordname === piece.id)
+      );
+      if (piece.missing !== missing) {
+        changed = true;
+        return { ...piece, missing };
+      }
+      return piece;
+    });
+    if (changed) {
+      this.pieces = next;
+      void this.runCompose();
+    }
+  }
+
+  /** Load once; `force` refetches after an external change. */
+  async load(force = false): Promise<void> {
+    if (this.loaded && !force) return;
+    await this.reload();
+    consumerFresh("morphology");
   }
 
   /** Point the preview at a lexicon word and clear the per-word picks. */
@@ -110,8 +172,9 @@ class MorphologyStore {
   async save(next: api.Morphology): Promise<void> {
     this.morphology = next;
     try {
-      await api.setTranslationMorphology(next);
-      ui.morphologyRevision += 1;
+      await withOwnWrite("morphology", ["translation"], () =>
+        api.setTranslationMorphology(next),
+      );
       this.error = "";
     } catch (e) {
       this.error = String(e);
@@ -180,15 +243,16 @@ class MorphologyStore {
     this.composed = null;
   }
 
-  /** Recompose the strip into a surface + breakdown. */
+  /** Recompose the strip into a surface + breakdown (missing pieces sit out). */
   async runCompose(): Promise<void> {
-    if (this.pieces.length === 0) {
+    const active = this.pieces.filter((piece) => !piece.missing);
+    if (active.length === 0) {
       this.composed = null;
       return;
     }
     try {
       this.composed = await api.compose(
-        this.pieces.map((piece) =>
+        active.map((piece) =>
           piece.kind === "word"
             ? ({ kind: "word", id: piece.id } as const)
             : ({ kind: "morpheme", id: piece.id } as const),
@@ -226,7 +290,9 @@ class MorphologyStore {
     gloss: string,
   ): Promise<api.MorphemeInfo | null> {
     try {
-      const id = await api.createTranslationWord(table, surface, gloss, [], null);
+      const id = await withOwnWrite("morphology", ["dictionary"], () =>
+        api.createTranslationWord(table, surface, gloss, [], null),
+      );
       if (!id) return null;
       this.morphemes = await api.listMorphemes();
       this.error = "";
@@ -298,3 +364,17 @@ class MorphologyStore {
 }
 
 export const morphology = new MorphologyStore();
+
+// The store follows `data-changed` events instead of loading once: word,
+// table-role, translation-config, workspace and vcs changes each invalidate
+// it. Hidden, it only goes stale and reloads when shown; its own writes
+// (save, createMorpheme) are skipped so they cannot loop.
+registerInvalidation({
+  id: "morphology",
+  scopes: ["dictionary", "config", "translation", "workspace", "vcs"],
+  reload: () => morphology.reload(),
+  visible: () =>
+    ui.activity === "morphology" ||
+    ui.groups.some((group) => group.doc.view === "morphology"),
+  needsLoad: () => !morphology.loaded,
+});

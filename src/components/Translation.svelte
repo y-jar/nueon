@@ -149,11 +149,13 @@
     void run();
   }
 
-  // Reload features and re-run when the Morphology activity edits the config.
-  let seenRevision = ui.morphologyRevision;
+  // Reload features and re-run when the morphology config is written
+  // elsewhere (the Morphology activity, Settings, a profile import).
+  let seenRevision = `${ui.revision.translation}:${ui.revision.config}`;
   $effect(() => {
-    if (ui.morphologyRevision === seenRevision) return;
-    seenRevision = ui.morphologyRevision;
+    const now = `${ui.revision.translation}:${ui.revision.config}`;
+    if (now === seenRevision) return;
+    seenRevision = now;
     void (async () => {
       await loadMorphology();
       await run();

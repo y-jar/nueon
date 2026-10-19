@@ -252,9 +252,9 @@
 
   // Anything that changes the writing or phonology config (the editor, another
   // panel, a git checkout) bumps a revision: reload the config and refresh previews.
-  let seenRevision = `${ui.writingRevision}:${ui.phonologyRevision}`;
+  let seenRevision = `${ui.revision.writing}:${ui.revision.config}`;
   $effect(() => {
-    const now = `${ui.writingRevision}:${ui.phonologyRevision}`;
+    const now = `${ui.revision.writing}:${ui.revision.config}`;
     untrack(() => {
       if (now === seenRevision) return;
       seenRevision = now;

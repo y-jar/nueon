@@ -6,6 +6,7 @@
  */
 
 import * as api from "./api";
+import type { Scope } from "./invalidation";
 import type { SplitNode } from "./tiling";
 
 /** Left activity ribbon selection. */
@@ -191,13 +192,18 @@ export const ui = $state({
   noteHeadings: {} as Record<string, string[]>,
   /** Pending "scroll to this heading" request after following a link. */
   scrollToHeading: null as { path: string; heading: string } | null,
-  vcsRevision: 0,
-  /** Bumped when the phonology config is written elsewhere (Settings). */
-  phonologyRevision: 0,
-  /** Bumped when the morphology config is written elsewhere (Morphology). */
-  morphologyRevision: 0,
-  /** Bumped when a glyph outline is written (writing commands). */
-  writingRevision: 0,
+  /** Bumped by the invalidation registry on every data-changed event, per
+   * scope; effect-based consumers add the counter(s) they depend on as
+   * `$effect` deps (see docs/STATE.md). */
+  revision: {
+    workspace: 0,
+    notes: 0,
+    dictionary: 0,
+    config: 0,
+    translation: 0,
+    writing: 0,
+    vcs: 0,
+  } as Record<Scope, number>,
   /** The table last used by the Morphology "Save as word" form (session). */
   morphologySaveTable: "",
 

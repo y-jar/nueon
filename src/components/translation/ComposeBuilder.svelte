@@ -38,7 +38,7 @@
 <div class="compose-builder">
   <div class="compose-strip" ondragover={onDragOver} ondrop={onDrop} role="list">
     {#each store.pieces as piece (piece.key)}
-      <span class="compose-chip {piece.kind}">
+      <span class="compose-chip {piece.kind}" class:missing={piece.missing}>
         <button
           class="chip-move"
           title={$t("morphology.moveLeft")}
