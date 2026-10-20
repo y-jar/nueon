@@ -9098,6 +9098,26 @@ async function main() {
          .length === 3`,
       { label: "the three export formats", timeout: 5000 },
     );
+    // The export-all trigger sits inline with its header neighbours, not on
+    // a line of its own above them.
+    const rowCheck = await js(
+      `const pick = (title) => [...document.querySelectorAll('.sidebar .pane-head .actions button')]
+         .find((x) => x.getAttribute('title') === title);
+       const a = pick('Export all');
+       const b = pick('New table');
+       if (!a || !b) return { missing: true };
+       const ra = a.getBoundingClientRect();
+       const rb = b.getBoundingClientRect();
+       return {
+         sameRow: Math.abs(ra.top - rb.top) < 2 && Math.abs(ra.bottom - rb.bottom) < 2,
+         aTop: Math.round(ra.top),
+         bTop: Math.round(rb.top),
+       };`,
+    );
+    if (rowCheck.missing) throw new Error("missing a header button");
+    if (!rowCheck.sameRow) {
+      throw new Error(`export-all button is off its row: ${JSON.stringify(rowCheck)}`);
+    }
     await screenshot("p208-export-all");
   });
 }

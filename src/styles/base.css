@@ -293,6 +293,14 @@ textarea:focus {
   margin: 8px 0 2px;
 }
 
+/* Action rows sit inline with every trigger kind: a popover's block-level
+   flex trigger must not break the row onto its own line. */
+.actions {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
+
 .actions button {
   padding: 1px 5px;
   font-size: 11px;
