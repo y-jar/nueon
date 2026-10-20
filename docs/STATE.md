@@ -89,6 +89,7 @@ Every frontend store or panel that holds a copy of backend data, and which
 | `Settings.svelte` (open) | language, grammar, roles, phonology, morphology | config, translation, dictionary | the registry (mounted while the modal is open; own writes suppressed, pending-save guard) | fresh |
 | `Inspector.svelte` | phonology copy, known tags | config, dictionary | `ui.revision.config`/`.dictionary` | fresh (draft guards are by design) |
 | `translation/FeatureEditor.svelte` | per-column feature values | dictionary | cache wiped on `ui.revision.dictionary` | fresh |
+| `AddWordModal.svelte` (open) | the picked table's schema + entries | dictionary | transient dialog: the open table arrives as props, a switched table is fetched per pick | fresh by design |
 | `Grid.svelte` / `TablesPanel` / quarantine | table data via `doc.table` | dictionary | the dictionary branch | fresh |
 | shared slices: `tree`, `wordIndex`, `tables`, `fixesTables` | workspace-derived indexes | notes, dictionary, config, workspace | the registry | fresh |
 | `GitPanel.svelte` | vcs state, log, status | vcs, workspace | `ui.revision.vcs` | fresh |

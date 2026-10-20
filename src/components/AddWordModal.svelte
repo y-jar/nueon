@@ -4,6 +4,7 @@
   import {
     X,
     Type,
+    Table2,
     TextAlignStart,
     Calendar,
     Ruler,
@@ -14,7 +15,7 @@
   } from "@lucide/svelte";
   import * as api from "../lib/api";
   import { boolValue, textValue } from "../lib/dictionary";
-  import { createWordWithValues } from "../lib/words";
+  import { createWordWithValues, suggestionsFor } from "../lib/words";
   import PillCell from "./PillCell.svelte";
   import SuggestInput from "./SuggestInput.svelte";
 
@@ -24,13 +25,16 @@
   }
 
   interface Props {
+    /** The open table: the wizard's default choice. */
     table: string;
-    /** The table's schema; every non-builtin tag becomes a property row. */
+    /** Every table name, in sidebar order, to pick the target from. */
+    tables: string[];
+    /** The default table's schema; every non-builtin tag becomes a property row. */
     tags: api.TagDef[];
     /** Existing words offered by relation / parent pickers. */
     options: Option[];
     nameById: Record<string, string>;
-    /** Existing values per suggest-enabled column. */
+    /** Existing values per suggest-enabled column of the default table. */
     suggestions: Record<string, string[]>;
     onClose: () => void;
     onCreated: () => void | Promise<void>;
@@ -38,6 +42,7 @@
 
   let {
     table,
+    tables,
     tags,
     options,
     nameById,
@@ -46,10 +51,12 @@
     onCreated,
   }: Props = $props();
 
-  const properties = $derived(
-    tags.filter((tag) => tag.name !== "wordname" && tag.name !== "parent"),
-  );
-
+  // svelte-ignore state_referenced_locally
+  let chosen = $state(table);
+  /** The switched table's fetched copy (schema + entries); null while the
+   * default table is chosen. A snapshot is fine: the modal lives seconds. */
+  let pickedTable = $state<api.WordTable | null>(null);
+  let pickGen = 0;
   let wordname = $state("");
   let values = $state<Record<string, api.FieldValue>>({});
   let parents = $state<string[]>([]);
@@ -60,6 +67,46 @@
   $effect(() => {
     nameInput?.focus();
   });
+
+  const schema = $derived.by(() => {
+    if (pickedTable && chosen === pickedTable.name) return pickedTable.tags;
+    if (chosen === table) return tags;
+    return [];
+  });
+
+  const activeSuggestions = $derived.by(() => {
+    if (pickedTable && chosen === pickedTable.name)
+      return suggestionsFor(pickedTable);
+    if (chosen === table) return suggestions;
+    return {};
+  });
+
+  async function pickTable(next: string) {
+    chosen = next;
+    values = {};
+    if (next === table) {
+      pickedTable = null;
+      return;
+    }
+    const gen = ++pickGen;
+    try {
+      const fetched = await api.getTable(next);
+      if (gen !== pickGen || chosen !== next) return;
+      pickedTable = fetched;
+      error = "";
+    } catch (e) {
+      if (gen === pickGen) error = String(e);
+    }
+  }
+
+  const properties = $derived(
+    schema.filter(
+      (tag) =>
+        tag.name !== "wordname" &&
+        tag.name !== "parent" &&
+        tag.name !== "definition",
+    ),
+  );
 
   function setValue(tag: string, value: api.FieldValue | null) {
     const next = { ...values };
@@ -97,7 +144,7 @@
     }
     busy = true;
     try {
-      const result = await createWordWithValues(table, name, values, parents);
+      const result = await createWordWithValues(chosen, name, values, parents);
       if (!result.id) {
         error = $t("grid.createFailed");
         return;
@@ -139,11 +186,26 @@
     aria-label={$t("grid.addWord")}
   >
     <div class="modal-head">
-      <span class="pane-title">{$t("grid.addWord")} · {table}</span>
+      <span class="pane-title">{$t("grid.addWord")} · {chosen}</span>
       <button onclick={onClose} title={$t("grid.cancel")}><X size={16} /></button>
     </div>
 
     <div class="modal-body prop-list">
+      <div class="prop-row">
+        <span class="prop-name"><Table2 size={14} /> {$t("grid.table")}</span>
+        <div class="prop-value">
+          <select
+            class="table-picker"
+            value={chosen}
+            onchange={(e) => void pickTable(e.currentTarget.value)}
+          >
+            {#each tables as name (name)}
+              <option value={name}>{name}</option>
+            {/each}
+          </select>
+        </div>
+      </div>
+
       <div class="prop-row">
         <span class="prop-name"><Type size={14} /> wordname</span>
         <div class="prop-value">
@@ -168,6 +230,34 @@
               if (id && !parents.includes(id)) parents = [...parents, id];
             }}
             onRemove={(id) => (parents = parents.filter((p) => p !== id))}
+          />
+        </div>
+      </div>
+
+      <div class="prop-row">
+        <span class="prop-name"><List size={14} /> definition</span>
+        <div class="prop-value">
+          <PillCell
+            pills={listOf("definition").map((value) => ({
+              id: value,
+              label: value,
+            }))}
+            placeholder={$t("grid.addPill")}
+            onAdd={(text) => {
+              const items = listOf("definition");
+              if (!items.includes(text))
+                setValue("definition", {
+                  type: "tag_list",
+                  value: [...items, text],
+                });
+            }}
+            onRemove={(id) => {
+              const items = listOf("definition").filter((v) => v !== id);
+              setValue(
+                "definition",
+                items.length ? { type: "tag_list", value: items } : null,
+              );
+            }}
           />
         </div>
       </div>
@@ -210,7 +300,7 @@
                 <SuggestInput
                   type={inputType(tag)}
                   value={textValue(values[tag.name])}
-                  suggestions={suggestions[tag.name] ?? []}
+                  suggestions={activeSuggestions[tag.name] ?? []}
                   onInput={(value) =>
                     setValue(
                       tag.name,
@@ -259,7 +349,7 @@
                 pills={listOf(tag.name).map((v) => ({ id: v, label: v }))}
                 placeholder={$t("grid.addPill")}
                 options={tag.suggest
-                  ? (suggestions[tag.name] ?? []).map((value) => ({
+                  ? (activeSuggestions[tag.name] ?? []).map((value) => ({
                       id: value,
                       label: value,
                     }))

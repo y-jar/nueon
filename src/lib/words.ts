@@ -31,3 +31,22 @@ export async function createWordWithValues(
   }
   return { id, rejectedParents };
 }
+
+/** Existing values per suggest-enabled tag, for cell autocomplete. */
+export function suggestionsFor(table: api.WordTable): Record<string, string[]> {
+  const map: Record<string, string[]> = {};
+  for (const tag of table.tags) {
+    if (!tag.suggest) continue;
+    const values = new Set<string>();
+    for (const entry of table.entries) {
+      const value = entry.values[tag.name];
+      if (value?.type === "tag_list") {
+        for (const item of value.value) values.add(item);
+      } else if (value?.type === "text" && value.value) {
+        values.add(value.value);
+      }
+    }
+    map[tag.name] = [...values];
+  }
+  return map;
+}

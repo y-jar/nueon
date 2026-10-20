@@ -8944,6 +8944,133 @@ async function main() {
     );
     await screenshot("p204-undo-reloads-note");
   });
+
+  // -- probes 205-207: the add-word wizard's table picker + definition field --
+
+  const openAddWord = async () => {
+    const opened = await js(`const b = document.querySelector('.grid-toolbar button.primary');
+      if (b) b.click();
+      return !!b;`);
+    if (!opened) throw new Error("no ＋ word button");
+    await waitJs(`!!document.querySelector('.add-word-modal')`, { label: "add word modal" });
+  };
+
+  const wizardRow = (name) =>
+    `[...document.querySelectorAll('.add-word-modal .prop-row')]
+       .find((r) => r.querySelector('.prop-name')?.textContent.trim().endsWith(${JSON.stringify(name)}))`;
+
+  const openLexGrid = async () => {
+    await openActivity("Dictionary");
+    await waitJs(`!!document.querySelector('.table-list')`, { label: "tables panel" });
+    const opened = await js(`const b = [...document.querySelectorAll('.table-list .table-row .tree-name')]
+        .find((x) => x.textContent.trim().startsWith('lex'));
+      if (b) b.click();
+      return !!b;`);
+    if (!opened) throw new Error("no lex table row");
+    await waitJs(`!!document.querySelector('.dict-grid')`, { label: "lex grid" });
+  };
+
+  const typeIntoWizard = (name, value) =>
+    js(`const i = ${wizardRow(name)}?.querySelector('.prop-value input, .prop-row input');
+      if (!i) return false;
+      i.value = ${JSON.stringify(value)};
+      i.dispatchEvent(new Event('input', { bubbles: true }));
+      return true;`);
+
+  const submitWizard = () =>
+    js(`const b = [...document.querySelectorAll('.add-word-modal .modal-foot button')]
+        .find((x) => x.textContent.trim() === 'Add');
+      if (b) b.click();
+      return !!b;`);
+
+  await probe("205-the-add-word-wizard-lists-every-table-in-order", async () => {
+    await openLexGrid();
+    await openAddWord();
+    const result = await js(`return (() => {
+      const select = document.querySelector('.add-word-modal .table-picker');
+      const panel = [...document.querySelectorAll('.table-list .table-row .tree-name .grow')]
+        .map((el) => el.textContent.trim());
+      return {
+        options: select ? [...select.options].map((o) => o.value) : null,
+        selected: select ? select.value : null,
+        panel,
+      };
+    })();`);
+    assertEqual(result.selected, "lex", "the picker defaults to the open table");
+    assertEqual(
+      JSON.stringify(result.options),
+      JSON.stringify(result.panel),
+      "the picker lists every table in sidebar order",
+    );
+    await js(`const b = document.querySelector('.add-word-modal .modal-head button'); if (b) b.click(); return true;`);
+    await screenshot("p205-wizard-table-picker");
+  });
+
+  await probe("206-the-add-word-wizard-takes-and-persists-a-definition", async () => {
+    await openLexGrid();
+    await openAddWord();
+    await waitJs(`!!${wizardRow("definition")}`, {
+      label: "the builtin definition row",
+      timeout: 5000,
+    });
+    const typed = await typeIntoWizard("wordname", "definew");
+    if (!typed) throw new Error("no wordname input");
+    const sensed = await js(`const i = ${wizardRow("definition")}?.querySelector('.prop-value input');
+      if (!i) return false;
+      i.value = 'probe sense';
+      i.dispatchEvent(new Event('input', { bubbles: true }));
+      i.dispatchEvent(new KeyboardEvent('keydown', { key: 'Enter', bubbles: true }));
+      return true;`);
+    if (!sensed) throw new Error("no definition input");
+    await waitJs(
+      `[...(${wizardRow("definition")})?.querySelectorAll('.pill') || []]
+         .some((p) => p.textContent.trim() === 'probe sense')`,
+      { label: "the definition sense became a pill" },
+    );
+    const added = await submitWizard();
+    if (!added) throw new Error("no Add button");
+    await waitJs(`!document.querySelector('.add-word-modal')`, {
+      label: "modal closed after add",
+    });
+    const table = await invokeAsync("get_table", { table: "lex" });
+    const entry = table.entries.find((e) => e.wordname === "definew");
+    if (!entry) throw new Error("definew was not created");
+    const def = entry.values?.definition;
+    if (!def || def.type !== "tag_list" || !def.value.includes("probe sense")) {
+      throw new Error(`definition not persisted: ${JSON.stringify(def)}`);
+    }
+    await screenshot("p206-wizard-definition");
+  });
+
+  await probe("207-switching-the-wizards-table-targets-the-word-there", async () => {
+    await openLexGrid();
+    await openAddWord();
+    const switched = await js(`const s = document.querySelector('.add-word-modal .table-picker');
+      if (!s) return false;
+      s.value = 'roots';
+      s.dispatchEvent(new Event('change', { bubbles: true }));
+      return true;`);
+    if (!switched) throw new Error("no table picker");
+    await waitJs(`!!${wizardRow("pos")}`, { label: "the roots table's pos row", timeout: 5000 });
+    const stale = await js(`return !!(${wizardRow("english")}) || !!(${wizardRow("decl")});`);
+    if (stale) throw new Error("lex-only rows still shown after switching");
+    const typed = await typeIntoWizard("wordname", "wrooted");
+    if (!typed) throw new Error("no wordname input after switching");
+    const added = await submitWizard();
+    if (!added) throw new Error("no Add button");
+    await waitJs(`!document.querySelector('.add-word-modal')`, {
+      label: "modal closed after add",
+    });
+    const roots = await invokeAsync("get_table", { table: "roots" });
+    if (!roots.entries.some((e) => e.wordname === "wrooted")) {
+      throw new Error("wrooted was not created in roots");
+    }
+    const lex = await invokeAsync("get_table", { table: "lex" });
+    if (lex.entries.some((e) => e.wordname === "wrooted")) {
+      throw new Error("wrooted leaked into lex");
+    }
+    await screenshot("p207-wizard-switch");
+  });
 }
 
 try {

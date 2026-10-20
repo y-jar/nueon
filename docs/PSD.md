@@ -61,6 +61,10 @@ layer (`src-tauri/`), and the Svelte 5 frontend (`src/`). See `docs/ARCHITECTURE
   and bulk edit, and a per-column context menu (sort, hide, change type, delete).
   The inline add-word ("ghost") row sits at the top of the body, above the
   virtual window; its height rides the scroll margin so the window stays aligned.
+  The "＋ word" wizard picks any table (every table in sidebar order, defaulting
+  to the open one; switching fetches that table's schema and suggestions), always
+  offers the builtin definition (senses) field alongside the table's tags, and
+  creates the word in the chosen table.
 - **Data.** `dictionary/<table>`; each entry has a hidden UUID, a required
   `wordname`, and user-defined tags.
 - **Invariants.** The UUID is stable across renames/re-imports; deleting a word

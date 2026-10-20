@@ -41,7 +41,7 @@
     confirmDialog,
     type DocState,
   } from "../lib/state.svelte";
-  import { createWordWithValues } from "../lib/words";
+  import { createWordWithValues, suggestionsFor } from "../lib/words";
   import { normalizeView } from "../lib/gridView";
   import PillCell from "./PillCell.svelte";
   import GridCell from "./GridCell.svelte";
@@ -162,23 +162,9 @@
   );
 
   /** Existing values per suggest-enabled column, for cell autocomplete. */
-  const suggestionsByTag = $derived.by(() => {
-    const map: Record<string, string[]> = {};
-    for (const tag of doc.table?.tags ?? []) {
-      if (!tag.suggest) continue;
-      const values = new Set<string>();
-      for (const entry of doc.table?.entries ?? []) {
-        const value = entry.values[tag.name];
-        if (value?.type === "tag_list") {
-          for (const item of value.value) values.add(item);
-        } else if (value?.type === "text" && value.value) {
-          values.add(value.value);
-        }
-      }
-      map[tag.name] = [...values];
-    }
-    return map;
-  });
+  const suggestionsByTag = $derived(
+    doc.table ? suggestionsFor(doc.table) : {},
+  );
 
   /** Columns a bulk edit can target: the dedicated ones plus user tags. */
   const bulkColumns = $derived([
@@ -1594,6 +1580,7 @@
 {#if addWordOpen && doc.currentTable}
   <AddWordModal
     table={doc.currentTable}
+    tables={ui.tables.map((entry) => entry.name)}
     tags={doc.table?.tags ?? []}
     options={relationOptions}
     nameById={ui.nameById}
