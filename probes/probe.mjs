@@ -1646,9 +1646,14 @@ async function main() {
       "dictionary tables panel",
       await js(`return !!document.querySelector('.sidebar .pane-head .pane-title')`),
     );
-    await js(
-      `document.querySelector('.sidebar .pane-head .actions button:nth-of-type(2)').click(); return true;`,
+    const newTable = await js(
+      `const b = [...document.querySelectorAll('.sidebar .pane-head .actions button')]
+         .find((x) => x.getAttribute('title') === 'New table');
+       if (!b) return false;
+       b.click();
+       return true;`,
     );
+    if (!newTable) throw new Error("no New table button in the sidebar header");
     await waitJs(`!!document.querySelector('.sidebar input.new-input')`, {
       label: "new table input",
     });
@@ -9070,6 +9075,30 @@ async function main() {
       throw new Error("wrooted leaked into lex");
     }
     await screenshot("p207-wizard-switch");
+  });
+
+  // -- probe 208: the tables sidebar's export-all button ---------------------
+
+  await probe("208-the-tables-sidebar-offers-an-export-all-popover", async () => {
+    await openActivity("Dictionary");
+    await waitJs(`!!document.querySelector('.table-list')`, { label: "tables panel" });
+    const clicked = await js(
+      `const b = [...document.querySelectorAll('.sidebar .pane-head .actions button')]
+         .find((x) => x.getAttribute('title') === 'Export all');
+       if (b) b.click();
+       return !!b;`,
+    );
+    if (!clicked) throw new Error("no Export all button in the sidebar header");
+    // The popover offers the three per-file formats; clicking one would open
+    // the OS folder dialog, which WebDriver cannot drive (manual QA).
+    await waitJs(
+      `[...document.querySelectorAll('.popover-panel .picker-body button')]
+         .map((b) => b.textContent.trim())
+         .filter((t) => t === 'CSV (.csv)' || t === 'TSV (.tsv)' || t === 'JSON backup (.json)')
+         .length === 3`,
+      { label: "the three export formats", timeout: 5000 },
+    );
+    await screenshot("p208-export-all");
   });
 }
 

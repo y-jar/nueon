@@ -2,7 +2,7 @@
 <script lang="ts">
   import { autofocus } from "../lib/actions";
   import { t } from "svelte-i18n";
-  import { Table2, Plus, Pencil, Trash2, Search } from "@lucide/svelte";
+  import { Table2, Plus, Pencil, Trash2, Search, Upload } from "@lucide/svelte";
   import * as api from "../lib/api";
   import {
     ui,
@@ -15,6 +15,7 @@
     consumeTableRename,
     openTableContextMenu,
   } from "../lib/state.svelte";
+  import Popover from "./Popover.svelte";
   import QuarantineBanner from "./QuarantineBanner.svelte";
 
   let newOpen = $state(false);
@@ -73,6 +74,19 @@
     }
   }
 
+  /** Export every table into a picked folder, one file per table. */
+  async function exportAll(format: api.TableFormat, close: () => void) {
+    close();
+    try {
+      ui.status = $t("status.exportingAll");
+      const { count, folder } = await api.exportAllTablesDialog(format);
+      ui.status = $t("status.exportedAll", { values: { count, folder } });
+    } catch (e) {
+      if (String(e).includes("cancelled")) return;
+      ui.status = $t("status.exportFailed", { values: { error: String(e) } });
+    }
+  }
+
 </script>
 
 <aside class="sidebar">
@@ -80,6 +94,22 @@
   <div class="pane-head">
     <span class="pane-title">{$t("sidebar.tables")}</span>
     <span class="actions">
+      <Popover align="right" title={$t("tables.exportAll")}>
+        {#snippet label()}<Upload size={14} />{/snippet}
+        {#snippet children(close)}
+          <div class="picker-body">
+            <button onclick={() => void exportAll("csv", close)}
+              >{$t("tables.exportCsv")}</button
+            >
+            <button onclick={() => void exportAll("tsv", close)}
+              >{$t("tables.exportTsv")}</button
+            >
+            <button onclick={() => void exportAll("json", close)}
+              >{$t("tables.exportJson")}</button
+            >
+          </div>
+        {/snippet}
+      </Popover>
       <button
         title={$t("trash.open")}
         aria-label={$t("trash.open")}

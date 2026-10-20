@@ -13,7 +13,7 @@ use nueon_core::import as core;
 use nueon_core::{AnkiExportOptions, Detection, ImportOptions, ImportPlan, ImportReport, Preview};
 
 use super::changed;
-use crate::security::{pick_open_file, pick_save_file, read_text_capped};
+use crate::security::{pick_directory, pick_open_file, pick_save_file, read_text_capped};
 use crate::state::AppState;
 
 type Shared = Mutex<AppState>;
@@ -155,6 +155,27 @@ pub async fn export_table_dialog(
         .export_table(&name, format, &destination)
         .map_err(|err| err.to_string())?;
     Ok(destination.display().to_string())
+}
+
+/// Export every table into a folder chosen in a dialog run on the Rust side,
+/// one file per table in the requested format, named after each table's own
+/// workspace filename. A path string from JavaScript is never trusted with a
+/// write. Returns how many tables were written and the folder.
+#[tauri::command]
+pub async fn export_all_tables_dialog(
+    app: AppHandle,
+    state: State<'_, Shared>,
+    format: nueon_core::TableFormat,
+) -> Result<(usize, String), String> {
+    let Some(folder) = pick_directory(&app).await? else {
+        return Err("cancelled".to_string());
+    };
+    let state = state.lock().map_err(|_| "state poisoned".to_string())?;
+    let count = state
+        .workspace()?
+        .export_all_tables(format, &folder)
+        .map_err(|err| err.to_string())?;
+    Ok((count, folder.display().to_string()))
 }
 
 /// Export a table as an Anki-importable text file whose path is chosen in a

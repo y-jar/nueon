@@ -145,10 +145,12 @@ layer (`src-tauri/`), and the Svelte 5 frontend (`src/`). See `docs/ARCHITECTURE
 ## Import & export
 
 - **Behaviour.** Import CSV/TSV/JSON into a table with column mapping; export a
-  table to CSV/TSV/JSON or Anki; notes to PDF/ODT; the whole workspace/profile as
+  table to CSV/TSV/JSON or Anki; export every table at once from the tables
+  sidebar (one file per table into a picked folder, named after each table's
+  own workspace filename); notes to PDF/ODT; the whole workspace/profile as
   a zip (and restore it).
 - **Where.** `crates/nueon-core/src/import.rs`, `export.rs`; `src/components/import/`.
-- **Proof.** probes 40, 56; cargo `import`/`export` tests.
+- **Proof.** probes 40, 56, 208; cargo `import`/`export`/`export_all_tables` tests.
 
 ## Version control
 

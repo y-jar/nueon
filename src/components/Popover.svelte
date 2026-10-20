@@ -7,11 +7,13 @@
     label: Snippet;
     /** Which trigger edge the panel aligns to. */
     align?: "left" | "right";
+    /** Tooltip of the trigger button. */
+    title?: string;
     /** Content; receives a function that closes the popover. */
     children: Snippet<[() => void]>;
   }
 
-  let { label, align = "left", children }: Props = $props();
+  let { label, align = "left", title, children }: Props = $props();
 
   let open = $state(false);
   let trigger = $state<HTMLButtonElement | null>(null);
@@ -79,6 +81,7 @@
   class="popover-trigger"
   class:active={open}
   aria-expanded={open}
+  {title}
   onclick={toggle}
 >
   {@render label()}

@@ -134,6 +134,35 @@ impl Workspace {
         storage::atomic_write(destination, text.as_bytes())
     }
 
+    /// Export every table into `folder`, one file per table in the requested
+    /// format, named after the table's own workspace filename (atomic writes).
+    /// Returns how many tables were written.
+    pub fn export_all_tables(
+        &self,
+        format: TableFormat,
+        folder: &Path,
+    ) -> Result<usize, StorageError> {
+        let ext = match format {
+            TableFormat::Csv => "csv",
+            TableFormat::Tsv => "tsv",
+            TableFormat::Json => "json",
+        };
+        let mut count = 0;
+        for table in self.dictionary.tables() {
+            let filename = self
+                .table_files
+                .filename(&table.name)
+                .ok_or_else(|| StorageError::TableMissing(table.name.clone()))?;
+            self.export_table(
+                &table.name,
+                format,
+                &folder.join(format!("{filename}.{ext}")),
+            )?;
+            count += 1;
+        }
+        Ok(count)
+    }
+
     /// Export a table as an Anki-importable text file (atomic write).
     pub fn export_anki(
         &self,

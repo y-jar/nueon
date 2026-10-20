@@ -77,7 +77,8 @@ parent directory are picked in Rust), `import_pick_dialog` (picks the import
 file, reads and detects it, stashes the path for the wizard's
 `import_detect_again` / `import_preview_stashed` / `import_apply`, which
 replaces the plan's `source` with the stashed path; `import_cancel` forgets
-it), `export_table_dialog`, `export_anki_dialog`,
+it), `export_table_dialog`, `export_all_tables_dialog` (picks the folder,
+then writes one slugged file per table), `export_anki_dialog`,
 `workspace_open_dialog` (picks the folder) and `workspace_create_dialog`
 (picks the parent). `workspace_open` stays for opening a workspace from the
 registry list the backend produced, and refuses a path that is not registered;

@@ -36,6 +36,41 @@ fn sample_workspace(dir: &std::path::Path) -> Workspace {
 }
 
 #[test]
+fn export_all_tables_writes_one_file_per_table_named_like_the_workspace() {
+    let dir = tempfile::tempdir().unwrap();
+    let ws = sample_workspace(dir.path());
+    let out = tempfile::tempdir().unwrap();
+
+    let count = ws.export_all_tables(TableFormat::Csv, out.path()).unwrap();
+    assert_eq!(count, 2);
+    let all_words = std::fs::read_to_string(out.path().join("all_words.csv")).unwrap();
+    let verbs = std::fs::read_to_string(out.path().join("verbs.csv")).unwrap();
+
+    // Each file is byte-identical to a single-table export of the same table.
+    let single = tempfile::tempdir().unwrap();
+    ws.export_table(
+        "all words",
+        TableFormat::Csv,
+        &single.path().join("one.csv"),
+    )
+    .unwrap();
+    assert_eq!(
+        all_words,
+        std::fs::read_to_string(single.path().join("one.csv")).unwrap()
+    );
+    assert!(verbs.contains("wordname"));
+
+    // The JSON snapshot format lands under .json with the entries in it.
+    assert_eq!(
+        ws.export_all_tables(TableFormat::Json, out.path()).unwrap(),
+        2
+    );
+    assert!(std::fs::read_to_string(out.path().join("all_words.json"))
+        .unwrap()
+        .contains("kala"));
+}
+
+#[test]
 fn workspace_round_trips() {
     let dir = tempfile::tempdir().unwrap();
     sample_workspace(dir.path());

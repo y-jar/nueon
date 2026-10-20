@@ -1258,6 +1258,16 @@ export const exportTableDialog = (
   format: TableFormat,
 ): Promise<string> => invoke("export_table_dialog", { name, format });
 
+/** Result of exporting every table into a picked folder. */
+export interface ExportAllResult {
+  count: number;
+  folder: string;
+}
+
+export const exportAllTablesDialog = (
+  format: TableFormat,
+): Promise<ExportAllResult> => invoke("export_all_tables_dialog", { format });
+
 // -- Anki export ---------------------------------------------------------
 export type AnkiSeparator =
   | "tab"

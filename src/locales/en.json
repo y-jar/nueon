@@ -171,6 +171,10 @@
   },
   "tables": {
     "newTable": "New table",
+    "exportAll": "Export all",
+    "exportCsv": "CSV (.csv)",
+    "exportTsv": "TSV (.tsv)",
+    "exportJson": "JSON backup (.json)",
     "namePlaceholder": "table name",
     "create": "Create",
     "exists": "A table with that name already exists",
@@ -911,6 +915,8 @@
     "dropHint": "drop files on the editor or the explorer to import them",
     "exporting": "exporting {name}…",
     "exported": "exported {name} → {path}",
+    "exportingAll": "exporting every table…",
+    "exportedAll": "exported {count} tables → {folder}",
     "exportFailed": "export failed: {error}",
     "couldNotInsertImage": "could not insert image: {error}",
     "couldNotRenameFile": "could not rename {name}: {error}"

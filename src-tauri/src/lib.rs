@@ -187,6 +187,7 @@ pub fn run() {
             commands::import_cancel,
             commands::import_apply,
             commands::export_table_dialog,
+            commands::export_all_tables_dialog,
             commands::export_anki_dialog,
             commands::import_asset,
             commands::asset_import_dialog,
