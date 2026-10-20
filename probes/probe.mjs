@@ -2463,12 +2463,13 @@ async function main() {
          .some((i) => i.value === 'w1999')`,
       { label: "last row after scroll" },
     );
-    // The ghost (add-word) row is still the last row of the body.
-    const lastIsGhost = await js(
+    // The ghost (add-word) row sits above every entry row, at the top of the
+    // body, and the virtual window still lines up behind it.
+    const firstIsGhost = await js(
       `const rows = [...document.querySelectorAll('.dict-grid tbody tr')];
-       return rows[rows.length - 1]?.classList.contains('ghost') === true;`,
+       return rows[0]?.classList.contains('ghost') === true;`,
     );
-    if (!lastIsGhost) throw new Error("ghost row is not last after virtualization");
+    if (!firstIsGhost) throw new Error("ghost row is not first in the body");
   });
 
   // -- probe 32: the first-run setup wizard ---------------------------------

@@ -86,6 +86,9 @@
   let tbodyRef = $state<HTMLTableSectionElement | null>(null);
   /** Height of the sticky header that sits above the body. */
   let headerHeight = $state(0);
+  /** Height of the ghost (add-word) row that sits above the virtual window. */
+  let ghostHeight = $state(0);
+  let ghostRow = $state<HTMLTableRowElement | null>(null);
 
   let selectedIds = $state<string[]>([]);
   // Bulk-edit form (applies one value to every selected row).
@@ -290,7 +293,8 @@
 
   // Window the rows: a dictionary can hold thousands, and rendering every
   // row as a live DOM node made scrolling crawl. `scrollMargin` is the sticky
-  // header's height, so the window lines up with the body.
+  // header's height plus the ghost (add-word) row's, so the window lines up
+  // with the body.
   //
   // `rowEstimate` tracks the real (often wrapped-pill) row height. A fixed
   // estimate far below it made the total size climb mid-scroll as rows were
@@ -315,24 +319,42 @@
       gridScroll.scrollTop;
   });
 
+  // The ghost row's height changes with pill wrapping and column resizes; the
+  // scroll margin must follow so the virtual window stays aligned.
+  $effect(() => {
+    const row = ghostRow;
+    if (!row) return;
+    const observer = new ResizeObserver(() => {
+      if (ghostHeight !== row.offsetHeight) ghostHeight = row.offsetHeight;
+    });
+    observer.observe(row);
+    return () => observer.disconnect();
+  });
+
   // Keep the virtualizer's count and header margin current. `$effect.pre` runs
   // before the DOM updates, so a filter that shrinks the row set is reflected
   // in the same pass rather than one render late.
   $effect.pre(() => {
     const count = rows.length;
-    get(virtualizer).setOptions({ count, scrollMargin: headerHeight });
+    get(virtualizer).setOptions({
+      count,
+      scrollMargin: headerHeight + ghostHeight,
+    });
   });
 
   const virtualRows = $derived($virtualizer.getVirtualItems());
   const virtualTotalSize = $derived($virtualizer.getTotalSize());
   const paddingTop = $derived(
-    virtualRows.length ? virtualRows[0].start - headerHeight : 0,
+    virtualRows.length
+      ? virtualRows[0].start - headerHeight - ghostHeight
+      : 0,
   );
   const paddingBottom = $derived(
     virtualRows.length
       ? virtualTotalSize -
           virtualRows[virtualRows.length - 1].end +
-          headerHeight
+          headerHeight +
+          ghostHeight
       : 0,
   );
 
@@ -1373,6 +1395,83 @@
         </tr>
       </thead>
       <tbody bind:this={tbodyRef}>
+        <tr class="ghost" bind:this={ghostRow} onfocusout={onGhostFocusOut}>
+          <td class="select-col"></td>
+          {#each visibleColumns as column (column.id)}
+            {#if column.id === "wordname"}
+              <td class="wordname-col">
+                <input
+                  placeholder={$t("grid.ghostPlaceholder")}
+                  bind:value={ghostName}
+                  onkeydown={(e) => e.key === "Enter" && createGhost()}
+                />
+              </td>
+            {:else if column.id === "parent"}
+              <td class="editable">
+                <PillCell
+                  pills={ghostParents.map((id) => ({
+                    id,
+                    label: ui.nameById[id] ?? "?",
+                  }))}
+                  placeholder={$t("grid.addParent")}
+                  options={relationOptions}
+                  onAdd={(label) => {
+                    const id = optionId(label);
+                    if (id && !ghostParents.includes(id))
+                      ghostParents = [...ghostParents, id];
+                  }}
+                  onRemove={(id) =>
+                    (ghostParents = ghostParents.filter((p) => p !== id))}
+                />
+              </td>
+            {:else if column.id === "definition"}
+              <td class="editable">
+                <PillCell
+                  pills={ghostList("definition").map((value) => ({
+                    id: value,
+                    label: value,
+                  }))}
+                  placeholder={$t("grid.addPill")}
+                  onAdd={(text) => {
+                    const items = ghostList("definition");
+                    if (!items.includes(text))
+                      ghostSetList("definition", [...items, text]);
+                  }}
+                  onRemove={(id) =>
+                    ghostSetList(
+                      "definition",
+                      ghostList("definition").filter((item) => item !== id),
+                    )}
+                />
+              </td>
+            {:else}
+              {@const tag = tagOf(column.id)}
+              <td class="editable">
+                {#if tag}
+                  <GridCell
+                    {tag}
+                    entry={null}
+                    ghostValues={ghostValues}
+                    suggestions={suggestionsByTag[tag.name] ?? []}
+                    relationOptions={relationOptions}
+                    nameById={ui.nameById}
+                    {onCellKey}
+                    {commitText}
+                    {commitBool}
+                    {addToList}
+                    {removeFromList}
+                    {addRelation}
+                    {removeRelation}
+                    {setGhost}
+                    {createGhost}
+                    {optionId}
+                  />
+                {/if}
+              </td>
+            {/if}
+          {/each}
+          <td></td>
+        </tr>
         {#if paddingTop > 0}
           <tr class="virtual-spacer" aria-hidden="true">
             <td
@@ -1487,83 +1586,6 @@
             ></td>
           </tr>
         {/if}
-        <tr class="ghost" onfocusout={onGhostFocusOut}>
-          <td class="select-col"></td>
-          {#each visibleColumns as column (column.id)}
-            {#if column.id === "wordname"}
-              <td class="wordname-col">
-                <input
-                  placeholder={$t("grid.ghostPlaceholder")}
-                  bind:value={ghostName}
-                  onkeydown={(e) => e.key === "Enter" && createGhost()}
-                />
-              </td>
-            {:else if column.id === "parent"}
-              <td class="editable">
-                <PillCell
-                  pills={ghostParents.map((id) => ({
-                    id,
-                    label: ui.nameById[id] ?? "?",
-                  }))}
-                  placeholder={$t("grid.addParent")}
-                  options={relationOptions}
-                  onAdd={(label) => {
-                    const id = optionId(label);
-                    if (id && !ghostParents.includes(id))
-                      ghostParents = [...ghostParents, id];
-                  }}
-                  onRemove={(id) =>
-                    (ghostParents = ghostParents.filter((p) => p !== id))}
-                />
-              </td>
-            {:else if column.id === "definition"}
-              <td class="editable">
-                <PillCell
-                  pills={ghostList("definition").map((value) => ({
-                    id: value,
-                    label: value,
-                  }))}
-                  placeholder={$t("grid.addPill")}
-                  onAdd={(text) => {
-                    const items = ghostList("definition");
-                    if (!items.includes(text))
-                      ghostSetList("definition", [...items, text]);
-                  }}
-                  onRemove={(id) =>
-                    ghostSetList(
-                      "definition",
-                      ghostList("definition").filter((item) => item !== id),
-                    )}
-                />
-              </td>
-            {:else}
-              {@const tag = tagOf(column.id)}
-              <td class="editable">
-                {#if tag}
-                  <GridCell
-                    {tag}
-                    entry={null}
-                    ghostValues={ghostValues}
-                    suggestions={suggestionsByTag[tag.name] ?? []}
-                    relationOptions={relationOptions}
-                    nameById={ui.nameById}
-                    {onCellKey}
-                    {commitText}
-                    {commitBool}
-                    {addToList}
-                    {removeFromList}
-                    {addRelation}
-                    {removeRelation}
-                    {setGhost}
-                    {createGhost}
-                    {optionId}
-                  />
-                {/if}
-              </td>
-            {/if}
-          {/each}
-          <td></td>
-        </tr>
       </tbody>
     </table>
   </div>

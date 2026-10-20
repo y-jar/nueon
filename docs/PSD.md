@@ -59,6 +59,8 @@ layer (`src-tauri/`), and the Svelte 5 frontend (`src/`). See `docs/ARCHITECTURE
 - **Behaviour.** One grid per table with virtualized rows, sort/filter/hide per
   column, rich cell editors (tag pills, references, suggestions), multi-select
   and bulk edit, and a per-column context menu (sort, hide, change type, delete).
+  The inline add-word ("ghost") row sits at the top of the body, above the
+  virtual window; its height rides the scroll margin so the window stays aligned.
 - **Data.** `dictionary/<table>`; each entry has a hidden UUID, a required
   `wordname`, and user-defined tags.
 - **Invariants.** The UUID is stable across renames/re-imports; deleting a word
