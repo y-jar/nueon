@@ -116,14 +116,22 @@
       };
 
       # Precompiled binary fetched from a GitHub release .deb and patched for
-      # Nix. Update `version` and refresh `hash` after publishing a release:
-      #   nix-prefetch-url --type sha256 <the deb url below>
+      # Nix. Two hashes in this flake may need touching during a release
+      # (docs/RELEASING.md §5 covers both):
+      #  1. `hash` below (the release .deb): every release, with
+      #       nix-prefetch-url --type sha256 <the deb url below>
+      #     then write `sha256:<returned-base32>` — bare base32 without the
+      #     type is rejected by fetchurl's hash parser and fails eval.
+      #  2. `npmDepsHash` (frontend, further up): only if package-lock.json
+      #     changed in the release — take the SRI hash the failing build
+      #     prints ("sha256-...="). No dep change -> no rehash.
+      # `version` strings are handled by scripts/bump-version.sh.
       nueon-bin = pkgs.stdenv.mkDerivation (finalAttrs: {
         pname = "nueon-bin";
         version = "26.10.16";
         src = pkgs.fetchurl {
           url = "https://github.com/y-jar/nueon/releases/download/v${finalAttrs.version}/nueon_${finalAttrs.version}_amd64.deb";
-          hash = "0hbzkq2xn0h0h7s86d945mdw04bialc9nfdpm71y3v7yi40xbzgk";
+          hash = "sha256:0hbzkq2xn0h0h7s86d945mdw04bialc9nfdpm71y3v7yi40xbzgk";
         };
         nativeBuildInputs = with pkgs; [
           dpkg

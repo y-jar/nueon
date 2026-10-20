@@ -65,17 +65,32 @@ gh release edit v26.10.10 --draft=false
 The assets then appear on the public **Releases** page, which is where the
 README points users.
 
-### 5. Refresh the Nix `nueon-bin` hash (after publishing)
+### 5. Refresh the Nix hashes (after publishing)
 
-`flake.nix`'s `nueon-bin` package fetches the published `.deb` and has a
-placeholder hash. After publishing, update it:
+The flake has two hashes; only one changes per release. Update
+`flake.nix`'s versions first if you released after a `bump` (the bump script
+already rewrites them).
+
+**a. `nueon-bin`'s `hash` — every release.** It fetches the published `.deb`:
 
 ```sh
 nix-prefetch-url --type sha256 \
   https://github.com/<you>/nueon/releases/download/v26.10.10/nueon_26.10.10_amd64.deb
 ```
 
-and put the returned hash into `flake.nix`, then `nix build .#nueon-bin`.
+`nix-prefetch-url` prints a **bare base32** digest — writing it into
+`hash =` as-is breaks eval ("hash does not include a type"). Prefix it:
+
+```nix
+hash = "sha256:<the printed base32>";
+```
+
+Then verify: `nix build .#nueon-bin`.
+
+**b. `npmDepsHash` (frontend) — only if `package-lock.json` changed.**
+`buildNpmPackage` needs that hash too; it is already SRI-form
+(`sha256-...=`), copy it from the failing `nix build` log. A release that
+only bumps versions doesn't change the lock, so usually you skip this one.
 
 ## Building locally (optional, for a preview)
 
